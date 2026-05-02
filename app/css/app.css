@@ -812,7 +812,9 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
 /* ── Home page ───────────────────────────────────────────────────────────── */
 .home-wrap  { max-width: 600px; }
 .home-hero  { text-align: center; padding: 2rem 0 2.5rem; }
-.home-logo  { height: 80px; width: auto; object-fit: contain; margin: 0 auto 1.25rem; display: block; }
+.home-logo       { height: 80px; width: auto; object-fit: contain; margin: 0 auto 1.25rem; display: block; }
+.home-logo[src=""] { display: none; }
+.home-band-name  { font-size: clamp(1.4rem, 5vw, 2.2rem); font-weight: 300; margin-bottom: 0.25rem; }
 .home-tagline {
     color: var(--third-color); font-size: 0.85rem;
     letter-spacing: 0.04em; margin-top: 0.25rem;
