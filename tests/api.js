@@ -3,7 +3,7 @@
 //
 // Usage:
 //   npm test                                    # needs vercel dev running
-//   BASE_URL=https://band-one.example npm test    # against production
+//   BASE_URL=https://yourapp.example.com npm test    # against production
 //   BAND_PASSWORD=xxx npm test                  # enables write tests
 
 const fs = require('fs');

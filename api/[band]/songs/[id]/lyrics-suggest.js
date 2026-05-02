@@ -81,7 +81,7 @@ module.exports = wrap(async function handler(req, res) {
   try {
     const r = await fetch(
       `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`,
-      { headers: { 'Lrclib-Client': 'bandone-band-tools' }, signal: AbortSignal.timeout(6000) }
+      { headers: { 'Lrclib-Client': 'smartist-band-tools' }, signal: AbortSignal.timeout(6000) }
     );
     if (r.ok) {
       const data   = await r.json();

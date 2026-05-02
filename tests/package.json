@@ -1,8 +1,8 @@
 {
-  "name": "bandone-api-tests",
+  "name": "smartist-api-tests",
   "private": true,
   "scripts": {
     "test": "node api.js",
-    "test:prod": "BASE_URL=https://band-one.example node api.js"
+    "test:prod": "BASE_URL=https://yourapp.example.com node api.js"
   }
 }
