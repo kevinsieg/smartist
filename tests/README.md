@@ -28,7 +28,7 @@ Then in a second terminal:
 cd tests
 npm test                  # read-only tests
 BAND_PASSWORD=xxx npm test   # + write tests
-npm run test:prod         # against https://band-one.example (read-only)
+npm run test:prod         # against production (read-only)
 BAND_PASSWORD=xxx npm run test:prod  # against production with writes
 ```
 
@@ -37,7 +37,7 @@ Or from the repo root without `cd`:
 ```bash
 node tests/api.js
 BAND_PASSWORD=xxx node tests/api.js
-BASE_URL=https://band-one.example node tests/api.js
+BASE_URL=https://yourapp.example.com node tests/api.js
 ```
 
 ## What is tested
