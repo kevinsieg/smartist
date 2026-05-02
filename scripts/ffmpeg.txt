@@ -1,0 +1,11 @@
+ffmpeg -ss 00:00:50.0 -i bandone.mov -t 00:00:05.0 -vf hue=s=0 -an -c:v libx264 -b:v 1000k -s hd720 trailer1000k.mp4 && ffmpeg -ss 00:00:50.0 -i bandone.mov -t 00:00:05.0 -vf hue=s=0 -an -c:v libvpx-vp9 -b:v 1M -s hd720 trailer1000k.webm
+
+* -ss 00:00:50.0: Sets the start time to 50 seconds.
+* -i bandone.mov: Specifies the input video file.
+* -t 00:00:05.0: Specifies the duration of the extracted segment to be 5 seconds.
+* -vf hue=s=0: Converts the video to black and white.
+* -an: Disables audio.
+* -c:v libx264: Sets the video codec to libx264 for compression.
+* -b:v 1000k: Sets the target video bitrate to 1000k (1 Mbps).
+* -s hd720: Resizes the video to 720p resolution (1280x720).
+* trailer1000k.mp4: Specifies the output file name.

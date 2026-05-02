@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Stage</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow"/>
+    <meta name="theme-color" content="#111111">
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --s-bg:     #111;
+            --s-text:   #f0ede8;
+            --s-muted:  #706860;
+            --s-accent: #f9bf8f;
+        }
+        html, body {
+            min-height: 100%;
+            background: var(--s-bg);
+            color: var(--s-text);
+            font-family: "Courier New", Courier, monospace;
+            -webkit-font-smoothing: antialiased;
+        }
+        .stage-wrap {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 5rem;
+        }
+        .stage-band {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--s-accent);
+            opacity: 0.7;
+            margin-bottom: 0.6rem;
+        }
+        .stage-title {
+            font-size: clamp(1.5rem, 5vw, 2.2rem);
+            font-weight: 300;
+            line-height: 1.2;
+            margin-bottom: 0.35rem;
+        }
+        .stage-sub {
+            font-size: 0.88rem;
+            color: var(--s-muted);
+            margin-bottom: 0.25rem;
+        }
+        .stage-header {
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid rgba(249,191,143,0.18);
+        }
+        .stage-list { list-style: none; }
+        .stage-song {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .stage-num {
+            font-size: 1rem;
+            color: var(--s-accent);
+            opacity: 0.6;
+            min-width: 2.4rem;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .stage-song-title {
+            flex: 1;
+            font-size: clamp(1.4rem, 4.5vw, 2rem);
+            font-weight: 300;
+            line-height: 1.2;
+        }
+        .stage-key {
+            font-size: 0.88rem;
+            color: var(--s-accent);
+            background: rgba(249,191,143,0.1);
+            border: 1px solid rgba(249,191,143,0.22);
+            padding: 0.2rem 0.55rem;
+            border-radius: 4px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .stage-total {
+            margin-top: 2rem;
+            font-size: 0.82rem;
+            color: var(--s-muted);
+            text-align: right;
+        }
+        .stage-message {
+            text-align: center;
+            color: var(--s-muted);
+            padding: 5rem 0;
+        }
+        @media (max-width: 600px) {
+            .stage-wrap { padding: 1.5rem 1.25rem 4rem; }
+            .stage-song { gap: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="stage-wrap">
+        <div id="stage-content">
+            <p class="stage-message">Loading…</p>
+        </div>
+    </div>
+    <script src="/app/js/stage.js"></script>
+</body>
+</html>

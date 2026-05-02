@@ -1,0 +1,4 @@
+# Files to ignore during Vercel deployment
+scripts/
+.git/
+.idea/
