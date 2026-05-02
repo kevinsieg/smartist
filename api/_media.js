@@ -13,10 +13,10 @@ const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpl
 //   actionPrefix  — audit log prefix, e.g. 'audio' → events 'audio_replace', 'audio_delete'
 //   allowedExts   — Set of lowercase extensions; if absent the handler accepts only .pdf
 //   mimePrefix    — expected MIME prefix for server-side verification, e.g. 'audio/'
-function makeMediaHandler({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts, mimePrefix }) {
+function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts, mimePrefix }) {
   const maxMB = maxBytes / 1024 / 1024;
 
-  return wrap(async function handler(req, res) {
+  return async function handler(req, res) {
     const { band: slug, id } = req.query;
     const songId = Number(id);
     if (!Number.isInteger(songId) || songId <= 0)
@@ -125,7 +125,9 @@ function makeMediaHandler({ keyPrefix, extraKey, maxBytes, actionPrefix, allowed
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
-  });
+  };
 }
 
-module.exports = { makeMediaHandler };
+function makeMediaHandler(config) { return wrap(makeMediaFn(config)); }
+
+module.exports = { makeMediaHandler, makeMediaFn };

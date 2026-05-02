@@ -94,9 +94,33 @@ window.onNavAuthEmpty = function(el) {
 | `api/_email.js` | `sendEmail({to, subject, text?, html?, attachments?})`. Provider: Resend. To switch, update the `PROVIDER` config block (`envVar`, `url`, `auth`, `buildBody`). Examples for Postmark and SendGrid are in the block. FROM address from `RESEND_FROM` env var. |
 | `api/_pdf.js` | `buildSetlistPdf(setlist, songs, bandName)` → Buffer; `setlistTitle(setlist)` |
 | `api/_r2.js` | `createPresignedUrl(key, contentType)`, `deleteFromR2(url)`, `filenameFromUrl(url)`, `keyFromUrl(url)`. Provider: Cloudflare R2 (S3-compatible). To switch to AWS S3 / Backblaze B2 / MinIO, update the `STORAGE` config block. Non-S3 providers: replace the SDK, keep exported function signatures. |
+| `api/_media.js` | `makeMediaFn(config)` (bare async handler, used inside catch-all) / `makeMediaHandler(config)` (wrapped, standalone). Config: `keyPrefix`, `extraKey`, `maxBytes`, `actionPrefix`, `allowedExts?`, `mimePrefix`. |
 | `api/_token.js` | `generateMagicToken(hash)`, `verifyMagicToken(token, hash)` |
 | `api/_ai.js` | `suggestLyricsWithAI(title, artist, { language, genre })` → `{ lyrics }` or `{ lyrics: null, skipped? }`. To switch provider: update the `AI` config block (4 lines: `format`, `baseUrl`, `model`, `apiKey`). Default: native Gemini API with Google Search grounding (`GEMINI_API_KEY`); fall back to `format: 'openai'` (knowledge-only) if grounding quota runs low. |
 | `api/_logger.js` | `info(event, data)`, `warn(event, data)`, `error(event, data)` — always writes JSON to stdout; **in dev** also appends to `logs/YYYY-MM-DD.log` (auto-pruned after 7 days); **in production** POSTs to the configured cloud provider via `fetch`. Cloud send is skipped in dev because `vercel dev` kills async I/O after the response is sent. To switch providers, update the `TRANSPORT` config block (`envVar`, `url`, `auth`, `success`). Currently: Better Stack. |
+
+### Serverless function layout
+
+Vercel Hobby plan limit is 12 functions (one per non-`_` file in `api/`). The current 12:
+
+| File | Routes handled |
+|------|---------------|
+| `api/config.js` | `GET /api/config` |
+| `api/[band]/auth.js` | `POST /api/:band/auth` |
+| `api/[band]/export.js` | `GET /api/:band/export` |
+| `api/[band]/gema/import.js` | `POST /api/:band/gema/import` |
+| `api/[band]/gigs.js` | `GET/POST /api/:band/gigs` |
+| `api/[band]/gigs/[id].js` | `GET/PUT/DELETE /api/:band/gigs/:id` |
+| `api/[band]/request-reset.js` | `POST /api/:band/request-reset` |
+| `api/[band]/setlists.js` | `GET/POST /api/:band/setlists` |
+| `api/[band]/setlists/[...path].js` | `GET/PUT /api/:band/setlists/:id`, `POST /api/:band/setlists/:id/duplicate`, `POST /api/:band/setlists/:id/share` |
+| `api/[band]/song-logs.js` | `GET /api/:band/song-logs` |
+| `api/[band]/songs.js` | `GET/POST/PATCH /api/:band/songs` |
+| `api/[band]/songs/[...path].js` | `DELETE /api/:band/songs/:id`, `POST .../restore`, `GET .../setlists`, `GET .../gema`, `PUT/DELETE .../lyrics`, `POST .../lyrics-suggest`, `POST/PUT/DELETE .../audio|sheet|playback` |
+
+`/api/docs` is served as a static HTML rewrite (`app/api-docs.html`) — zero functions used.
+
+The catch-all files dispatch on `req.query.path[1]` (the action segment). `makeMediaFn` from `_media.js` is used inside the songs catch-all; auth and ID validation run in the outer `wrap()` first, then `req.query.id = rawId` shims the ID before delegating to the media function.
 
 ### Handler Conventions
 Every handler file exports `wrap(async function handler(req, res) { ... })`.
@@ -150,7 +174,7 @@ await sql`
 - `gema_language` — `select` type (EN/FR/DE): **read-only stat** when the song has a linked GEMA work (GEMA owns the value); **editable dropdown** (stored in `songs.extra.language`) when there is no GEMA link
 - `extra.isrc` — read-only `stat` type; recording ISRC stored in `songs.extra.isrc` (set via script, never overwritten by the UI thanks to the JSONB merge in the PATCH handler)
 
-**GEMA modal** (`api/[band]/songs/[id]/gema.js`): `GET` returns `{ works, rightholders }` for a song. The modal shows per-work details (ISWC, ISRC, performers, genre, duration, dates) and a rightholders table (name, role, AR/VR shares, society, represents). Triggered by clicking the GEMA-Nr stat cell.
+**GEMA modal** (handled by `api/[band]/songs/[...path].js`, action `gema`): `GET` returns `{ works, rightholders }` for a song. The modal shows per-work details (ISWC, ISRC, performers, genre, duration, dates) and a rightholders table (name, role, AR/VR shares, society, represents). Triggered by clicking the GEMA-Nr stat cell.
 
 **`extra` PATCH merge**: the songs PATCH uses `songs.extra || ${update.extra}` (JSONB `||`) instead of full replacement. This preserves extra keys the UI has no input for (e.g. `isrc`, `language` for GEMA-linked songs) across every save.
 
@@ -168,12 +192,12 @@ Interactive docs served at `/api/docs` (Scalar UI).
 
 The songs table has four icon columns for per-song media. Each stores its value in the `extra` JSONB field and is surfaced in `app/js/songs.js` via the `COLS` array.
 
-| Column | Header | `extra` key | Endpoint | Storage |
+| Column | Header | `extra` key | URL path | Storage |
 |--------|--------|-------------|----------|---------|
-| Listen | ▶ | `listenUrl` | `audio.js` | R2 (`audio/` prefix), or YouTube/SoundCloud/direct URL |
-| Sheet | ≡ | `sheetUrl` | `sheet.js` | R2 (`sheets/` prefix), PDF only, 20 MB max |
-| Playback | ▷ | `playbackUrl` | `playback.js` | R2 (`playback/` prefix), audio files, 50 MB max |
-| Lyrics | ¶ | `lyrics` | `lyrics.js` | PostgreSQL `extra` JSONB only (no R2), 20 000 char max |
+| Listen | ▶ | `listenUrl` | `/api/:band/songs/:id/audio` | R2 (`audio/` prefix), or YouTube/SoundCloud/direct URL |
+| Sheet | ≡ | `sheetUrl` | `/api/:band/songs/:id/sheet` | R2 (`sheets/` prefix), PDF only, 20 MB max |
+| Playback | ▷ | `playbackUrl` | `/api/:band/songs/:id/playback` | R2 (`playback/` prefix), audio files, 50 MB max |
+| Lyrics | ¶ | `lyrics` | `/api/:band/songs/:id/lyrics` | PostgreSQL `extra` JSONB only (no R2), 20 000 char max |
 
 **File upload flow (audio / sheet / playback):**
 1. Client `POST /api/:band/songs/:id/<type>` with `{ filename, contentType, size }` → server returns `{ uploadUrl, publicUrl }` (5-min presigned PUT URL)
@@ -190,7 +214,7 @@ The server never trusts the client to supply the previous URL — it always read
 
 **Lyrics suggest ("AI ✦" button):** in edit mode, clicking "AI ✦" calls `POST /api/:band/songs/:id/lyrics-suggest`. The server runs a three-source pipeline and returns `{ lyrics, source, sources }`. The client shows a preview pane; the user clicks "Use this" to copy into the textarea, or "Discard" to dismiss. An in-flight request is aborted when the modal closes.
 
-**`lyrics-suggest` pipeline** (`api/[band]/songs/[id]/lyrics-suggest.js`):
+**`lyrics-suggest` pipeline** (handled by `api/[band]/songs/[...path].js`, action `lyrics-suggest`):
 1. **lyrics.ovh** — `GET https://api.lyrics.ovh/v1/{artist}/{title}` (6 s timeout, no key, accepts on `.lyrics` length > 50)
 2. **lrclib.net** — `GET https://lrclib.net/api/get?artist_name=&track_name=` (6 s timeout, no key, uses `plainLyrics` or strips timestamps from `syncedLyrics`)
 3. **AI** — knowledge-based via `suggestLyricsWithAI()` in `api/_ai.js` (see below)
