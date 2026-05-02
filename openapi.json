@@ -1,12 +1,12 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Salmon & the Laundry Bear — Band API",
+    "title": "Smartist — Band API",
     "version": "1.0.0",
-    "description": "Internal API for setlist management, song database, and gig tracking.\n\n**Auth**: most write endpoints require a `Bearer` token in the `Authorization` header. The token is either the band password or a short-lived magic token obtained via `/request-reset`.\n\nThe `{band}` path segment is the band slug (`salmons`). Fetch it at runtime from `GET /api/config`."
+    "description": "Internal API for setlist management, song database, and gig tracking.\n\n**Auth**: most write endpoints require a `Bearer` token in the `Authorization` header. The token is either the band password or a short-lived magic token obtained via `/request-reset`.\n\nThe `{band}` path segment is the band slug (e.g. `yourband`). Fetch it at runtime from `GET /api/config`."
   },
   "servers": [
-    { "url": "https://www.salmons.fr", "description": "Production" },
+    { "url": "https://yourapp.example.com", "description": "Production" },
     { "url": "http://localhost:3000", "description": "Local (vercel dev)" }
   ],
   "components": {
@@ -24,7 +24,7 @@
         "required": true,
         "schema": { "type": "string" },
         "description": "Band slug — obtain from `GET /api/config`",
-        "example": "salmons"
+        "example": "yourband"
       },
       "id": {
         "name": "id",

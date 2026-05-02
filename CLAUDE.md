@@ -4,20 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Two things in one repo, one Vercel deployment at **https://www.salmons.fr**:
+Band tools app — password-protected pages backed by Neon PostgreSQL + Vercel serverless functions.
 
-1. **Public website** — pure static HTML/CSS/JS for "Salmon & the Laundry Bear" (bluegrass/old-time, Paris)
-2. **Band tools** — password-protected internal pages backed by Neon PostgreSQL + Vercel serverless functions
-
-No build step anywhere. Everything is served as-is.
+No build step. Everything is served as-is.
 
 ---
 
 ## Running Locally
 
 ```bash
-vercel dev          # band tools (requires .env with all env vars — see below)
-python3 -m http.server 8000   # public site only (no API)
+vercel dev          # requires .env with all env vars — see below
 ```
 
 ### Local environment variables (`.env`)
@@ -28,7 +24,7 @@ python3 -m http.server 8000   # public site only (no API)
 DATABASE_URL=
 BAND_SLUG=
 BETTERSTACK_TOKEN=
-APP_ORIGIN=https://www.salmons.fr
+APP_ORIGIN=https://yourapp.example.com
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
@@ -43,33 +39,7 @@ GEMINI_API_KEY=
 
 ---
 
-## Public Website (`index.html`, `css/`, `js/`)
-
-### Files
-- `index.html` — single-page app with all content (bilingual EN/FR)
-- `css/backvideo.css` — all custom styles; `css/normalize.css` is untouched
-- `js/main.js` — all JavaScript
-
-### State Management
-State is DOM-driven, not data-driven:
-- **Language**: `.active` class on `#about-en` / `#about-fr` divs; toggled by `showContent(lang)`
-- **Year filter**: `.active` class on `.year-section` divs; toggled by `showYear(year)`
-- **Gallery slide**: CSS radio inputs (`<input type="radio">`) control which slide is visible via `:checked` selectors; `initGallerySwipe()` in JS only manipulates the checked state
-
-### Key Patterns
-- Buttons use inline `onclick` handlers in HTML (intentional, not legacy)
-- CSS custom properties for the colour palette: `--primary-color`, `--secondary-color` (#f9bf8f warm peach), `--third-color` (#A09C93)
-- Font is Courier New monospace throughout
-- `clamp()` used for all fluid font sizes — no breakpoint-specific font overrides
-- `updateYearCounts()` counts `<li>` elements inside each year section to populate concert counts in buttons
-- Video background is desktop-only; skipped when `window.innerWidth <= 767`
-
-### Gallery Swipe Logic
-The touch swipe detector in `initGallerySwipe()` uses axis-locking: after 8px of movement it commits to horizontal or vertical. A swipe only registers if `dx >= 40px` AND `dx > 1.25 * dy`. Slide index wraps circularly using `% radios.length`.
-
----
-
-## Band Tools
+## App
 
 ### Pages (`app/`)
 
@@ -107,7 +77,7 @@ window.onNavAuthEmpty = function(el) {
 
 ### Logo and Band Config
 `bands.config` JSONB drives UI without schema changes. Key fields:
-- `logoUrl` — path to band logo (e.g. `/img/salb-logo-f9bf8f.png`). Loaded by `applyNav()` into `.app-logo-img` elements. Set it with:
+- `logoUrl` — URL to band logo. Loaded by `applyNav()` into `.app-logo-img` elements. Set it with:
   ```sql
   UPDATE bands SET config = config || '{"logoUrl": "/img/your-logo.png"}'::jsonb WHERE slug = 'yourslug';
   ```
@@ -289,24 +259,12 @@ See `tests/README.md` for configuration and adding new test cases.
 
 ---
 
-## Assets
-
-- `img/gallery/` — photo credits encoded in filenames (URL-safe, e.g. `LucieBascoul-Salmon-1.jpg`)
-- `img/background-mobile.jpg` / `img/background-desktop.jpg` — responsive backgrounds via `<link rel="preload" media="...">`
-- `mov/trailer.mp4` — desktop video background (24h cache)
-- `downloads/` — presskit and downloadable assets
-
----
-
 ## Deployment
 
 `vercel.json` sets all cache headers and security headers. Cache rules:
 - HTML / JSON: no-cache (`must-revalidate`)
-- CSS / JS / images / favicons: 1 year + immutable
-- Videos: 24 hours
-- Downloads: 1 hour
-
-No cookies, no analytics, no tracking — GDPR-compliant per `mentions-legales.html`.
+- `/app/css/` + `/app/js/`: 1 year + immutable
+- Global `X-Robots-Tag: noindex, nofollow` on all routes
 
 ### Hosting portability
 

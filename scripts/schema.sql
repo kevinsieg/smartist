@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS gema_works (
   isrc                   TEXT,
   publisher_work_numbers TEXT,                    -- Verlagswerknummern
   language               TEXT,                    -- Sprache normalised: DE, EN, FR, …
-  performers             TEXT,                    -- Interpretinnen/Interpreten, e.g. "SALMON AND THE LAUNDRY BEAR"
+  performers             TEXT,                    -- Interpretinnen/Interpreten, e.g. "YOUR BAND NAME"
   gema_genre             TEXT,                    -- Gattung, e.g. "FOLK", "SCHLAGER"
   duration_sec           INTEGER,                 -- Dauer in seconds
   first_registered_at    DATE,                    -- Erstmals geladen (DD.MM.YYYY → ISO)
