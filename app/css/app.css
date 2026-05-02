@@ -809,6 +809,43 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
 }
 .gema-rh-table tr:last-child td { border-bottom: none; }
 
+/* ── Home page ───────────────────────────────────────────────────────────── */
+.home-wrap  { max-width: 600px; }
+.home-hero  { text-align: center; padding: 2rem 0 2.5rem; }
+.home-logo  { height: 80px; width: auto; object-fit: contain; margin: 0 auto 1.25rem; display: block; }
+.home-tagline {
+    color: var(--third-color); font-size: 0.85rem;
+    letter-spacing: 0.04em; margin-top: 0.25rem;
+}
+.home-cards {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem; margin-bottom: 2.5rem;
+}
+.home-card {
+    display: flex; flex-direction: column; gap: 0.25rem;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid rgba(249, 191, 143, 0.35); border-radius: 6px;
+    color: inherit; text-decoration: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+.home-card:hover {
+    border-color: var(--secondary-color);
+    background: rgba(249, 191, 143, 0.06);
+    text-decoration: none;
+}
+.home-card-icon  { font-size: 1.25rem; color: var(--secondary-color); line-height: 1; }
+.home-card-title { font-size: 0.95rem; }
+.home-card-desc  { font-size: 0.78rem; color: var(--third-color); }
+.home-logged-in  {
+    text-align: center; color: var(--third-color);
+    font-size: 0.85rem; padding: 0.5rem 0;
+}
+.home-logged-in strong { color: #2d6a2d; }
+@media (max-width: 479px) {
+    .home-cards { grid-template-columns: 1fr; }
+    .home-logo  { height: 60px; }
+}
+
 /* ── Auth gate (password / magic-link) ───────────────────────────────────── */
 .auth-gate { max-width: 360px; margin: 3rem auto; text-align: center; }
 .auth-gate p { color: var(--third-color); margin-bottom: 1rem; font-size: 0.9rem; }
