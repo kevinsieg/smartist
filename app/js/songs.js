@@ -1,0 +1,1778 @@
+// Songs management page
+
+let bandSlug = '';
+let songs = [];
+const dirty = new Set();
+let newRowCounter = 0;
+let currentPlayerSid = null;
+let currentSheetSid    = null;
+let currentPlaybackSid = null;
+let currentLyricsSid   = null;
+let _lyricsSuggestAbort = null;
+
+let _configPromise = null;
+function getConfig() {
+  if (!_configPromise) _configPromise = loadConfig();
+  return _configPromise;
+}
+
+// --- Init ---
+
+async function init() {
+  // Magic link login: /songs?magic=TOKEN
+  const params = new URLSearchParams(window.location.search);
+  const magic = params.get('magic');
+  if (magic) {
+    history.replaceState(null, '', window.location.pathname);
+    if (await verifyToken(magic)) {
+      sessionStorage.setItem('setlist_token', magic);
+      await loadAndRender();
+      return;
+    }
+  }
+  const token = sessionStorage.getItem('setlist_token');
+  if (token && await verifyToken(token)) {
+    await loadAndRender();
+  } else {
+    renderAuthGate();
+  }
+}
+
+async function verifyToken(token) {
+  try {
+    const cfg = await getConfig().catch(() => null);
+    if (!cfg) return false;
+    bandSlug = cfg.slug;
+    applyNav(cfg.name, cfg.config);
+    const r = await fetch(`/api/${bandSlug}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: token }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+// --- Auth gate ---
+
+function renderAuthGate() {
+  document.getElementById('page-content').innerHTML = `
+    <div class="auth-gate">
+      <p>Enter the band password to manage songs.</p>
+      <div class="auth-row">
+        <div class="pw-wrapper">
+          <input type="password" id="pw-input" placeholder="Password" autocomplete="current-password">
+          <button type="button" class="pw-toggle" id="pw-toggle">show</button>
+        </div>
+        <button class="btn" id="pw-btn">Login</button>
+      </div>
+      <div class="auth-error" id="auth-error"></div>
+      <button class="reset-link" id="reset-toggle">Forgot password?</button>
+      <div class="reset-form" id="reset-form" style="display:none">
+        <div class="auth-row">
+          <input type="email" id="reset-email" placeholder="Band email address" autocomplete="email">
+          <button class="btn" id="reset-btn">Send link</button>
+        </div>
+        <div class="auth-error" id="reset-msg"></div>
+      </div>
+    </div>`;
+  document.getElementById('pw-btn').addEventListener('click', doLogin);
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+  document.getElementById('pw-toggle').addEventListener('click', () => {
+    const input = document.getElementById('pw-input');
+    const btn   = document.getElementById('pw-toggle');
+    const show  = input.type === 'password';
+    input.type      = show ? 'text' : 'password';
+    btn.textContent = show ? 'hide' : 'show';
+  });
+  document.getElementById('reset-toggle').addEventListener('click', () => {
+    const form = document.getElementById('reset-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display !== 'none') document.getElementById('reset-email').focus();
+  });
+  document.getElementById('reset-btn').addEventListener('click', doRequestReset);
+  document.getElementById('reset-email').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doRequestReset();
+  });
+  setTimeout(() => document.getElementById('pw-input')?.focus(), 50);
+}
+
+async function doRequestReset() {
+  const email = document.getElementById('reset-email').value.trim();
+  if (!email) return;
+  const btn = document.getElementById('reset-btn');
+  const msg = document.getElementById('reset-msg');
+  btn.disabled = true; btn.textContent = '…';
+  msg.textContent = '';
+  try {
+    if (!bandSlug) {
+      const cfg = await getConfig();
+      bandSlug = cfg.slug;
+    }
+    await fetch(`/api/${bandSlug}/request-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    msg.style.color = 'var(--secondary-color)';
+    msg.textContent = 'If that email is correct, a login link has been sent.';
+  } catch {
+    msg.style.color = '';
+    msg.textContent = 'Failed to send. Try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send link';
+  }
+}
+
+async function doLogin() {
+  const pw = document.getElementById('pw-input').value.trim();
+  if (!pw) return;
+  const btn = document.getElementById('pw-btn');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const cfg = await getConfig();
+    bandSlug = cfg.slug;
+    applyNav(cfg.name, cfg.config);
+    const r = await fetch(`/api/${bandSlug}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (!r.ok) throw new Error('wrong');
+    sessionStorage.setItem('setlist_token', pw);
+    await loadAndRender();
+  } catch {
+    document.getElementById('auth-error').textContent = 'Wrong password.';
+    btn.disabled = false; btn.textContent = 'Login';
+  }
+}
+
+// --- Data ---
+
+async function loadAndRender() {
+  try {
+    if (!bandSlug) {
+      const cfg = await getConfig();
+      bandSlug = cfg.slug;
+      applyNav(cfg.name, cfg.config);
+    }
+    songs = await fetch(`/api/${bandSlug}/songs`).then(r => r.json());
+    renderTable();
+    loadLogs();
+  } catch {
+    document.getElementById('page-content').innerHTML =
+      '<p style="color:var(--third-color);text-align:center;">Failed to load songs.</p>';
+  }
+}
+
+// --- Table ---
+
+const COLS = [
+  { key: 'title',               label: 'title',              type: 'text',   cls: 'col-title',   width: 180 },
+  { key: 'active',              label: 'active',             type: 'bool',   cls: 'col-active',  width: 48  },
+  { key: 'extra.listenUrl',    label: '▶',                  type: 'listen',   cls: 'col-listen',   width: 52, title: 'Listen — reference recording'  },
+  { key: 'extra.sheetUrl',     label: '≡',                  type: 'sheet',    cls: 'col-sheet',    width: 52, title: 'Sheet — chords & lyrics PDF'   },
+  { key: 'extra.playbackUrl',  label: '▷',                  type: 'playback', cls: 'col-playback', width: 52, title: 'Playback — backing track'       },
+  { key: 'extra.lyrics',       label: '¶',                  type: 'lyrics',   cls: 'col-lyrics',   width: 52, title: 'Lyrics'                          },
+  { key: 'play_count',          label: 'plays',              type: 'stat',   cls: 'col-plays',   width: 50  },
+  { key: 'last_played_at',      label: 'last live',          type: 'stat',   cls: 'col-last',    width: 86  },
+  { key: 'iswc',                label: 'ISWC',               type: 'stat',   cls: 'col-iswc',    width: 110, title: 'ISWC (GEMA/SACEM)' },
+  { key: 'gema_work_number',    label: 'GEMA-Nr',            type: 'stat',   cls: 'col-gema',    width: 116, title: 'GEMA Werknummer' },
+  { key: 'gema_language',       label: 'lang',               type: 'select', cls: 'col-glang',   width: 56,  title: 'Language (GEMA)', options: ['EN', 'FR', 'DE'], default: 'EN' },
+  { key: 'extra.isrc',          label: 'ISRC',               type: 'stat',   cls: 'col-isrc',    width: 120, title: 'ISRC (recording)' },
+  { key: 'key',                 label: 'key',                type: 'text',   cls: 'col-key',     width: 52  },
+  { key: 'extra.lead',          label: 'lead',               type: 'text',   cls: 'col-lead',    width: 80  },
+  { key: 'extra.banjoCapo',     label: 'banjoCapo',          type: 'number', cls: 'col-bcapo',   width: 58  },
+  { key: 'extra.git2',          label: 'git2',               type: 'bool',   cls: 'col-lgit',    width: 70  },
+  { key: 'extra.gitCapo',       label: 'gitCapo',            type: 'number', cls: 'col-kcapo',   width: 58  },
+  { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
+  { key: 'genre',            label: 'genre',           type: 'text',   cls: 'col-cat',     width: 100 },
+  { key: 'tempo',               label: 'tempo',              type: 'text',   cls: 'col-tempo',   width: 70  },
+  { key: 'length_min',          label: 'length_min',         type: 'time',   cls: 'col-len',     width: 68  },
+  { key: 'extra.author',        label: 'author',             type: 'text',   cls: 'col-author',  width: 130 },
+  { key: 'interpret',           label: 'interpret',          type: 'text',   cls: 'col-interp',  width: 140 },
+  { key: 'reference_interpret', label: 'reference_interpret', type: 'text',  cls: 'col-refint',  width: 140 },
+  { key: 'extra.referenceUrl',  label: 'referenceUrl',       type: 'url',    cls: 'col-refurl',  width: 120 },
+  { key: 'extra.songinfoUrl',   label: 'songinfoUrl',        type: 'url',    cls: 'col-infourl', width: 120 },
+  { key: 'comment',             label: 'comment',            type: 'text',   cls: 'col-comment', width: 160 },
+];
+
+const COL_WIDTHS_KEY = 'songs_col_widths';
+
+function minsToTime(mins) {
+  if (mins === null || mins === undefined || mins === '') return '';
+  const m = Math.floor(Number(mins));
+  const s = Math.round((Number(mins) - m) * 60);
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function timeToMins(str) {
+  if (!str || !str.trim()) return null;
+  const parts = str.trim().split(':');
+  if (parts.length !== 2) return null;
+  const m = parseInt(parts[0], 10);
+  const s = parseInt(parts[1], 10);
+  if (isNaN(m) || isNaN(s) || s >= 60) return null;
+  return m + s / 60;
+}
+
+function getVal(song, key) {
+  if (key.startsWith('extra.')) {
+    const k = key.slice(6);
+    return song.extra?.[k] ?? '';
+  }
+  const v = song[key];
+  return v === null || v === undefined ? '' : v;
+}
+
+function getSavedWidths() {
+  try { return JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || '{}'); } catch { return {}; }
+}
+
+const filters = { text: '', active: true, lead: '', genre: '' };
+
+function getVisibleSongs() {
+  return songs.filter(s => {
+    if (filters.active   && !s.active) return false;
+    if (filters.text     && !s.title.toLowerCase().includes(filters.text)) return false;
+    if (filters.lead     && !(s.extra?.lead || '').toLowerCase().includes(filters.lead)) return false;
+    if (filters.genre && !(s.genre || '').toLowerCase().includes(filters.genre)) return false;
+    return true;
+  });
+}
+
+function applyFilter() {
+  const visible = getVisibleSongs();
+  const tbody = document.getElementById('tbody');
+  if (!tbody) return;
+  const newRows = [...tbody.querySelectorAll('tr[data-id^="_new_"]')];
+  tbody.innerHTML = visible.map(s => renderRow(s)).join('');
+  newRows.forEach(r => tbody.appendChild(r));
+  const countEl = document.getElementById('filter-count');
+  if (countEl) countEl.textContent = `${visible.length} / ${songs.length}`;
+}
+
+const FILTER_COLS = {
+  'title':      () => `<input type="text" id="filter-text" class="col-filter" placeholder="Search…" value="${escHtml(filters.text)}" autocomplete="off">`,
+  'active':     () => `<input type="checkbox" id="filter-active" class="col-filter-check" title="Active only" ${filters.active ? 'checked' : ''}>`,
+  'extra.lead': () => `<input type="text" id="filter-lead" class="col-filter" placeholder="…" value="${escHtml(filters.lead)}" autocomplete="off">`,
+  'genre':   () => `<input type="text" id="filter-cat" class="col-filter" placeholder="…" value="${escHtml(filters.genre)}" autocomplete="off">`,
+};
+
+function renderTable() {
+  const saved = getSavedWidths();
+  const headers = COLS.map((c, i) => {
+    const w = saved[c.key] ?? c.width;
+    const sticky = i === 0 ? ' col-sticky' : '';
+    const filter = FILTER_COLS[c.key] ? FILTER_COLS[c.key]() : '';
+    return `<th class="${c.cls}${sticky}" data-col="${c.key}" style="width:${w}px${i === 0 ? ';left:0' : ''}"${c.title ? ` title="${c.title}"` : ''}>` +
+           `<span class="col-label">${c.label}</span>` +
+           `<div class="resize-handle"></div>` +
+           `${filter}</th>`;
+  }).join('') + '<th class="col-del" style="width:36px"></th>';
+  const visible = getVisibleSongs();
+  const rows = visible.map(s => renderRow(s)).join('');
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="toolbar">
+      <button class="btn active" id="save-btn" disabled>Save</button>
+      <button class="btn" id="discard-btn" disabled>Discard</button>
+      <button class="btn" id="add-btn">+ Add song</button>
+      <span class="status" id="status"></span>
+      <span class="filter-count" id="filter-count">${visible.length} / ${songs.length}</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${headers}</tr></thead>
+        <tbody id="tbody">${rows}</tbody>
+      </table>
+    </div>
+    <div id="logs-section"></div>`;
+
+  document.getElementById('save-btn').addEventListener('click', saveAll);
+  document.getElementById('discard-btn').addEventListener('click', discardAll);
+  document.getElementById('add-btn').addEventListener('click', addRow);
+  document.getElementById('filter-text').addEventListener('input', e => {
+    filters.text = e.target.value.toLowerCase();
+    applyFilter();
+  });
+  document.getElementById('filter-active').addEventListener('change', e => {
+    filters.active = e.target.checked;
+    applyFilter();
+  });
+  document.getElementById('filter-lead').addEventListener('input', e => {
+    filters.lead = e.target.value.toLowerCase();
+    applyFilter();
+  });
+  document.getElementById('filter-cat').addEventListener('input', e => {
+    filters.genre = e.target.value.toLowerCase();
+    applyFilter();
+  });
+
+  initResizableColumns();
+}
+
+function initResizableColumns() {
+  const ths = document.querySelectorAll('thead th[data-col]');
+
+  ths.forEach(th => {
+    const handle = th.querySelector('.resize-handle');
+    if (!handle) return;
+
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const startX    = e.pageX;
+      const startWidth = parseInt(th.style.width) || th.offsetWidth;
+      handle.classList.add('resizing');
+      document.body.style.cursor    = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      function onMove(e) {
+        th.style.width = Math.max(40, startWidth + e.pageX - startX) + 'px';
+      }
+
+      function onUp() {
+        handle.classList.remove('resizing');
+        document.body.style.cursor    = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+        const widths = {};
+        document.querySelectorAll('thead th[data-col]').forEach(t => {
+          widths[t.dataset.col] = parseInt(t.style.width);
+        });
+        localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(widths));
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  });
+}
+
+function renderRow(song) {
+  const sid = song.id || song._newId;
+  const cells = COLS.map((c, i) => {
+    const val = getVal(song, c.key);
+    const sticky = i === 0 ? ' col-sticky' : '';
+    if (c.type === 'stat') {
+      let display = '—';
+      if (val !== '' && val !== null && val !== undefined) {
+        if (c.key === 'last_played_at') {
+          display = new Date(val).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' });
+        } else {
+          display = String(val);
+        }
+      }
+      let clickable = false, attrs = '';
+      if (c.key === 'play_count' && song.id) {
+        clickable = true;
+        attrs = ` onclick="openAppearances(${song.id})"`;
+      } else if (c.key === 'gema_work_number' && val && val !== '—' && song.id) {
+        clickable = true;
+        attrs = ` onclick="openGema(${song.id})"`;
+      }
+      return `<td class="${c.cls}${sticky}">
+        <span class="stat-cell${clickable ? ' clickable' : ''}"${attrs}>${escHtml(display)}</span>
+      </td>`;
+    }
+    if (c.type === 'listen') {
+      const hasUrl = !!val;
+      const actionBtn = hasUrl
+        ? `<button class="listen-play-btn" onclick="openPlayer('${sid}')" title="Play">▶</button>`
+        : `<button class="listen-upload-btn" onclick="triggerAudioUpload('${sid}')" title="Upload audio">↑</button>`;
+      return `<td class="${c.cls}${sticky} listen-cell">
+        <input type="text" data-id="${sid}" data-key="${c.key}"
+          value="${escHtml(String(val))}" style="display:none">
+        ${actionBtn}
+        <input type="file" class="listen-file-input" accept="audio/*" style="display:none"
+          onchange="handleAudioFile(this, '${sid}')">
+      </td>`;
+    }
+    if (c.type === 'sheet') {
+      const hasUrl = !!val;
+      const actionBtn = hasUrl
+        ? `<button class="sheet-open-btn" onclick="openSheet('${sid}')" title="Open sheet">≡</button>`
+        : `<button class="sheet-upload-btn" onclick="triggerSheetUpload('${sid}')" title="Upload PDF">↑</button>`;
+      return `<td class="${c.cls}${sticky} sheet-cell">
+        <input type="text" data-id="${sid}" data-key="${c.key}"
+          value="${escHtml(String(val))}" style="display:none">
+        ${actionBtn}
+        <input type="file" class="sheet-file-input" accept=".pdf,application/pdf" style="display:none"
+          onchange="handleSheetFile(this, '${sid}')">
+      </td>`;
+    }
+    if (c.type === 'playback') {
+      const hasUrl = !!val;
+      const actionBtn = hasUrl
+        ? `<button class="playback-open-btn" onclick="openPlayback('${sid}')" title="Play playback">▷</button>`
+        : `<button class="playback-upload-btn" onclick="triggerPlaybackUpload('${sid}')" title="Upload playback">↑</button>`;
+      return `<td class="${c.cls}${sticky} playback-cell">
+        <input type="text" data-id="${sid}" data-key="${c.key}"
+          value="${escHtml(String(val))}" style="display:none">
+        ${actionBtn}
+        <input type="file" class="playback-file-input" accept="audio/*" style="display:none"
+          onchange="handlePlaybackFile(this, '${sid}')">
+      </td>`;
+    }
+    if (c.type === 'lyrics') {
+      const hasLyrics = !!(val && String(val).trim());
+      const actionBtn = hasLyrics
+        ? `<button class="lyrics-open-btn" onclick="openLyrics('${sid}')" title="View lyrics">¶</button>`
+        : `<button class="lyrics-add-btn"  onclick="openLyricsEdit('${sid}')" title="Add lyrics">+</button>`;
+      return `<td class="${c.cls}${sticky} lyrics-cell">
+        <textarea data-id="${sid}" data-key="${c.key}" style="display:none">${escHtml(String(val ?? ''))}</textarea>
+        ${actionBtn}
+      </td>`;
+    }
+    if (c.type === 'bool') {
+      return `<td class="${c.cls}${sticky}">
+        <input type="checkbox" data-id="${sid}" data-key="${c.key}"
+          ${val === true || val === 'true' || val === 1 ? 'checked' : ''}
+          onchange="markDirty('${sid}')">
+      </td>`;
+    }
+    if (c.type === 'time') {
+      return `<td class="${c.cls}${sticky}">
+        <input type="text" data-id="${sid}" data-key="${c.key}" data-type="time"
+          value="${escHtml(minsToTime(val))}" placeholder="MM:SS"
+          oninput="markDirty('${sid}')">
+      </td>`;
+    }
+    if (c.type === 'number') {
+      return `<td class="${c.cls}${sticky}">
+        <input type="number" data-id="${sid}" data-key="${c.key}"
+          value="${escHtml(String(val))}" min="0" step="any"
+          oninput="markDirty('${sid}')">
+      </td>`;
+    }
+    if (c.type === 'select') {
+      if (song.gema_work_number) {
+        return `<td class="${c.cls}${sticky}"><span class="stat-cell">${escHtml(val || '—')}</span></td>`;
+      }
+      const cur = song.extra?.language || c.default || '';
+      const opts = (c.options || []).map(o =>
+        `<option value="${o}"${o === cur ? ' selected' : ''}>${o}</option>`
+      ).join('');
+      return `<td class="${c.cls}${sticky}">
+        <select data-id="${sid}" data-key="extra.language" onchange="markDirty('${sid}')">${opts}</select>
+      </td>`;
+    }
+    if (c.type === 'url') {
+      const link = val ? `<a href="${escHtml(String(val))}" target="_blank" rel="noopener" class="url-link">↗</a>` : '';
+      return `<td class="${c.cls}${sticky} url-cell">
+        <input type="text" data-id="${sid}" data-key="${c.key}"
+          value="${escHtml(String(val))}" placeholder="https://…"
+          oninput="markDirty('${sid}')">${link}
+      </td>`;
+    }
+    return `<td class="${c.cls}${sticky}">
+      <input type="text" data-id="${sid}" data-key="${c.key}"
+        value="${escHtml(String(val))}"
+        oninput="markDirty('${sid}')">
+    </td>`;
+  }).join('');
+
+  return `<tr id="row-${sid}" data-id="${sid}">${cells}
+    <td class="col-del">
+      <button class="del-btn" onclick="deleteRow('${sid}')" title="Delete">&#215;</button>
+    </td>
+  </tr>`;
+}
+
+// --- Dirty tracking ---
+
+function markDirty(sid) {
+  dirty.add(String(sid));
+  const row = document.getElementById(`row-${sid}`);
+  if (row) row.classList.add('dirty');
+  setStatus('unsaved', 'Unsaved changes');
+  document.getElementById('save-btn')?.removeAttribute('disabled');
+  document.getElementById('discard-btn')?.removeAttribute('disabled');
+}
+
+function setStatus(cls, msg) {
+  const el = document.getElementById('status');
+  if (!el) return;
+  el.className = 'status ' + cls;
+  el.textContent = msg;
+}
+
+// --- Collect row ---
+
+function collectRow(sid) {
+  const inputs = document.querySelectorAll(`input[data-id="${sid}"], textarea[data-id="${sid}"], select[data-id="${sid}"]`);
+  const result = { extra: {} };
+  for (const input of inputs) {
+    const key = input.dataset.key;
+    let val;
+    if (input.type === 'checkbox')          val = input.checked;
+    else if (input.dataset.type === 'time') val = timeToMins(input.value);
+    else if (input.type === 'number')       val = input.value.trim() === '' ? null : parseFloat(input.value);
+    else                                    val = input.value.trim() || null;
+    if (key.startsWith('extra.')) result.extra[key.slice(6)] = val;
+    else                          result[key] = val;
+  }
+  return result;
+}
+
+// --- Add / delete ---
+
+function addRow() {
+  newRowCounter++;
+  const tempId = `_new_${newRowCounter}`;
+  const blank  = { _newId: tempId, extra: {}, active: true, length_min: 4 };
+  const tbody  = document.getElementById('tbody');
+  const tr     = document.createElement('tr');
+  tr.id = `row-${tempId}`;
+  tr.dataset.id = tempId;
+  // renderRow returns a full <tr>…</tr> — extract the innerHTML
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = renderRow(blank);
+  tr.innerHTML = tmp.firstElementChild.innerHTML;
+  tbody.appendChild(tr);
+  dirty.add(tempId);
+  tr.classList.add('dirty');
+  tr.querySelector('input[type="text"]')?.focus();
+  setStatus('unsaved', 'Unsaved changes');
+}
+
+async function deleteRow(sid) {
+  // Unsaved new row — never reached the DB, just remove from DOM
+  if (String(sid).startsWith('_new_')) {
+    document.getElementById(`row-${sid}`)?.remove();
+    dirty.delete(sid);
+    if (dirty.size === 0) setStatus('', '');
+    return;
+  }
+
+  if (!confirm('Delete this song? It will also be removed from any saved setlists.')) return;
+
+  const token = sessionStorage.getItem('setlist_token');
+  const r = await fetch(`/api/${bandSlug}/songs/${sid}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+
+  if (r.ok || r.status === 404) {
+    document.getElementById(`row-${sid}`)?.remove();
+    dirty.delete(String(sid));
+    songs = songs.filter(s => String(s.id) !== String(sid));
+    if (dirty.size === 0) setStatus('', '');
+  } else if (r.status === 401) {
+    sessionStorage.removeItem('setlist_token');
+    renderAuthGate();
+  } else {
+    setStatus('error', 'Could not delete song — try again');
+  }
+}
+
+// --- Save / Discard ---
+
+function discardAll() {
+  if (dirty.size === 0) return;
+  dirty.clear();
+  renderTable();
+}
+
+async function saveAll() {
+  const token = sessionStorage.getItem('setlist_token');
+  if (!token) { renderAuthGate(); return; }
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  setStatus('', 'Saving…');
+
+  try {
+    const allRows  = [...document.querySelectorAll('#tbody tr')];
+    const toUpdate = [];
+    const toInsert = [];
+
+    for (const tr of allRows) {
+      const sid = tr.dataset.id;
+      if (!dirty.has(sid)) continue;
+      const data = collectRow(sid);
+      if (sid.startsWith('_new_')) toInsert.push(data);
+      else                          toUpdate.push({ id: parseInt(sid, 10), ...data });
+    }
+
+    if (toUpdate.length > 0) {
+      const r = await fetch(`/api/${bandSlug}/songs`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(toUpdate),
+      });
+      if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+      if (!r.ok) throw new Error('patch failed');
+    }
+
+    for (const data of toInsert) {
+      if (!data.title) continue;
+      const r = await fetch(`/api/${bandSlug}/songs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(data),
+      });
+      if (!r.ok) throw new Error('insert failed');
+    }
+
+    dirty.clear();
+    await loadAndRender();
+    setStatus('saved', 'All changes saved');
+    setTimeout(() => setStatus('', ''), 3000);
+
+  } catch {
+    setStatus('error', 'Save failed — try again');
+  } finally {
+    const b = document.getElementById('save-btn');
+    if (b) { b.disabled = false; b.textContent = 'Save'; }
+  }
+}
+
+// --- Logs ---
+
+async function loadLogs() {
+  const el = document.getElementById('logs-section');
+  if (!el || !bandSlug) return;
+  try {
+    const logs = await fetch(`/api/${bandSlug}/song-logs`).then(r => r.json());
+    renderLogs(logs);
+  } catch {
+    el.innerHTML = '';
+  }
+}
+
+function timeAgo(iso) {
+  const secs = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (secs < 60)   return 'just now';
+  if (secs < 3600) return Math.floor(secs / 60) + ' min ago';
+  if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
+  return Math.floor(secs / 86400) + 'd ago';
+}
+
+function renderLogs(logs) {
+  const el = document.getElementById('logs-section');
+  if (!el) return;
+  if (!logs.length) { el.innerHTML = ''; return; }
+
+  const token = sessionStorage.getItem('setlist_token');
+  const items = logs.map(log => {
+    const title = log.song_data?.title ?? '(unknown)';
+    const badge = log.action === 'create' ? 'log-create'
+                : log.action === 'delete' ? 'log-delete'
+                : 'log-update';
+    const label = log.action === 'create' ? 'added'
+                : log.action === 'delete' ? 'deleted'
+                : 'updated';
+    const restore = (log.action === 'delete' && token)
+      ? `<button class="log-restore-btn" onclick="restoreSong(${log.song_id})">Restore</button>`
+      : '';
+    return `<div class="log-row">
+      <span class="log-badge ${badge}">${label}</span>
+      <span class="log-title">${escHtml(title)}</span>
+      <span class="log-time">${timeAgo(log.changed_at)}</span>
+      ${restore}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="logs-wrap"><h2 class="logs-heading">Change log</h2>${items}</div>`;
+}
+
+async function restoreSong(songId) {
+  const token = sessionStorage.getItem('setlist_token');
+  if (!token) return;
+  const r = await fetch(`/api/${bandSlug}/songs/${songId}/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+  });
+  if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+  if (r.ok) {
+    await loadAndRender();
+  } else {
+    setStatus('error', 'Could not restore song — try again');
+  }
+}
+
+// --- Song appearances modal ---
+
+async function openAppearances(songId) {
+  const song  = songs.find(s => s.id === songId);
+  const modal = document.getElementById('appearances-modal');
+  document.getElementById('appearances-title').textContent =
+    song ? `"${song.title}"` : 'Song appearances';
+  const list = document.getElementById('appearances-list');
+  list.innerHTML = '<p class="appearance-loading">Loading…</p>';
+  modal.classList.add('open');
+
+  try {
+    const data = await fetch(`/api/${bandSlug}/songs/${songId}/setlists`).then(r => r.json());
+    if (!data.length) {
+      list.innerHTML = '<p class="appearance-empty">Not in any setlist yet.</p>';
+      return;
+    }
+    list.innerHTML = data.map(sl => {
+      const parts = [sl.gig_name, sl.gig_date ? String(sl.gig_date).slice(0, 10) : null, sl.gig_venue]
+        .filter(Boolean);
+      const label = parts.length ? parts.join(' — ') : (sl.title || `Setlist #${sl.id}`);
+      const date  = new Date(sl.created_at).toLocaleDateString('fr-FR',
+        { day: 'numeric', month: 'long', year: 'numeric' });
+      return `<div class="appearance-row">
+        <a class="appearance-gig" href="/setlist-history#set-${sl.id}" target="_blank">${escHtml(label)}</a>
+        <span class="appearance-date">${date}</span>
+      </div>`;
+    }).join('');
+  } catch {
+    list.innerHTML = '<p class="appearance-empty">Failed to load.</p>';
+  }
+}
+
+function closeAppearances() {
+  document.getElementById('appearances-modal').classList.remove('open');
+}
+
+document.getElementById('appearances-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeAppearances();
+});
+
+// --- GEMA modal ---
+
+async function openGema(songId) {
+  const modal   = document.getElementById('gema-modal');
+  const title   = document.getElementById('gema-title');
+  const content = document.getElementById('gema-content');
+  const song    = songs.find(s => s.id === songId);
+  title.textContent = song?.title ?? 'GEMA';
+  content.innerHTML = '<p class="gema-loading">Loading…</p>';
+  modal.classList.add('open');
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${songId}/gema`);
+    const { works, rightholders } = await r.json();
+    content.innerHTML = works.length ? renderGemaContent(works, rightholders) : '<p class="gema-loading">No GEMA registration linked.</p>';
+  } catch {
+    content.innerHTML = '<p class="gema-loading">Failed to load.</p>';
+  }
+}
+
+function renderGemaContent(works, rightholders) {
+  return works.map(work => {
+    const rh = rightholders.filter(r => r.gema_work_id === work.id);
+    const dur = work.duration_sec != null
+      ? `${Math.floor(work.duration_sec / 60)}:${String(work.duration_sec % 60).padStart(2, '0')}`
+      : null;
+    const details = [
+      ['ISWC',             work.iswc],
+      ['ISRC',             work.isrc],
+      ['Language',         work.language],
+      ['Performers',       work.performers],
+      ['Genre',            work.gema_genre],
+      ['Duration',         dur],
+      ['First registered', work.first_registered_at],
+      ['Last updated',     work.last_updated_at],
+    ].filter(([, v]) => v);
+
+    const dlHtml = details.map(([k, v]) =>
+      `<dt>${escHtml(k)}</dt><dd>${escHtml(String(v))}</dd>`
+    ).join('');
+
+    const rhHtml = rh.length ? `
+      <table class="gema-rh-table">
+        <thead><tr><th>Name</th><th>Role</th><th>AR %</th><th>VR %</th><th>Society</th><th>Represents</th></tr></thead>
+        <tbody>${rh.map(r => `<tr>
+          <td>${escHtml(r.name)}</td>
+          <td>${escHtml(r.role)}</td>
+          <td>${r.ar_share != null ? r.ar_share : '—'}</td>
+          <td>${r.vr_share != null ? r.vr_share : '—'}</td>
+          <td>${escHtml(r.society_ar || '—')}</td>
+          <td>${r.represents_name ? escHtml(r.represents_name) : '—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>` : '';
+
+    return `<div class="gema-work">
+      <h3 class="gema-work-nr">${escHtml(work.gema_work_number)}</h3>
+      ${dlHtml ? `<dl class="gema-details">${dlHtml}</dl>` : ''}
+      ${rhHtml}
+    </div>`;
+  }).join('');
+}
+
+function closeGema() {
+  document.getElementById('gema-modal').classList.remove('open');
+}
+
+document.getElementById('gema-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeGema();
+});
+
+// --- Audio upload ---
+
+function triggerAudioUpload(sid) {
+  const row = document.getElementById(`row-${sid}`);
+  if (!row) return;
+  row.querySelector('.listen-file-input')?.click();
+}
+
+async function handleAudioFile(input, sid) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = ''; // reset so same file can be re-selected
+
+  if (file.size > 50 * 1024 * 1024) {
+    setStatus('error', 'File too large — max 50 MB');
+    return;
+  }
+
+  const uploadBtn = document.querySelector(`#row-${sid} .listen-upload-btn`);
+  if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
+
+    const { uploadUrl, publicUrl } = await r.json();
+
+    const put = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
+
+    // Confirm upload: save publicUrl to DB, delete previous file from R2 if any
+    const song = songs.find(s => String(s.id) === String(sid));
+    
+    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ publicUrl }),
+    });
+    if (confirm.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
+
+    // Update local cache and swap ↑ for ▶ in the table cell
+    if (song) { song.extra = { ...(song.extra ?? {}), listenUrl: publicUrl }; }
+    const td = document.querySelector(`#row-${sid} .listen-cell`);
+    if (td) {
+      td.querySelector('input[type="text"]').value = publicUrl;
+      td.querySelector('.listen-upload-btn')?.remove();
+      if (!td.querySelector('.listen-play-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'listen-play-btn';
+        btn.title = 'Play';
+        btn.textContent = '▶';
+        btn.setAttribute('onclick', `openPlayer('${sid}')`);
+        td.prepend(btn);
+      }
+    }
+    setStatus('saved', 'Audio uploaded');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Upload failed — check your connection');
+  } finally {
+    if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
+  }
+}
+
+// --- Player modal ---
+
+function toEmbedUrl(url) {
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1`;
+  if (/soundcloud\.com/.test(url))
+    return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&auto_play=true&color=%23f9bf8f&hide_related=true&show_comments=false`;
+  return null;
+}
+
+function openPlayer(sid) {
+  const row = document.getElementById(`row-${sid}`);
+  if (!row) return;
+  const url = row.querySelector('.listen-cell input[type="text"]')?.value?.trim();
+  if (!url) return;
+
+  const song  = songs.find(s => String(s.id) === String(sid));
+  const title = song?.title ?? row.querySelector('[data-key="title"]')?.value ?? 'Listen';
+
+  currentPlayerSid = sid;
+  document.getElementById('player-title').textContent = `♪ ${title}`;
+
+  const isAudio  = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i.test(url);
+  const embedUrl = toEmbedUrl(url);
+  const content  = document.getElementById('player-content');
+
+  if (isAudio) {
+    content.innerHTML = `<audio controls src="${escHtml(url)}" autoplay></audio>`;
+  } else if (embedUrl) {
+    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}"
+      allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+  } else {
+    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
+  }
+
+  // Reset delete confirm state
+  document.getElementById('player-delete-confirm').style.display = 'none';
+  document.getElementById('player-delete-btn').style.display = '';
+  document.getElementById('player-history').innerHTML = '';
+
+  // Fetch audio history for this song
+  fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+    .then(r => r.ok ? r.json() : [])
+    .then(renderPlayerHistory)
+    .catch(() => {});
+
+  document.getElementById('player-modal').classList.add('open');
+}
+
+function closePlayer() {
+  document.getElementById('player-modal').classList.remove('open');
+  document.getElementById('player-content').innerHTML = ''; // stops playback
+  document.getElementById('player-history').innerHTML = '';
+  document.getElementById('player-delete-confirm').style.display = 'none';
+  document.getElementById('player-delete-btn').style.display = '';
+  currentPlayerSid = null;
+}
+
+function showDeleteConfirm() {
+  document.getElementById('player-delete-btn').style.display = 'none';
+  document.getElementById('player-delete-confirm').style.display = 'flex';
+}
+
+function cancelDeleteAudio() {
+  document.getElementById('player-delete-confirm').style.display = 'none';
+  document.getElementById('player-delete-btn').style.display = '';
+}
+
+async function confirmDeleteAudio() {
+  const sid = currentPlayerSid;
+  if (!sid) return;
+  closePlayer();
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!r.ok) { setStatus('error', 'Could not remove audio file'); return; }
+
+    // Update local cache and swap ▶ back to ↑ in the table cell
+    const song = songs.find(s => String(s.id) === String(sid));
+    if (song?.extra) delete song.extra.listenUrl;
+    const td = document.querySelector(`#row-${sid} .listen-cell`);
+    if (td) {
+      td.querySelector('input[type="text"]').value = '';
+      td.querySelector('.listen-play-btn')?.remove();
+      if (!td.querySelector('.listen-upload-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'listen-upload-btn';
+        btn.title = 'Upload audio';
+        btn.textContent = '↑';
+        btn.setAttribute('onclick', `triggerAudioUpload('${sid}')`);
+        td.appendChild(btn);
+      }
+    }
+    setStatus('saved', 'Audio removed');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Could not remove audio file');
+  }
+}
+
+function triggerReplaceAudio() {
+  document.getElementById('player-file-input').click();
+}
+
+async function handleReplaceFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const sid = currentPlayerSid;
+  if (!sid) return;
+
+  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
+
+  const replaceBtn = document.getElementById('player-replace-btn');
+  if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closePlayer(); return; }
+    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
+
+    const { uploadUrl, publicUrl } = await r.json();
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    
+    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ publicUrl }),
+    });
+    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
+
+    // Update local cache + table cell hidden input
+    if (song) { song.extra = { ...(song.extra ?? {}), listenUrl: publicUrl }; }
+    const td = document.querySelector(`#row-${sid} .listen-cell`);
+    if (td) td.querySelector('input[type="text"]').value = publicUrl;
+
+    // Swap player content to new file
+    const isAudio = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i.test(publicUrl);
+    const embedUrl = toEmbedUrl(publicUrl);
+    const content  = document.getElementById('player-content');
+    if (isAudio) {
+      content.innerHTML = `<audio controls src="${escHtml(publicUrl)}" autoplay></audio>`;
+    } else if (embedUrl) {
+      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}"
+        allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+    }
+
+    // Refresh history
+    fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+      .then(r2 => r2.ok ? r2.json() : [])
+      .then(renderPlayerHistory)
+      .catch(() => {});
+
+    setStatus('saved', 'Audio replaced');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Upload failed — check your connection');
+  } finally {
+    if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
+  }
+}
+
+function renderPlayerHistory(logs) {
+  const el = document.getElementById('player-history');
+  if (!el) return;
+  const audio = logs.filter(l => l.action === 'audio_replace' || l.action === 'audio_delete');
+  if (!audio.length) { el.innerHTML = ''; return; }
+
+  const items = audio.map(log => {
+    const desc = log.action === 'audio_replace'
+      ? `replaced — ${escHtml(log.song_data?.previousFilename ?? '?')}`
+      : `removed — ${escHtml(log.song_data?.filename ?? '?')}`;
+    return `<div class="player-history-item">
+      <span class="player-history-time">${timeAgo(log.changed_at)}</span>
+      <span>${desc}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<h3 class="player-history-heading">History</h3>${items}`;
+}
+
+// --- Sheet (PDF) column ---
+
+function triggerSheetUpload(sid) {
+  const row = document.getElementById(`row-${sid}`);
+  if (!row) return;
+  row.querySelector('.sheet-file-input')?.click();
+}
+
+async function handleSheetFile(input, sid) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  if (file.size > 20 * 1024 * 1024) { setStatus('error', 'File too large — max 20 MB'); return; }
+
+  const uploadBtn = document.querySelector(`#row-${sid} .sheet-upload-btn`);
+  if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ filename: file.name, size: file.size }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
+
+    const { uploadUrl, publicUrl } = await r.json();
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: file });
+    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    
+    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ publicUrl }),
+    });
+    if (confirm.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
+
+    if (song) { song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl }; }
+    const td = document.querySelector(`#row-${sid} .sheet-cell`);
+    if (td) {
+      td.querySelector('input[type="text"]').value = publicUrl;
+      td.querySelector('.sheet-upload-btn')?.remove();
+      if (!td.querySelector('.sheet-open-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'sheet-open-btn';
+        btn.title = 'Open sheet';
+        btn.textContent = '≡';
+        btn.setAttribute('onclick', `openSheet('${sid}')`);
+        td.prepend(btn);
+      }
+    }
+    setStatus('saved', 'Sheet uploaded');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Upload failed — check your connection');
+  } finally {
+    if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
+  }
+}
+
+function openSheet(sid) {
+  const row = document.getElementById(`row-${sid}`);
+  if (!row) return;
+  const url = row.querySelector('.sheet-cell input[type="text"]')?.value?.trim();
+  if (!url) return;
+
+  const song  = songs.find(s => String(s.id) === String(sid));
+  const title = song?.title ?? row.querySelector('[data-key="title"]')?.value ?? 'Sheet';
+
+  currentSheetSid = sid;
+  document.getElementById('sheet-title').textContent = `≡ ${title}`;
+  document.getElementById('sheet-open-link').href = url;
+  document.getElementById('sheet-content').innerHTML =
+    `<div class="sheet-embed"><iframe src="${escHtml(url)}" title="Sheet"></iframe></div>`;
+
+  document.getElementById('sheet-delete-confirm').style.display = 'none';
+  document.getElementById('sheet-delete-btn').style.display = '';
+  document.getElementById('sheet-history').innerHTML = '';
+
+  fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+    .then(r => r.ok ? r.json() : [])
+    .then(renderSheetHistory)
+    .catch(() => {});
+
+  document.getElementById('sheet-modal').classList.add('open');
+}
+
+function closeSheet() {
+  document.getElementById('sheet-modal').classList.remove('open');
+  document.getElementById('sheet-content').innerHTML = ''; // unload iframe
+  document.getElementById('sheet-history').innerHTML = '';
+  document.getElementById('sheet-delete-confirm').style.display = 'none';
+  document.getElementById('sheet-delete-btn').style.display = '';
+  currentSheetSid = null;
+}
+
+function showSheetDeleteConfirm() {
+  document.getElementById('sheet-delete-btn').style.display = 'none';
+  document.getElementById('sheet-delete-confirm').style.display = 'flex';
+}
+
+function cancelDeleteSheet() {
+  document.getElementById('sheet-delete-confirm').style.display = 'none';
+  document.getElementById('sheet-delete-btn').style.display = '';
+}
+
+async function confirmDeleteSheet() {
+  const sid = currentSheetSid;
+  if (!sid) return;
+  closeSheet();
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!r.ok) { setStatus('error', 'Could not remove sheet'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    if (song?.extra) delete song.extra.sheetUrl;
+    const td = document.querySelector(`#row-${sid} .sheet-cell`);
+    if (td) {
+      td.querySelector('input[type="text"]').value = '';
+      td.querySelector('.sheet-open-btn')?.remove();
+      if (!td.querySelector('.sheet-upload-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'sheet-upload-btn';
+        btn.title = 'Upload PDF';
+        btn.textContent = '↑';
+        btn.setAttribute('onclick', `triggerSheetUpload('${sid}')`);
+        td.appendChild(btn);
+      }
+    }
+    setStatus('saved', 'Sheet removed');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Could not remove sheet');
+  }
+}
+
+function triggerReplaceSheet() {
+  document.getElementById('sheet-file-input').click();
+}
+
+async function handleReplaceSheet(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const sid = currentSheetSid;
+  if (!sid) return;
+
+  if (file.size > 20 * 1024 * 1024) { setStatus('error', 'File too large — max 20 MB'); return; }
+
+  const replaceBtn = document.getElementById('sheet-replace-btn');
+  if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ filename: file.name, size: file.size }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closeSheet(); return; }
+    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
+
+    const { uploadUrl, publicUrl } = await r.json();
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: file });
+    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    
+    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ publicUrl }),
+    });
+    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
+
+    if (song) { song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl }; }
+    const td = document.querySelector(`#row-${sid} .sheet-cell`);
+    if (td) td.querySelector('input[type="text"]').value = publicUrl;
+
+    document.getElementById('sheet-open-link').href = publicUrl;
+    document.getElementById('sheet-content').innerHTML =
+      `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
+
+    fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+      .then(r2 => r2.ok ? r2.json() : [])
+      .then(renderSheetHistory)
+      .catch(() => {});
+
+    setStatus('saved', 'Sheet replaced');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Upload failed — check your connection');
+  } finally {
+    if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
+  }
+}
+
+function renderSheetHistory(logs) {
+  const el = document.getElementById('sheet-history');
+  if (!el) return;
+  const sheets = logs.filter(l => l.action === 'sheet_replace' || l.action === 'sheet_delete');
+  if (!sheets.length) { el.innerHTML = ''; return; }
+
+  const items = sheets.map(log => {
+    const desc = log.action === 'sheet_replace'
+      ? `replaced — ${escHtml(log.song_data?.previousFilename ?? '?')}`
+      : `removed — ${escHtml(log.song_data?.filename ?? '?')}`;
+    return `<div class="player-history-item">
+      <span class="player-history-time">${timeAgo(log.changed_at)}</span>
+      <span>${desc}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<h3 class="player-history-heading">History</h3>${items}`;
+}
+
+document.getElementById('player-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closePlayer();
+});
+
+document.getElementById('sheet-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeSheet();
+});
+
+// --- Playback column ---
+
+function triggerPlaybackUpload(sid) {
+  document.getElementById(`row-${sid}`)?.querySelector('.playback-file-input')?.click();
+}
+
+async function handlePlaybackFile(input, sid) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
+
+  const uploadBtn = document.querySelector(`#row-${sid} .playback-upload-btn`);
+  if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
+
+    const { uploadUrl, publicUrl } = await r.json();
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    
+    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      body: JSON.stringify({ publicUrl }),
+    });
+    if (confirm.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
+
+    if (song) { song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl }; }
+    const td = document.querySelector(`#row-${sid} .playback-cell`);
+    if (td) {
+      td.querySelector('input[type="text"]').value = publicUrl;
+      td.querySelector('.playback-upload-btn')?.remove();
+      if (!td.querySelector('.playback-open-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'playback-open-btn';
+        btn.title = 'Play playback';
+        btn.textContent = '▷';
+        btn.setAttribute('onclick', `openPlayback('${sid}')`);
+        td.prepend(btn);
+      }
+    }
+    setStatus('saved', 'Playback uploaded');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Upload failed — check your connection');
+  } finally {
+    if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
+  }
+}
+
+function openPlayback(sid) {
+  const row = document.getElementById(`row-${sid}`);
+  if (!row) return;
+  const url = row.querySelector('.playback-cell input[type="text"]')?.value?.trim();
+  if (!url) return;
+
+  const song  = songs.find(s => String(s.id) === String(sid));
+  const title = song?.title ?? row.querySelector('[data-key="title"]')?.value ?? 'Playback';
+
+  currentPlaybackSid = sid;
+  document.getElementById('playback-title').textContent = `▷ ${title}`;
+
+  const isAudio  = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i.test(url);
+  const embedUrl = toEmbedUrl(url);
+  const content  = document.getElementById('playback-content');
+  if (isAudio) {
+    content.innerHTML = `<audio controls src="${escHtml(url)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio>`;
+  } else if (embedUrl) {
+    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+  } else {
+    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
+  }
+
+  document.getElementById('playback-delete-confirm').style.display = 'none';
+  document.getElementById('playback-delete-btn').style.display = '';
+  document.getElementById('playback-history').innerHTML = '';
+
+  fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+    .then(r => r.ok ? r.json() : [])
+    .then(renderPlaybackHistory)
+    .catch(() => {});
+
+  document.getElementById('playback-modal').classList.add('open');
+}
+
+function closePlayback() {
+  document.getElementById('playback-modal').classList.remove('open');
+  document.getElementById('playback-content').innerHTML = ''; // stops playback
+  document.getElementById('playback-history').innerHTML = '';
+  document.getElementById('playback-delete-confirm').style.display = 'none';
+  document.getElementById('playback-delete-btn').style.display = '';
+  currentPlaybackSid = null;
+}
+
+function showPlaybackDeleteConfirm() {
+  document.getElementById('playback-delete-btn').style.display = 'none';
+  document.getElementById('playback-delete-confirm').style.display = 'flex';
+}
+
+function cancelDeletePlayback() {
+  document.getElementById('playback-delete-confirm').style.display = 'none';
+  document.getElementById('playback-delete-btn').style.display = '';
+}
+
+async function confirmDeletePlayback() {
+  const sid = currentPlaybackSid;
+  if (!sid) return;
+  closePlayback();
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!r.ok) { setStatus('error', 'Could not remove playback file'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    if (song?.extra) delete song.extra.playbackUrl;
+    const td = document.querySelector(`#row-${sid} .playback-cell`);
+    if (td) {
+      td.querySelector('input[type="text"]').value = '';
+      td.querySelector('.playback-open-btn')?.remove();
+      if (!td.querySelector('.playback-upload-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'playback-upload-btn';
+        btn.title = 'Upload playback';
+        btn.textContent = '↑';
+        btn.setAttribute('onclick', `triggerPlaybackUpload('${sid}')`);
+        td.appendChild(btn);
+      }
+    }
+    setStatus('saved', 'Playback removed');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Could not remove playback file');
+  }
+}
+
+function triggerReplacePlayback() {
+  document.getElementById('playback-file-input').click();
+}
+
+async function handleReplacePlayback(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const sid = currentPlaybackSid;
+  if (!sid) return;
+
+  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
+
+  const replaceBtn = document.getElementById('playback-replace-btn');
+  if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closePlayback(); return; }
+    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
+
+    const { uploadUrl, publicUrl } = await r.json();
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    
+    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      body: JSON.stringify({ publicUrl }),
+    });
+    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
+
+    if (song) { song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl }; }
+    const td = document.querySelector(`#row-${sid} .playback-cell`);
+    if (td) td.querySelector('input[type="text"]').value = publicUrl;
+
+    document.getElementById('playback-content').innerHTML =
+      `<audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio>`;
+
+    fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+      .then(r2 => r2.ok ? r2.json() : [])
+      .then(renderPlaybackHistory)
+      .catch(() => {});
+
+    setStatus('saved', 'Playback replaced');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Upload failed — check your connection');
+  } finally {
+    if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
+  }
+}
+
+function renderPlaybackHistory(logs) {
+  const el = document.getElementById('playback-history');
+  if (!el) return;
+  const items = logs.filter(l => l.action === 'playback_replace' || l.action === 'playback_delete');
+  if (!items.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `<h3 class="player-history-heading">History</h3>` + items.map(log => {
+    const desc = log.action === 'playback_replace'
+      ? `replaced — ${escHtml(log.song_data?.previousFilename ?? '?')}`
+      : `removed — ${escHtml(log.song_data?.filename ?? '?')}`;
+    return `<div class="player-history-item">
+      <span class="player-history-time">${timeAgo(log.changed_at)}</span>
+      <span>${desc}</span>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('playback-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closePlayback();
+});
+
+// --- Lyrics column ---
+
+function _lyricsSetMode(mode) { // 'view' or 'edit'
+  document.getElementById('lyrics-suggest-preview').style.display = 'none';
+  document.getElementById('lyrics-view').style.display        = mode === 'view' ? '' : 'none';
+  document.getElementById('lyrics-edit').style.display        = mode === 'edit' ? '' : 'none';
+  document.getElementById('lyrics-actions-view').style.display = mode === 'view' ? '' : 'none';
+  document.getElementById('lyrics-actions-edit').style.display = mode === 'edit' ? '' : 'none';
+}
+
+function openLyrics(sid) {
+  const song  = songs.find(s => String(s.id) === String(sid));
+  const title = song?.title ?? 'Lyrics';
+  const text  = song?.extra?.lyrics ?? '';
+
+  currentLyricsSid = sid;
+  document.getElementById('lyrics-title').textContent = `¶ ${title}`;
+  document.getElementById('lyrics-view').textContent  = text;
+  document.getElementById('lyrics-edit').value        = text;
+  document.getElementById('lyrics-delete-confirm').style.display = 'none';
+  document.getElementById('lyrics-delete-btn').style.display     = '';
+  _lyricsSetMode('view');
+  document.getElementById('lyrics-modal').classList.add('open');
+}
+
+function openLyricsEdit(sid) {
+  const song  = songs.find(s => String(s.id) === String(sid));
+  const title = song?.title ?? 'Lyrics';
+
+  currentLyricsSid = sid;
+  document.getElementById('lyrics-title').textContent = `¶ ${title}`;
+  document.getElementById('lyrics-edit').value        = song?.extra?.lyrics ?? '';
+  _lyricsSetMode('edit');
+  document.getElementById('lyrics-modal').classList.add('open');
+  document.getElementById('lyrics-edit').focus();
+}
+
+function closeLyrics() {
+  if (_lyricsSuggestAbort) { _lyricsSuggestAbort.abort(); _lyricsSuggestAbort = null; }
+  document.getElementById('lyrics-suggest-preview').style.display = 'none';
+  document.getElementById('lyrics-modal').classList.remove('open');
+  currentLyricsSid = null;
+}
+
+function _lyricsShowSuggestState(header, text, showActions) {
+  document.getElementById('lyrics-suggest-header').textContent          = header;
+  document.getElementById('lyrics-suggest-text').textContent            = text;
+  document.getElementById('lyrics-suggest-actions').style.display       = showActions ? '' : 'none';
+  document.getElementById('lyrics-suggest-preview').style.display       = '';
+}
+
+async function suggestLyrics() {
+  if (!currentLyricsSid) return;
+  const btn = document.getElementById('lyrics-suggest-btn');
+  if (!btn) return;
+  btn.textContent = '…'; btn.disabled = true;
+  _lyricsShowSuggestState('Searching lyrics.ovh, lrclib, AI…', '', false);
+  _lyricsSuggestAbort = new AbortController();
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${currentLyricsSid}/lyrics-suggest`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      signal: _lyricsSuggestAbort.signal,
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      _lyricsShowSuggestState(body.error ?? 'Could not fetch lyrics', '', false);
+      return;
+    }
+    const data = await r.json();
+    const sourcesList = data.sources ? data.sources.join(', ') : 'all sources';
+    if (!data.lyrics) {
+      const aiNote = data.aiSkipped ? ' (AI quota exhausted — try again tomorrow)' : '';
+      _lyricsShowSuggestState(`No lyrics found (tried: ${sourcesList})${aiNote}`, '', false);
+      return;
+    }
+    _lyricsShowSuggestState(`Suggested via ${data.source}`, data.lyrics, true);
+  } catch (e) {
+    if (e.name !== 'AbortError') _lyricsShowSuggestState('Could not fetch lyrics', '', false);
+  } finally {
+    btn.textContent = 'AI ✦'; btn.disabled = false;
+    _lyricsSuggestAbort = null;
+  }
+}
+
+function _lyricsAcceptSuggestion() {
+  document.getElementById('lyrics-edit').value = document.getElementById('lyrics-suggest-text').textContent;
+  document.getElementById('lyrics-suggest-preview').style.display = 'none';
+  document.getElementById('lyrics-edit').focus();
+}
+
+function _lyricsDiscardSuggestion() {
+  document.getElementById('lyrics-suggest-preview').style.display = 'none';
+}
+
+function startEditLyrics() {
+  document.getElementById('lyrics-edit').value = document.getElementById('lyrics-view').textContent;
+  _lyricsSetMode('edit');
+  document.getElementById('lyrics-edit').focus();
+}
+
+function cancelEditLyrics() {
+  const song = songs.find(s => String(s.id) === String(currentLyricsSid));
+  if (song?.extra?.lyrics) {
+    _lyricsSetMode('view');
+  } else {
+    closeLyrics();
+  }
+}
+
+async function saveLyrics() {
+  const sid = currentLyricsSid;
+  if (!sid) return;
+  const text = document.getElementById('lyrics-edit').value;
+
+  const saveBtn = document.getElementById('lyrics-save-btn');
+  if (saveBtn) { saveBtn.textContent = '…'; saveBtn.disabled = true; }
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/lyrics`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      body: JSON.stringify({ lyrics: text }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closeLyrics(); return; }
+    if (!r.ok) { setStatus('error', 'Could not save lyrics'); return; }
+
+    // Update local cache and DOM
+    const song = songs.find(s => String(s.id) === String(sid));
+    const trimmed = text.trim() || null;
+    if (song) { song.extra = { ...(song.extra ?? {}), lyrics: trimmed }; }
+
+    const td = document.querySelector(`#row-${sid} .lyrics-cell`);
+    if (td) {
+      td.querySelector('textarea').value = trimmed ?? '';
+      const existing = td.querySelector('.lyrics-open-btn, .lyrics-add-btn');
+      if (trimmed && existing?.classList.contains('lyrics-add-btn')) {
+        existing.className = 'lyrics-open-btn';
+        existing.textContent = '¶';
+        existing.title = 'View lyrics';
+        existing.setAttribute('onclick', `openLyrics('${sid}')`);
+      } else if (!trimmed && existing?.classList.contains('lyrics-open-btn')) {
+        existing.className = 'lyrics-add-btn';
+        existing.textContent = '+';
+        existing.title = 'Add lyrics';
+        existing.setAttribute('onclick', `openLyricsEdit('${sid}')`);
+      }
+    }
+
+    if (trimmed) {
+      document.getElementById('lyrics-view').textContent = trimmed;
+      _lyricsSetMode('view');
+    } else {
+      closeLyrics();
+    }
+    setStatus('saved', 'Lyrics saved');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Could not save lyrics');
+  } finally {
+    if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; }
+  }
+}
+
+function showLyricsDeleteConfirm() {
+  document.getElementById('lyrics-delete-btn').style.display     = 'none';
+  document.getElementById('lyrics-delete-confirm').style.display = 'flex';
+}
+
+function cancelDeleteLyrics() {
+  document.getElementById('lyrics-delete-confirm').style.display = 'none';
+  document.getElementById('lyrics-delete-btn').style.display     = '';
+}
+
+async function confirmDeleteLyrics() {
+  const sid = currentLyricsSid;
+  if (!sid) return;
+  closeLyrics();
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/songs/${sid}/lyrics`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+    });
+    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (!r.ok) { setStatus('error', 'Could not delete lyrics'); return; }
+
+    const song = songs.find(s => String(s.id) === String(sid));
+    if (song?.extra) delete song.extra.lyrics;
+
+    const td = document.querySelector(`#row-${sid} .lyrics-cell`);
+    if (td) {
+      td.querySelector('textarea').value = '';
+      const btn = td.querySelector('.lyrics-open-btn');
+      if (btn) {
+        btn.className = 'lyrics-add-btn';
+        btn.textContent = '+';
+        btn.title = 'Add lyrics';
+        btn.setAttribute('onclick', `openLyricsEdit('${sid}')`);
+      }
+    }
+    setStatus('saved', 'Lyrics deleted');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch {
+    setStatus('error', 'Could not delete lyrics');
+  }
+}
+
+document.getElementById('lyrics-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeLyrics();
+});
+
+init();
