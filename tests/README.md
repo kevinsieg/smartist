@@ -1,6 +1,6 @@
 # API Tests
 
-Integration tests for the Band Tools API. No dependencies — runs with Node 18+.
+Integration tests for the Band Tools API. No dependencies — runs with Node 20+ (uses native fetch).
 
 ## Setup
 
