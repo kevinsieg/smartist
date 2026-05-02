@@ -1,0 +1,10 @@
+/.idea
+.DS_Store
+.env
+.env.local
+.env*.local
+node_modules/
+.vercel
+logs/
+.claude/
+data/

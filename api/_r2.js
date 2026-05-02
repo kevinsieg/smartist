@@ -1,0 +1,71 @@
+const { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+// ── Object storage provider ───────────────────────────────────────────────────
+// Current: Cloudflare R2 (S3-compatible, free tier: 10 GB storage, no egress fees)
+// The @aws-sdk/client-s3 package works with any S3-compatible provider.
+// To switch providers, update STORAGE and the env vars in .env / Vercel dashboard.
+//
+//   AWS S3:       remove endpoint, set region to your bucket's region (e.g. 'eu-west-1')
+//                 env vars: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME, S3_PUBLIC_URL
+//   Backblaze B2: endpoint = 'https://s3.{region}.backblazeb2.com', region = '{region}'
+//   MinIO:        endpoint = 'http://localhost:9000', region = 'us-east-1'
+//
+// Non-S3 providers (GCS, Azure Blob): replace the SDK; keep exported function
+// signatures (createPresignedUrl, deleteFromR2, keyFromUrl, filenameFromUrl) so
+// callers need no changes.
+const STORAGE = {
+  region:          'auto',                                                             // AWS S3: e.g. 'eu-west-1'
+  endpoint:        () => `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, // remove for AWS S3
+  accessKeyId:     () => process.env.R2_ACCESS_KEY_ID,
+  secretAccessKey: () => process.env.R2_SECRET_ACCESS_KEY,
+  bucket:          () => process.env.R2_BUCKET_NAME,
+  publicUrl:       () => process.env.R2_PUBLIC_URL,
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getR2Client() {
+  return new S3Client({
+    region:      STORAGE.region,
+    endpoint:    STORAGE.endpoint(),
+    credentials: { accessKeyId: STORAGE.accessKeyId(), secretAccessKey: STORAGE.secretAccessKey() },
+  });
+}
+
+function keyFromUrl(url) {
+  const base = STORAGE.publicUrl();
+  if (base && url && url.startsWith(base)) return url.slice(base.length + 1);
+  return null;
+}
+
+function filenameFromUrl(url) {
+  try { return decodeURIComponent(url.split('/').pop().split('?')[0]); } catch { return url; }
+}
+
+async function deleteFromR2(url) {
+  const key = keyFromUrl(url);
+  if (!key) return;
+  try {
+    await getR2Client().send(new DeleteObjectCommand({ Bucket: STORAGE.bucket(), Key: key }));
+  } catch {
+    // Non-fatal: log entry still written even if storage delete fails
+  }
+}
+
+async function createPresignedUrl(key, contentType) {
+  const command = new PutObjectCommand({ Bucket: STORAGE.bucket(), Key: key, ContentType: contentType });
+  const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 300 });
+  const publicUrl = `${STORAGE.publicUrl()}/${key}`;
+  return { uploadUrl, publicUrl };
+}
+
+async function verifyUpload(key) {
+  try {
+    const r = await getR2Client().send(new HeadObjectCommand({ Bucket: STORAGE.bucket(), Key: key }));
+    return { size: r.ContentLength ?? 0, contentType: r.ContentType ?? '' };
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { getR2Client, keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload };

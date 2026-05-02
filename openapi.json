@@ -1,0 +1,804 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Salmon & the Laundry Bear — Band API",
+    "version": "1.0.0",
+    "description": "Internal API for setlist management, song database, and gig tracking.\n\n**Auth**: most write endpoints require a `Bearer` token in the `Authorization` header. The token is either the band password or a short-lived magic token obtained via `/request-reset`.\n\nThe `{band}` path segment is the band slug (`bandone`). Fetch it at runtime from `GET /api/config`."
+  },
+  "servers": [
+    { "url": "https://band-one.example", "description": "Production" },
+    { "url": "http://localhost:3000", "description": "Local (vercel dev)" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Band password or magic login token"
+      }
+    },
+    "parameters": {
+      "band": {
+        "name": "band",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "Band slug — obtain from `GET /api/config`",
+        "example": "bandone"
+      },
+      "id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer" },
+        "description": "Resource ID"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        },
+        "required": ["error"]
+      },
+      "Ok": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "enum": [true] }
+        }
+      },
+      "Song": {
+        "type": "object",
+        "properties": {
+          "id":                   { "type": "integer" },
+          "band_id":              { "type": "integer" },
+          "title":                { "type": "string" },
+          "active":               { "type": "boolean" },
+          "key":                  { "type": "string",  "nullable": true },
+          "genre":             { "type": "string",  "nullable": true },
+          "tempo":                { "type": "number",  "nullable": true },
+          "length_min":           { "type": "number",  "nullable": true },
+          "interpret":            { "type": "string",  "nullable": true },
+          "reference_interpret":  { "type": "string",  "nullable": true },
+          "comment":              { "type": "string",  "nullable": true },
+          "extra":                { "type": "object" },
+          "deleted":              { "type": "boolean" }
+        }
+      },
+      "SongWithStats": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Song" },
+          {
+            "type": "object",
+            "properties": {
+              "play_count":     { "type": "integer", "description": "Number of distinct setlists this song appears in" },
+              "last_played_at": { "type": "string", "format": "date-time", "nullable": true }
+            }
+          }
+        ]
+      },
+      "SongInput": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title":                { "type": "string", "maxLength": 200 },
+          "active":               { "type": "boolean", "default": true },
+          "key":                  { "type": "string", "maxLength": 20,  "nullable": true },
+          "genre":             { "type": "string", "maxLength": 100, "nullable": true },
+          "tempo":                { "type": "number", "nullable": true },
+          "length_min":           { "type": "number", "nullable": true },
+          "interpret":            { "type": "string", "maxLength": 200, "nullable": true },
+          "reference_interpret":  { "type": "string", "maxLength": 500, "nullable": true },
+          "comment":              { "type": "string", "maxLength": 2000, "nullable": true },
+          "extra":                { "type": "object", "nullable": true }
+        }
+      },
+      "Gig": {
+        "type": "object",
+        "properties": {
+          "id":      { "type": "integer" },
+          "band_id": { "type": "integer" },
+          "name":    { "type": "string" },
+          "date":    { "type": "string", "format": "date", "nullable": true },
+          "venue":   { "type": "string", "nullable": true },
+          "notes":   { "type": "string", "nullable": true }
+        }
+      },
+      "GigInput": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name":  { "type": "string", "maxLength": 200 },
+          "date":  { "type": "string", "format": "date", "nullable": true },
+          "venue": { "type": "string", "maxLength": 200, "nullable": true },
+          "notes": { "type": "string", "maxLength": 2000, "nullable": true }
+        }
+      },
+      "Setlist": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "integer" },
+          "band_id":    { "type": "integer" },
+          "title":      { "type": "string", "nullable": true },
+          "comment":    { "type": "string", "nullable": true },
+          "gig_id":     { "type": "integer", "nullable": true },
+          "gig_name":   { "type": "string", "nullable": true },
+          "gig_date":   { "type": "string", "nullable": true },
+          "gig_venue":  { "type": "string", "nullable": true },
+          "song_count": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SetlistWithSongs": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Setlist" },
+          {
+            "type": "object",
+            "properties": {
+              "songs": {
+                "type": "array",
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Song" },
+                    { "type": "object", "properties": { "position": { "type": "integer" } } }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SetlistInput": {
+        "type": "object",
+        "required": ["song_ids"],
+        "properties": {
+          "title":    { "type": "string", "maxLength": 200, "nullable": true },
+          "comment":  { "type": "string", "maxLength": 2000, "nullable": true },
+          "gig_id":   { "type": "integer", "nullable": true },
+          "song_ids": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "Ordered list of song IDs (position = array index)"
+          }
+        }
+      },
+      "SongLog": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "integer" },
+          "band_id":    { "type": "integer" },
+          "song_id":    { "type": "integer", "nullable": true },
+          "action":     { "type": "string", "enum": ["create", "update", "delete"] },
+          "song_data":  { "type": "object", "description": "Snapshot of the song at the time of the action" },
+          "changed_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "responses": {
+      "401": {
+        "description": "Unauthorized",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "404": {
+        "description": "Not found",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "405": {
+        "description": "Method not allowed",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "500": {
+        "description": "Internal server error",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    }
+  },
+  "paths": {
+    "/api/config": {
+      "get": {
+        "summary": "Get band config and song list",
+        "description": "Returns the band slug, name, config, and all non-deleted songs. Use this to bootstrap the frontend — the `slug` value is the `{band}` path parameter for all other endpoints.",
+        "operationId": "getConfig",
+        "tags": ["Config"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Band config with songs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "slug":   { "type": "string" },
+                    "name":   { "type": "string" },
+                    "config": { "type": "object" },
+                    "songs":  { "type": "array", "items": { "$ref": "#/components/schemas/Song" } }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/auth": {
+      "post": {
+        "summary": "Verify password",
+        "description": "Checks the band password. Returns `{ ok: true }` on success. The token to use in subsequent `Authorization: Bearer` headers is the raw password (or a magic token from `/request-reset`).",
+        "operationId": "auth",
+        "tags": ["Auth"],
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "password": { "type": "string", "maxLength": 1000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } }
+          },
+          "400": { "description": "Missing password", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/request-reset": {
+      "post": {
+        "summary": "Request a magic login link",
+        "description": "Sends a one-time login link to the admin email. Always returns `{ ok: true }` regardless of whether the email matches (prevents email enumeration).",
+        "operationId": "requestReset",
+        "tags": ["Auth"],
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Always returned (silent fail if email does not match)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } }
+          },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/songs": {
+      "get": {
+        "summary": "List all songs",
+        "description": "Returns all non-deleted songs with aggregated play stats (`play_count`, `last_played_at`).",
+        "operationId": "listSongs",
+        "tags": ["Songs"],
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "responses": {
+          "200": {
+            "description": "Array of songs",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SongWithStats" } }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      },
+      "post": {
+        "summary": "Create a song",
+        "operationId": "createSong",
+        "tags": ["Songs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SongInput" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Song created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Song" } } }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      },
+      "patch": {
+        "summary": "Batch update songs",
+        "description": "Updates multiple songs in a single request (max 100). Each item must include `id`. Items with invalid or oversized fields are silently skipped.",
+        "operationId": "batchUpdateSongs",
+        "tags": ["Songs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SongInput" },
+                    { "type": "object", "required": ["id"], "properties": { "id": { "type": "integer" } } }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok":    { "type": "boolean" },
+                    "count": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}": {
+      "delete": {
+        "summary": "Soft-delete a song",
+        "description": "Sets `deleted = true`. The song remains in the database and can be restored.",
+        "operationId": "deleteSong",
+        "tags": ["Songs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/audio": {
+      "post": {
+        "summary": "Get a presigned upload URL for a song audio file",
+        "description": "Returns a short-lived presigned PUT URL for uploading an audio file directly to Cloudflare R2, plus the public URL where the file will be accessible. The client uploads directly to R2 (not through this server). After a successful upload, save the `publicUrl` to the song via `PATCH /api/{band}/songs`.",
+        "operationId": "getAudioUploadUrl",
+        "tags": ["Songs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/songId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["filename", "contentType"],
+                "properties": {
+                  "filename":    { "type": "string", "example": "cripple-creek.mp3" },
+                  "contentType": { "type": "string", "example": "audio/mpeg" },
+                  "size":        { "type": "integer", "description": "File size in bytes (used for pre-validation)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Presigned upload URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadUrl": { "type": "string", "description": "Presigned PUT URL (5-min expiry) — upload file body directly here" },
+                    "publicUrl": { "type": "string", "description": "Public URL where the file will be accessible after upload" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid filename, unsupported type, or file too large" },
+          "401": { "description": "Unauthorized" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a song audio file",
+        "description": "Removes the audio file from Cloudflare R2 (if hosted there) and clears `extra.listenUrl` on the song.",
+        "operationId": "deleteAudio",
+        "tags": ["Songs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/songId" }
+        ],
+        "responses": {
+          "200": { "description": "File deleted and DB field cleared" },
+          "401": { "description": "Unauthorized" },
+          "404": { "description": "Song not found" }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/restore": {
+      "post": {
+        "summary": "Restore a deleted song",
+        "description": "Restores the most recently deleted version. If the song still exists as a soft-deleted row, it is undeleted in place. Otherwise it is re-inserted from the audit log snapshot.",
+        "operationId": "restoreSong",
+        "tags": ["Songs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "responses": {
+          "201": {
+            "description": "Song restored",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Song" } } }
+          },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "description": "No delete record found for this song", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/setlists": {
+      "get": {
+        "summary": "Setlists containing a song",
+        "description": "Returns all setlists (with gig info) that include this song, ordered by creation date descending.",
+        "operationId": "getSongSetlists",
+        "tags": ["Songs"],
+        "security": [],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching setlists",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Setlist" } }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/song-logs": {
+      "get": {
+        "summary": "Recent audit log",
+        "description": "Returns the 10 most recent entries from the song audit trail.",
+        "operationId": "getSongLogs",
+        "tags": ["Songs"],
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "responses": {
+          "200": {
+            "description": "Audit log entries",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SongLog" } }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/gigs": {
+      "get": {
+        "summary": "List all gigs",
+        "operationId": "listGigs",
+        "tags": ["Gigs"],
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "responses": {
+          "200": {
+            "description": "Array of gigs",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Gig" } } } }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      },
+      "post": {
+        "summary": "Create a gig",
+        "operationId": "createGig",
+        "tags": ["Gigs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GigInput" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Gig created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gig" } } }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/gigs/{id}": {
+      "get": {
+        "summary": "Get a gig",
+        "operationId": "getGig",
+        "tags": ["Gigs"],
+        "security": [],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gig",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gig" } } }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      },
+      "put": {
+        "summary": "Update a gig",
+        "operationId": "updateGig",
+        "tags": ["Gigs"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GigInput" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated gig",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gig" } } }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/setlists": {
+      "get": {
+        "summary": "List all setlists",
+        "description": "Returns setlists with gig info and song count, ordered by creation date descending.",
+        "operationId": "listSetlists",
+        "tags": ["Setlists"],
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "responses": {
+          "200": {
+            "description": "Array of setlists",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Setlist" } } } }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      },
+      "post": {
+        "summary": "Create a setlist",
+        "description": "Creates a setlist and inserts songs in the given order. `song_ids` determines position (index = position).",
+        "operationId": "createSetlist",
+        "tags": ["Setlists"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SetlistInput" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Setlist created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Setlist" } } }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}": {
+      "get": {
+        "summary": "Get a setlist with songs",
+        "operationId": "getSetlist",
+        "tags": ["Setlists"],
+        "security": [],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Setlist with ordered songs",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SetlistWithSongs" } } }
+          },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      },
+      "put": {
+        "summary": "Update a setlist",
+        "description": "Updates metadata and rebuilds the song list. The existing `setlist_songs` rows are deleted and replaced with the new `song_ids` order.",
+        "operationId": "updateSetlist",
+        "tags": ["Setlists"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  { "$ref": "#/components/schemas/SetlistInput" },
+                  { "type": "object", "properties": { "song_ids": { "minItems": 0 } } }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated setlist",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Setlist" } } }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}/duplicate": {
+      "post": {
+        "summary": "Duplicate a setlist",
+        "description": "Creates a copy of the setlist with the same songs and order. The copy is unlinked from any gig and its title gets a `(copy)` suffix.",
+        "operationId": "duplicateSetlist",
+        "tags": ["Setlists"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "responses": {
+          "201": {
+            "description": "Duplicated setlist",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Setlist" } } }
+          },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}/share": {
+      "post": {
+        "summary": "Email a setlist as PDF",
+        "description": "Generates a PDF of the setlist and sends it to the given email address via Resend.",
+        "operationId": "shareSetlist",
+        "tags": ["Setlists"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/band" },
+          { "$ref": "#/components/parameters/id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email sent",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } }
+          },
+          "400": { "description": "Invalid email", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    },
+    "/api/{band}/export": {
+      "get": {
+        "summary": "Export all data",
+        "description": "Returns a full JSON export of all songs, gigs, setlists, and setlist_songs for the band. Response is served with a `Content-Disposition: attachment` header.",
+        "operationId": "exportData",
+        "tags": ["Export"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "responses": {
+          "200": {
+            "description": "Full data export",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "band":          { "type": "object", "properties": { "slug": { "type": "string" }, "name": { "type": "string" } } },
+                    "songs":         { "type": "array", "items": { "$ref": "#/components/schemas/Song" } },
+                    "gigs":          { "type": "array", "items": { "$ref": "#/components/schemas/Gig" } },
+                    "setlists":      { "type": "array", "items": { "$ref": "#/components/schemas/Setlist" } },
+                    "setlist_songs": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/401" },
+          "500": { "$ref": "#/components/responses/500" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Config",   "description": "Bootstrap / configuration" },
+    { "name": "Auth",     "description": "Password verification and magic login" },
+    { "name": "Songs",    "description": "Song CRUD, audit log, play statistics" },
+    { "name": "Gigs",     "description": "Concert management" },
+    { "name": "Setlists", "description": "Setlist management, sharing, and stage view" },
+    { "name": "Export",   "description": "Full data export" }
+  ]
+}

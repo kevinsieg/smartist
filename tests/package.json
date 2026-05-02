@@ -1,0 +1,8 @@
+{
+  "name": "bandone-api-tests",
+  "private": true,
+  "scripts": {
+    "test": "node api.js",
+    "test:prod": "BASE_URL=https://band-one.example node api.js"
+  }
+}

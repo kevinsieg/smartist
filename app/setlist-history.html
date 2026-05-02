@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Setlist History</title>
+    <meta charset="utf-8"/>
+    <meta name="description" content="Setlist history"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow"/>
+    <meta name="theme-color" content="#f9bf8f">
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="/favicon_io/site.webmanifest">
+    <link rel="stylesheet" href="/app/css/app.css">
+</head>
+<body>
+
+<main>
+    <section class="app-page">
+        <div class="app-wrap">
+            <h1>Setlist History</h1>
+            <div id="history-content">
+                <p style="text-align:center;color:var(--third-color);">Loading…</p>
+            </div>
+
+            <!-- print-only: header + rendered setlist -->
+            <div id="print-header">
+                <img alt="" class="app-logo-img">
+                <div id="print-meta">
+                    <p id="print-setlist-title" style="margin:0;font-family:'Courier New',monospace;font-size:10pt;"></p>
+                    <p id="print-timestamp" style="margin:0;"></p>
+                </div>
+            </div>
+            <div id="print-area"></div>
+        </div>
+    </section>
+</main>
+
+<div class="modal-overlay" id="history-login-modal">
+  <div class="modal" style="max-width:320px;">
+    <h2>Login</h2>
+    <div class="modal-field">
+      <label for="history-login-pw">Password</label>
+      <input type="password" id="history-login-pw" placeholder="Band password" autocomplete="current-password">
+    </div>
+    <div class="status-msg" id="history-login-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" onclick="doHistoryLogin()">Login</button>
+      <button class="btn" onclick="closeHistoryLogin()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h2>Edit setlist</h2>
+    <div class="modal-field" id="edit-auth-field" style="display:none">
+      <label for="edit-password">Password</label>
+      <input type="password" id="edit-password" placeholder="Band password" autocomplete="current-password">
+    </div>
+    <div id="edit-form-body">
+      <div class="modal-field">
+        <label for="edit-title">Title</label>
+        <input type="text" id="edit-title" placeholder="Set name…">
+      </div>
+      <div class="modal-field">
+        <label for="edit-comment">Comment</label>
+        <input type="text" id="edit-comment" placeholder="Notes…">
+      </div>
+      <div class="modal-field">
+        <label for="edit-gig">Gig</label>
+        <select id="edit-gig" onchange="onGigSelect()">
+          <option value="">— no gig —</option>
+        </select>
+        <div id="gig-edit-section" style="display:none;margin-top:0.5rem;">
+          <button type="button" class="btn new-gig-toggle" id="gig-edit-toggle" onclick="toggleGigEditForm()">Edit gig details</button>
+          <div id="gig-edit-form" class="new-gig-form">
+            <div class="modal-field">
+              <label for="gig-edit-name">Name</label>
+              <input type="text" id="gig-edit-name" placeholder="Gig name">
+            </div>
+            <div class="modal-field">
+              <label for="gig-edit-date">Date</label>
+              <input type="date" id="gig-edit-date">
+            </div>
+            <div class="modal-field">
+              <label for="gig-edit-venue">Venue</label>
+              <input type="text" id="gig-edit-venue" placeholder="Venue">
+            </div>
+            <div class="modal-field">
+              <label for="gig-edit-notes">Notes</label>
+              <textarea id="gig-edit-notes" placeholder="Notes…"></textarea>
+            </div>
+            <div class="status-msg" id="gig-edit-status"></div>
+            <div class="modal-actions">
+              <button class="btn active" id="gig-edit-save-btn" onclick="saveGigEdit()">Save gig</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label>Songs</label>
+        <ul class="edit-song-list" id="edit-song-list"></ul>
+        <select id="edit-add-song" onchange="editAddSong(this)" style="margin-top:0.4rem;width:100%;font-family:'Courier New',monospace;font-size:0.82rem;padding:0.3rem 0.5rem;border:1px dashed rgba(160,156,147,0.4);border-radius:4px;background:transparent;color:var(--third-color);cursor:pointer;">
+          <option value="">+ add a song…</option>
+        </select>
+      </div>
+    </div>
+    <div class="status-msg" id="edit-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" id="edit-save-btn" onclick="doEditSave()">Save</button>
+      <button class="btn" onclick="closeEditModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="share-modal">
+  <div class="modal">
+    <h2>Share setlist</h2>
+    <form onsubmit="doShareSend(); return false;" autocomplete="on">
+      <div class="modal-field" id="share-auth-field" style="display:none">
+        <label for="share-password">Password</label>
+        <input type="password" id="share-password" placeholder="Band password" autocomplete="current-password">
+      </div>
+      <div class="modal-field">
+        <label for="share-email">Recipient email</label>
+        <input type="email" id="share-email" name="email" placeholder="someone@example.com" autocomplete="email">
+      </div>
+      <div class="status-msg" id="share-status"></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn active" id="share-send-btn">Send PDF</button>
+        <button type="button" class="btn" onclick="closeShareModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/app/js/common.js"></script>
+<script src="/app/js/setlist-history.js"></script>
+</body>
+</html>
