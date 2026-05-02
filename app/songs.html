@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Songs</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow"/>
+    <meta name="theme-color" content="#f9bf8f">
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="/favicon_io/site.webmanifest">
+    <link rel="stylesheet" href="/app/css/app.css">
+    <style>
+        /* Songs page needs full-width layout, not max-width 960px */
+        .songs-page .app-wrap { max-width: 100%; }
+    </style>
+</head>
+<body>
+
+<main>
+    <section class="app-page songs-page">
+        <div class="app-wrap">
+            <h1>Songs</h1>
+            <div id="page-content">
+                <p style="text-align:center;color:var(--third-color);">Loading…</p>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="modal-overlay" id="player-modal">
+  <div class="modal" style="max-width:560px;">
+    <h2 id="player-title">Listen</h2>
+    <div id="player-content"></div>
+    <div id="player-history" class="player-history"></div>
+    <div class="modal-actions">
+      <button class="btn" id="player-replace-btn" onclick="triggerReplaceAudio()">Replace</button>
+      <input type="file" id="player-file-input" accept="audio/*" style="display:none" onchange="handleReplaceFile(this)">
+      <button class="btn" id="player-delete-btn" onclick="showDeleteConfirm()">Remove file</button>
+      <div id="player-delete-confirm" class="player-delete-confirm" style="display:none">
+        <span>Delete audio?</span>
+        <button class="btn btn-danger" onclick="confirmDeleteAudio()">Yes, delete</button>
+        <button class="btn" onclick="cancelDeleteAudio()">No</button>
+      </div>
+      <button class="btn" onclick="closePlayer()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sheet-modal">
+  <div class="modal" style="max-width:760px;">
+    <h2 id="sheet-title">Sheet</h2>
+    <div id="sheet-content"></div>
+    <div id="sheet-history" class="player-history"></div>
+    <div class="modal-actions">
+      <a id="sheet-open-link" href="#" target="_blank" rel="noopener" class="btn">Open ↗</a>
+      <button class="btn" id="sheet-replace-btn" onclick="triggerReplaceSheet()">Replace</button>
+      <input type="file" id="sheet-file-input" accept=".pdf,application/pdf" style="display:none" onchange="handleReplaceSheet(this)">
+      <button class="btn" id="sheet-delete-btn" onclick="showSheetDeleteConfirm()">Remove</button>
+      <div id="sheet-delete-confirm" class="player-delete-confirm" style="display:none">
+        <span>Delete sheet?</span>
+        <button class="btn btn-danger" onclick="confirmDeleteSheet()">Yes, delete</button>
+        <button class="btn" onclick="cancelDeleteSheet()">No</button>
+      </div>
+      <button class="btn" onclick="closeSheet()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="playback-modal">
+  <div class="modal" style="max-width:560px;">
+    <h2 id="playback-title">Playback</h2>
+    <div id="playback-content"></div>
+    <div id="playback-history" class="player-history"></div>
+    <div class="modal-actions">
+      <button class="btn" id="playback-replace-btn" onclick="triggerReplacePlayback()">Replace</button>
+      <input type="file" id="playback-file-input" accept="audio/*" style="display:none" onchange="handleReplacePlayback(this)">
+      <button class="btn" id="playback-delete-btn" onclick="showPlaybackDeleteConfirm()">Remove</button>
+      <div id="playback-delete-confirm" class="player-delete-confirm" style="display:none">
+        <span>Delete playback?</span>
+        <button class="btn btn-danger" onclick="confirmDeletePlayback()">Yes, delete</button>
+        <button class="btn" onclick="cancelDeletePlayback()">No</button>
+      </div>
+      <button class="btn" onclick="closePlayback()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="lyrics-modal">
+  <div class="modal" style="max-width:620px;">
+    <h2 id="lyrics-title">Lyrics</h2>
+    <pre id="lyrics-view" class="lyrics-view"></pre>
+    <textarea id="lyrics-edit" class="lyrics-edit" style="display:none" placeholder="Enter lyrics…" spellcheck="false"></textarea>
+    <div id="lyrics-suggest-preview" style="display:none">
+      <p id="lyrics-suggest-header" class="lyrics-suggest-header"></p>
+      <pre id="lyrics-suggest-text" class="lyrics-view lyrics-suggest-text"></pre>
+      <div class="modal-actions" id="lyrics-suggest-actions" style="display:none">
+        <button class="btn" onclick="_lyricsAcceptSuggestion()">Use this</button>
+        <button class="btn" onclick="_lyricsDiscardSuggestion()">Discard</button>
+      </div>
+    </div>
+    <div class="modal-actions" id="lyrics-actions-view">
+      <button class="btn" onclick="startEditLyrics()">Edit</button>
+      <button class="btn" id="lyrics-delete-btn" onclick="showLyricsDeleteConfirm()">Delete</button>
+      <div id="lyrics-delete-confirm" class="player-delete-confirm" style="display:none">
+        <span>Delete lyrics?</span>
+        <button class="btn btn-danger" onclick="confirmDeleteLyrics()">Yes, delete</button>
+        <button class="btn" onclick="cancelDeleteLyrics()">No</button>
+      </div>
+      <button class="btn" onclick="closeLyrics()">Close</button>
+    </div>
+    <div class="modal-actions" id="lyrics-actions-edit" style="display:none">
+      <button class="btn" id="lyrics-save-btn" onclick="saveLyrics()">Save</button>
+      <button class="btn" id="lyrics-suggest-btn" onclick="suggestLyrics()" title="Search for lyrics online using AI">AI ✦</button>
+      <button class="btn" onclick="cancelEditLyrics()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="appearances-modal">
+  <div class="modal" style="max-width:500px;">
+    <h2 id="appearances-title">Appearances</h2>
+    <div id="appearances-list"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAppearances()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="gema-modal">
+  <div class="modal" style="max-width:680px;">
+    <h2 id="gema-title">GEMA</h2>
+    <div id="gema-content"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeGema()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app/js/common.js"></script>
+<script src="/app/js/songs.js"></script>
+</body>
+</html>

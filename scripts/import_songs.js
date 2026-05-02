@@ -1,0 +1,120 @@
+#!/usr/bin/env node
+/**
+ * Band Tools — Song importer
+ *
+ * Imports songs from a JSON file into the database for a given band.
+ * Run setup.js first to create the band if it does not exist yet.
+ *
+ * Usage:
+ *   node scripts/import_songs.js --band <slug> <file.json>
+ *
+ * JSON format — array of song objects:
+ *   [
+ *     {
+ *       "title": "Song Title",          // required
+ *       "active": true,                 // optional, default true
+ *       "key": "G",                     // optional
+ *       "genre": "Blues",            // optional
+ *       "tempo": "Medium",              // optional
+ *       "length_min": 3.5,              // optional, decimal minutes
+ *       "interpret": "Artist",          // optional
+ *       "reference_interpret": "Ref",   // optional
+ *       "comment": "Notes",             // optional
+ *       "extra": { "capo": 2 }          // optional, band-specific fields
+ *     }
+ *   ]
+ *
+ * Reads DATABASE_URL from .env.local in the project root if not set in env.
+ */
+
+'use strict';
+
+const { neon } = require('@neondatabase/serverless');
+const fs       = require('fs');
+const path     = require('path');
+
+// Load .env.local
+function loadEnv(filePath) {
+  try {
+    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
+      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim();
+    });
+  } catch {}
+}
+loadEnv(path.join(__dirname, '..', '.env.local'));
+
+// ── Args ───────────────────────────────────────────────────────────────────
+
+const args    = process.argv.slice(2);
+const bandIdx = args.indexOf('--band');
+
+if (bandIdx === -1 || !args[bandIdx + 1]) {
+  console.error('Usage: node scripts/import_songs.js --band <slug> <file.json>');
+  process.exit(1);
+}
+
+const slug = args[bandIdx + 1];
+const file = args.find((a, i) => i !== bandIdx && i !== bandIdx + 1);
+
+if (!file) {
+  console.error('No JSON file specified.');
+  process.exit(1);
+}
+
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set. Add it to .env.local or export it.');
+  process.exit(1);
+}
+
+// ── Import ─────────────────────────────────────────────────────────────────
+
+(async () => {
+  const sql   = neon(process.env.DATABASE_URL);
+  const songs = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
+
+  if (!Array.isArray(songs) || songs.length === 0) {
+    console.error('JSON file must contain a non-empty array of songs.');
+    process.exit(1);
+  }
+
+  const [band] = await sql`SELECT id FROM bands WHERE slug = ${slug} LIMIT 1`;
+  if (!band) {
+    console.error(`Band "${slug}" not found. Run setup.js first.`);
+    process.exit(1);
+  }
+
+  let imported = 0;
+  let skipped  = 0;
+
+  for (const s of songs) {
+    if (!s.title || !String(s.title).trim()) {
+      skipped++;
+      continue;
+    }
+
+    await sql`
+      INSERT INTO songs
+        (band_id, title, active, key, genre, tempo, length_min,
+         interpret, reference_interpret, comment, extra)
+      VALUES (
+        ${band.id},
+        ${String(s.title).trim()},
+        ${s.active ?? true},
+        ${s.key        ?? null},
+        ${s.genre   ?? null},
+        ${s.tempo      ?? null},
+        ${s.length_min ?? null},
+        ${s.interpret           ?? null},
+        ${s.reference_interpret ?? null},
+        ${s.comment    ?? null},
+        ${s.extra      ?? {}}
+      )
+    `;
+
+    imported++;
+    if (imported % 20 === 0) process.stdout.write(`  ${imported} imported...\r`);
+  }
+
+  console.log(`\nDone — ${imported} songs imported, ${skipped} skipped (missing title).`);
+})().catch(e => { console.error(e.message); process.exit(1); });

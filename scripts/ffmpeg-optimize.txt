@@ -1,0 +1,20 @@
+# Extract and optimize video segment 00:16-00:20 (4 seconds) for web background
+# Run these commands from the mov/ directory
+
+# Create optimized MP4 (H.264) - better compatibility
+ffmpeg -ss 00:00:16.0 -i "Going Accross the Sea_version longue.mp4" -t 00:00:04.0 -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -an -c:v libx264 -preset slow -crf 28 -b:v 800k -maxrate 1000k -bufsize 2000k -movflags +faststart trailer.mp4
+
+# Create optimized WebM (VP9) - better compression
+ffmpeg -ss 00:00:16.0 -i "Going Accross the Sea_version longue.mp4" -t 00:00:04.0 -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -an -c:v libvpx-vp9 -b:v 800k -crf 30 -speed 2 trailer.webm
+
+# Explanation:
+# -ss 00:00:16.0: Start at 16 seconds
+# -t 00:00:04.0: Extract 4 seconds (16-20)
+# -vf scale: Resize to 720p while maintaining aspect ratio
+# -an: Remove audio (not needed for background)
+# -c:v libx264/libvpx-vp9: Video codec
+# -preset slow / -speed 2: Quality vs speed tradeoff
+# -crf 28/30: Quality setting (lower = better quality, larger file)
+# -b:v 800k: Target bitrate
+# -movflags +faststart: Enable progressive download for MP4
+

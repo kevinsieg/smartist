@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>GEMA Import</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow"/>
+    <meta name="theme-color" content="#f9bf8f">
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="/favicon_io/site.webmanifest">
+    <link rel="stylesheet" href="/app/css/app.css">
+</head>
+<body>
+
+<main>
+    <section class="app-page">
+        <div class="app-wrap">
+            <h1>GEMA Import</h1>
+
+            <div id="login-area" style="display:none">
+                <p style="color:var(--third-color);margin-bottom:1rem;">Login required to import GEMA data.</p>
+                <div class="gema-login-row">
+                    <input type="password" id="login-pw" class="gema-login-input" placeholder="Password" autocomplete="current-password"/>
+                    <button class="btn" onclick="doLogin()">Login</button>
+                </div>
+                <p id="login-error" style="color:var(--danger-color);margin-top:0.5rem;display:none"></p>
+            </div>
+
+            <div id="import-area" style="display:none">
+                <p style="color:var(--third-color);margin-bottom:1.5rem;font-size:0.9rem;">
+                    Upload a GEMA CSV export. Type is detected automatically from the filename.<br>
+                    <strong>Validate</strong> runs a dry-run preview — nothing is written until you click <strong>Import</strong>.
+                </p>
+
+                <div class="gema-owner-row">
+                    <label class="gema-owner-label" for="owner-ip">Your IP-Name-Nr <span class="gema-owner-hint">(optional — enables own-composition classification, e.g. 755143051)</span></label>
+                    <input type="text" id="owner-ip" class="gema-login-input" placeholder="e.g. 755143051" autocomplete="off" inputmode="numeric">
+                </div>
+
+                <div id="drop-zone" class="gema-drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+                    <input type="file" id="csv-input" accept=".csv,text/csv" style="display:none" onchange="handleFileSelect(this.files[0])">
+                    <div id="drop-label" class="gema-drop-label">Drop CSV here or click to select</div>
+                    <div id="file-info" class="gema-file-info" style="display:none"></div>
+                </div>
+
+                <div id="type-row" class="gema-type-row" style="display:none">
+                    <span style="color:var(--third-color);font-size:0.85rem;">Type:</span>
+                    <select id="type-select" class="gema-type-select" onchange="_csvType = this.value">
+                        <option value="info">Werkinformationen (language, duration, genre)</option>
+                        <option value="ids">Identifikatoren (ISWC, ISRC)</option>
+                        <option value="beteiligte">Beteiligte (rightholders)</option>
+                    </select>
+                </div>
+
+                <div class="gema-actions" id="step1-actions" style="display:none">
+                    <button class="btn" id="validate-btn" onclick="runValidate()">Validate</button>
+                </div>
+
+                <div id="preview-area" style="display:none">
+                    <div id="preview-summary" class="gema-summary"></div>
+                    <div id="preview-table-wrap" class="gema-table-wrap"></div>
+                    <div class="gema-actions">
+                        <button class="btn" id="import-btn" onclick="runImport()">Import</button>
+                        <button class="btn" onclick="resetImport()">Reset</button>
+                    </div>
+                </div>
+
+                <div id="result-area" style="display:none">
+                    <div id="result-summary" class="gema-summary"></div>
+                    <div id="result-table-wrap" class="gema-table-wrap"></div>
+                    <div class="gema-actions">
+                        <button class="btn" onclick="resetImport()">Import another file</button>
+                    </div>
+                </div>
+
+                <p id="import-status" class="gema-status" style="display:none"></p>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script src="/app/js/common.js"></script>
+<script src="/app/js/gema-import.js"></script>
+</body>
+</html>

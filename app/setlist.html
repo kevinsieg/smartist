@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Setlist Generator</title>
+    <meta charset="utf-8"/>
+    <meta name="description" content="Setlist generator"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow"/>
+    <meta name="theme-color" content="#f9bf8f">
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="/favicon_io/site.webmanifest">
+    <link rel="stylesheet" href="/app/css/app.css">
+</head>
+<body>
+
+<div id="print-header">
+    <img alt="" class="app-logo-img">
+    <div id="print-meta">
+        <p id="print-timestamp"></p>
+    </div>
+</div>
+
+<main>
+    <section class="app-page">
+        <div class="app-wrap">
+            <h1>Setlist Generator</h1>
+            <div id="setlist-content">
+                <p style="text-align:center;color:var(--third-color);">Loading songs…</p>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- Accept / save modal -->
+<div class="modal-overlay" id="accept-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+        <h2 id="modal-title">Save Setlist</h2>
+
+        <div id="auth-step">
+            <div class="modal-field">
+                <label for="password-input">Password</label>
+                <input type="password" id="password-input" autocomplete="current-password" placeholder="Band password">
+            </div>
+            <div class="status-msg" id="auth-error"></div>
+            <div class="modal-actions">
+                <button class="btn" id="verify-btn">Verify</button>
+                <button class="btn" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+
+        <div id="save-step" style="display:none">
+            <div class="modal-field">
+                <label for="setlist-title">Name</label>
+                <input type="text" id="setlist-title" placeholder="e.g. Summer set">
+            </div>
+            <div class="modal-field">
+                <label for="gig-select">Gig (optional)</label>
+                <select id="gig-select">
+                    <option value="">&mdash; no gig &mdash;</option>
+                </select>
+                <button class="btn new-gig-toggle" id="new-gig-btn">+ New gig</button>
+                <div class="new-gig-form" id="new-gig-form">
+                    <div class="modal-field">
+                        <label for="gig-name">Gig name</label>
+                        <input type="text" id="gig-name" placeholder="e.g. Festival Etretat">
+                    </div>
+                    <div class="modal-field">
+                        <label for="gig-date">Date</label>
+                        <input type="date" id="gig-date">
+                    </div>
+                    <div class="modal-field">
+                        <label for="gig-venue">Venue (optional)</label>
+                        <input type="text" id="gig-venue">
+                    </div>
+                    <button class="btn" id="create-gig-btn" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:36px">Create gig</button>
+                </div>
+            </div>
+            <div class="modal-field">
+                <label for="setlist-comment">Comment (optional)</label>
+                <textarea id="setlist-comment" placeholder="Notes about this set…"></textarea>
+            </div>
+            <div class="status-msg" id="save-error"></div>
+            <div class="modal-actions">
+                <button class="btn active" id="save-btn">Save</button>
+                <button class="btn" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/app/js/common.js"></script>
+<script src="/app/js/setlist.js"></script>
+</body>
+</html>
