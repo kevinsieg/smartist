@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/docs",        "destination": "/app/api-docs.html" },
     { "source": "/setlist",         "destination": "/app/setlist.html" },
     { "source": "/setlist-history", "destination": "/app/setlist-history.html" },
     { "source": "/songs",           "destination": "/app/songs.html" },
