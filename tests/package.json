@@ -2,7 +2,8 @@
   "name": "smartist-api-tests",
   "private": true,
   "scripts": {
-    "test": "node api.js",
+    "test": "node routing.js && node api.js",
+    "test:routing": "node routing.js",
     "test:prod": "BASE_URL=https://yourapp.example.com node api.js"
   }
 }
