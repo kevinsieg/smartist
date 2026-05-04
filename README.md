@@ -219,10 +219,9 @@ All endpoints live under `/api/:band/`. Auth uses `Authorization: Bearer <token>
 | DELETE | `/api/:band/songs/:id` | ✓ | Soft-delete song |
 | POST | `/api/:band/songs/:id/restore` | ✓ | Restore from audit log |
 | GET | `/api/:band/setlists` | — | List setlists with song count |
-| POST | `/api/:band/setlists` | ✓ | Create setlist |
+| POST | `/api/:band/setlists` | ✓ | Create setlist (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
+| GET | `/api/:band/setlists/:id` | — | Setlist detail with ordered songs |
 | PUT | `/api/:band/setlists/:id` | ✓ | Update metadata + song list |
-| POST | `/api/:band/setlists/:id/share` | ✓ | Email setlist as PDF |
-| POST | `/api/:band/setlists/:id/duplicate` | ✓ | Clone setlist |
 | GET | `/api/:band/gigs` | — | List gigs |
 | POST | `/api/:band/gigs` | ✓ | Create gig |
 | GET | `/api/:band/export` | ✓ | Full data export as JSON |

@@ -69,7 +69,7 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | `GET /api/:band/song-logs` | audit log with action and song_data |
 | `GET /api/:band/gigs` | array; single gig by id |
 | `GET /api/:band/setlists` | array with song_count; single setlist with ordered songs |
-| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401 |
+| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; PUT /setlists/:id → 401 |
 | Validation | id=0 → 400, non-integer id → 400, missing required fields → 400, unknown id → 404 |
 
 **Write (requires `BAND_PASSWORD`)**
@@ -80,7 +80,7 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
 | `POST /api/:band/songs` | missing title → 400 |
 | Lyrics suggest | rejects songs without an artist before calling external providers |
-| Setlist create | `POST` → 201, validates `POST .../share`, `PUT` updates title, `POST .../duplicate` returns new id |
+| Setlist lifecycle | `POST` (create) → 201, `POST` (share) validates email + unknown id, `PUT` updates title, `POST` (duplicate) → 201 with new id + matching song count |
 | `POST /api/:band/setlists` | missing song_ids → 400 |
 | File upload validation | extension, MIME type, size, presigned URL prefix checks |
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |

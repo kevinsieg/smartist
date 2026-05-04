@@ -780,10 +780,10 @@ async function doShareSend() {
   st.textContent = 'Sending…'; st.className = 'status-msg'; st.style.display = 'block';
 
   try {
-    const r = await fetch(`/api/${bandSlug}/setlists/${shareTargetId}/share`, {
+    const r = await fetch(`/api/${bandSlug}/setlists`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ share_id: shareTargetId, email }),
     });
     if (r.status === 401) {
       sessionStorage.removeItem('setlist_token');
@@ -834,9 +834,10 @@ async function doDuplicate(id) {
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
 
   try {
-    const r = await fetch(`/api/${bandSlug}/setlists/${id}/duplicate`, {
+    const r = await fetch(`/api/${bandSlug}/setlists`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duplicate_id: id }),
     });
 
     if (r.status === 401) { sessionStorage.removeItem('setlist_token'); refreshAllActionBtns(); return; }
