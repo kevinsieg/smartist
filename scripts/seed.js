@@ -5,7 +5,7 @@
  * Populates the database with realistic test data:
  *   - ~20 songs (various genres, keys, tempos, some with custom extra fields)
  *   - 4 gigs (2 past, 1 upcoming, 1 TBD)
- *   - 4 setlists (2 linked to gigs, 2 standalone templates)
+ *   - 4 setlists (2 past gigs, 1 upcoming gig, 1 standalone template)
  *   - Song audit log entries (create/update/delete)
  *   - 2 GEMA works with rightholders
  *
