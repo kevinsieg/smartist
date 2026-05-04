@@ -29,7 +29,12 @@ function loadEnv(filePath) {
   try {
     fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
       const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim();
+      if (m && process.env[m[1]] === undefined) {
+        let v = m[2].trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
+          v = v.slice(1, -1);
+        process.env[m[1]] = v;
+      }
     });
   } catch {}
 }
@@ -67,6 +72,16 @@ function ask(prompt, hint = '') {
 async function confirm(prompt) {
   const answer = await ask(`${prompt} (y/n)`);
   return /^y/i.test(answer);
+}
+
+async function confirmDb(url) {
+  let host;
+  try { host = new URL(url).hostname; } catch { host = '(unknown)'; }
+  console.log(`\n  ${D('database:')} ${B(host)}`);
+  if (!await confirm('Connect to this database?')) {
+    console.log(D('\n  Aborted.\n'));
+    process.exit(0);
+  }
 }
 
 // ── DB helpers ─────────────────────────────────────────────────────────────
@@ -343,6 +358,8 @@ async function main() {
     console.log(D('  Add it to .env.local or export it before running this script.\n'));
     process.exit(1);
   }
+
+  await confirmDb(process.env.DATABASE_URL);
 
   const sql = neon(process.env.DATABASE_URL);
 

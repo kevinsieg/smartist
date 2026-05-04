@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <title>Setlist History</title>
+    <title>History</title>
     <meta charset="utf-8"/>
     <meta name="description" content="Setlist history"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -18,7 +18,21 @@
 <main>
     <section class="app-page">
         <div class="app-wrap">
-            <h1>Setlist History</h1>
+            <h1>History</h1>
+
+            <div class="history-subnav">
+              <button class="subnav-btn active" id="subnav-setlists" onclick="setView('setlists')">Setlists</button>
+              <button class="subnav-btn" id="subnav-gigs" onclick="setView('gigs')">Gigs</button>
+            </div>
+
+            <div class="history-filterbar">
+              <input class="history-filter-input" type="text" id="filter-name" placeholder="Name…" oninput="onFilterInput()">
+              <input class="history-filter-input" type="text" id="filter-song" placeholder="Song…" oninput="onSongInput(this.value)">
+              <input class="history-filter-input" type="date" id="filter-date-from" title="From date" oninput="onFilterInput()">
+              <input class="history-filter-input" type="date" id="filter-date-to" title="To date" oninput="onFilterInput()">
+              <button class="btn" id="filter-clear-btn" onclick="clearFilters()" style="display:none">Clear</button>
+            </div>
+
             <div id="history-content">
                 <p style="text-align:center;color:var(--third-color);">Loading…</p>
             </div>
