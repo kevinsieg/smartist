@@ -62,7 +62,8 @@ BASE_URL=https://yourapp.example.com node tests/api.js
 | `POST /api/:band/auth` | correct password → 200 |
 | Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
 | `POST /api/:band/songs` | missing title → 400 |
-| Setlist create | `POST` → 201, `PUT` updates title, `POST .../duplicate` returns new id |
+| Lyrics suggest | rejects songs without an artist before calling external providers |
+| Setlist create | `POST` → 201, validates `POST .../share`, `PUT` updates title, `POST .../duplicate` returns new id |
 | `POST /api/:band/setlists` | missing song_ids → 400 |
 | `GET /api/:band/export` | 200 with `Content-Disposition: attachment`, songs/setlists/gigs arrays present |
 
