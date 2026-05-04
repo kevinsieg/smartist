@@ -21,6 +21,8 @@ Two git branches map to two Vercel environments:
 
 **Branch rules:** push freely to `dev` (auto-deploys to the Vercel Preview URL). Direct pushes to `main` are blocked by GitHub branch protection — only PR merges from `dev` trigger production deployments.
 
+For **project-specific** Neon project names, Vercel project name, domains, and bucket names, see `README.md` (this file stays provider-agnostic).
+
 ### Env vars that differ per environment
 
 | Variable | Production | Preview / Development |
@@ -357,7 +359,7 @@ What `--force` inserts:
 - 26 song audit log entries (create/update/delete)
 - 2 GEMA works (`MIDNIGHT DRIVE`, `RIVER TOWN BLUES`) with 3 rightholders each
 
-The script finds the band by `BAND_SLUG` env var, then tries `fish`, then falls back to the first band in the DB — so it is safe to run before or after the slug rename.
+The script targets the band from `BAND_SLUG` if set; otherwise it uses the first band row in the database (and prints a warning). Run `setup.js` first so that band exists.
 
 ### `loadEnv` quote handling
 
@@ -367,14 +369,22 @@ All scripts use the same `loadEnv` helper that reads `DATABASE_URL` and other va
 
 ## Tests (`tests/`)
 
-Zero-dependency test suite using native Node.js fetch (Node 20+). Runs against a live API (local or remote).
+Two layers, both zero extra npm deps beyond the repo root `package.json`:
+
+| Layer | Command | Needs |
+|-------|---------|--------|
+| **Unit** | `npm run test:unit` (repo root) or `node tests/unit.js` | Nothing — runs in CI (`.github/workflows/ci.yml`) |
+| **Integration** | `cd tests && npm test` | Live API: `vercel dev` or set `BASE_URL` |
+
+Integration tests use native `fetch` (Node 20+). They load `.env.local` then `.env` at the repo root (paths resolved from `tests/api.js`, not the shell cwd). Overlapping keys keep the `.env.local` value.
 
 ```bash
-cd tests && npm test          # run all tests
-BAND_SLUG=yourslug npm test   # override band slug
+npm run test:unit             # validate / token helpers
+cd tests && npm test          # read-only API checks (needs server + BAND_SLUG)
+BAND_PASSWORD=… npm test      # also runs mutating tests — see tests/README.md
 ```
 
-See `tests/README.md` for configuration and adding new test cases.
+See `tests/README.md` for `BASE_URL`, `test:dev` / `test:prod`, and adding cases.
 
 ---
 

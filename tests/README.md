@@ -31,7 +31,7 @@ Full API coverage against a live server. Requires `vercel dev` running locally, 
 
 ### Setup
 
-Tests read credentials from `.env.local` in the `tests/` directory or the repo root (whichever exists first). No extra configuration needed beyond what `vercel dev` already uses.
+Integration tests load `.env.local` then `.env` from the **repo root** (paths are fixed relative to `tests/api.js`, so `npm test` from `tests/` still works). Each key is applied only if not already set, so a variable present in both files keeps the `.env.local` value. Values already exported in the shell win over both files. Quote-wrapped lines (from `vercel env pull`) are stripped when parsed.
 
 To enable write tests, add your band password:
 
