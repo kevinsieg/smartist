@@ -20,6 +20,8 @@ npm run test:unit           # from tests/ directory
 |--------|-----------|
 | `api/_validate.js` | `validateSongIds`, `validateStr`, `validateNum`, `validateEmail` |
 | `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
+| `api/_pdf.js` | `setlistTitle` |
+| `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 
 Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
 
