@@ -1,10 +1,37 @@
-# API Tests
+# Tests
 
-Integration tests for the Band Tools API. No dependencies — runs with Node 20+ (uses native fetch).
+Two test layers — unit tests (no infrastructure) and integration tests (need a live server).
 
-## Setup
+---
 
-Tests read credentials from `.env.local` in the `tests/` directory or the repo root (whichever exists). No extra configuration needed beyond what `vercel dev` already uses.
+## Unit tests
+
+Test pure helper functions with no server, database, or network required. Run anywhere Node 20+ is available.
+
+```bash
+node tests/unit.js          # from repo root
+npm run test:unit           # from repo root (alias)
+npm run test:unit           # from tests/ directory
+```
+
+**What is covered:**
+
+| Module | Functions |
+|--------|-----------|
+| `api/_validate.js` | `validateSongIds`, `validateStr`, `validateNum`, `validateEmail` |
+| `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
+
+Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
+
+---
+
+## Integration tests
+
+Full API coverage against a live server. Requires `vercel dev` running locally, or a deployed URL.
+
+### Setup
+
+Tests read credentials from `.env.local` in the `tests/` directory or the repo root (whichever exists first). No extra configuration needed beyond what `vercel dev` already uses.
 
 To enable write tests, add your band password:
 
@@ -12,35 +39,25 @@ To enable write tests, add your band password:
 BAND_PASSWORD=yourpassword
 ```
 
-to `.env.local` (it is never sent anywhere except your local API).
-
-## Running
-
-Start the dev server first:
+### Running
 
 ```bash
-vercel dev
+# Local (needs vercel dev running on port 3000)
+cd tests && npm test
+BAND_PASSWORD=xxx npm test
+
+# Against the dev Preview deployment
+npm run test:dev
+BAND_PASSWORD=xxx npm run test:dev
+
+# Against production (read-only)
+npm run test:prod
+
+# Override URL explicitly
+BASE_URL=https://your-preview.vercel.app node tests/api.js
 ```
 
-Then in a second terminal:
-
-```bash
-cd tests
-npm test                  # read-only tests
-BAND_PASSWORD=xxx npm test   # + write tests
-npm run test:prod         # against production (read-only)
-BAND_PASSWORD=xxx npm run test:prod  # against production with writes
-```
-
-Or from the repo root without `cd`:
-
-```bash
-node tests/api.js
-BAND_PASSWORD=xxx node tests/api.js
-BASE_URL=https://yourapp.example.com node tests/api.js
-```
-
-## What is tested
+### What is tested
 
 **Read-only (always run)**
 
@@ -64,11 +81,13 @@ BASE_URL=https://yourapp.example.com node tests/api.js
 | `POST /api/:band/songs` | missing title → 400 |
 | Setlist create | `POST` → 201, `PUT` updates title, `POST .../duplicate` returns new id |
 | `POST /api/:band/setlists` | missing song_ids → 400 |
+| File upload validation | extension, MIME type, size, presigned URL prefix checks |
+| Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
 | `GET /api/:band/export` | 200 with `Content-Disposition: attachment`, songs/setlists/gigs arrays present |
 
 > **Note:** write tests create two setlists named `[TEST]` that cannot be deleted via the API. Remove them manually from the setlist history page if needed.
 
-## Exit codes
+### Exit codes
 
 - `0` — all tests passed
 - `1` — one or more tests failed or `BAND_SLUG` is not set

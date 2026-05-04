@@ -4,9 +4,62 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Band tools app — password-protected pages backed by Neon PostgreSQL + Vercel serverless functions.
+DIY Musician app — password-protected pages backed by Neon PostgreSQL + Vercel serverless functions.
 
 No build step. Everything is served as-is.
+
+---
+
+## Environments
+
+Two git branches map to two Vercel environments:
+
+| Branch | Vercel env | Database | Purpose |
+|--------|-----------|----------|---------|
+| `dev` *(default)* | Preview | Neon `dev` branch | All day-to-day work |
+| `main` | Production | Neon `main` branch | Live site — only via PR merge |
+
+**Branch rules:** push freely to `dev` (auto-deploys to the Vercel Preview URL). Direct pushes to `main` are blocked by GitHub branch protection — only PR merges from `dev` trigger production deployments.
+
+### Env vars that differ per environment
+
+| Variable | Production | Preview / Development |
+|----------|-----------|----------------------|
+| `DATABASE_URL` | Neon `main` connection string | Neon `dev` branch connection string |
+| `APP_ORIGIN` | `https://yourdomain.com` | Stable Vercel Preview URL |
+| `BAND_ADMIN_EMAIL` | Production admin email | `you+dev@yourdomain.com` |
+| `BETTERSTACK_TOKEN` | Your token | *(empty — stdout only)* |
+| `R2_BUCKET_NAME` | `yourband` | `yourband-dev` |
+| `R2_ACCESS_KEY_ID/SECRET` | Prod R2 API token | Dev R2 API token |
+| `R2_PUBLIC_URL` | Prod bucket URL | Dev bucket URL |
+
+`GEMINI_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM`, `R2_ACCOUNT_ID`, `BAND_SLUG` — shared across all environments ("All environments" in Vercel dashboard).
+
+### Logging and `VERCEL_ENV`
+
+`api/_logger.js` branches on `VERCEL_ENV` (auto-injected by Vercel, never needs to be in `.env`):
+- `development` or unset → writes to `logs/YYYY-MM-DD.log` (local only)
+- `preview` → stdout only (visible in Vercel function logs dashboard)
+- `production` → stdout + BetterStack cloud transport
+
+### Promotion workflow
+
+1. Work on `dev`, verify on the Vercel Preview URL
+2. Open PR: `dev → main` on GitHub
+3. Review diff, approve, merge → Vercel auto-deploys to production
+4. If the PR includes a schema change, apply it to the Neon `main` branch before or immediately after merge:
+   ```bash
+   psql $PROD_DATABASE_URL < scripts/schema.sql
+   ```
+
+### First-time Neon dev branch setup
+
+```bash
+# 1. In Neon console: Branches → New Branch → name: dev, from: main
+# 2. Copy the dev branch pooler connection string
+# 3. Run setup against it (creates band row in dev DB):
+DATABASE_URL=<neon-dev-branch-url> node scripts/setup.js
+```
 
 ---
 
@@ -18,24 +71,26 @@ vercel dev          # requires .env with all env vars — see below
 
 ### Local environment variables (`.env`)
 
-`vercel dev` loads `.env` for function handlers but **not** `.env.local` (a CLI 52.x quirk). Keep all vars in `.env` (already gitignored):
+`vercel dev` loads `.env` for function handlers but **not** `.env.local` (a CLI 52.x quirk). Keep all vars in `.env`:
 
 ```
-DATABASE_URL=
+DATABASE_URL=        # Neon dev branch URL
 BAND_SLUG=
-BETTERSTACK_TOKEN=
-APP_ORIGIN=https://yourapp.example.com
+BAND_ADMIN_EMAIL=
+APP_ORIGIN=http://localhost:3000
 R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
+R2_ACCESS_KEY_ID=    # Dev R2 token
 R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=
+R2_BUCKET_NAME=      # Dev bucket name (e.g. yourband-dev)
 R2_PUBLIC_URL=
 RESEND_API_KEY=
 RESEND_FROM=
 GEMINI_API_KEY=
 ```
 
-`vercel env pull .env.local` syncs from the Vercel dashboard — copy values into `.env` manually, stripping the surrounding quotes. `VERCEL_OIDC_TOKEN` (auto-rotating) does not need to be in `.env`.
+Do not add `BETTERSTACK_TOKEN` to `.env` — local runs log to `logs/` automatically.
+
+`vercel env pull .env.local` syncs Preview vars from the Vercel dashboard — copy values into `.env` manually, stripping the surrounding quotes. `VERCEL_OIDC_TOKEN` (auto-rotating) does not need to be in `.env`.
 
 ---
 
@@ -45,9 +100,11 @@ GEMINI_API_KEY=
 
 | URL | HTML | JS | Purpose |
 |-----|------|----|---------|
+| `/` | `app/index.html` | `app/js/home.js` | Landing page — login + band logo + nav links |
 | `/setlist` | `app/setlist.html` | `app/js/setlist.js` | Setlist generator |
 | `/setlist-history` | `app/setlist-history.html` | `app/js/setlist-history.js` | Browse past setlists |
 | `/songs` | `app/songs.html` | `app/js/songs.js` | Song catalogue editor |
+| `/gema-import` | `app/gema-import.html` | `app/js/gema-import.js` | PRO (Performing Rights Organizations) — GEMA import |
 | `/stage?id=N` | `app/stage.html` | `app/js/stage.js` | Full-screen stage view (no nav, dark bg) |
 
 Shared styles in `app/css/app.css`. Shared JS utilities in `app/js/common.js`.
@@ -176,11 +233,21 @@ await sql`
 
 **GEMA modal** (handled by `api/[band]/songs/[...path].js`, action `gema`): `GET` returns `{ works, rightholders }` for a song. The modal shows per-work details (ISWC, ISRC, performers, genre, duration, dates) and a rightholders table (name, role, AR/VR shares, society, represents). Triggered by clicking the GEMA-Nr stat cell.
 
+**PRO page (`/gema-import`)**: renamed from "GEMA Import" to "PRO" (Performing Rights Organizations). The page is a two-step flow: (1) a card grid showing available PROs (GEMA = available/clickable; SACEM = coming soon); clicking GEMA hides the cards and shows the import section. A "← PRO" back button returns to the card selection. `selectPro('gema')` / `selectPro(null)` are inline script functions in the HTML. Nav link and landing page link both say "PRO". URL stays `/gema-import` (no routing change needed).
+
 **`extra` PATCH merge**: the songs PATCH uses `songs.extra || ${update.extra}` (JSONB `||`) instead of full replacement. This preserves extra keys the UI has no input for (e.g. `isrc`, `language` for GEMA-linked songs) across every save.
 
 **`select` COLS type**: renders a `<select data-id data-key>` element. `collectRow()` queries `input`, `textarea`, and `select` elements with `data-id`. Can be made conditionally read-only (stat cell) based on song data — see `gema_language` for the pattern.
 
 **New song default**: `length_min: 4` (displays as `04:00` in the time field).
+
+**URL columns (`referenceUrl`, `songinfoUrl`)**: rendered as a compact `+ Add` / `✓ Link` button (`.url-edit-btn`). The actual value lives in a hidden `<input data-id data-key>` inside the same `<td>` — `collectRow()` picks it up normally. Clicking the button opens the URL preview modal (`#url-preview-modal`) which has an editable URL input bar, an "Edit" button (applies URL change + reloads iframe + syncs back to the hidden input + calls `markDirty`), an external-open `↗` link, and a `Close` button that also auto-saves the current input value. A "Loading…" placeholder is shown while the iframe loads. `toEmbedUrl(url)` converts YouTube watch URLs to embed URLs. Two-way sync: editing in the table cell reflects in the modal on next open; editing in the modal reflects in the cell on Edit/Close.
+
+**Songs table layout (sticky header + toolbar):**
+- `.songs-page .toolbar` is `position: sticky` with `top: var(--songs-toolbar-top)` (CSS var set via JS `requestAnimationFrame` after render measuring `.app-header` height).
+- `.songs-page .table-wrap` has `overflow-y: auto` with `maxHeight` set via JS to `window.innerHeight - tableWrap.getBoundingClientRect().top - 24px` — making the table its own scroll container.
+- `thead th` uses `box-shadow: inset 0 -2px 0 …` instead of `border-bottom` (avoids the sticky header / `border-collapse` border-disappearing bug) and `z-index: 2` to paint above tbody rows.
+- `thead th.col-sticky` combines both box-shadows: right-side column separator + bottom header bar.
 
 Neon's HTTP driver serialises JS objects directly for JSONB columns — do **not** `JSON.stringify()` objects before passing them as query parameters.
 
@@ -262,11 +329,39 @@ Supports `?songId=<id>` to filter to file-related actions for a specific song (`
 | Script | Purpose |
 |--------|---------|
 | `scripts/setup.js` | Interactive 4-step onboarding wizard (schema check/apply, band create, field config, review) |
+| `scripts/seed.js` | Populate the dev database with test data (see below) |
 | `scripts/import_songs.js` | Bulk-import songs from a JSON file |
 | `scripts/import_gema.js` | Import GEMA CSV exports. `--ids <Identifikatoren.csv>` / `--info <Werkinformationen.csv>` → `gema_works` (upsert, auto-matches songs by title). `--beteiligte <Beteiligte.csv>` → `gema_rightholders` (replace-all per work: delete + reinsert). Any combination of flags accepted. Use `--dry-run` first. |
 | `scripts/schema.sql` | Full annotated schema; all ALTER TABLE statements wrapped in idempotent DO blocks |
 
 See `scripts/README.md` for usage details.
+
+### Dev database seeding (`scripts/seed.js`)
+
+Populates the dev database with realistic but clearly fake test data. Run after `setup.js` has created the band row.
+
+```bash
+node scripts/seed.js           # seed (no-op if songs already exist)
+node scripts/seed.js --force   # wipe all band data and reseed
+```
+
+What it does on every run:
+- Prints the target database hostname and requires manual confirmation before connecting
+
+**Production guard:** the DB confirmation prompt must be answered `y` before any data is read or written. Combined with the host display, this ensures you always know which database you are targeting.
+
+What `--force` inserts:
+- 20 songs across Rock, Blues, Folk, Country, Funk, Soul, Reggae, Alternative — 18 active, 2 inactive, some with `extra.capo`
+- 4 gigs (2 past, 1 upcoming, 1 TBD with no date)
+- 4 setlists (2 linked to past gigs, 1 to the upcoming gig, 1 standalone template)
+- 26 song audit log entries (create/update/delete)
+- 2 GEMA works (`MIDNIGHT DRIVE`, `RIVER TOWN BLUES`) with 3 rightholders each
+
+The script finds the band by `BAND_SLUG` env var, then tries `fish`, then falls back to the first band in the DB — so it is safe to run before or after the slug rename.
+
+### `loadEnv` quote handling
+
+All scripts use the same `loadEnv` helper that reads `DATABASE_URL` and other vars from `.env` / `.env.local`. `vercel env pull` wraps every value in double-quotes (`DATABASE_URL="postgres://..."`). The helper strips surrounding single or double quotes before setting the variable, so the pulled file can be used directly without manual editing.
 
 ---
 
