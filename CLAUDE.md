@@ -1,110 +1,55 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Overview
-
-Band tools app — password-protected pages backed by Neon PostgreSQL + Vercel serverless functions.
-
-No build step. Everything is served as-is.
+Band management app — Vercel serverless (no build step) + Neon PostgreSQL. See `README.md` for infrastructure names, env vars, and setup steps.
 
 ---
 
-## Running Locally
+## Environments
+
+| Branch | Vercel env | DB | Notes |
+|--------|------------|----|-------|
+| `dev` | Preview | Neon dev | default; push freely |
+| `main` | Production | Neon main | PR-merge only |
+
+---
+
+## Local dev
 
 ```bash
-vercel dev          # requires .env with all env vars — see below
+vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .env)
 ```
 
-### Local environment variables (`.env`)
-
-`vercel dev` loads `.env` for function handlers but **not** `.env.local` (a CLI 52.x quirk). Keep all vars in `.env` (already gitignored):
-
-```
-DATABASE_URL=
-BAND_SLUG=
-BETTERSTACK_TOKEN=
-APP_ORIGIN=https://yourapp.example.com
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=
-R2_PUBLIC_URL=
-RESEND_API_KEY=
-RESEND_FROM=
-GEMINI_API_KEY=
-```
-
-`vercel env pull .env.local` syncs from the Vercel dashboard — copy values into `.env` manually, stripping the surrounding quotes. `VERCEL_OIDC_TOKEN` (auto-rotating) does not need to be in `.env`.
+`vercel env pull .env.local` wraps values in double-quotes. The `loadEnv` helper in every script strips them. Do not put `BETTERSTACK_TOKEN` in `.env` (local logs go to `logs/` automatically).
 
 ---
 
-## App
+## vercel dev bugs (52.x) — read before touching API routing
 
-### Pages (`app/`)
+1. **`req.query.path` not populated** in catch-all files inside dynamic dirs. Handlers fall back to `req.url.split('?')[0].split('/segment/')[1]?.split('/')`.
+2. **Multi-segment POST to catch-alls fails silently** — vercel returns its own HTML 404 (not the handler). Example: `POST /api/:band/setlists/:id/duplicate` was broken. Fix: move such endpoints to the plain `setlists.js` handler using body fields (`duplicate_id`, `share_id`). Same fallback for `req.query.band`: `req.query.band || req.url.split('?')[0].split('/')[2]`.
+3. **Detect early:** run `BAND_PASSWORD=… node tests/api.js` against local `vercel dev`. Routing bugs that only appear in dev (not on Vercel) will fail these tests.
 
-| URL | HTML | JS | Purpose |
-|-----|------|----|---------|
-| `/setlist` | `app/setlist.html` | `app/js/setlist.js` | Setlist generator |
-| `/setlist-history` | `app/setlist-history.html` | `app/js/setlist-history.js` | Browse past setlists |
-| `/songs` | `app/songs.html` | `app/js/songs.js` | Song catalogue editor |
-| `/stage?id=N` | `app/stage.html` | `app/js/stage.js` | Full-screen stage view (no nav, dark bg) |
+---
 
-Shared styles in `app/css/app.css`. Shared JS utilities in `app/js/common.js`.
+## Pages
 
-### Shared Utilities (`app/js/common.js`)
+| URL | JS |
+|-----|-----|
+| `/` | `app/js/home.js` |
+| `/setlist` | `app/js/setlist.js` |
+| `/setlist-history` | `app/js/setlist-history.js` |
+| `/songs` | `app/js/songs.js` |
+| `/gema-import` | `app/js/gema-import.js` |
+| `/stage?id=N` | `app/js/stage.js` — **no `common.js`; no nav** |
 
-Every page loads `common.js` before its own script. It provides:
+`app/js/common.js` is loaded by every page except `stage.html`. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `common.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()` (which lives in `common.js`).
 
-- `escHtml(s)` / `formatLength(mins)` — formatting helpers
-- `injectShell()` — IIFE that runs at script load time. Inserts `<header class="app-header">` (with nav) before the first body child, and `<footer>` before the `<script>` tag. Also sets the `#currentYear` span. **Do not put `<header>` or `<footer>` in page HTML** — they come from here. `stage.html` intentionally does not load `common.js` and therefore has no nav.
-- `loadConfig()` — fetches `/api/config` with **stale-while-revalidate** via `sessionStorage`. First call awaits the network; subsequent calls within the same tab return the cached value immediately and refresh in the background. Cache key: `band_config_cache`.
-- `applyNav(bandName, bandConfig)` — populates `.band-name` text, sets `.app-logo-img` src from `bandConfig.logoUrl`, highlights the current nav link, and injects the auth indicator into the nav.
-- `updateAuthIndicator()` — shows logged-in badge + logout button, or clears the area. If `window.onNavAuthEmpty` is defined, calls it so pages can inject a page-specific login button.
-- `doLogout()` — clears the session token and calls `updateAuthIndicator()`.
+---
 
-### Auth Pattern
-Stateless. Password lives in `sessionStorage.setlist_token`, sent as `Authorization: Bearer <token>` on every mutating request. Magic login tokens (30-min HMAC) are generated by `api/_token.js` and sent via `/request-reset`.
+## Serverless functions (12 — Hobby plan limit)
 
-### Per-page nav hook (`onNavAuthEmpty`)
-Pages that need a login button in the nav when logged out define:
-```js
-window.onNavAuthEmpty = function(el) {
-  el.innerHTML = '<button class="nav-auth-login" onclick="openHistoryLogin()">login to edit</button>';
-};
-```
-`common.js` calls this after clearing the auth area on logout or initial unauthenticated load.
-
-### Logo and Band Config
-`bands.config` JSONB drives UI without schema changes. Key fields:
-- `logoUrl` — URL to band logo. Loaded by `applyNav()` into `.app-logo-img` elements. Set it with:
-  ```sql
-  UPDATE bands SET config = config || '{"logoUrl": "/img/your-logo.png"}'::jsonb WHERE slug = 'yourslug';
-  ```
-- `displayFields`, `filterFields` — configure the songs table columns and filters.
-
-### API Helpers (`api/_*.js`)
-
-| File | Purpose |
-|------|---------|
-| `api/_db.js` | `getDb()` (singleton), `getBand(slug)`, `insertAuditLog(sql, bandId, songId, action, songData)`. Provider: Neon (`@neondatabase/serverless`). To switch, update the `DB.connect` function — `postgres.js` and `pg` use the same tagged-template interface. |
-| `api/_auth.js` | `requireAuth(req, res, slug)` → band object or writes 401; `checkCredentials(token, band)` |
-| `api/_handler.js` | `wrap(handler)` — catches all unhandled errors, returns 500 JSON, logs every request. **All handlers must use this.** |
-| `api/_validate.js` | `validateSongIds`, `validateStr(val, maxLen)`, `validateNum(val)`, `validateEmail(val)` — return `null` (empty/missing), the validated value, or `false` (invalid) |
-| `api/_email.js` | `sendEmail({to, subject, text?, html?, attachments?})`. Provider: Resend. To switch, update the `PROVIDER` config block (`envVar`, `url`, `auth`, `buildBody`). Examples for Postmark and SendGrid are in the block. FROM address from `RESEND_FROM` env var. |
-| `api/_pdf.js` | `buildSetlistPdf(setlist, songs, bandName)` → Buffer; `setlistTitle(setlist)` |
-| `api/_r2.js` | `createPresignedUrl(key, contentType)`, `deleteFromR2(url)`, `filenameFromUrl(url)`, `keyFromUrl(url)`. Provider: Cloudflare R2 (S3-compatible). To switch to AWS S3 / Backblaze B2 / MinIO, update the `STORAGE` config block. Non-S3 providers: replace the SDK, keep exported function signatures. |
-| `api/_media.js` | `makeMediaFn(config)` (bare async handler, used inside catch-all) / `makeMediaHandler(config)` (wrapped, standalone). Config: `keyPrefix`, `extraKey`, `maxBytes`, `actionPrefix`, `allowedExts?`, `mimePrefix`. |
-| `api/_token.js` | `generateMagicToken(hash)`, `verifyMagicToken(token, hash)` |
-| `api/_ai.js` | `suggestLyricsWithAI(title, artist, { language, genre })` → `{ lyrics }` or `{ lyrics: null, skipped? }`. To switch provider: update the `AI` config block (4 lines: `format`, `baseUrl`, `model`, `apiKey`). Default: native Gemini API with Google Search grounding (`GEMINI_API_KEY`); fall back to `format: 'openai'` (knowledge-only) if grounding quota runs low. |
-| `api/_logger.js` | `info(event, data)`, `warn(event, data)`, `error(event, data)` — always writes JSON to stdout; **in dev** also appends to `logs/YYYY-MM-DD.log` (auto-pruned after 7 days); **in production** POSTs to the configured cloud provider via `fetch`. Cloud send is skipped in dev because `vercel dev` kills async I/O after the response is sent. To switch providers, update the `TRANSPORT` config block (`envVar`, `url`, `auth`, `success`). Currently: Better Stack. |
-
-### Serverless function layout
-
-Vercel Hobby plan limit is 12 functions (one per non-`_` file in `api/`). The current 12:
-
-| File | Routes handled |
-|------|---------------|
+| File | Routes |
+|------|--------|
 | `api/config.js` | `GET /api/config` |
 | `api/[band]/auth.js` | `POST /api/:band/auth` |
 | `api/[band]/export.js` | `GET /api/:band/export` |
@@ -112,29 +57,56 @@ Vercel Hobby plan limit is 12 functions (one per non-`_` file in `api/`). The cu
 | `api/[band]/gigs.js` | `GET/POST /api/:band/gigs` |
 | `api/[band]/gigs/[id].js` | `GET/PUT/DELETE /api/:band/gigs/:id` |
 | `api/[band]/request-reset.js` | `POST /api/:band/request-reset` |
-| `api/[band]/setlists.js` | `GET/POST /api/:band/setlists` |
-| `api/[band]/setlists/[...path].js` | `GET/PUT /api/:band/setlists/:id`, `POST /api/:band/setlists/:id/duplicate`, `POST /api/:band/setlists/:id/share` |
+| `api/[band]/setlists.js` | `GET /api/:band/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
+| `api/[band]/setlists/[...path].js` | `GET/PUT /api/:band/setlists/:id` |
 | `api/[band]/song-logs.js` | `GET /api/:band/song-logs` |
 | `api/[band]/songs.js` | `GET/POST/PATCH /api/:band/songs` |
-| `api/[band]/songs/[...path].js` | `DELETE /api/:band/songs/:id`, `POST .../restore`, `GET .../setlists`, `GET .../gema`, `PUT/DELETE .../lyrics`, `POST .../lyrics-suggest`, `POST/PUT/DELETE .../audio|sheet|playback` |
+| `api/[band]/songs/[...path].js` | `DELETE` / `restore` / `setlists` / `gema` / `lyrics` / `lyrics-suggest` / `audio` / `sheet` / `playback` |
 
-`/api/docs` is served as a static HTML rewrite (`app/api-docs.html`) — zero functions used.
+**Duplicate and share are both `POST /api/:band/setlists`** with a body field — not separate URL paths. This avoids the vercel dev multi-segment POST bug (see above).
 
-The catch-all files dispatch on `req.query.path[1]` (the action segment). `makeMediaFn` from `_media.js` is used inside the songs catch-all; auth and ID validation run in the outer `wrap()` first, then `req.query.id = rawId` shims the ID before delegating to the media function.
+`/api/docs` is a static rewrite to `app/api-docs.html` — uses zero functions.
 
-### Handler Conventions
-Every handler file exports `wrap(async function handler(req, res) { ... })`.
+---
 
-Validation pattern:
+## API helpers (`api/_*.js`)
+
+| Module | Key exports / notes |
+|--------|---------------------|
+| `_db.js` | `getDb()` singleton, `getBand(slug)` → null if not found, `insertAuditLog` silently swallows errors by design |
+| `_auth.js` | `requireAuth(req, res, slug)` → band object or writes 401/404 and returns null |
+| `_handler.js` | `wrap(handler)` — **required on every handler**; catches unhandled errors → 500 |
+| `_validate.js` | returns `null` (missing/empty), validated value, or `false` (invalid) |
+| `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
+| `_pdf.js` | `buildSetlistPdf(setlist, songs, bandName)` → Buffer; `setlistTitle(setlist)` |
+| `_r2.js` | `createPresignedUrl`, `deleteFromR2` — swap storage via `STORAGE` block at top |
+| `_media.js` | `makeMediaFn(config)` for use inside catch-alls; `makeMediaHandler` for standalone files |
+| `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
+| `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
+| `_token.js` | `generateMagicToken(hash)`, `verifyMagicToken(token, hash)` — 30-min HMAC |
+
+---
+
+## Code patterns
+
+**Handler skeleton:**
+```js
+module.exports = wrap(async function handler(req, res) {
+  // catch-alls: req.query.band may be unpopulated in vercel dev
+  const slug = req.query.band || req.url.split('?')[0].split('/')[2];
+  const sql  = getDb();
+  ...
+});
+```
+
+**Validation:**
 ```js
 const name = validateStr(rawName, 200);
 if (name === false) return res.status(400).json({ error: 'name too long' });
 if (!name)          return res.status(400).json({ error: 'name required' });
 ```
 
-`insertAuditLog` silently swallows errors — a failed audit write never breaks the main operation.
-
-For handlers with both GET (public) and PUT/POST (auth-gated) on the same resource, auth-gate the write path first to avoid the double `getBand` call:
+**Mixed GET (public) / PUT (authed) on the same resource — auth-gate first to avoid double `getBand`:**
 ```js
 let band;
 if (req.method === 'PUT') {
@@ -146,159 +118,58 @@ if (req.method === 'PUT') {
 }
 ```
 
-Batch song inserts use Neon's UNNEST pattern to avoid N round-trips:
+**Batch inserts (avoid N round-trips):**
 ```js
-await sql`
-  INSERT INTO setlist_songs (setlist_id, song_id, position)
-  SELECT * FROM unnest(${setlistIds}::int[], ${songIds}::int[], ${positions}::int[])
-`;
+await sql`INSERT INTO setlist_songs (setlist_id, song_id, position)
+  SELECT * FROM unnest(${ids}::int[], ${songIds}::int[], ${positions}::int[])`;
 ```
 
-### Database Schema
-
-| Table | Key columns |
-|-------|-------------|
-| `bands` | `id`, `slug`, `name`, `password_hash`, `config` (JSONB) |
-| `songs` | `id`, `band_id`, `title`, `active`, `key`, `category`, `tempo`, `length_min`, `interpret`, `reference_interpret`, `comment`, `extra` (JSONB), `deleted` |
-| `gigs` | `id`, `band_id`, `name`, `date`, `venue`, `notes` |
-| `setlists` | `id`, `band_id`, `title`, `comment`, `gig_id` |
-| `setlist_songs` | `setlist_id`, `song_id`, `position` (junction + ordering) |
-| `song_logs` | `id`, `band_id`, `song_id`, `action` (create/update/delete), `song_data` (JSONB snapshot), `changed_at` |
-| `gema_works` | `id`, `band_id`, `gema_work_number`, `title`, `iswc`, `isrc`, `publisher_work_numbers`, `language`, `song_id` (nullable FK → songs) |
-| `gema_rightholders` | `id`, `gema_work_id` (FK → gema_works), `name`, `ip_name_number`, `role` (composer/lyricist/publisher/arranger), `ar_share`, `vr_share`, `society_ar`, `society_vr`, `represents_name/ip/role` |
-
-`GET /api/:band/songs` LEFT JOIN LATERAL-joins `gema_works` onto songs, returning `iswc`, `gema_work_number`, `gema_language` per song (null if no GEMA registration). `/api/config` does the same join for the setlist generator. Import via `scripts/import_gema.js` (see below).
-
-**GEMA columns in the songs table:**
-- `iswc`, `gema_work_number` — read-only `stat` type; GEMA-Nr is clickable and opens the GEMA modal
-- `gema_language` — `select` type (EN/FR/DE): **read-only stat** when the song has a linked GEMA work (GEMA owns the value); **editable dropdown** (stored in `songs.extra.language`) when there is no GEMA link
-- `extra.isrc` — read-only `stat` type; recording ISRC stored in `songs.extra.isrc` (set via script, never overwritten by the UI thanks to the JSONB merge in the PATCH handler)
-
-**GEMA modal** (handled by `api/[band]/songs/[...path].js`, action `gema`): `GET` returns `{ works, rightholders }` for a song. The modal shows per-work details (ISWC, ISRC, performers, genre, duration, dates) and a rightholders table (name, role, AR/VR shares, society, represents). Triggered by clicking the GEMA-Nr stat cell.
-
-**`extra` PATCH merge**: the songs PATCH uses `songs.extra || ${update.extra}` (JSONB `||`) instead of full replacement. This preserves extra keys the UI has no input for (e.g. `isrc`, `language` for GEMA-linked songs) across every save.
-
-**`select` COLS type**: renders a `<select data-id data-key>` element. `collectRow()` queries `input`, `textarea`, and `select` elements with `data-id`. Can be made conditionally read-only (stat cell) based on song data — see `gema_language` for the pattern.
-
-**New song default**: `length_min: 4` (displays as `04:00` in the time field).
-
-Neon's HTTP driver serialises JS objects directly for JSONB columns — do **not** `JSON.stringify()` objects before passing them as query parameters.
-
-### API Reference
-Full OpenAPI 3.0 spec at `openapi.json` (project root, served statically at `/openapi.json`).
-Interactive docs served at `/api/docs` (Scalar UI).
-
-### Song file & media columns
-
-The songs table has four icon columns for per-song media. Each stores its value in the `extra` JSONB field and is surfaced in `app/js/songs.js` via the `COLS` array.
-
-| Column | Header | `extra` key | URL path | Storage |
-|--------|--------|-------------|----------|---------|
-| Listen | ▶ | `listenUrl` | `/api/:band/songs/:id/audio` | R2 (`audio/` prefix), or YouTube/SoundCloud/direct URL |
-| Sheet | ≡ | `sheetUrl` | `/api/:band/songs/:id/sheet` | R2 (`sheets/` prefix), PDF only, 20 MB max |
-| Playback | ▷ | `playbackUrl` | `/api/:band/songs/:id/playback` | R2 (`playback/` prefix), audio files, 50 MB max |
-| Lyrics | ¶ | `lyrics` | `/api/:band/songs/:id/lyrics` | PostgreSQL `extra` JSONB only (no R2), 20 000 char max |
-
-**File upload flow (audio / sheet / playback):**
-1. Client `POST /api/:band/songs/:id/<type>` with `{ filename, contentType, size }` → server returns `{ uploadUrl, publicUrl }` (5-min presigned PUT URL)
-2. Client `PUT uploadUrl` directly to R2 with the file bytes
-3. Client `PUT /api/:band/songs/:id/<type>` with `{ publicUrl }` → server validates prefix, reads previous URL from DB, swaps in new URL, deletes old R2 object if different
-
-The server never trusts the client to supply the previous URL — it always reads it from the DB.
-
-**`publicUrl` validation:** server checks `publicUrl.startsWith(`${R2_PUBLIC_URL}/${KEY_PREFIX}`)` to prevent SSRF / storing arbitrary URLs.
-
-**Player modals** auto-detect URL type: `.mp3/.m4a/.ogg/.wav/.flac` → `<audio>` element, YouTube/SoundCloud → iframe embed, other → external link. Replace and Delete buttons live only in the modal (not the table cell). Upload history (from `song-logs` with `?songId=`) is shown at the bottom of each modal.
-
-**Lyrics modal** has two modes: view (`<pre>`) and edit (`<textarea>`), toggled inline. Saved via `PUT /api/:band/songs/:id/lyrics`.
-
-**Lyrics suggest ("AI ✦" button):** in edit mode, clicking "AI ✦" calls `POST /api/:band/songs/:id/lyrics-suggest`. The server runs a three-source pipeline and returns `{ lyrics, source, sources }`. The client shows a preview pane; the user clicks "Use this" to copy into the textarea, or "Discard" to dismiss. An in-flight request is aborted when the modal closes.
-
-**`lyrics-suggest` pipeline** (handled by `api/[band]/songs/[...path].js`, action `lyrics-suggest`):
-1. **lyrics.ovh** — `GET https://api.lyrics.ovh/v1/{artist}/{title}` (6 s timeout, no key, accepts on `.lyrics` length > 50)
-2. **lrclib.net** — `GET https://lrclib.net/api/get?artist_name=&track_name=` (6 s timeout, no key, uses `plainLyrics` or strips timestamps from `syncedLyrics`)
-3. **AI** — knowledge-based via `suggestLyricsWithAI()` in `api/_ai.js` (see below)
-
-`SOURCES = ['lyrics.ovh', 'lrclib', 'ai']` in the handler is the single source of truth for the pipeline order — client UI dynamically reflects it. Add a new source by appending to `SOURCES` and adding a `try` block in the same position. Rate limits: 3 requests per song per 5 min, 10 per IP per hour. Title is normalised to Title Case before all API calls (case-sensitive APIs). Artist is `reference_interpret || interpret` (original artist, not the band name). Returns `{ lyrics: null, sources }` (HTTP 200) when nothing is found — never 404 (reserved for missing song row).
-
-**`api/_ai.js`** — provider-agnostic AI wrapper. Switch provider by editing the `AI` config block at the top of the file:
-- `format: 'gemini'` — native Gemini API with `google_search` grounding; finds obscure/non-English songs via web search. **Current default.**
-- `format: 'openai'` — standard `/chat/completions` with `Authorization: Bearer` (Gemini compat, Groq, Mistral, Ollama); knowledge-only, no web search, faster. Switch to this if grounding quota runs low.
-
-Env var: `GEMINI_API_KEY` (get free key at aistudio.google.com, 1 500 req/day, no billing required). Grounding and knowledge-only endpoints have separate quota buckets in Google Cloud Console.
-
-**`collectRow()` in `songs.js`** queries `input[data-id]`, `textarea[data-id]`, and `select[data-id]` so lyrics (textarea) and dropdown fields (select) survive bulk PATCH saves.
-
-**R2 setup** (Cloudflare, free tier: 10 GB, no egress):
-```
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=
-R2_PUBLIC_URL=https://<bucket>.<accountid>.r2.dev
-```
-
-R2 helpers are centralised in `api/_r2.js` (shared by all three file endpoints). npm deps: `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`.
-
-### Client-side Caching Rules
-Several data sources are intentionally cached to avoid redundant requests across the session:
-
-| Data | Where | Mechanism | Invalidation |
-|------|-------|-----------|--------------|
-| `/api/config` | All pages | `sessionStorage` stale-while-revalidate | Never (tab lifetime) |
-| Gig list | `setlist-history.js` | `loadedGigs` Map | Never within tab; `saveGigEdit()` updates entries in-place |
-| Setlist detail | `setlist-history.js` | `loadedData` Map | Updated in-place after edit save |
-| Song change log | `songs.js` | Fetched once per `loadAndRender()` | Re-fetched after save/restore |
-
-**Do not call `loadLogs()` from inside `renderTable()`.** `renderTable()` is also called by `discardAll()`; logs only need refreshing after a real data change (`loadAndRender()`).
-
-### Song logs (`/api/:band/song-logs`)
-Supports `?songId=<id>` to filter to file-related actions for a specific song (`audio_replace`, `audio_delete`, `sheet_replace`, `sheet_delete`, `playback_replace`, `playback_delete`). Used by the upload-history section inside each player modal. `songId=0` or non-integer → 400.
+**JSONB:**
+- Neon serialises JS objects directly — do **not** `JSON.stringify()`.
+- Use `extra || ${update.extra}` (JSONB `||`) for partial PATCH; full replacement overwrites keys like `isrc` and `language` that the UI doesn't manage.
 
 ---
 
-## Scripts (`scripts/`)
+## Database
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/setup.js` | Interactive 4-step onboarding wizard (schema check/apply, band create, field config, review) |
-| `scripts/import_songs.js` | Bulk-import songs from a JSON file |
-| `scripts/import_gema.js` | Import GEMA CSV exports. `--ids <Identifikatoren.csv>` / `--info <Werkinformationen.csv>` → `gema_works` (upsert, auto-matches songs by title). `--beteiligte <Beteiligte.csv>` → `gema_rightholders` (replace-all per work: delete + reinsert). Any combination of flags accepted. Use `--dry-run` first. |
-| `scripts/schema.sql` | Full annotated schema; all ALTER TABLE statements wrapped in idempotent DO blocks |
+Tables: `bands`, `songs`, `gigs`, `setlists`, `setlist_songs`, `song_logs`, `gema_works`, `gema_rightholders`. Full schema in `scripts/schema.sql`.
 
-See `scripts/README.md` for usage details.
+Songs use a `deleted` flag (soft-delete). `songs.extra` JSONB holds arbitrary per-song data (`isrc`, `language`, `listenUrl`, `sheetUrl`, `playbackUrl`, `lyrics`, `capo`, …).
+
+GEMA: `extra.language` is editable when no GEMA work is linked; the GEMA value shadows it when linked. `extra.isrc` is always read-only (set via script). The `||` PATCH merge preserves both.
 
 ---
 
-## Tests (`tests/`)
+## Client-side rules
 
-Zero-dependency test suite using native Node.js fetch (Node 20+). Runs against a live API (local or remote).
+- `loadConfig()` in `common.js` — stale-while-revalidate via `sessionStorage` key `band_config_cache`. First call blocks on network; subsequent calls in the same tab return immediately.
+- Auth token: `sessionStorage.setlist_token` → `Authorization: Bearer <token>` on every mutating request.
+- **Do not call `loadLogs()` inside `renderTable()`** — `renderTable()` is also called by `discardAll()`. Logs only need refreshing after a real data change.
+- Songs table: toolbar is `position:sticky`; `table-wrap` has JS-computed `maxHeight` for independent scroll. `thead th` uses `box-shadow` instead of `border-bottom` to avoid the sticky/border-collapse disappearing-border bug.
+
+---
+
+## Scripts
+
+All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values.
 
 ```bash
-cd tests && npm test          # run all tests
-BAND_SLUG=yourslug npm test   # override band slug
+node scripts/setup.js                                      # first-time: schema + band row
+node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
+node scripts/import_songs.js --band <slug> songs.json
+node scripts/import_gema.js  --band <slug> [--ids <csv>] [--info <csv>] [--beteiligte <csv>] [--dry-run]
 ```
 
-See `tests/README.md` for configuration and adding new test cases.
+`BAND_SLUG` env var targets the band; falls back to the first band in the DB.
 
 ---
 
-## Deployment
+## Tests
 
-`vercel.json` sets all cache headers and security headers. Cache rules:
-- HTML / JSON: no-cache (`must-revalidate`)
-- `/app/css/` + `/app/js/`: 1 year + immutable
-- Global `X-Robots-Tag: noindex, nofollow` on all routes
+```bash
+node tests/unit.js                        # validate + token helpers; runs in CI
+cd tests && BAND_PASSWORD=… npm test      # full integration suite against vercel dev (port 3000)
+npm run test:dev                          # against Vercel Preview URL
+```
 
-### Hosting portability
-
-API handlers use the standard Node.js `(req, res)` interface — no Vercel-specific APIs in handler code. To move off Vercel:
-
-| Coupling point | What to change |
-|----------------|---------------|
-| `vercel.json` | Replace with provider config (e.g. `netlify.toml`, `fly.toml`) |
-| `api/` directory routing | Vercel infers routes from file paths; other platforms may need explicit router setup |
-| Environment variables | Re-add all vars in the new platform's dashboard |
-| `vercel dev` | Replace with `node`, `tsx`, Express, or the new platform's local dev tool |
-
-The service helpers (`_db.js`, `_email.js`, `_r2.js`, `_logger.js`) each have a labelled config block at the top — provider swaps are isolated to those blocks.
+Write tests (require `BAND_PASSWORD`) create two `[TEST]` setlists that persist. Remove them manually from `/setlist-history` if needed.
