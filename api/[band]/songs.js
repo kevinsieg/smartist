@@ -36,7 +36,7 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug);
     if (!band) return;
     const { title: rawTitle, active, key: rawKey, genre: rawCat, tempo: rawTempo,
-            length_min: rawLen, interpret: rawInterp, reference_interpret: rawRef,
+            bpm: rawBpm, length_min: rawLen, interpret: rawInterp, reference_interpret: rawRef,
             comment: rawComment, extra } = req.body ?? {};
 
     const title = validateStr(rawTitle, 200);
@@ -46,8 +46,10 @@ module.exports = wrap(async function handler(req, res) {
     if (key === false) return res.status(400).json({ error: 'key too long' });
     const genre = validateStr(rawCat, 100);
     if (genre === false) return res.status(400).json({ error: 'genre too long' });
-    const tempo = validateNum(rawTempo);
-    if (tempo === false) return res.status(400).json({ error: 'tempo must be a number' });
+    const tempo = validateStr(rawTempo, 50);
+    if (tempo === false) return res.status(400).json({ error: 'tempo too long' });
+    const bpm = validateNum(rawBpm);
+    if (bpm === false) return res.status(400).json({ error: 'bpm must be a number' });
     const length_min = validateNum(rawLen);
     if (length_min === false) return res.status(400).json({ error: 'length_min must be a number' });
     const interpret = validateStr(rawInterp, 200);
@@ -58,10 +60,10 @@ module.exports = wrap(async function handler(req, res) {
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
 
     const [song] = await sql`
-      INSERT INTO songs (band_id, title, active, key, genre, tempo, length_min,
+      INSERT INTO songs (band_id, title, active, key, genre, tempo, bpm, length_min,
                          interpret, reference_interpret, comment, extra)
       VALUES (${band.id}, ${title}, ${active ?? true}, ${key},
-              ${genre}, ${tempo}, ${length_min},
+              ${genre}, ${tempo}, ${bpm}, ${length_min},
               ${interpret}, ${reference_interpret},
               ${comment}, ${extra ?? {}})
       RETURNING *
@@ -92,8 +94,10 @@ module.exports = wrap(async function handler(req, res) {
       if (key === false) continue;
       const genre = validateStr(update.genre, 100);
       if (genre === false) continue;
-      const tempo = validateNum(update.tempo);
+      const tempo = validateStr(update.tempo, 50);
       if (tempo === false) continue;
+      const bpm = validateNum(update.bpm);
+      if (bpm === false) continue;
       const length_min = validateNum(update.length_min);
       if (length_min === false) continue;
       const interpret = validateStr(update.interpret, 200);
@@ -110,6 +114,7 @@ module.exports = wrap(async function handler(req, res) {
           key                 = ${key},
           genre            = ${genre},
           tempo               = ${tempo},
+          bpm                 = ${bpm},
           length_min          = ${length_min},
           interpret           = ${interpret},
           reference_interpret = ${reference_interpret},

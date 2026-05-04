@@ -286,8 +286,13 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
-  await test('POST /setlists/1/share without token → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists/1/share`, { email: 'test@example.com' });
+  await test('POST /setlists with share_id without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists`, { share_id: 1, email: 'test@example.com' });
+    assertStatus(res, json, 401);
+  });
+
+  await test('PUT /setlists/:id without token → 401', async () => {
+    const { res, json } = await PUT(`/api/${slug}/setlists/1`, { title: 'x', song_ids: [] });
     assertStatus(res, json, 401);
   });
 
@@ -556,15 +561,15 @@ async function testLyricsLifecycle(slug, token, songId) {
 async function testSetlistShareValidation(slug, token, setlistId) {
   console.log(B('\nSetlist share validation'));
 
-  await test('POST /setlists/:id/share invalid email → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists/${setlistId}/share`,
-      { email: 'not-an-email' }, { token });
+  await test('POST /setlists share_id + invalid email → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists`,
+      { share_id: setlistId, email: 'not-an-email' }, { token });
     assertStatus(res, json, 400);
   });
 
-  await test('POST /setlists/:id/share unknown setlist → 404', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists/999999999/share`,
-      { email: 'test@example.com' }, { token });
+  await test('POST /setlists share_id + unknown setlist → 404', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists`,
+      { share_id: 999999999, email: 'test@example.com' }, { token });
     assertStatus(res, json, 404);
   });
 }
@@ -672,11 +677,12 @@ async function testWrite(slug, token, firstSong) {
         assert(json.title === '[TEST] updated', 'title not updated');
       });
 
-      await test('POST /setlists/:id/duplicate → 201', async () => {
-        const { res, json } = await POST(
-          `/api/${slug}/setlists/${setlist.id}/duplicate`, undefined, { token });
+      await test('POST /setlists duplicate_id → 201 with new id and copied songs', async () => {
+        const { res, json } = await POST(`/api/${slug}/setlists`,
+          { duplicate_id: setlist.id }, { token });
         assertStatus(res, json, 201);
         assert(json.id !== setlist.id, 'duplicate has same id as original');
+        assert(json.song_count === setlist.song_count, `song count mismatch — expected ${setlist.song_count}, got ${json.song_count}`);
       });
     }
   } else {
