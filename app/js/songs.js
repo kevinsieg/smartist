@@ -190,6 +190,7 @@ const COLS = [
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
   { key: 'genre',            label: 'genre',           type: 'text',   cls: 'col-cat',     width: 100 },
   { key: 'tempo',               label: 'tempo',              type: 'text',   cls: 'col-tempo',   width: 70  },
+  { key: 'bpm',                 label: 'bpm',                type: 'number', cls: 'col-bpm',     width: 55  },
   { key: 'length_min',          label: 'length_min',         type: 'time',   cls: 'col-len',     width: 68  },
   { key: 'extra.author',        label: 'author',             type: 'text',   cls: 'col-author',  width: 130 },
   { key: 'interpret',           label: 'interpret',          type: 'text',   cls: 'col-interp',  width: 140 },

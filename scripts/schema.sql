@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS songs (
   key                 TEXT,             -- musical key, e.g. "G", "Am"
   genre            TEXT,             -- genre or style grouping
   tempo               TEXT,             -- descriptive tempo, e.g. "Slow", "Medium"
+  bpm                 INTEGER,          -- beats per minute
   length_min          REAL,             -- duration in decimal minutes, e.g. 3.5 = 3:30
   interpret           TEXT,             -- main performer or band known for this song
   reference_interpret TEXT,             -- artist of a specific reference recording
