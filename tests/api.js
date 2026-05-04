@@ -276,6 +276,11 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
+  await test('POST /setlists/1/share without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/1/share`, { email: 'test@example.com' });
+    assertStatus(res, json, 401);
+  });
+
   // File endpoints auth
   for (const type of ['audio', 'sheet', 'playback']) {
     await test(`POST /songs/1/${type} without token → 401`, async () => {
@@ -298,6 +303,10 @@ async function testAuth(slug) {
   });
   await test('DELETE /songs/1/lyrics without token → 401', async () => {
     const { res, json } = await DELETE(`/api/${slug}/songs/1/lyrics`);
+    assertStatus(res, json, 401);
+  });
+  await test('POST /songs/1/lyrics-suggest without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/1/lyrics-suggest`, {});
     assertStatus(res, json, 401);
   });
 }
@@ -534,6 +543,22 @@ async function testLyricsLifecycle(slug, token, songId) {
   });
 }
 
+async function testSetlistShareValidation(slug, token, setlistId) {
+  console.log(B('\nSetlist share validation'));
+
+  await test('POST /setlists/:id/share invalid email → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/${setlistId}/share`,
+      { email: 'not-an-email' }, { token });
+    assertStatus(res, json, 400);
+  });
+
+  await test('POST /setlists/:id/share unknown setlist → 404', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/999999999/share`,
+      { email: 'test@example.com' }, { token });
+    assertStatus(res, json, 404);
+  });
+}
+
 async function testWrite(slug, token, firstSong) {
   console.log(B('\nWrite ops'));
 
@@ -577,6 +602,12 @@ async function testWrite(slug, token, firstSong) {
       assert(json.ok === true, 'expected ok:true');
     });
 
+    await test('POST /songs/:id/lyrics-suggest without artist → 400', async () => {
+      const { res, json } = await POST(`/api/${slug}/songs/${song.id}/lyrics-suggest`, {}, { token });
+      assertStatus(res, json, 400);
+      assert(json.error?.includes('No artist'), `unexpected error: ${JSON.stringify(json)}`);
+    });
+
     // File and lyrics tests run on the temp song so production data is untouched
     await testLyricsLifecycle(slug, token, song.id);
     await testFileValidation(slug, token, song.id);
@@ -615,6 +646,8 @@ async function testWrite(slug, token, firstSong) {
       assert(json.id > 0, 'missing id');
       setlist = json;
     });
+
+    if (setlist) await testSetlistShareValidation(slug, token, setlist.id);
 
     await test('POST /setlists missing song_ids → 400', async () => {
       const { res, json } = await POST(`/api/${slug}/setlists`, { title: 'x' }, { token });
