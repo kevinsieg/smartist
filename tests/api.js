@@ -6,19 +6,29 @@
 //   BASE_URL=https://yourapp.example.com npm test    # against production
 //   BAND_PASSWORD=xxx npm test                  # enables write tests
 
-const fs = require('fs');
+const fs   = require('fs');
+const path = require('path');
 
-// Load .env.local — works from repo root or from tests/
-function loadEnv(path) {
+const REPO_ROOT = path.join(__dirname, '..');
+
+/** Load KEY=val lines; only sets `process.env` if unset. Strips quotes like `vercel env pull`. */
+function loadEnvFile(absPath) {
   try {
-    fs.readFileSync(path, 'utf8').split('\n').forEach(line => {
+    fs.readFileSync(absPath, 'utf8').split('\n').forEach(line => {
       const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim();
+      if (m && process.env[m[1]] === undefined) {
+        let v = m[2].trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
+          v = v.slice(1, -1);
+        process.env[m[1]] = v;
+      }
     });
-    return true;
-  } catch { return false; }
+  } catch { /* missing file is fine */ }
 }
-loadEnv('.env.local') || loadEnv('../.env.local');
+
+// `.env` fills keys not already set from `.env.local` (each line only applies if env[key] is still undefined)
+loadEnvFile(path.join(REPO_ROOT, '.env.local'));
+loadEnvFile(path.join(REPO_ROOT, '.env'));
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const SLUG     = process.env.BAND_SLUG;

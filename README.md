@@ -14,7 +14,7 @@ Setlist management and song catalogue for bands. Runs as a Vercel serverless app
 
 **Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. No auth required.
 
-**GEMA import** (`/gema-import`) — import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) with dry-run preview and auto-matching against songs.
+**PRO / GEMA** (`/gema-import`) — import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) with dry-run preview and auto-matching against songs. UI label is “PRO”; URL unchanged.
 
 ---
 
@@ -146,13 +146,13 @@ vercel env pull .env.local   # pulls Preview vars into .env.local (used directly
 vercel dev                   # starts local server on port 3000
 ```
 
-Seed the dev database with test data (band "The Fishfits", slug `fish`):
+Seed the dev database with fake gigs, setlists, songs, and sample GEMA rows (targets the band from `BAND_SLUG`, or the first band in the DB if unset — run `setup.js` first):
 
 ```bash
 node scripts/seed.js --force
 ```
 
-The seed script also updates `BAND_SLUG` in `.env.local` to `fish`, so restart `vercel dev` after seeding.
+Set `BAND_SLUG` in `.env` or `.env.local` to match the band you created with `setup.js`. Restart `vercel dev` if you change env files.
 
 ---
 
