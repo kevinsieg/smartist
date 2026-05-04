@@ -24,7 +24,7 @@ async function init() {
   }
 
   try {
-    const cfg  = await loadConfig();
+    const cfg  = await fetch('/api/config').then(r => { if (!r.ok) throw new Error(); return r.json(); });
     const data = await fetch(`/api/${cfg.slug}/setlists/${setlistId}`).then(r => {
       if (!r.ok) throw new Error('not found');
       return r.json();

@@ -15,7 +15,7 @@
         '<a href="/setlist">Setlist</a>' +
         '<a href="/setlist-history">History</a>' +
         '<a href="/songs">Songs</a>' +
-        '<a href="/gema-import">GEMA</a>' +
+        '<a href="/gema-import">PRO</a>' +
       '</div>' +
     '</nav>';
   document.body.insertBefore(header, document.body.firstChild);
@@ -87,6 +87,10 @@ function applyNav(bandName, bandConfig) {
   document.querySelectorAll('.app-logo').forEach(el => {
     el.setAttribute('aria-label', bandName || '');
   });
+
+  if (bandName && document.title && !document.title.includes(bandName)) {
+    document.title = `${document.title} — ${bandName}`;
+  }
 
   const path = window.location.pathname.replace(/\/+$/, '');
   document.querySelectorAll('.nav-links a').forEach(a => {

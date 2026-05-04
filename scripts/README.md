@@ -27,6 +27,29 @@ psql $DATABASE_URL < scripts/schema.sql
 
 ---
 
+## seed.js — dev database seeder
+
+Populates the database with realistic test data for local development. Run this after `setup.js` creates the band.
+
+```bash
+node scripts/seed.js            # seed (skips if songs already exist)
+node scripts/seed.js --force    # wipe all band data and reseed
+```
+
+Targets the band whose slug matches `BAND_SLUG` in your `.env`, or the first band in the database.
+
+**Production guard:** the database hostname is shown on startup and must be confirmed before anything runs. Combined with the `--force` requirement for wipes, this prevents accidental data loss.
+
+Inserts:
+
+- 20 songs across genres (Rock, Blues, Folk, Country, Funk, Soul, Reggae, Alternative), with varied keys, tempos, and lengths; 2 inactive songs; some with `extra.capo`
+- 4 gigs (2 past, 1 upcoming June 2026, 1 TBD)
+- 4 setlists (2 linked to past gigs, 1 for the upcoming gig, 1 standalone 30-min template)
+- Song audit log entries (create/update/delete)
+- 2 GEMA works with 3 rightholders each
+
+---
+
 ## import_songs.js — bulk import
 
 ```bash

@@ -27,9 +27,10 @@
 
 'use strict';
 
-const { neon } = require('@neondatabase/serverless');
-const fs       = require('fs');
-const path     = require('path');
+const { neon }   = require('@neondatabase/serverless');
+const readline   = require('readline');
+const fs         = require('fs');
+const path       = require('path');
 
 function loadEnv(...files) {
   for (const file of files) {
@@ -165,6 +166,23 @@ async function main() {
     console.error('Usage: node scripts/import_gema.js --band <slug> [--ids <ids.csv>] [--info <info.csv>] [--beteiligte <beteiligte.csv>] [--dry-run]');
     process.exit(1);
   }
+
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL is not set.');
+    process.exit(1);
+  }
+
+  await new Promise(resolve => {
+    let host;
+    try { host = new URL(process.env.DATABASE_URL).hostname; } catch { host = '(unknown)'; }
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    console.log(`\n  database: ${host}`);
+    rl.question('  Continue? (y/n): ', answer => {
+      rl.close();
+      if (!/^y/i.test(answer.trim())) { console.log('  Aborted.'); process.exit(0); }
+      resolve();
+    });
+  });
 
   const sql  = neon(process.env.DATABASE_URL);
   const rows = await sql`SELECT id FROM bands WHERE slug = ${slug} LIMIT 1`;

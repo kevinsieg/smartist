@@ -7,12 +7,16 @@ const { wrap } = require('../../_handler');
 const logger = require('../../_logger');
 
 module.exports = wrap(async function handler(req, res) {
-  const [rawId, action] = req.query.path ?? [];
+  // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
+  const pathParts = Array.isArray(req.query.path) && req.query.path.length
+    ? req.query.path
+    : req.url.split('?')[0].split('/setlists/')[1]?.split('/') ?? [];
+  const [rawId, action] = pathParts;
   const setlistId = Number(rawId);
   if (!Number.isInteger(setlistId) || setlistId <= 0)
     return res.status(400).json({ error: 'Invalid setlist id' });
 
-  const { band: slug } = req.query;
+  const slug = req.query.band || req.url.split('?')[0].split('/')[2];
   const sql = getDb();
 
   // ── GET/PUT setlist ───────────────────────────────────────────────────────

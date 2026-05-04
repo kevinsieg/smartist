@@ -6,19 +6,29 @@
 //   BASE_URL=https://yourapp.example.com npm test    # against production
 //   BAND_PASSWORD=xxx npm test                  # enables write tests
 
-const fs = require('fs');
+const fs   = require('fs');
+const path = require('path');
 
-// Load .env.local — works from repo root or from tests/
-function loadEnv(path) {
+const REPO_ROOT = path.join(__dirname, '..');
+
+/** Load KEY=val lines; only sets `process.env` if unset. Strips quotes like `vercel env pull`. */
+function loadEnvFile(absPath) {
   try {
-    fs.readFileSync(path, 'utf8').split('\n').forEach(line => {
+    fs.readFileSync(absPath, 'utf8').split('\n').forEach(line => {
       const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim();
+      if (m && process.env[m[1]] === undefined) {
+        let v = m[2].trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
+          v = v.slice(1, -1);
+        process.env[m[1]] = v;
+      }
     });
-    return true;
-  } catch { return false; }
+  } catch { /* missing file is fine */ }
 }
-loadEnv('.env.local') || loadEnv('../.env.local');
+
+// `.env` fills keys not already set from `.env.local` (each line only applies if env[key] is still undefined)
+loadEnvFile(path.join(REPO_ROOT, '.env.local'));
+loadEnvFile(path.join(REPO_ROOT, '.env'));
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const SLUG     = process.env.BAND_SLUG;
@@ -276,8 +286,13 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
-  await test('POST /setlists/1/share without token → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists/1/share`, { email: 'test@example.com' });
+  await test('POST /setlists with share_id without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists`, { share_id: 1, email: 'test@example.com' });
+    assertStatus(res, json, 401);
+  });
+
+  await test('PUT /setlists/:id without token → 401', async () => {
+    const { res, json } = await PUT(`/api/${slug}/setlists/1`, { title: 'x', song_ids: [] });
     assertStatus(res, json, 401);
   });
 
@@ -546,15 +561,15 @@ async function testLyricsLifecycle(slug, token, songId) {
 async function testSetlistShareValidation(slug, token, setlistId) {
   console.log(B('\nSetlist share validation'));
 
-  await test('POST /setlists/:id/share invalid email → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists/${setlistId}/share`,
-      { email: 'not-an-email' }, { token });
+  await test('POST /setlists share_id + invalid email → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists`,
+      { share_id: setlistId, email: 'not-an-email' }, { token });
     assertStatus(res, json, 400);
   });
 
-  await test('POST /setlists/:id/share unknown setlist → 404', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists/999999999/share`,
-      { email: 'test@example.com' }, { token });
+  await test('POST /setlists share_id + unknown setlist → 404', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists`,
+      { share_id: 999999999, email: 'test@example.com' }, { token });
     assertStatus(res, json, 404);
   });
 }
@@ -662,11 +677,12 @@ async function testWrite(slug, token, firstSong) {
         assert(json.title === '[TEST] updated', 'title not updated');
       });
 
-      await test('POST /setlists/:id/duplicate → 201', async () => {
-        const { res, json } = await POST(
-          `/api/${slug}/setlists/${setlist.id}/duplicate`, undefined, { token });
+      await test('POST /setlists duplicate_id → 201 with new id and copied songs', async () => {
+        const { res, json } = await POST(`/api/${slug}/setlists`,
+          { duplicate_id: setlist.id }, { token });
         assertStatus(res, json, 201);
         assert(json.id !== setlist.id, 'duplicate has same id as original');
+        assert(json.song_count === setlist.song_count, `song count mismatch — expected ${setlist.song_count}, got ${json.song_count}`);
       });
     }
   } else {
