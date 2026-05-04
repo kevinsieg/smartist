@@ -15,43 +15,20 @@
 </head>
 <body>
 
-<main>
-    <section class="app-page">
-        <div class="app-wrap home-wrap">
-
-            <div class="home-hero">
-                <img class="app-logo-img home-logo" src="" alt="">
-                <h1 class="band-name home-band-name"></h1>
-                <p class="home-tagline">Setlist generator · Song catalogue · GEMA</p>
-            </div>
-
-            <nav class="home-cards">
-                <a href="/setlist" class="home-card">
-                    <span class="home-card-icon">&#9835;</span>
-                    <span class="home-card-title">Setlist</span>
-                    <span class="home-card-desc">Generate and save setlists</span>
-                </a>
-                <a href="/setlist-history" class="home-card">
-                    <span class="home-card-icon">&#8635;</span>
-                    <span class="home-card-title">History</span>
-                    <span class="home-card-desc">Browse past setlists</span>
-                </a>
-                <a href="/songs" class="home-card">
-                    <span class="home-card-icon">&#8801;</span>
-                    <span class="home-card-title">Songs</span>
-                    <span class="home-card-desc">Manage the song catalogue</span>
-                </a>
-                <a href="/gema-import" class="home-card">
-                    <span class="home-card-icon">G</span>
-                    <span class="home-card-title">GEMA</span>
-                    <span class="home-card-desc">Import rights data</span>
-                </a>
-            </nav>
-
-            <div id="home-auth"></div>
-
+<main class="landing-main">
+    <div class="landing-card">
+        <div class="smartist-brand">
+            <span class="smartist-wordmark">smartist</span>
+            <span class="smartist-tagline">DIY musician management</span>
         </div>
-    </section>
+
+        <div class="landing-band" id="landing-band">
+            <img class="app-logo-img landing-logo" src="" alt="">
+            <h2 class="band-name landing-band-name"></h2>
+        </div>
+
+        <div id="landing-auth"></div>
+    </div>
 </main>
 
 <script src="/app/js/common.js"></script>
