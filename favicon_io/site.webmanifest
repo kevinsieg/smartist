@@ -1,0 +1,8 @@
+{
+  "name": "Smartist",
+  "short_name": "Smartist",
+  "icons": [],
+  "theme_color": "#f9bf8f",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
