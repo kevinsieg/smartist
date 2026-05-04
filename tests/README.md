@@ -79,7 +79,8 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | `POST /api/:band/auth` | correct password → 200 |
 | Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
 | `POST /api/:band/songs` | missing title → 400 |
-| Setlist create | `POST` → 201, `PUT` updates title, `POST .../duplicate` returns new id |
+| Lyrics suggest | rejects songs without an artist before calling external providers |
+| Setlist create | `POST` → 201, validates `POST .../share`, `PUT` updates title, `POST .../duplicate` returns new id |
 | `POST /api/:band/setlists` | missing song_ids → 400 |
 | File upload validation | extension, MIME type, size, presigned URL prefix checks |
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
