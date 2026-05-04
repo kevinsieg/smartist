@@ -1,7 +1,4 @@
 {
-  "redirects": [
-    { "source": "/", "destination": "/setlist", "permanent": false }
-  ],
   "rewrites": [
     { "source": "/",                "destination": "/app/index.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },

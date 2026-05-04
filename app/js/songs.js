@@ -312,6 +312,20 @@ function renderTable() {
   });
 
   initResizableColumns();
+
+  requestAnimationFrame(() => {
+    const appHeader = document.querySelector('.app-header');
+    const toolbar   = document.querySelector('.toolbar');
+    const tableWrap = document.querySelector('.table-wrap');
+    if (appHeader && toolbar) {
+      const hh = appHeader.getBoundingClientRect().height;
+      document.documentElement.style.setProperty('--songs-toolbar-top', `${hh}px`);
+    }
+    if (tableWrap) {
+      const top = tableWrap.getBoundingClientRect().top;
+      tableWrap.style.maxHeight = `${window.innerHeight - top - 24}px`;
+    }
+  });
 }
 
 function initResizableColumns() {
@@ -437,7 +451,7 @@ function renderRow(song) {
     if (c.type === 'time') {
       return `<td class="${c.cls}${sticky}">
         <input type="text" data-id="${sid}" data-key="${c.key}" data-type="time"
-          value="${escHtml(minsToTime(val))}" placeholder="MM:SS"
+          value="${escHtml(minsToTime(val ?? 4))}" placeholder="MM:SS"
           oninput="markDirty('${sid}')">
       </td>`;
     }
@@ -461,11 +475,12 @@ function renderRow(song) {
       </td>`;
     }
     if (c.type === 'url') {
-      const link = val ? `<a href="${escHtml(String(val))}" target="_blank" rel="noopener" class="url-link">↗</a>` : '';
+      const hasUrl = !!val;
+      const btnCls = hasUrl ? 'url-edit-btn url-edit-btn--set' : 'url-edit-btn';
+      const btnLbl = hasUrl ? '✓ Link' : '+ Add';
       return `<td class="${c.cls}${sticky} url-cell">
-        <input type="text" data-id="${sid}" data-key="${c.key}"
-          value="${escHtml(String(val))}" placeholder="https://…"
-          oninput="markDirty('${sid}')">${link}
+        <input type="text" data-id="${sid}" data-key="${c.key}" value="${escHtml(String(val))}" style="display:none">
+        <button class="${btnCls}" onclick="openUrlPreview(this.previousElementSibling.value,this.previousElementSibling)">${btnLbl}</button>
       </td>`;
     }
     return `<td class="${c.cls}${sticky}">
@@ -1773,6 +1788,75 @@ async function confirmDeleteLyrics() {
 
 document.getElementById('lyrics-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeLyrics();
+});
+
+// ── URL preview modal ─────────────────────────────────────────────────────────
+
+let _urlPreviewSourceInput = null;
+
+function _setPreviewSrc(url) {
+  const iframe  = document.getElementById('url-preview-iframe');
+  const loading = document.getElementById('url-preview-loading');
+  if (url) {
+    loading.style.display = '';
+    iframe.style.display  = 'none';
+    iframe.src = toEmbedUrl(url) || url;
+  } else {
+    loading.style.display = 'none';
+    iframe.style.display  = '';
+    iframe.src = '';
+  }
+}
+
+function openUrlPreview(url, sourceInput) {
+  _urlPreviewSourceInput = sourceInput || null;
+  document.getElementById('url-preview-input').value = url || '';
+  document.getElementById('url-preview-link').href   = url || '#';
+  document.getElementById('url-preview-link').style.display = url ? '' : 'none';
+  _setPreviewSrc(url);
+  document.getElementById('url-preview-modal').classList.add('open');
+  document.getElementById('url-preview-input').focus();
+}
+
+function reloadUrlPreview() {
+  const url = document.getElementById('url-preview-input').value.trim();
+  document.getElementById('url-preview-link').href  = url || '#';
+  document.getElementById('url-preview-link').style.display = url ? '' : 'none';
+  _setPreviewSrc(url);
+  if (_urlPreviewSourceInput) {
+    _urlPreviewSourceInput.value = url;
+    markDirty(_urlPreviewSourceInput.dataset.id);
+    _syncUrlBtn(_urlPreviewSourceInput);
+  }
+}
+
+function _syncUrlBtn(input) {
+  const btn = input.nextElementSibling;
+  if (!btn) return;
+  const has = !!input.value.trim();
+  btn.textContent = has ? '✓ Link' : '+ Add';
+  btn.classList.toggle('url-edit-btn--set', has);
+}
+
+function closeUrlPreview() {
+  const url = document.getElementById('url-preview-input').value.trim();
+  if (_urlPreviewSourceInput) {
+    _urlPreviewSourceInput.value = url;
+    markDirty(_urlPreviewSourceInput.dataset.id);
+    _syncUrlBtn(_urlPreviewSourceInput);
+  }
+  document.getElementById('url-preview-modal').classList.remove('open');
+  document.getElementById('url-preview-iframe').src = '';
+  _urlPreviewSourceInput = null;
+}
+
+document.getElementById('url-preview-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeUrlPreview();
+});
+
+document.getElementById('url-preview-iframe').addEventListener('load', () => {
+  document.getElementById('url-preview-loading').style.display = 'none';
+  document.getElementById('url-preview-iframe').style.display  = '';
 });
 
 init();
