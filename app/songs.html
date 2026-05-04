@@ -138,6 +138,19 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="url-preview-modal">
+  <div class="modal url-preview-modal">
+    <div class="url-preview-header">
+      <input type="text" id="url-preview-input" placeholder="https://…" class="url-preview-input" onkeydown="if(event.key==='Enter')reloadUrlPreview()">
+      <button class="btn" onclick="reloadUrlPreview()" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px">Edit</button>
+      <a id="url-preview-link" href="#" target="_blank" rel="noopener" class="btn" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px">↗</a>
+      <button class="btn" onclick="closeUrlPreview()" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px">Close</button>
+    </div>
+    <div id="url-preview-loading" class="url-preview-loading" style="display:none">Loading…</div>
+    <iframe id="url-preview-iframe" src="" title="URL preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allow="fullscreen" allowfullscreen></iframe>
+  </div>
+</div>
+
 <script src="/app/js/common.js"></script>
 <script src="/app/js/songs.js"></script>
 </body>

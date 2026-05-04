@@ -1,4 +1,9 @@
 # Files to ignore during Vercel deployment
 scripts/
+tests/
 .git/
+.github/
 .idea/
+CLAUDE.md
+DATABASE.md
+README.md

@@ -1,7 +1,11 @@
 const fs   = require('fs');
 const path = require('path');
 
-const IS_DEV       = process.env.NODE_ENV !== 'production';
+// VERCEL_ENV is injected by Vercel: 'production' | 'preview' | 'development'.
+// Not set when running outside Vercel (e.g. plain `node`).
+const VERCEL_ENV   = process.env.VERCEL_ENV;
+const IS_LOCAL     = VERCEL_ENV === 'development' || !VERCEL_ENV;
+const IS_PROD      = VERCEL_ENV === 'production';
 const LOG_DIR      = path.join(process.cwd(), 'logs');
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -62,11 +66,12 @@ async function sendToCloud(entry) {
 async function write(level, event, data) {
   const entry = { ts: new Date().toISOString(), level, event, ...data };
   console.log(JSON.stringify(entry));
-  if (IS_DEV) {
+  if (IS_LOCAL) {
     writeToFile(JSON.stringify(entry));
-  } else {
+  } else if (IS_PROD) {
     await sendToCloud(entry);
   }
+  // preview: stdout only — logs visible in Vercel function dashboard
 }
 
 module.exports = {

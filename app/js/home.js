@@ -10,35 +10,25 @@ async function init() {
     cfg = await loadConfig();
     bandSlug = cfg.slug;
     applyNav(cfg.name, cfg.config);
-    document.querySelectorAll('.home-logo').forEach(img => {
-      if (cfg.config?.logoUrl) { img.src = cfg.config.logoUrl; img.alt = cfg.name || ''; }
-    });
-    document.querySelector('.home-tagline') &&
-      (document.title = (cfg.name || 'Band Tools'));
+    document.title = cfg.name || 'Band Tools';
   } catch {
-    renderAuthSection(false);
+    renderLogin();
     return;
   }
 
   if (magic) {
     const ok = await verifyToken(magic);
-    if (ok) {
-      sessionStorage.setItem('setlist_token', magic);
-      renderAuthSection(true);
-      return;
-    }
-    // fall through to show login form with error
-    renderAuthSection(false, 'Invalid or expired login link.');
+    if (ok) { sessionStorage.setItem('setlist_token', magic); renderLoggedIn(cfg); }
+    else     { renderLogin('Invalid or expired login link.'); }
     return;
   }
 
   const token = sessionStorage.getItem('setlist_token');
-  if (token) {
-    const ok = await verifyToken(token);
-    renderAuthSection(ok);
-    if (!ok) sessionStorage.removeItem('setlist_token');
+  if (token && await verifyToken(token)) {
+    renderLoggedIn(cfg);
   } else {
-    renderAuthSection(false);
+    sessionStorage.removeItem('setlist_token');
+    renderLogin();
   }
 }
 
@@ -53,28 +43,41 @@ async function verifyToken(token) {
   } catch { return false; }
 }
 
-function renderAuthSection(loggedIn, errorMsg) {
-  const el = document.getElementById('home-auth');
+// ── Logged-in state ───────────────────────────────────────────────────────────
+
+function renderLoggedIn(cfg) {
+  updateAuthIndicator();
+  const el = document.getElementById('landing-auth');
+  if (!el) return;
+  el.innerHTML =
+    '<nav class="landing-nav">' +
+      '<a href="/setlist"         class="landing-nav-link">Setlist generator</a>' +
+      '<a href="/setlist-history" class="landing-nav-link">Setlist history</a>' +
+      '<a href="/songs"           class="landing-nav-link">Song catalogue</a>' +
+      '<a href="/gema-import"     class="landing-nav-link">PRO</a>' +
+    '</nav>' +
+    '<button class="reset-link landing-logout" onclick="handleLogout()">logout</button>';
+}
+
+function handleLogout() {
+  doLogout();
+  renderLogin();
+}
+
+// ── Login form ────────────────────────────────────────────────────────────────
+
+function renderLogin(errorMsg) {
+  const el = document.getElementById('landing-auth');
   if (!el) return;
 
-  if (loggedIn) {
-    el.innerHTML =
-      '<div class="home-logged-in">' +
-        '<strong>&#10004; logged in</strong> &mdash; ' +
-        '<button class="reset-link" onclick="doLogout()">logout</button>' +
-      '</div>';
-    return;
-  }
-
   el.innerHTML =
-    '<div class="auth-gate">' +
-      '<p>Enter the band password to manage songs and setlists.</p>' +
+    '<div class="landing-login">' +
       '<div class="auth-row">' +
         '<div class="pw-wrapper">' +
           '<input type="password" id="pw-input" placeholder="Password" autocomplete="current-password">' +
           '<button type="button" class="pw-toggle" id="pw-toggle">show</button>' +
         '</div>' +
-        '<button class="btn" id="pw-btn">Login</button>' +
+        '<button class="btn active" id="pw-btn">Login</button>' +
       '</div>' +
       '<div class="auth-error" id="auth-error">' + (errorMsg || '') + '</div>' +
       '<button class="reset-link" id="reset-toggle">Forgot password?</button>' +
@@ -93,8 +96,8 @@ function renderAuthSection(loggedIn, errorMsg) {
     const input = document.getElementById('pw-input');
     const btn   = document.getElementById('pw-toggle');
     const show  = input.type === 'password';
-    input.type      = show ? 'text' : 'password';
-    btn.textContent = show ? 'hide' : 'show';
+    input.type      = show ? 'text'     : 'password';
+    btn.textContent = show ? 'hide'     : 'show';
   });
   document.getElementById('reset-toggle').addEventListener('click', () => {
     const form = document.getElementById('reset-form');
@@ -114,6 +117,8 @@ async function doLogin() {
   const err = document.getElementById('auth-error');
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
+    const cfg = await loadConfig();
+    bandSlug = cfg.slug;
     const r = await fetch(`/api/${bandSlug}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -121,8 +126,8 @@ async function doLogin() {
     });
     if (!r.ok) throw new Error();
     sessionStorage.setItem('setlist_token', pw);
-    updateAuthIndicator();
-    renderAuthSection(true);
+    applyNav(cfg.name, cfg.config);
+    renderLoggedIn(cfg);
   } catch {
     err.textContent = 'Wrong password.';
     btn.disabled = false; btn.textContent = 'Login';
@@ -136,6 +141,7 @@ async function doRequestReset() {
   const msg = document.getElementById('reset-msg');
   btn.disabled = true; btn.textContent = '…'; msg.textContent = '';
   try {
+    if (!bandSlug) { const cfg = await loadConfig(); bandSlug = cfg.slug; }
     await fetch(`/api/${bandSlug}/request-reset`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
