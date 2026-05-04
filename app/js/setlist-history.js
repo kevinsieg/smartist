@@ -17,6 +17,24 @@ const loadedSets = new Set();
 const loadedData = new Map(); // setlist id → { meta + songs }
 const loadedGigs = new Map(); // gig id → gig object (shared with edit modal)
 
+/** Parse JSON after verifying `res.ok`; throws so callers do not treat error bodies as success payloads. */
+async function readJsonResponse(res) {
+  const data = await res.json().catch(() => null);
+  if (res.ok) return data;
+  const msg =
+    (data && typeof data.error === 'string' && data.error) ||
+    (data && typeof data.message === 'string' && data.message) ||
+    `Request failed (${res.status})`;
+  throw new Error(msg);
+}
+
+/** Same as `readJsonResponse` but requires a JSON array (e.g. list endpoints). */
+async function readJsonArray(res) {
+  const data = await readJsonResponse(res);
+  if (!Array.isArray(data)) throw new Error('Invalid response: expected an array');
+  return data;
+}
+
 window.onNavAuthEmpty = function(el) {
   el.innerHTML = '<button class="nav-auth-login" onclick="openHistoryLogin()">login to edit</button>';
 };
@@ -33,9 +51,13 @@ async function init() {
       const printLogo = document.querySelector('#print-header .app-logo-img');
       if (printLogo) printLogo.src = cfg.config.logoUrl;
     }
+    const [setRes, gigRes] = await Promise.all([
+      fetch(`/api/${bandSlug}/setlists`),
+      fetch(`/api/${bandSlug}/gigs`),
+    ]);
     const [setlists, gigs] = await Promise.all([
-      fetch(`/api/${bandSlug}/setlists`).then(r => r.json()),
-      fetch(`/api/${bandSlug}/gigs`).then(r => r.json()),
+      readJsonArray(setRes),
+      readJsonArray(gigRes),
     ]);
     allSetlists = setlists;
     allGigs     = gigs;
@@ -91,8 +113,11 @@ async function runSongFilter(query) {
   const results = await Promise.all(
     matches.map(s =>
       fetch(`/api/${bandSlug}/songs/${s.id}/setlists`)
-        .then(r => r.ok ? r.json() : [])
-        .then(rows => rows.map(r => r.id))
+        .then(async r => {
+          if (!r.ok) return [];
+          const rows = await r.json().catch(() => null);
+          return Array.isArray(rows) ? rows.map(row => row.id) : [];
+        })
         .catch(() => [])
     )
   );
@@ -500,7 +525,8 @@ async function openEditModal(id) {
   gigSel.innerHTML = '<option value="">— no gig —</option>';
   try {
     if (!loadedGigs.size) {
-      const gigs = await fetch(`/api/${bandSlug}/gigs`).then(r => r.json());
+      const gigRes = await fetch(`/api/${bandSlug}/gigs`);
+      const gigs = await readJsonArray(gigRes);
       for (const g of gigs) loadedGigs.set(g.id, g);
     }
     for (const [, g] of loadedGigs) {
@@ -510,7 +536,10 @@ async function openEditModal(id) {
       if (g.id === data.gig_id) opt.selected = true;
       gigSel.appendChild(opt);
     }
-  } catch {}
+  } catch (e) {
+    st.textContent = e?.message || 'Could not load gigs.';
+    st.className = 'status-msg error';
+  }
   onGigSelect();
 
   renderEditSongList();
