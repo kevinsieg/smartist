@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS songs (
   deleted             BOOLEAN NOT NULL DEFAULT false
 );
 
+-- ── migrations (idempotent) ────────────────────────────────────────────────
+-- Older databases may have been created before some columns existed. Re-running
+-- CREATE TABLE IF NOT EXISTS will not add them, so we patch them in here.
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS bpm INTEGER;
+
 -- Speeds up all per-band song queries
 CREATE INDEX IF NOT EXISTS songs_band_id_idx     ON songs(band_id);
 -- Speeds up the setlist generator (filters active songs per band)
