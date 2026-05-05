@@ -149,6 +149,37 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="gig-modal">
+  <div class="modal" style="max-width:360px;">
+    <h2>Edit gig</h2>
+    <div class="modal-field" id="gig-modal-auth-field" style="display:none">
+      <label for="gig-modal-pw">Password</label>
+      <input type="password" id="gig-modal-pw" placeholder="Band password" autocomplete="current-password">
+    </div>
+    <div class="modal-field">
+      <label for="gig-modal-name">Name</label>
+      <input type="text" id="gig-modal-name" placeholder="Gig name">
+    </div>
+    <div class="modal-field">
+      <label for="gig-modal-date">Date</label>
+      <input type="date" id="gig-modal-date">
+    </div>
+    <div class="modal-field">
+      <label for="gig-modal-venue">Venue</label>
+      <input type="text" id="gig-modal-venue" placeholder="Venue">
+    </div>
+    <div class="modal-field">
+      <label for="gig-modal-notes">Notes</label>
+      <textarea id="gig-modal-notes" placeholder="Notes…"></textarea>
+    </div>
+    <div class="status-msg" id="gig-modal-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" id="gig-modal-save-btn" onclick="doSaveGigModal()">Save</button>
+      <button class="btn" onclick="closeGigModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="/app/js/common.js"></script>
 <script src="/app/js/setlist-history.js"></script>
 </body>

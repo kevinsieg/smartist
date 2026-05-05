@@ -312,16 +312,16 @@ async function testAuth(slug) {
     });
   }
 
-  await test('PUT /songs/1/lyrics without token → 401', async () => {
-    const { res, json } = await PUT(`/api/${slug}/songs/1/lyrics`, { lyrics: 'x' });
+  await test('POST /songs lyrics_update_id without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_update_id: 1, lyrics: 'x' });
     assertStatus(res, json, 401);
   });
-  await test('DELETE /songs/1/lyrics without token → 401', async () => {
-    const { res, json } = await DELETE(`/api/${slug}/songs/1/lyrics`);
+  await test('POST /songs lyrics_delete_id without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_delete_id: 1 });
     assertStatus(res, json, 401);
   });
-  await test('POST /songs/1/lyrics-suggest without token → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs/1/lyrics-suggest`, {});
+  await test('POST /songs lyrics_suggest_id without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_suggest_id: 1 });
     assertStatus(res, json, 401);
   });
 }
@@ -331,7 +331,7 @@ async function testAuth(slug) {
 async function testFileIdValidation(slug) {
   console.log(B('\nFile endpoint ID validation'));
 
-  for (const type of ['audio', 'sheet', 'playback', 'lyrics']) {
+  for (const type of ['audio', 'sheet', 'playback']) {
     await test(`POST /songs/0/${type} → 400`, async () => {
       const { res, json } = await POST(`/api/${slug}/songs/0/${type}`, {});
       assertStatus(res, json, 400);
@@ -502,27 +502,28 @@ async function testLyricsLifecycle(slug, token, songId) {
   console.log(B('\nLyrics lifecycle'));
 
   // Validation
-  await test('PUT /lyrics wrong body key → 400', async () => {
-    const { res, json } = await PUT(`/api/${slug}/songs/${songId}/lyrics`,
-      { text: 'wrong key' }, { token });
+  await test('POST /songs lyrics_update_id wrong body key → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`,
+      { lyrics_update_id: songId, text: 'wrong key' }, { token });
     assertStatus(res, json, 400);
   });
-  await test('PUT /lyrics too long → 400', async () => {
-    const { res, json } = await PUT(`/api/${slug}/songs/${songId}/lyrics`,
-      { lyrics: 'x'.repeat(20001) }, { token });
+  await test('POST /songs lyrics_update_id too long → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`,
+      { lyrics_update_id: songId, lyrics: 'x'.repeat(20001) }, { token });
     assertStatus(res, json, 400);
   });
-  await test('DELETE /lyrics nonexistent song → 404', async () => {
-    const { res, json } = await DELETE(`/api/${slug}/songs/999999999/lyrics`, { token });
+  await test('POST /songs lyrics_delete_id nonexistent song → 404', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`,
+      { lyrics_delete_id: 999999999 }, { token });
     assertStatus(res, json, 404);
   });
 
   // Full round-trip
   const testLyrics = 'Verse 1\nSecond line\n\nChorus\nSing along';
 
-  await test('PUT /lyrics saves text → 200', async () => {
-    const { res, json } = await PUT(`/api/${slug}/songs/${songId}/lyrics`,
-      { lyrics: testLyrics }, { token });
+  await test('POST /songs lyrics_update_id saves text → 200', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`,
+      { lyrics_update_id: songId, lyrics: testLyrics }, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
   });
@@ -536,8 +537,9 @@ async function testLyricsLifecycle(slug, token, songId) {
       `lyrics mismatch — got: ${JSON.stringify(song.extra?.lyrics)}`);
   });
 
-  await test('DELETE /lyrics clears field → 200', async () => {
-    const { res, json } = await DELETE(`/api/${slug}/songs/${songId}/lyrics`, { token });
+  await test('POST /songs lyrics_delete_id clears field → 200', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`,
+      { lyrics_delete_id: songId }, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
   });
@@ -551,8 +553,9 @@ async function testLyricsLifecycle(slug, token, songId) {
       `expected no lyrics, got: ${JSON.stringify(song.extra?.lyrics)}`);
   });
 
-  await test('DELETE /lyrics again (already empty) → 200', async () => {
-    const { res, json } = await DELETE(`/api/${slug}/songs/${songId}/lyrics`, { token });
+  await test('POST /songs lyrics_delete_id again (already empty) → 200', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`,
+      { lyrics_delete_id: songId }, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
   });
@@ -617,8 +620,8 @@ async function testWrite(slug, token, firstSong) {
       assert(json.ok === true, 'expected ok:true');
     });
 
-    await test('POST /songs/:id/lyrics-suggest without artist → 400', async () => {
-      const { res, json } = await POST(`/api/${slug}/songs/${song.id}/lyrics-suggest`, {}, { token });
+    await test('POST /songs lyrics_suggest_id without artist → 400', async () => {
+      const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_suggest_id: song.id }, { token });
       assertStatus(res, json, 400);
       assert(json.error?.includes('No artist'), `unexpected error: ${JSON.stringify(json)}`);
     });
