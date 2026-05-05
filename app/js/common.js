@@ -117,7 +117,8 @@ function updateAuthIndicator() {
     el.innerHTML = `<span class="nav-auth-badge">&#10004; logged in</span>
        <button class="nav-auth-logout" onclick="doLogout()">logout</button>`;
   } else {
-    el.innerHTML = '';
+    const onLanding = window.location.pathname === '/' || window.location.pathname === '';
+    el.innerHTML = onLanding ? '' : '<a class="nav-auth-login" href="/">login</a>';
     if (typeof window.onNavAuthEmpty === 'function') window.onNavAuthEmpty(el);
   }
 }

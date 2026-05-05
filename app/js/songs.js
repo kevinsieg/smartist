@@ -314,11 +314,10 @@ function renderTable() {
 
   initResizableColumns();
 
-  requestAnimationFrame(() => {
+  function updateLayout() {
     const appHeader = document.querySelector('.app-header');
-    const toolbar   = document.querySelector('.toolbar');
     const tableWrap = document.querySelector('.table-wrap');
-    if (appHeader && toolbar) {
+    if (appHeader) {
       const hh = appHeader.getBoundingClientRect().height;
       document.documentElement.style.setProperty('--songs-toolbar-top', `${hh}px`);
     }
@@ -326,7 +325,9 @@ function renderTable() {
       const top = tableWrap.getBoundingClientRect().top;
       tableWrap.style.maxHeight = `${window.innerHeight - top - 24}px`;
     }
-  });
+  }
+  requestAnimationFrame(updateLayout);
+  window.addEventListener('resize', updateLayout);
 }
 
 function initResizableColumns() {
@@ -1587,6 +1588,7 @@ function _lyricsSetMode(mode) { // 'view' or 'edit'
   document.getElementById('lyrics-edit').style.display        = mode === 'edit' ? '' : 'none';
   document.getElementById('lyrics-actions-view').style.display = mode === 'view' ? '' : 'none';
   document.getElementById('lyrics-actions-edit').style.display = mode === 'edit' ? '' : 'none';
+  _lyricsSaveStatus('', false);
 }
 
 function openLyrics(sid) {
@@ -1638,9 +1640,13 @@ async function suggestLyrics() {
   _lyricsShowSuggestState('Searching lyrics.ovh, lrclib, AI…', '', false);
   _lyricsSuggestAbort = new AbortController();
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${currentLyricsSid}/lyrics-suggest`, {
+    const r = await fetch(`/api/${bandSlug}/songs`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionStorage.getItem('setlist_token')}`,
+      },
+      body: JSON.stringify({ lyrics_suggest_id: currentLyricsSid }),
       signal: _lyricsSuggestAbort.signal,
     });
     if (!r.ok) {
@@ -1667,7 +1673,7 @@ async function suggestLyrics() {
 function _lyricsAcceptSuggestion() {
   document.getElementById('lyrics-edit').value = document.getElementById('lyrics-suggest-text').textContent;
   document.getElementById('lyrics-suggest-preview').style.display = 'none';
-  document.getElementById('lyrics-edit').focus();
+  saveLyrics();
 }
 
 function _lyricsDiscardSuggestion() {
@@ -1689,6 +1695,14 @@ function cancelEditLyrics() {
   }
 }
 
+function _lyricsSaveStatus(msg, isError) {
+  const el = document.getElementById('lyrics-save-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color  = isError ? 'var(--danger-color)' : 'var(--third-color)';
+  el.style.display = msg ? '' : 'none';
+}
+
 async function saveLyrics() {
   const sid = currentLyricsSid;
   if (!sid) return;
@@ -1696,15 +1710,22 @@ async function saveLyrics() {
 
   const saveBtn = document.getElementById('lyrics-save-btn');
   if (saveBtn) { saveBtn.textContent = '…'; saveBtn.disabled = true; }
+  _lyricsSaveStatus('', false);
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/lyrics`, {
-      method: 'PUT',
+    const r = await fetch(`/api/${bandSlug}/songs`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
-      body: JSON.stringify({ lyrics: text }),
+      body: JSON.stringify({ lyrics_update_id: sid, lyrics: text }),
     });
     if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closeLyrics(); return; }
-    if (!r.ok) { setStatus('error', 'Could not save lyrics'); return; }
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      const msg = body.error ?? `Save failed (${r.status})`;
+      _lyricsSaveStatus(msg, true);
+      console.error('saveLyrics failed', r.status, body);
+      return;
+    }
 
     // Update local cache and DOM
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1736,8 +1757,9 @@ async function saveLyrics() {
     }
     setStatus('saved', 'Lyrics saved');
     setTimeout(() => setStatus('', ''), 3000);
-  } catch {
-    setStatus('error', 'Could not save lyrics');
+  } catch (e) {
+    _lyricsSaveStatus('Network error — could not save', true);
+    console.error('saveLyrics network error', e);
   } finally {
     if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; }
   }
@@ -1759,9 +1781,10 @@ async function confirmDeleteLyrics() {
   closeLyrics();
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/lyrics`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+    const r = await fetch(`/api/${bandSlug}/songs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      body: JSON.stringify({ lyrics_delete_id: sid }),
     });
     if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
     if (!r.ok) { setStatus('error', 'Could not delete lyrics'); return; }
