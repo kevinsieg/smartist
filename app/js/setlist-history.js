@@ -489,6 +489,7 @@ function refreshAllActionBtns() {
     const el = document.getElementById(`actions-${id}`);
     if (el) el.innerHTML = renderActionBtns(id);
   }
+  if (currentView === 'gigs') renderGigsView();
   updateAuthIndicator();
 }
 
@@ -960,5 +961,112 @@ function printHistorySetlist(id) {
     setTimeout(() => document.documentElement.style.removeProperty('--print-song-size'), 500);
   }, 50);
 }
+
+// ── Gig edit modal ────────────────────────────────────────────────────────
+
+let gigModalId = null;
+
+function openGigModal(gigId) {
+  gigModalId = gigId;
+  const gig = loadedGigs.get(gigId);
+  const st  = document.getElementById('gig-modal-status');
+  st.className = 'status-msg'; st.textContent = '';
+  document.getElementById('gig-modal-save-btn').disabled = false;
+
+  const hasToken = !!sessionStorage.getItem('setlist_token');
+  document.getElementById('gig-modal-auth-field').style.display = hasToken ? 'none' : '';
+  document.getElementById('gig-modal-pw').value = '';
+
+  document.getElementById('gig-modal-name').value  = gig?.name  ?? '';
+  document.getElementById('gig-modal-date').value  = gig?.date  ? String(gig.date).slice(0, 10) : '';
+  document.getElementById('gig-modal-venue').value = gig?.venue ?? '';
+  document.getElementById('gig-modal-notes').value = gig?.notes ?? '';
+
+  document.getElementById('gig-modal').classList.add('open');
+  setTimeout(() => document.getElementById(hasToken ? 'gig-modal-name' : 'gig-modal-pw').focus(), 50);
+}
+
+function closeGigModal() {
+  document.getElementById('gig-modal').classList.remove('open');
+  gigModalId = null;
+}
+
+async function doSaveGigModal() {
+  let token = sessionStorage.getItem('setlist_token');
+  const pwInput = document.getElementById('gig-modal-pw').value.trim();
+  if (pwInput) token = pwInput;
+
+  const st  = document.getElementById('gig-modal-status');
+  const btn = document.getElementById('gig-modal-save-btn');
+
+  if (!token) {
+    document.getElementById('gig-modal-auth-field').style.display = '';
+    document.getElementById('gig-modal-pw').focus();
+    st.textContent = 'Password required.'; st.className = 'status-msg error';
+    return;
+  }
+
+  const name = document.getElementById('gig-modal-name').value.trim();
+  if (!name) { st.textContent = 'Name is required.'; st.className = 'status-msg error'; return; }
+
+  btn.disabled = true;
+  st.textContent = 'Saving…'; st.className = 'status-msg'; st.style.display = 'block';
+
+  try {
+    const r = await fetch(`/api/${bandSlug}/gigs/${gigModalId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        name,
+        date:  document.getElementById('gig-modal-date').value         || null,
+        venue: document.getElementById('gig-modal-venue').value.trim() || null,
+        notes: document.getElementById('gig-modal-notes').value.trim() || null,
+      }),
+    });
+
+    if (r.status === 401) {
+      sessionStorage.removeItem('setlist_token');
+      document.getElementById('gig-modal-auth-field').style.display = '';
+      document.getElementById('gig-modal-pw').value = '';
+      document.getElementById('gig-modal-pw').focus();
+      st.textContent = 'Wrong password.'; st.className = 'status-msg error';
+      btn.disabled = false;
+      return;
+    }
+
+    if (r.ok) {
+      const updated = await r.json();
+      sessionStorage.setItem('setlist_token', token);
+      loadedGigs.set(gigModalId, updated);
+      const idx = allGigs.findIndex(g => g.id === gigModalId);
+      if (idx !== -1) allGigs[idx] = updated;
+      // Propagate gig name/date/venue into cached setlist summaries
+      for (let i = 0; i < allSetlists.length; i++) {
+        if (allSetlists[i].gig_id === gigModalId) {
+          allSetlists[i] = { ...allSetlists[i], gig_name: updated.name, gig_date: updated.date, gig_venue: updated.venue };
+        }
+      }
+      closeGigModal();
+      applyFilters();
+    } else {
+      const data = await r.json().catch(() => ({}));
+      st.textContent = data.error || 'Failed to save.'; st.className = 'status-msg error';
+      btn.disabled = false;
+    }
+  } catch {
+    st.textContent = 'Network error. Please try again.'; st.className = 'status-msg error';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('gig-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeGigModal();
+});
+document.getElementById('gig-modal-pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('gig-modal-name').focus();
+});
+document.getElementById('gig-modal-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSaveGigModal();
+});
 
 init();
