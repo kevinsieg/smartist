@@ -68,10 +68,15 @@ module.exports = wrap(async function handler(req, res) {
     const artist = song.reference_interpret || song.interpret;
     if (!artist) return res.status(400).json({ error: 'No artist on this song — cannot search for lyrics' });
 
-    if (await checkRateLimit(`lyrics-suggest:${band.id}:${songId}`, 3, 300))
+    const ip = clientIp(req);
+    if (await checkRateLimit(`lyrics-suggest:${band.id}:${songId}`, 3, 300)) {
+      await logger.warn('rate_limit_lyrics_suggest', { band: slug, songId, ip, key: 'per-song' });
       return res.status(429).json({ error: 'Too many requests. Try again in a few minutes.' });
-    if (await checkRateLimit(`lyrics-suggest-ip:${clientIp(req)}`, 10, 3600))
+    }
+    if (await checkRateLimit(`lyrics-suggest-ip:${ip}`, 10, 3600)) {
+      await logger.warn('rate_limit_lyrics_suggest', { band: slug, songId, ip, key: 'per-ip' });
       return res.status(429).json({ error: 'Too many requests from this IP.' });
+    }
 
     const { title, language, genre } = song;
     const ctx = { band: band.slug, songId, title, artist };
