@@ -12,6 +12,10 @@ const { validateSongIds, validateStr, validateNum, validateEmail } =
   require(path.join(__dirname, '../api/_validate'));
 const { generateMagicToken, verifyMagicToken } =
   require(path.join(__dirname, '../api/_token'));
+const { setlistTitle } =
+  require(path.join(__dirname, '../api/_pdf'));
+const { keyFromUrl, filenameFromUrl } =
+  require(path.join(__dirname, '../api/_r2'));
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -318,6 +322,61 @@ test('valid JSON but missing fields → false', () => {
   const broken = Buffer.from(JSON.stringify({ foo: 'bar' })).toString('base64url');
   assertEq(verifyMagicToken(broken, HASH), false);
 });
+
+// ── setlistTitle ──────────────────────────────────────────────────────────────
+
+console.log(B('\nsetlistTitle'));
+
+test('title, gig name, and date → combined share/PDF title', () => {
+  assertEq(setlistTitle({
+    title: 'Festival Opener',
+    gig_name: 'Summer Fest',
+    gig_date: '2026-07-18T20:00:00.000Z',
+  }), '"Festival Opener" — Summer Fest — 2026-07-18');
+});
+
+test('missing setlist title keeps gig details', () => {
+  assertEq(setlistTitle({
+    title: '',
+    gig_name: 'Club Night',
+    gig_date: '2026-02-03',
+  }), 'Club Night — 2026-02-03');
+});
+
+test('empty setlist metadata → null', () => {
+  assertEq(setlistTitle({ title: null, gig_name: null, gig_date: null }), null);
+});
+
+// ── R2 URL helpers ────────────────────────────────────────────────────────────
+
+console.log(B('\nR2 URL helpers'));
+
+const ORIGINAL_R2_PUBLIC_URL = process.env.R2_PUBLIC_URL;
+process.env.R2_PUBLIC_URL = 'https://cdn.example.test/media';
+
+test('keyFromUrl extracts object key under configured public URL', () => {
+  assertEq(
+    keyFromUrl('https://cdn.example.test/media/audio/abc-Track.mp3'),
+    'audio/abc-Track.mp3'
+  );
+});
+
+test('keyFromUrl returns null for unrelated URL', () => {
+  assertEq(keyFromUrl('https://other.example.test/media/audio/abc-Track.mp3'), null);
+});
+
+test('filenameFromUrl strips query string and decodes filename', () => {
+  assertEq(
+    filenameFromUrl('https://cdn.example.test/media/audio/abc-My%20Song.mp3?token=123'),
+    'abc-My Song.mp3'
+  );
+});
+
+if (ORIGINAL_R2_PUBLIC_URL === undefined) {
+  delete process.env.R2_PUBLIC_URL;
+} else {
+  process.env.R2_PUBLIC_URL = ORIGINAL_R2_PUBLIC_URL;
+}
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 
