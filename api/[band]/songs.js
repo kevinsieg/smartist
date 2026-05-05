@@ -2,6 +2,15 @@ const { getDb, getBand, insertAuditLog } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
+const { suggestLyricsWithAI } = require('../_ai');
+const { checkRateLimit, clientIp } = require('../_ratelimit');
+const logger = require('../_logger');
+
+const LYRICS_SOURCES = ['lyrics.ovh', 'lrclib', 'ai'];
+
+function _plainFromSynced(synced) {
+  return synced?.replace(/\[\d+:\d+\.\d+\]/g, '').trim() ?? '';
+}
 
 module.exports = wrap(async function handler(req, res) {
   const { band: slug } = req.query;
@@ -30,6 +39,136 @@ module.exports = wrap(async function handler(req, res) {
       ORDER BY s.title
     `;
     return res.json(songs);
+  }
+
+  // ── POST lyrics-suggest ───────────────────────────────────────────────────
+  // Dispatched via body field to avoid multi-segment POST routing issues.
+  // Client sends POST /api/:band/songs with { lyrics_suggest_id: songId }.
+  if (req.method === 'POST' && req.body?.lyrics_suggest_id != null) {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+
+    const songId = Number(req.body.lyrics_suggest_id);
+    if (!Number.isInteger(songId) || songId <= 0)
+      return res.status(400).json({ error: 'Invalid song id' });
+
+    const [song] = await sql`
+      SELECT s.title, s.interpret, s.reference_interpret,
+        COALESCE(g.language, s.extra->>'language') AS language,
+        g.gema_genre AS genre
+      FROM songs s
+      LEFT JOIN LATERAL (
+        SELECT language, gema_genre FROM gema_works
+        WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
+      ) g ON true
+      WHERE s.id = ${songId} AND s.band_id = ${band.id} AND s.deleted = false
+    `;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+
+    const artist = song.reference_interpret || song.interpret;
+    if (!artist) return res.status(400).json({ error: 'No artist on this song — cannot search for lyrics' });
+
+    if (await checkRateLimit(`lyrics-suggest:${band.id}:${songId}`, 3, 300))
+      return res.status(429).json({ error: 'Too many requests. Try again in a few minutes.' });
+    if (await checkRateLimit(`lyrics-suggest-ip:${clientIp(req)}`, 10, 3600))
+      return res.status(429).json({ error: 'Too many requests from this IP.' });
+
+    const { title, language, genre } = song;
+    const ctx = { band: band.slug, songId, title, artist };
+    const found = (lyrics, source) => res.json({ lyrics, source, sources: LYRICS_SOURCES });
+    const miss  = (aiSkipped = false) => res.json({ lyrics: null, sources: LYRICS_SOURCES, aiSkipped });
+
+    try {
+      const r = await fetch(
+        `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (r.ok) {
+        const data = await r.json().catch(() => null);
+        if (data?.lyrics?.length > 50) {
+          await logger.info('lyrics_suggest', { ...ctx, source: 'lyrics.ovh' });
+          return found(data.lyrics.trim(), 'lyrics.ovh');
+        }
+      }
+      await logger.info('lyrics_suggest_miss', { ...ctx, source: 'lyrics.ovh', status: r.status });
+    } catch (e) {
+      await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lyrics.ovh', error: e.message });
+    }
+
+    try {
+      const r = await fetch(
+        `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (r.ok) {
+        const data = await r.json().catch(() => null);
+        const top = Array.isArray(data) && data[0];
+        if (top) {
+          const lyrics = top.plainLyrics || _plainFromSynced(top.syncedLyrics);
+          if (lyrics?.length > 50) {
+            await logger.info('lyrics_suggest', { ...ctx, source: 'lrclib' });
+            return found(lyrics.trim(), 'lrclib');
+          }
+        }
+      }
+      await logger.info('lyrics_suggest_miss', { ...ctx, source: 'lrclib', status: r.status });
+    } catch (e) {
+      await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lrclib', error: e.message });
+    }
+
+    const { lyrics, skipped } = await suggestLyricsWithAI(title, artist, { language, genre });
+    if (lyrics) {
+      await logger.info('lyrics_suggest', { ...ctx, source: 'ai' });
+      return found(lyrics, 'ai');
+    }
+
+    await logger.info('lyrics_suggest_miss', { ...ctx, source: 'ai', skipped: skipped ?? false });
+    return miss(skipped ?? false);
+  }
+
+  // ── POST lyrics update (replaces PUT /songs/:id/lyrics) ───────────────────
+  if (req.method === 'POST' && req.body?.lyrics_update_id != null) {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+
+    const songId = Number(req.body.lyrics_update_id);
+    if (!Number.isInteger(songId) || songId <= 0)
+      return res.status(400).json({ error: 'Invalid song id' });
+
+    const { lyrics } = req.body;
+    if (typeof lyrics !== 'string')
+      return res.status(400).json({ error: 'lyrics must be a string' });
+    if (lyrics.length > 20000)
+      return res.status(400).json({ error: 'Lyrics too long (max 20 000 characters)' });
+
+    const lyricsVal = lyrics.trim() || null;
+    const [song] = await sql`
+      UPDATE songs SET extra = extra || ${{ lyrics: lyricsVal }}
+      WHERE id = ${songId} AND band_id = ${band.id} AND deleted = false
+      RETURNING id, title
+    `;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+
+    await insertAuditLog(sql, band.id, song.id, 'lyrics_update', { title: song.title });
+    return res.json({ ok: true });
+  }
+
+  // ── POST lyrics delete (replaces DELETE /songs/:id/lyrics) ────────────────
+  if (req.method === 'POST' && req.body?.lyrics_delete_id != null) {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+
+    const songId = Number(req.body.lyrics_delete_id);
+    if (!Number.isInteger(songId) || songId <= 0)
+      return res.status(400).json({ error: 'Invalid song id' });
+
+    const [song] = await sql`
+      SELECT id FROM songs WHERE id = ${songId} AND band_id = ${band.id} AND deleted = false
+    `;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+
+    await sql`UPDATE songs SET extra = extra - 'lyrics' WHERE id = ${songId} AND band_id = ${band.id}`;
+    return res.json({ ok: true });
   }
 
   if (req.method === 'POST') {
