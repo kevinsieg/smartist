@@ -251,66 +251,35 @@ function renderGigsView() {
 
   const currentYear = new Date().getFullYear();
   const years = [...byYear.keys()].sort((a, b) => b - a);
-  const authed = !!sessionStorage.getItem('setlist_token');
 
   container.innerHTML = years.map(year => {
     const label = year === 0 ? 'TBD' : year;
     const isCurrentYear = year === currentYear;
-
-    // Each setlist is a flat collapsible item; gig name is the leading title.
-    // Gigs with no linked setlists render as a non-expandable row.
-    const items = byYear.get(year).flatMap(g => {
+    const items = byYear.get(year).map(g => {
       const linkedSets = allSetlists.filter(s => s.gig_id === g.id);
+      const setCount   = linkedSets.length;
       const dateStr    = g.date ? String(g.date).slice(0, 10) : 'Date TBD';
       const venuePart  = g.venue ? ` — ${escHtml(g.venue)}` : '';
-      const editBtn    = authed
-        ? `<button class="btn gig-edit-btn" onclick="event.stopPropagation();openGigModal(${g.id})" aria-label="Edit gig">Edit</button>`
-        : '';
-
-      if (!linkedSets.length) {
-        return `
-          <div class="history-item">
-            <div class="history-header" style="cursor:default">
-              <div class="history-meta">
-                <span class="gig-name">${escHtml(g.name)}</span>
-                <span class="set-info">${dateStr}${venuePart}</span>
-                ${g.notes ? `<span class="set-comment">${escHtml(g.notes)}</span>` : ''}
-                <span class="set-info" style="font-style:italic;opacity:0.7">No setlists</span>
-              </div>
-              ${editBtn}
+      return `
+        <div class="history-item" id="gig-${g.id}">
+          <div class="history-header" onclick="toggleGig(${g.id})">
+            <div class="history-meta">
+              <span class="gig-name">${escHtml(g.name)}</span>
+              <span class="set-info">${dateStr}${venuePart} &bull; ${setCount} setlist${setCount !== 1 ? 's' : ''}</span>
+              ${g.notes ? `<span class="set-comment">${escHtml(g.notes)}</span>` : ''}
             </div>
-          </div>`;
-      }
-
-      return linkedSets.map(s => {
-        const count = s.song_count ?? 0;
-        return `
-          <div class="history-item" id="set-${s.id}">
-            <div class="history-header" onclick="toggleSet(${s.id})">
-              <div class="history-meta">
-                <span class="gig-name">${escHtml(g.name)}</span>
-                <span class="set-info">${dateStr}${venuePart}</span>
-                ${s.title ? `<span class="set-title">&ldquo;${escHtml(s.title)}&rdquo;</span>` : ''}
-                <span class="set-info">${count} song${count !== 1 ? 's' : ''} &bull; saved ${formatSavedDate(s.created_at)}</span>
-                ${s.comment ? `<span class="set-comment">${escHtml(s.comment)}</span>` : ''}
-              </div>
-              <div class="header-end">
-                ${editBtn}
-                <button class="toggle-btn" aria-label="Toggle setlist" aria-expanded="false">&#9660;</button>
-              </div>
-            </div>
-            <div class="history-songs" id="songs-${s.id}" hidden>
-              <p style="color:var(--third-color);font-size:0.82rem;padding:0.25rem 0;">Loading…</p>
-            </div>
-          </div>`;
-      });
+            <button class="toggle-btn" aria-label="Toggle gig" aria-expanded="false">&#9660;</button>
+          </div>
+          <div class="history-songs" id="gig-body-${g.id}" hidden>
+            ${renderGigSetlists(linkedSets)}
+          </div>
+        </div>`;
     }).join('');
 
-    const gigCount = byYear.get(year).length;
     return `<div class="year-section">
       <div class="year-header" onclick="toggleYear('gy${year}')" aria-expanded="${isCurrentYear}">
         <span class="year-label">${label}</span>
-        <span class="year-count">${gigCount} gig${gigCount !== 1 ? 's' : ''}</span>
+        <span class="year-count">${byYear.get(year).length} gig${byYear.get(year).length !== 1 ? 's' : ''}</span>
         <span class="year-arrow">${isCurrentYear ? '▲' : '▼'}</span>
       </div>
       <div class="year-body" id="year-gy${year}" ${isCurrentYear ? '' : 'hidden'}>
@@ -318,6 +287,31 @@ function renderGigsView() {
       </div>
     </div>`;
   }).join('');
+}
+
+function renderGigSetlists(linkedSets) {
+  if (!linkedSets.length) {
+    return '<p style="color:var(--third-color);font-size:0.82rem;padding:0.5rem 0;">No setlists linked to this gig.</p>';
+  }
+  return `<div class="gig-setlist-list">${linkedSets.map(s => `
+    <div class="gig-setlist-item" id="set-${s.id}">
+      <div class="history-header" onclick="toggleSet(${s.id})">
+        <div class="history-meta">${renderSetlistMeta(s)}</div>
+        <button class="toggle-btn" aria-label="Toggle setlist" aria-expanded="false">&#9660;</button>
+      </div>
+      <div class="history-songs" id="songs-${s.id}" hidden>
+        <p style="color:var(--third-color);font-size:0.82rem;padding:0.25rem 0;">Loading…</p>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function toggleGig(id) {
+  const body = document.getElementById(`gig-body-${id}`);
+  const btn  = document.querySelector(`#gig-${id} > .history-header .toggle-btn`);
+  if (!body) return;
+  const open = !body.hidden;
+  body.hidden = open;
+  if (btn) { btn.innerHTML = open ? '&#9660;' : '&#9650;'; btn.setAttribute('aria-expanded', String(!open)); }
 }
 
 // ── Shared rendering helpers ──────────────────────────────────────────────
@@ -881,8 +875,7 @@ async function doDuplicate(id) {
 
     const created = await r.json();
     allSetlists.unshift(created);
-    // do not cache in loadedData — it has song_count but no songs array;
-    // toggleSet will fetch the full detail (with songs) on first expand
+    loadedData.set(created.id, created);
 
     const year     = new Date(created.created_at).getFullYear();
     const yearBody = document.getElementById(`year-${year}`);

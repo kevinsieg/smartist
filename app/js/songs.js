@@ -314,10 +314,11 @@ function renderTable() {
 
   initResizableColumns();
 
-  function updateLayout() {
+  requestAnimationFrame(() => {
     const appHeader = document.querySelector('.app-header');
+    const toolbar   = document.querySelector('.toolbar');
     const tableWrap = document.querySelector('.table-wrap');
-    if (appHeader) {
+    if (appHeader && toolbar) {
       const hh = appHeader.getBoundingClientRect().height;
       document.documentElement.style.setProperty('--songs-toolbar-top', `${hh}px`);
     }
@@ -325,9 +326,7 @@ function renderTable() {
       const top = tableWrap.getBoundingClientRect().top;
       tableWrap.style.maxHeight = `${window.innerHeight - top - 24}px`;
     }
-  }
-  requestAnimationFrame(updateLayout);
-  window.addEventListener('resize', updateLayout);
+  });
 }
 
 function initResizableColumns() {
