@@ -22,6 +22,7 @@ npm run test:unit           # from tests/ directory
 | `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
 | `api/_pdf.js` | `setlistTitle` |
 | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
+| `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 
 Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
 

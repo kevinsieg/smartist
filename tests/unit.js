@@ -16,6 +16,8 @@ const { setlistTitle } =
   require(path.join(__dirname, '../api/_pdf'));
 const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
+const { suggestLyricsWithAI } =
+  require(path.join(__dirname, '../api/_ai'));
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -26,6 +28,7 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 // ── Runner ───────────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 const failures = [];
+const asyncTests = [];
 
 function test(name, fn) {
   try {
@@ -37,6 +40,25 @@ function test(name, fn) {
     console.log(`      ${R(e.message)}`);
     failures.push({ name, error: e.message });
     failed++;
+  }
+}
+
+function testAsync(name, fn) {
+  asyncTests.push({ name, fn });
+}
+
+async function runAsyncTests() {
+  for (const { name, fn } of asyncTests) {
+    try {
+      await fn();
+      console.log(`  ${G('✓')} ${name}`);
+      passed++;
+    } catch (e) {
+      console.log(`  ${R('✗')} ${name}`);
+      console.log(`      ${R(e.message)}`);
+      failures.push({ name, error: e.message });
+      failed++;
+    }
   }
 }
 
@@ -378,16 +400,102 @@ if (ORIGINAL_R2_PUBLIC_URL === undefined) {
   process.env.R2_PUBLIC_URL = ORIGINAL_R2_PUBLIC_URL;
 }
 
+// ── suggestLyricsWithAI ───────────────────────────────────────────────────────
+
+console.log(B('\nsuggestLyricsWithAI'));
+
+const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const ORIGINAL_FETCH = global.fetch;
+
+async function withAiEnv(apiKey, fetchImpl, fn) {
+  if (apiKey === undefined) {
+    delete process.env.GEMINI_API_KEY;
+  } else {
+    process.env.GEMINI_API_KEY = apiKey;
+  }
+  global.fetch = fetchImpl;
+  try {
+    await fn();
+  } finally {
+    if (ORIGINAL_GEMINI_API_KEY === undefined) {
+      delete process.env.GEMINI_API_KEY;
+    } else {
+      process.env.GEMINI_API_KEY = ORIGINAL_GEMINI_API_KEY;
+    }
+    global.fetch = ORIGINAL_FETCH;
+  }
+}
+
+testAsync('no API key → skipped without network call', async () => {
+  let called = false;
+  await withAiEnv(undefined, async () => { called = true; }, async () => {
+    const result = await suggestLyricsWithAI('Song', 'Artist');
+    assertEq(result, { lyrics: null, skipped: true });
+    assertEq(called, false, 'fetch should not be called without an API key');
+  });
+});
+
+testAsync('Gemini response → strips markdown, citations, and URL-only links', async () => {
+  let requestBody = null;
+  const lyrics =
+    '**Premier couplet** [1]\n' +
+    'Une longue ligne de paroles en francais qui depasse largement la limite.\n' +
+    '(https://example.test/source)\n' +
+    '^2^Derniere ligne de chanson sans markdown.';
+
+  await withAiEnv('test-key', async (_url, opts) => {
+    requestBody = JSON.parse(opts.body);
+    return {
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: lyrics }] } }],
+      }),
+    };
+  }, async () => {
+    const result = await suggestLyricsWithAI('Titre', 'Artiste', { language: 'FR', genre: 'FOLK' });
+    assert(result.lyrics.includes('Premier couplet'), `missing cleaned first line: ${result.lyrics}`);
+    assert(result.lyrics.includes('Derniere ligne de chanson sans markdown.'), `missing cleaned last line: ${result.lyrics}`);
+    assert(!result.lyrics.includes('**'), `markdown was not stripped: ${result.lyrics}`);
+    assert(!result.lyrics.includes('[1]'), `citation index was not stripped: ${result.lyrics}`);
+    assert(!result.lyrics.includes('https://'), `URL-only link was not stripped: ${result.lyrics}`);
+    assert(!result.lyrics.includes('^2^'), `superscript citation was not stripped: ${result.lyrics}`);
+
+    const prompt = requestBody.contents[0].parts[0].text;
+    assert(prompt.includes('a folk song'), `missing genre hint in prompt: ${prompt}`);
+    assert(prompt.includes('Return the lyrics in French.'), `missing French language instruction: ${prompt}`);
+  });
+});
+
+testAsync('provider quota response → null lyrics with skipped flag', async () => {
+  await withAiEnv('test-key', async () => ({
+    ok: false,
+    status: 429,
+    text: async () => 'quota exceeded',
+  }), async () => {
+    assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: null, skipped: true });
+  });
+});
+
+testAsync('network failure → null lyrics without skipped flag', async () => {
+  await withAiEnv('test-key', async () => {
+    throw new Error('socket closed');
+  }, async () => {
+    assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: null });
+  });
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-const total = passed + failed;
-console.log(`\n${B('─'.repeat(40))}`);
-console.log(
-  `${G(`${passed} passed`)}  ` +
-  `${failed ? R(`${failed} failed`) : D('0 failed')}`
-);
-if (failures.length) {
-  console.log(R('\nFailed:'));
-  failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
-}
-process.exit(failed > 0 ? 1 : 0);
+runAsyncTests().then(() => {
+  const total = passed + failed;
+  console.log(`\n${B('─'.repeat(40))}`);
+  console.log(
+    `${G(`${passed} passed`)}  ` +
+    `${failed ? R(`${failed} failed`) : D('0 failed')}`
+  );
+  if (failures.length) {
+    console.log(R('\nFailed:'));
+    failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
+  }
+  process.exit(failed > 0 ? 1 : 0);
+});
