@@ -7,6 +7,7 @@
 
 const path = require('path');
 const crypto = require('crypto');
+const { spawnSync } = require('child_process');
 
 const { validateSongIds, validateStr, validateNum, validateEmail } =
   require(path.join(__dirname, '../api/_validate'));
@@ -377,6 +378,54 @@ if (ORIGINAL_R2_PUBLIC_URL === undefined) {
 } else {
   process.env.R2_PUBLIC_URL = ORIGINAL_R2_PUBLIC_URL;
 }
+
+// ── Rate limit helper ─────────────────────────────────────────────────────────
+
+console.log(B('\nrate limit helper'));
+
+test('checkRateLimit fails open when the backing table is missing', () => {
+  const script = `
+    const path = require('path');
+    const root = process.cwd();
+    const dbPath = require.resolve(path.join(root, 'api/_db.js'));
+    const loggerPath = require.resolve(path.join(root, 'api/_logger.js'));
+    require.cache[dbPath] = {
+      id: dbPath,
+      filename: dbPath,
+      loaded: true,
+      exports: {
+        getDb() {
+          return async function sql() {
+            throw new Error('relation "rate_limits" does not exist');
+          };
+        },
+      },
+    };
+    require.cache[loggerPath] = {
+      id: loggerPath,
+      filename: loggerPath,
+      loaded: true,
+      exports: { error: async () => {} },
+    };
+    const { checkRateLimit } = require(path.join(root, 'api/_ratelimit.js'));
+    checkRateLimit('auth:127.0.0.1', 10, 60)
+      .then(blocked => {
+        if (blocked !== false) {
+          console.error('expected false, got ' + blocked);
+          process.exit(1);
+        }
+      })
+      .catch(err => {
+        console.error(err.stack || err.message);
+        process.exit(1);
+      });
+  `;
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: path.join(__dirname, '..'),
+    encoding: 'utf8',
+  });
+  assert(result.status === 0, result.stderr || result.stdout || `exit ${result.status}`);
+});
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 
