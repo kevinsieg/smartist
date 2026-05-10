@@ -8,6 +8,15 @@
 const path = require('path');
 const crypto = require('crypto');
 
+const loggerPath = require.resolve(path.join(__dirname, '../api/_logger'));
+require.cache[loggerPath] = {
+  exports: {
+    info: async () => {},
+    warn: async () => {},
+    error: async () => {},
+  },
+};
+
 const { validateSongIds, validateStr, validateNum, validateEmail } =
   require(path.join(__dirname, '../api/_validate'));
 const { generateMagicToken, verifyMagicToken } =
@@ -16,6 +25,8 @@ const { setlistTitle } =
   require(path.join(__dirname, '../api/_pdf'));
 const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
+const { suggestLyricsWithAI } =
+  require(path.join(__dirname, '../api/_ai'));
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -50,6 +61,19 @@ function assertEq(a, b, msg) {
   const bStr = JSON.stringify(b);
   if (aStr !== bStr)
     throw new Error(msg || `expected ${bStr}, got ${aStr}`);
+}
+
+async function testAsync(name, fn) {
+  try {
+    await fn();
+    console.log(`  ${G('✓')} ${name}`);
+    passed++;
+  } catch (e) {
+    console.log(`  ${R('✗')} ${name}`);
+    console.log(`      ${R(e.message)}`);
+    failures.push({ name, error: e.message });
+    failed++;
+  }
 }
 
 // ── validateSongIds ───────────────────────────────────────────────────────────
@@ -378,16 +402,125 @@ if (ORIGINAL_R2_PUBLIC_URL === undefined) {
   process.env.R2_PUBLIC_URL = ORIGINAL_R2_PUBLIC_URL;
 }
 
-// ── Summary ───────────────────────────────────────────────────────────────────
+// ── suggestLyricsWithAI ───────────────────────────────────────────────────────
 
-const total = passed + failed;
-console.log(`\n${B('─'.repeat(40))}`);
-console.log(
-  `${G(`${passed} passed`)}  ` +
-  `${failed ? R(`${failed} failed`) : D('0 failed')}`
-);
-if (failures.length) {
-  console.log(R('\nFailed:'));
-  failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
+const ORIGINAL_FETCH = global.fetch;
+const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+async function testSuggestLyricsWithAI() {
+  console.log(B('\nsuggestLyricsWithAI'));
+
+  await testAsync('missing GEMINI_API_KEY skips AI without network', async () => {
+    delete process.env.GEMINI_API_KEY;
+    let called = false;
+    global.fetch = async () => { called = true; throw new Error('unexpected fetch'); };
+
+    const result = await suggestLyricsWithAI('Song', 'Artist');
+
+    assertEq(result, { lyrics: null, skipped: true });
+    assertEq(called, false, 'fetch should not be called without an API key');
+  });
+
+  await testAsync('Gemini success strips markdown, citations, and links', async () => {
+    process.env.GEMINI_API_KEY = 'unit-test-key';
+    let request;
+    global.fetch = async (url, opts) => {
+      request = { url, opts, body: JSON.parse(opts.body) };
+      return {
+        ok: true,
+        async json() {
+          return {
+            candidates: [{
+              content: {
+                parts: [{
+                  text: [
+                    '## Test title',
+                    '**Premiere ligne avec assez de mots pour rester valide** [1]',
+                    'Deuxieme ligne avec *emphase* et un lien (https://example.test)',
+                    'Troisieme ligne qui garde le resultat au-dessus du seuil ^[2]^',
+                  ].join('\n'),
+                }],
+              },
+            }],
+          };
+        },
+      };
+    };
+
+    const result = await suggestLyricsWithAI('Chanson', 'Artiste', { language: 'FR', genre: 'FOLK' });
+
+    assert(request.url.includes('/models/gemini-2.0-flash:generateContent?key=unit-test-key'), 'wrong Gemini URL');
+    assertEq(request.opts.method, 'POST');
+    assert(Array.isArray(request.body.tools) && request.body.tools[0].google_search, 'missing search grounding');
+    const prompt = request.body.contents[0].parts[0].text;
+    assert(prompt.includes('Return the lyrics in French.'), 'missing French language instruction');
+    assert(prompt.includes('a folk song'), 'missing genre hint');
+    assert(result.lyrics.includes('Premiere ligne'), 'missing cleaned lyrics');
+    assert(!/[#*]/.test(result.lyrics), `markdown not stripped: ${result.lyrics}`);
+    assert(!result.lyrics.includes('[1]'), `citation not stripped: ${result.lyrics}`);
+    assert(!result.lyrics.includes('https://example.test'), `link not stripped: ${result.lyrics}`);
+    assert(!result.lyrics.includes('^[2]^'), `superscript citation not stripped: ${result.lyrics}`);
+  });
+
+  await testAsync('Gemini quota response returns skipped miss', async () => {
+    process.env.GEMINI_API_KEY = 'unit-test-key';
+    global.fetch = async () => ({
+      ok: false,
+      status: 429,
+      async text() { return 'quota exceeded'; },
+    });
+
+    const result = await suggestLyricsWithAI('Song', 'Artist');
+
+    assertEq(result, { lyrics: null, skipped: true });
+  });
+
+  await testAsync('short AI response is treated as a miss', async () => {
+    process.env.GEMINI_API_KEY = 'unit-test-key';
+    global.fetch = async () => ({
+      ok: true,
+      async json() {
+        return {
+          candidates: [{
+            content: { parts: [{ text: 'Too short' }] },
+          }],
+        };
+      },
+    });
+
+    const result = await suggestLyricsWithAI('Song', 'Artist');
+
+    assertEq(result, { lyrics: null });
+  });
 }
-process.exit(failed > 0 ? 1 : 0);
+
+function restoreAsyncTestGlobals() {
+  global.fetch = ORIGINAL_FETCH;
+  if (ORIGINAL_GEMINI_API_KEY === undefined) {
+    delete process.env.GEMINI_API_KEY;
+  } else {
+    process.env.GEMINI_API_KEY = ORIGINAL_GEMINI_API_KEY;
+  }
+}
+
+function printSummary() {
+  const total = passed + failed;
+  console.log(`\n${B('─'.repeat(40))}`);
+  console.log(
+    `${G(`${passed} passed`)}  ` +
+    `${failed ? R(`${failed} failed`) : D('0 failed')}`
+  );
+  if (failures.length) {
+    console.log(R('\nFailed:'));
+    failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
+  }
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+testSuggestLyricsWithAI()
+  .finally(restoreAsyncTestGlobals)
+  .then(printSummary, err => {
+    failed++;
+    failures.push({ name: 'suggestLyricsWithAI setup', error: err.message });
+    printSummary();
+  });
