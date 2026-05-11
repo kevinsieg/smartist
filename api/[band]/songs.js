@@ -4,13 +4,8 @@ const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
 const { suggestLyricsWithAI } = require('../_ai');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
+const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
 const logger = require('../_logger');
-
-const LYRICS_SOURCES = ['lyrics.ovh', 'lrclib', 'ai'];
-
-function _plainFromSynced(synced) {
-  return synced?.replace(/\[\d+:\d+\.\d+\]/g, '').trim() ?? '';
-}
 
 module.exports = wrap(async function handler(req, res) {
   const { band: slug } = req.query;
@@ -104,7 +99,7 @@ module.exports = wrap(async function handler(req, res) {
         const data = await r.json().catch(() => null);
         const top = Array.isArray(data) && data[0];
         if (top) {
-          const lyrics = top.plainLyrics || _plainFromSynced(top.syncedLyrics);
+          const lyrics = top.plainLyrics || plainFromSynced(top.syncedLyrics);
           if (lyrics?.length > 50) {
             await logger.info('lyrics_suggest', { ...ctx, source: 'lrclib' });
             return found(lyrics.trim(), 'lrclib');

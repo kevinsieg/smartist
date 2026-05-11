@@ -16,8 +16,10 @@ const { setlistTitle } =
   require(path.join(__dirname, '../api/_pdf'));
 const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
-const { suggestLyricsWithAI } =
-  require(path.join(__dirname, '../api/_ai'));
+const { LYRICS_SOURCES, plainFromSynced } =
+  require(path.join(__dirname, '../api/_lyrics'));
+const { clientIp } =
+  require(path.join(__dirname, '../api/_ratelimit'));
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -400,12 +402,53 @@ if (ORIGINAL_R2_PUBLIC_URL === undefined) {
   process.env.R2_PUBLIC_URL = ORIGINAL_R2_PUBLIC_URL;
 }
 
-// ── suggestLyricsWithAI ───────────────────────────────────────────────────────
+// ── lyrics helpers ───────────────────────────────────────────────────────────
 
-console.log(B('\nsuggestLyricsWithAI'));
+console.log(B('\nlyrics helpers'));
 
-const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const ORIGINAL_FETCH = global.fetch;
+test('LYRICS_SOURCES preserves provider fallback order', () => {
+  assertEq(LYRICS_SOURCES, ['lyrics.ovh', 'lrclib', 'ai']);
+});
+
+test('plainFromSynced strips LRCLIB timestamp markers and trims text', () => {
+  assertEq(
+    plainFromSynced('  [00:12.34]First line\n[01:02.03]Second line  '),
+    'First line\nSecond line'
+  );
+});
+
+test('plainFromSynced keeps non-timestamp bracketed lyrics text', () => {
+  assertEq(
+    plainFromSynced('[Intro]\n[00:01.00]Sing it'),
+    '[Intro]\nSing it'
+  );
+});
+
+test('plainFromSynced nullish input → empty string', () => {
+  assertEq(plainFromSynced(null), '');
+  assertEq(plainFromSynced(undefined), '');
+});
+
+// ── rate-limit helpers ───────────────────────────────────────────────────────
+
+console.log(B('\nrate-limit helpers'));
+
+test('clientIp uses first forwarded IP before proxies', () => {
+  assertEq(
+    clientIp({ headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' } }),
+    '203.0.113.10'
+  );
+});
+
+test('clientIp trims forwarded IP whitespace', () => {
+  assertEq(clientIp({ headers: { 'x-forwarded-for': ' 2001:db8::1 ' } }), '2001:db8::1');
+});
+
+test('clientIp missing forwarded header → unknown', () => {
+  assertEq(clientIp({ headers: {} }), 'unknown');
+});
+
+// ── Summary ───────────────────────────────────────────────────────────────────
 
 async function withAiEnv(apiKey, fetchImpl, fn) {
   if (apiKey === undefined) {
