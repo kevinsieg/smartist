@@ -471,7 +471,7 @@ test('parseCsv rejects files without a Werknummer header', () => {
 test('parseBeteiligte maps duplicate-index columns and normalises shares/roles', () => {
   const row = [
     '15299392-001', '', 'Jane Writer', 'IP-123', 'KOMPONIST/-IN', '1', '',
-    '12,5', '-', '25', '50,25', 'GEMA', 'ASCAP', '', '', 'Rep Publisher',
+    '"12,5"', '-', '25', '"50,25"', 'GEMA', 'ASCAP', '', '', 'Rep Publisher',
     'IP-999', 'TEXTDICHTER/-IN',
   ].join(',');
   assertEq(gemaImport.parseBeteiligte(`Preamble\nWerknummer,unused\n${row}`), [{
