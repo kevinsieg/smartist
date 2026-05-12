@@ -18,7 +18,7 @@ const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
 const { LYRICS_SOURCES, plainFromSynced } =
   require(path.join(__dirname, '../api/_lyrics'));
-const { clientIp } =
+const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
@@ -426,6 +426,18 @@ test('clientIp trims forwarded IP whitespace', () => {
 
 test('clientIp missing forwarded header → unknown', () => {
   assertEq(clientIp({ headers: {} }), 'unknown');
+});
+
+test('isMissingRateLimitTable detects PostgreSQL undefined_table errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '42P01', message: 'relation "rate_limits" does not exist' }), true);
+});
+
+test('isMissingRateLimitTable detects Neon missing relation messages', () => {
+  assertEq(isMissingRateLimitTable({ message: 'relation "rate_limits" does not exist' }), true);
+});
+
+test('isMissingRateLimitTable ignores unrelated database errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────
