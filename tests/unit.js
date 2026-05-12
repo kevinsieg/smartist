@@ -7,9 +7,12 @@
 
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const { validateSongIds, validateStr, validateNum, validateEmail } =
   require(path.join(__dirname, '../api/_validate'));
+const { checkCredentials } =
+  require(path.join(__dirname, '../api/_auth'));
 const { generateMagicToken, verifyMagicToken } =
   require(path.join(__dirname, '../api/_token'));
 const { setlistTitle } =
@@ -30,6 +33,7 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 // ── Runner ───────────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 const failures = [];
+const pending = [];
 
 function test(name, fn) {
   try {
@@ -42,6 +46,21 @@ function test(name, fn) {
     failures.push({ name, error: e.message });
     failed++;
   }
+}
+
+function asyncTest(name, fn) {
+  pending.push((async () => {
+    try {
+      await fn();
+      console.log(`  ${G('✓')} ${name}`);
+      passed++;
+    } catch (e) {
+      console.log(`  ${R('✗')} ${name}`);
+      console.log(`      ${R(e.message)}`);
+      failures.push({ name, error: e.message });
+      failed++;
+    }
+  })());
 }
 
 // ── Assertions ───────────────────────────────────────────────────────────────
@@ -428,16 +447,39 @@ test('clientIp missing forwarded header → unknown', () => {
   assertEq(clientIp({ headers: {} }), 'unknown');
 });
 
+// ── auth helpers ──────────────────────────────────────────────────────────────
+
+console.log(B('\nauth helpers'));
+
+const PASSWORD = 'correct horse battery staple';
+const PASSWORD_HASH = bcrypt.hashSync(PASSWORD, 4);
+const TEST_BAND = { password_hash: PASSWORD_HASH };
+
+asyncTest('checkCredentials accepts the stored bcrypt password', async () => {
+  assertEq(await checkCredentials(PASSWORD, TEST_BAND), true);
+});
+
+asyncTest('checkCredentials accepts a valid magic token for the stored hash', async () => {
+  assertEq(await checkCredentials(generateMagicToken(PASSWORD_HASH), TEST_BAND), true);
+});
+
+asyncTest('checkCredentials rejects invalid credentials', async () => {
+  assertEq(await checkCredentials('wrong password', TEST_BAND), false);
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-const total = passed + failed;
-console.log(`\n${B('─'.repeat(40))}`);
-console.log(
-  `${G(`${passed} passed`)}  ` +
-  `${failed ? R(`${failed} failed`) : D('0 failed')}`
-);
-if (failures.length) {
-  console.log(R('\nFailed:'));
-  failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
-}
-process.exit(failed > 0 ? 1 : 0);
+(async () => {
+  await Promise.all(pending);
+  const total = passed + failed;
+  console.log(`\n${B('─'.repeat(40))}`);
+  console.log(
+    `${G(`${passed} passed`)}  ` +
+    `${failed ? R(`${failed} failed`) : D('0 failed')}`
+  );
+  if (failures.length) {
+    console.log(R('\nFailed:'));
+    failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
+  }
+  process.exit(failed > 0 ? 1 : 0);
+})();
