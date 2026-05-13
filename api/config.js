@@ -1,8 +1,28 @@
 const { getBand, getDb } = require('./_db');
 const { wrap } = require('./_handler');
+const { validateEmail } = require('./_validate');
+const { checkRateLimit, clientIp } = require('./_ratelimit');
 
 module.exports = wrap(async function handler(req, res) {
+  if (req.method === 'POST') {
+    const email = validateEmail(req.body?.email);
+    if (!email) return res.status(400).json({ error: 'Valid email required' });
+
+    if (await checkRateLimit(`subscribe:${clientIp(req)}`, 5, 3600))
+      return res.status(429).json({ error: 'Too many requests — try again later' });
+
+    const sql = getDb();
+    try {
+      await sql`INSERT INTO subscribers (email, source) VALUES (${email}, 'landing')`;
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Already subscribed' });
+      throw err;
+    }
+    return res.status(200).json({ ok: true });
+  }
+
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
   const slug = process.env.BAND_SLUG;
   if (!slug) return res.status(500).json({ error: 'BAND_SLUG not configured' });
   const band = await getBand(slug);
