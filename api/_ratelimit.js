@@ -4,7 +4,7 @@ const logger = require('./_logger');
 
 // Sliding-window rate limiter backed by the rate_limits table.
 // Returns true if the request should be blocked (limit exceeded).
-// Fails open (returns false) on DB error so a missing table never causes 500s.
+// Each key gets one row; the window resets automatically when it expires.
 async function checkRateLimit(key, maxRequests, windowSecs) {
   const sql = getDb();
   const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
@@ -25,13 +25,21 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
     `;
     return row.count > maxRequests;
   } catch (err) {
-    await logger.error('rate_limit_error', { key, error: err.message });
-    return false; // fail open — don't block on DB error
+    if (isMissingRateLimitTable(err)) {
+      await logger.warn('rate_limit_unavailable', { key, code: err.code, error: err.message });
+      return false;
+    }
+    throw err;
   }
+}
+
+function isMissingRateLimitTable(err) {
+  return err?.code === '42P01'
+    || /relation ["']?rate_limits["']? does not exist/i.test(err?.message || '');
 }
 
 function clientIp(req) {
   return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'unknown';
 }
 
-module.exports = { checkRateLimit, clientIp };
+module.exports = { checkRateLimit, clientIp, isMissingRateLimitTable };
