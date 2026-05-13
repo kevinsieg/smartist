@@ -7,6 +7,7 @@
 
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const loggerPath = require.resolve(path.join(__dirname, '../api/_logger'));
 require.cache[loggerPath] = {
@@ -19,14 +20,20 @@ require.cache[loggerPath] = {
 
 const { validateSongIds, validateStr, validateNum, validateEmail } =
   require(path.join(__dirname, '../api/_validate'));
+const { checkCredentials } =
+  require(path.join(__dirname, '../api/_auth'));
 const { generateMagicToken, verifyMagicToken } =
   require(path.join(__dirname, '../api/_token'));
 const { setlistTitle } =
   require(path.join(__dirname, '../api/_pdf'));
 const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
-const { suggestLyricsWithAI } =
-  require(path.join(__dirname, '../api/_ai'));
+const { LYRICS_SOURCES, plainFromSynced } =
+  require(path.join(__dirname, '../api/_lyrics'));
+const { clientIp, isMissingRateLimitTable } =
+  require(path.join(__dirname, '../api/_ratelimit'));
+const gemaImport =
+  require(path.join(__dirname, '../api/[band]/gema/import'))._test;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -37,10 +44,28 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 // ── Runner ───────────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 const failures = [];
+const pending = [];
 
 function test(name, fn) {
   try {
     fn();
+    console.log(`  ${G('✓')} ${name}`);
+    passed++;
+  } catch (e) {
+    console.log(`  ${R('✗')} ${name}`);
+    console.log(`      ${R(e.message)}`);
+    failures.push({ name, error: e.message });
+    failed++;
+  }
+}
+
+function asyncTest(name, fn) {
+  pending.push({ name, fn });
+}
+
+async function runAsyncTest({ name, fn }) {
+  try {
+    await fn();
     console.log(`  ${G('✓')} ${name}`);
     passed++;
   } catch (e) {
@@ -402,108 +427,169 @@ if (ORIGINAL_R2_PUBLIC_URL === undefined) {
   process.env.R2_PUBLIC_URL = ORIGINAL_R2_PUBLIC_URL;
 }
 
-// ── suggestLyricsWithAI ───────────────────────────────────────────────────────
+// ── lyrics helpers ───────────────────────────────────────────────────────────
 
-const ORIGINAL_FETCH = global.fetch;
-const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+console.log(B('\nlyrics helpers'));
 
-async function testSuggestLyricsWithAI() {
-  console.log(B('\nsuggestLyricsWithAI'));
+test('LYRICS_SOURCES preserves provider fallback order', () => {
+  assertEq(LYRICS_SOURCES, ['lyrics.ovh', 'lrclib', 'ai']);
+});
 
-  await testAsync('missing GEMINI_API_KEY skips AI without network', async () => {
-    delete process.env.GEMINI_API_KEY;
-    let called = false;
-    global.fetch = async () => { called = true; throw new Error('unexpected fetch'); };
+test('plainFromSynced strips LRCLIB timestamp markers and trims text', () => {
+  assertEq(
+    plainFromSynced('  [00:12.34]First line\n[01:02.03]Second line  '),
+    'First line\nSecond line'
+  );
+});
 
-    const result = await suggestLyricsWithAI('Song', 'Artist');
+test('plainFromSynced keeps non-timestamp bracketed lyrics text', () => {
+  assertEq(
+    plainFromSynced('[Intro]\n[00:01.00]Sing it'),
+    '[Intro]\nSing it'
+  );
+});
 
-    assertEq(result, { lyrics: null, skipped: true });
-    assertEq(called, false, 'fetch should not be called without an API key');
-  });
+test('plainFromSynced nullish input → empty string', () => {
+  assertEq(plainFromSynced(null), '');
+  assertEq(plainFromSynced(undefined), '');
+});
 
-  await testAsync('Gemini success strips markdown, citations, and links', async () => {
-    process.env.GEMINI_API_KEY = 'unit-test-key';
-    let request;
-    global.fetch = async (url, opts) => {
-      request = { url, opts, body: JSON.parse(opts.body) };
-      return {
-        ok: true,
-        async json() {
-          return {
-            candidates: [{
-              content: {
-                parts: [{
-                  text: [
-                    '## Test title',
-                    '**Premiere ligne avec assez de mots pour rester valide** [1]',
-                    'Deuxieme ligne avec *emphase* et un lien (https://example.test)',
-                    'Troisieme ligne qui garde le resultat au-dessus du seuil ^[2]^',
-                  ].join('\n'),
-                }],
-              },
-            }],
-          };
-        },
-      };
-    };
+// ── rate-limit helpers ───────────────────────────────────────────────────────
 
-    const result = await suggestLyricsWithAI('Chanson', 'Artiste', { language: 'FR', genre: 'FOLK' });
+console.log(B('\nrate-limit helpers'));
 
-    assert(request.url.includes('/models/gemini-2.0-flash:generateContent?key=unit-test-key'), 'wrong Gemini URL');
-    assertEq(request.opts.method, 'POST');
-    assert(Array.isArray(request.body.tools) && request.body.tools[0].google_search, 'missing search grounding');
-    const prompt = request.body.contents[0].parts[0].text;
-    assert(prompt.includes('Return the lyrics in French.'), 'missing French language instruction');
-    assert(prompt.includes('a folk song'), 'missing genre hint');
-    assert(result.lyrics.includes('Premiere ligne'), 'missing cleaned lyrics');
-    assert(!/[#*]/.test(result.lyrics), `markdown not stripped: ${result.lyrics}`);
-    assert(!result.lyrics.includes('[1]'), `citation not stripped: ${result.lyrics}`);
-    assert(!result.lyrics.includes('https://example.test'), `link not stripped: ${result.lyrics}`);
-    assert(!result.lyrics.includes('^[2]^'), `superscript citation not stripped: ${result.lyrics}`);
-  });
+test('clientIp uses first forwarded IP before proxies', () => {
+  assertEq(
+    clientIp({ headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' } }),
+    '203.0.113.10'
+  );
+});
 
-  await testAsync('Gemini quota response returns skipped miss', async () => {
-    process.env.GEMINI_API_KEY = 'unit-test-key';
-    global.fetch = async () => ({
-      ok: false,
-      status: 429,
-      async text() { return 'quota exceeded'; },
-    });
+test('clientIp trims forwarded IP whitespace', () => {
+  assertEq(clientIp({ headers: { 'x-forwarded-for': ' 2001:db8::1 ' } }), '2001:db8::1');
+});
 
-    const result = await suggestLyricsWithAI('Song', 'Artist');
+test('clientIp missing forwarded header → unknown', () => {
+  assertEq(clientIp({ headers: {} }), 'unknown');
+});
 
-    assertEq(result, { lyrics: null, skipped: true });
-  });
+test('isMissingRateLimitTable detects PostgreSQL undefined_table errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '42P01', message: 'relation "rate_limits" does not exist' }), true);
+});
 
-  await testAsync('short AI response is treated as a miss', async () => {
-    process.env.GEMINI_API_KEY = 'unit-test-key';
-    global.fetch = async () => ({
-      ok: true,
-      async json() {
-        return {
-          candidates: [{
-            content: { parts: [{ text: 'Too short' }] },
-          }],
-        };
-      },
-    });
+test('isMissingRateLimitTable detects Neon missing relation messages', () => {
+  assertEq(isMissingRateLimitTable({ message: 'relation "rate_limits" does not exist' }), true);
+});
 
-    const result = await suggestLyricsWithAI('Song', 'Artist');
+test('isMissingRateLimitTable ignores unrelated database errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
+});
 
-    assertEq(result, { lyrics: null });
-  });
+// ── Summary ───────────────────────────────────────────────────────────────────
+
+console.log(B('\nhandler wrapper'));
+
+function makeRes({ headersSent = false } = {}) {
+  return {
+    headersSent,
+    statusCode: 200,
+    jsonCalls: 0,
+    body: undefined,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      this.jsonCalls++;
+      this.headersSent = true;
+      return this;
+    },
+  };
 }
 
-function restoreAsyncTestGlobals() {
-  global.fetch = ORIGINAL_FETCH;
-  if (ORIGINAL_GEMINI_API_KEY === undefined) {
-    delete process.env.GEMINI_API_KEY;
-  } else {
-    process.env.GEMINI_API_KEY = ORIGINAL_GEMINI_API_KEY;
+async function withStubbedLogger(fn) {
+  const loggerPath = require.resolve(path.join(__dirname, '../api/_logger'));
+  const handlerPath = require.resolve(path.join(__dirname, '../api/_handler'));
+  const originalLogger = require.cache[loggerPath];
+  const originalHandler = require.cache[handlerPath];
+  const logs = [];
+
+  delete require.cache[handlerPath];
+  require.cache[loggerPath] = {
+    id: loggerPath,
+    filename: loggerPath,
+    loaded: true,
+    exports: {
+      info: async (event, data = {}) => logs.push({ level: 'info', event, data }),
+      warn: async (event, data = {}) => logs.push({ level: 'warn', event, data }),
+      error: async (event, data = {}) => logs.push({ level: 'error', event, data }),
+    },
+  };
+
+  try {
+    const { wrap } = require(handlerPath);
+    return await fn(wrap, logs);
+  } finally {
+    delete require.cache[handlerPath];
+    if (originalHandler) require.cache[handlerPath] = originalHandler;
+    if (originalLogger) require.cache[loggerPath] = originalLogger;
+    else delete require.cache[loggerPath];
   }
 }
 
-function printSummary() {
+asyncTest('wrap logs successful requests with response status', async () => {
+  await withStubbedLogger(async (wrap, logs) => {
+    const res = makeRes();
+    const req = { method: 'GET', url: '/ok' };
+
+    await wrap(async (_req, res) => res.status(204).json({ ok: true }))(req, res);
+
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'info');
+    assertEq(logs[0].event, 'request');
+    assertEq(logs[0].data.method, 'GET');
+    assertEq(logs[0].data.url, '/ok');
+    assertEq(logs[0].data.status, 204);
+  });
+});
+
+asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () => {
+  await withStubbedLogger(async (wrap, logs) => {
+    const res = makeRes();
+    const req = { method: 'POST', url: '/boom' };
+
+    await wrap(async () => { throw new Error('database password leaked'); })(req, res);
+
+    assertEq(res.statusCode, 500);
+    assertEq(res.body, { error: 'Internal server error' });
+    assertEq(res.jsonCalls, 1);
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'error');
+    assertEq(logs[0].event, 'unhandled_error');
+    assertEq(logs[0].data.error, 'database password leaked');
+  });
+});
+
+asyncTest('wrap does not write a second response after headers were sent', async () => {
+  await withStubbedLogger(async (wrap, logs) => {
+    const res = makeRes({ headersSent: true });
+    const req = { method: 'GET', url: '/late-error' };
+
+    await wrap(async () => { throw new Error('late failure'); })(req, res);
+
+    assertEq(res.statusCode, 200);
+    assertEq(res.body, undefined);
+    assertEq(res.jsonCalls, 0);
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'error');
+  });
+});
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+
+(async () => {
+  for (const entry of pending) await runAsyncTest(entry);
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(
@@ -515,12 +601,4 @@ function printSummary() {
     failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
   }
   process.exit(failed > 0 ? 1 : 0);
-}
-
-testSuggestLyricsWithAI()
-  .finally(restoreAsyncTestGlobals)
-  .then(printSummary, err => {
-    failed++;
-    failures.push({ name: 'suggestLyricsWithAI setup', error: err.message });
-    printSummary();
-  });
+})();

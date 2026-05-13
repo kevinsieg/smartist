@@ -4,6 +4,7 @@ const { wrap } = require('../../_handler');
 const { checkRateLimit, clientIp } = require('../../_ratelimit');
 const { suggestLyricsWithAI } = require('../../_ai');
 const { makeMediaFn } = require('../../_media');
+const { LYRICS_SOURCES, plainFromSynced } = require('../../_lyrics');
 const logger = require('../../_logger');
 
 const MEDIA = {
@@ -11,12 +12,6 @@ const MEDIA = {
   sheet:    makeMediaFn({ keyPrefix: 'sheets/',   extraKey: 'sheetUrl',    maxBytes: 20*1024*1024, actionPrefix: 'sheet',    mimePrefix: 'application/pdf' }),
   playback: makeMediaFn({ keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50*1024*1024, actionPrefix: 'playback', allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' }),
 };
-
-const SOURCES = ['lyrics.ovh', 'lrclib', 'ai'];
-
-function _plainFromSynced(synced) {
-  return synced?.replace(/\[\d+:\d+\.\d+\]/g, '').trim() ?? '';
-}
 
 module.exports = wrap(async function handler(req, res) {
   // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
@@ -216,8 +211,8 @@ module.exports = wrap(async function handler(req, res) {
     const language = song.language || null;
     const genre    = song.genre    || null;
     const ctx      = { bandId: band.id, songId, title, artist, language, genre };
-    const found    = (lyrics, source) => res.json({ lyrics, source, sources: SOURCES });
-    const miss     = (aiSkipped = false) => res.json({ lyrics: null, sources: SOURCES, aiSkipped });
+    const found    = (lyrics, source) => res.json({ lyrics, source, sources: LYRICS_SOURCES });
+    const miss     = (aiSkipped = false) => res.json({ lyrics: null, sources: LYRICS_SOURCES, aiSkipped });
 
     try {
       const r = await fetch(
@@ -243,7 +238,7 @@ module.exports = wrap(async function handler(req, res) {
       );
       if (r.ok) {
         const data   = await r.json();
-        const lyrics = data.plainLyrics || _plainFromSynced(data.syncedLyrics);
+        const lyrics = data.plainLyrics || plainFromSynced(data.syncedLyrics);
         if (lyrics?.length > 50) {
           await logger.info('lyrics_suggest', { ...ctx, source: 'lrclib' });
           return found(lyrics.trim(), 'lrclib');
