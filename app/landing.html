@@ -54,43 +54,17 @@
   .hero-waveform { position: absolute; right: 0; top: 48px; display: flex; align-items: flex-end; gap: 3px; opacity: 0.1; pointer-events: none; }
   .hero-waveform span { display: block; width: 3px; background: #b06a2a; border-radius: 1px; }
 
-  /* ── Feature strip ── */
-  .features { background: #ede5d8; margin: 0 16px 32px; border: 1px solid #ddd5c8; border-radius: 3px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); }
-  .features-inner { display: flex; flex-wrap: wrap; }
+  /* ── Feature gallery (horizontal scroll) ── */
+  .features { background: #ede5d8; border-top: 1px solid #ddd5c8; border-bottom: 1px solid #ddd5c8; margin-bottom: 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none; cursor: grab; user-select: none; }
+  .features.is-dragging { cursor: grabbing; scroll-snap-type: none; }
+  .features::-webkit-scrollbar { display: none; }
+  .features-inner { display: flex; flex-wrap: nowrap; }
+  /* tile width: 85vw on small screens → 25vw on wide screens (4 visible) */
+  .feature-tile { flex: 0 0 max(260px, 25vw); padding: 32px 26px; border-right: 1px solid #ddd5c8; scroll-snap-align: start; }
+  .feature-tile:last-child { border-right: none; }
   .feature-tile h3 { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: #b06a2a; margin-bottom: 8px; }
-  .feature-tile p { font-size: 0.69rem; color: #666; line-height: 1.6; }
+  .feature-tile p { font-size: 0.72rem; color: #666; line-height: 1.65; }
   .feature-tile .badge { display: inline-block; font-size: 0.49rem; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 6px; border: 1px solid #c89060; color: #c89060; border-radius: 2px; margin-bottom: 7px; }
-
-  /* Default (< 360px): 1 column */
-  .feature-tile { flex: 0 0 100%; padding: 18px 16px; border-right: none; border-bottom: 1px solid #ddd5c8; }
-  .feature-tile:last-child { border-bottom: none; }
-
-  /* ≥ 360px: 2 columns */
-  @media (min-width: 360px) {
-    .feature-tile { flex: 0 0 50%; border-right: 1px solid #ddd5c8; border-bottom: 1px solid #ddd5c8; }
-    .feature-tile:last-child { border-bottom: 1px solid #ddd5c8; }
-    .feature-tile:nth-child(2n) { border-right: none; }
-    .feature-tile:nth-last-child(-n+2) { border-bottom: none; }
-  }
-
-  /* ≥ 540px: 4 columns */
-  @media (min-width: 540px) {
-    .feature-tile { flex: 0 0 25%; }
-    .feature-tile:nth-child(2n) { border-right: 1px solid #ddd5c8; }
-    .feature-tile:nth-child(4n) { border-right: none; }
-    .feature-tile:nth-last-child(-n+2) { border-bottom: 1px solid #ddd5c8; }
-    .feature-tile:nth-last-child(-n+4) { border-bottom: none; }
-  }
-
-  /* ≥ 1050px: single full-width flat strip */
-  @media (min-width: 1050px) {
-    .features { margin: 0; border: none; border-top: 1px solid #ddd5c8; border-bottom: 1px solid #ddd5c8; border-radius: 0; box-shadow: none; }
-    .features-inner { flex-wrap: nowrap; }
-    .feature-tile { flex: 1 1 0; padding: 26px 16px; border-right: 1px solid #ddd5c8; border-bottom: none; }
-    .feature-tile:nth-child(4n) { border-right: 1px solid #ddd5c8; }
-    .feature-tile:nth-last-child(-n+4) { border-bottom: none; }
-    .feature-tile:last-child { border-right: none; }
-  }
 
   /* ── Bottom section ── */
   .bottom { border-top: 1px solid #ddd5c8; padding: 48px 20px; }
@@ -307,6 +281,42 @@
 
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') btn.click();
+  });
+}());
+
+(function () {
+  var strip = document.querySelector('.features');
+  if (!strip) return;
+
+  // Convert vertical wheel to horizontal scroll
+  strip.addEventListener('wheel', function (e) {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      strip.scrollLeft += e.deltaY;
+    }
+  }, { passive: false });
+
+  // Drag to scroll
+  var dragging = false, startX, startScroll;
+  strip.addEventListener('mousedown', function (e) {
+    dragging = true;
+    startX = e.pageX;
+    startScroll = strip.scrollLeft;
+    strip.classList.add('is-dragging');
+  });
+  window.addEventListener('mouseup', function () {
+    if (!dragging) return;
+    dragging = false;
+    strip.classList.remove('is-dragging');
+  });
+  strip.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    e.preventDefault();
+    strip.scrollLeft = startScroll - (e.pageX - startX);
+  });
+  // Prevent link/button clicks firing after a drag
+  strip.addEventListener('click', function (e) {
+    if (Math.abs(strip.scrollLeft - startScroll) > 4) e.preventDefault();
   });
 }());
 </script>
