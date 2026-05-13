@@ -7,15 +7,24 @@
 
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const { validateSongIds, validateStr, validateNum, validateEmail } =
   require(path.join(__dirname, '../api/_validate'));
+const { checkCredentials } =
+  require(path.join(__dirname, '../api/_auth'));
 const { generateMagicToken, verifyMagicToken } =
   require(path.join(__dirname, '../api/_token'));
 const { setlistTitle } =
   require(path.join(__dirname, '../api/_pdf'));
 const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
+const { LYRICS_SOURCES, plainFromSynced } =
+  require(path.join(__dirname, '../api/_lyrics'));
+const { clientIp, isMissingRateLimitTable } =
+  require(path.join(__dirname, '../api/_ratelimit'));
+const gemaImport =
+  require(path.join(__dirname, '../api/[band]/gema/import'))._test;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -39,6 +48,7 @@ function recordFailure(name, e) {
   failures.push({ name, error: e.message });
   failed++;
 }
+const pending = [];
 
 function test(name, fn) {
   try {
@@ -69,6 +79,23 @@ async function runAsyncTests() {
     } catch (e) {
       recordFailure(name, e);
     }
+  }
+}
+
+function asyncTest(name, fn) {
+  pending.push({ name, fn });
+}
+
+async function runAsyncTest({ name, fn }) {
+  try {
+    await fn();
+    console.log(`  ${G('✓')} ${name}`);
+    passed++;
+  } catch (e) {
+    console.log(`  ${R('✗')} ${name}`);
+    console.log(`      ${R(e.message)}`);
+    failures.push({ name, error: e.message });
+    failed++;
   }
 }
 
@@ -573,6 +600,62 @@ asyncTest('checkRateLimit allows requests at the max and blocks above it', async
   assertEq(calls.length, 2);
   assertEq(calls[0].values[0], 'lyrics-suggest:1:2');
   assert(!Number.isNaN(Date.parse(calls[0].values[1])), 'window start should be an ISO timestamp');
+// ── lyrics helpers ───────────────────────────────────────────────────────────
+
+console.log(B('\nlyrics helpers'));
+
+test('LYRICS_SOURCES preserves provider fallback order', () => {
+  assertEq(LYRICS_SOURCES, ['lyrics.ovh', 'lrclib', 'ai']);
+});
+
+test('plainFromSynced strips LRCLIB timestamp markers and trims text', () => {
+  assertEq(
+    plainFromSynced('  [00:12.34]First line\n[01:02.03]Second line  '),
+    'First line\nSecond line'
+  );
+});
+
+test('plainFromSynced keeps non-timestamp bracketed lyrics text', () => {
+  assertEq(
+    plainFromSynced('[Intro]\n[00:01.00]Sing it'),
+    '[Intro]\nSing it'
+  );
+});
+
+test('plainFromSynced nullish input → empty string', () => {
+  assertEq(plainFromSynced(null), '');
+  assertEq(plainFromSynced(undefined), '');
+});
+
+// ── rate-limit helpers ───────────────────────────────────────────────────────
+
+console.log(B('\nrate-limit helpers'));
+
+test('clientIp uses first forwarded IP before proxies', () => {
+  assertEq(
+    clientIp({ headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' } }),
+    '203.0.113.10'
+  );
+});
+
+test('clientIp trims forwarded IP whitespace', () => {
+  assertEq(clientIp({ headers: { 'x-forwarded-for': ' 2001:db8::1 ' } }), '2001:db8::1');
+});
+
+test('clientIp missing forwarded header → unknown', () => {
+  assertEq(clientIp({ headers: {} }), 'unknown');
+});
+
+test('isMissingRateLimitTable detects PostgreSQL undefined_table errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '42P01', message: 'relation "rate_limits" does not exist' }), true);
+});
+
+test('isMissingRateLimitTable detects Neon missing relation messages', () => {
+  assertEq(isMissingRateLimitTable({ message: 'relation "rate_limits" does not exist' }), true);
+});
+
+test('isMissingRateLimitTable ignores unrelated database errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────
@@ -596,3 +679,118 @@ runAsyncTests()
     recordFailure('async test runner', e);
     printSummary();
   });
+console.log(B('\nhandler wrapper'));
+
+function makeRes({ headersSent = false } = {}) {
+  return {
+    headersSent,
+    statusCode: 200,
+    jsonCalls: 0,
+    body: undefined,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      this.jsonCalls++;
+      this.headersSent = true;
+      return this;
+    },
+  };
+}
+
+async function withStubbedLogger(fn) {
+  const loggerPath = require.resolve(path.join(__dirname, '../api/_logger'));
+  const handlerPath = require.resolve(path.join(__dirname, '../api/_handler'));
+  const originalLogger = require.cache[loggerPath];
+  const originalHandler = require.cache[handlerPath];
+  const logs = [];
+
+  delete require.cache[handlerPath];
+  require.cache[loggerPath] = {
+    id: loggerPath,
+    filename: loggerPath,
+    loaded: true,
+    exports: {
+      info: async (event, data = {}) => logs.push({ level: 'info', event, data }),
+      warn: async (event, data = {}) => logs.push({ level: 'warn', event, data }),
+      error: async (event, data = {}) => logs.push({ level: 'error', event, data }),
+    },
+  };
+
+  try {
+    const { wrap } = require(handlerPath);
+    return await fn(wrap, logs);
+  } finally {
+    delete require.cache[handlerPath];
+    if (originalHandler) require.cache[handlerPath] = originalHandler;
+    if (originalLogger) require.cache[loggerPath] = originalLogger;
+    else delete require.cache[loggerPath];
+  }
+}
+
+asyncTest('wrap logs successful requests with response status', async () => {
+  await withStubbedLogger(async (wrap, logs) => {
+    const res = makeRes();
+    const req = { method: 'GET', url: '/ok' };
+
+    await wrap(async (_req, res) => res.status(204).json({ ok: true }))(req, res);
+
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'info');
+    assertEq(logs[0].event, 'request');
+    assertEq(logs[0].data.method, 'GET');
+    assertEq(logs[0].data.url, '/ok');
+    assertEq(logs[0].data.status, 204);
+  });
+});
+
+asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () => {
+  await withStubbedLogger(async (wrap, logs) => {
+    const res = makeRes();
+    const req = { method: 'POST', url: '/boom' };
+
+    await wrap(async () => { throw new Error('database password leaked'); })(req, res);
+
+    assertEq(res.statusCode, 500);
+    assertEq(res.body, { error: 'Internal server error' });
+    assertEq(res.jsonCalls, 1);
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'error');
+    assertEq(logs[0].event, 'unhandled_error');
+    assertEq(logs[0].data.error, 'database password leaked');
+  });
+});
+
+asyncTest('wrap does not write a second response after headers were sent', async () => {
+  await withStubbedLogger(async (wrap, logs) => {
+    const res = makeRes({ headersSent: true });
+    const req = { method: 'GET', url: '/late-error' };
+
+    await wrap(async () => { throw new Error('late failure'); })(req, res);
+
+    assertEq(res.statusCode, 200);
+    assertEq(res.body, undefined);
+    assertEq(res.jsonCalls, 0);
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'error');
+  });
+});
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+
+(async () => {
+  for (const entry of pending) await runAsyncTest(entry);
+  const total = passed + failed;
+  console.log(`\n${B('─'.repeat(40))}`);
+  console.log(
+    `${G(`${passed} passed`)}  ` +
+    `${failed ? R(`${failed} failed`) : D('0 failed')}`
+  );
+  if (failures.length) {
+    console.log(R('\nFailed:'));
+    failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
+  }
+  process.exit(failed > 0 ? 1 : 0);
+})();
