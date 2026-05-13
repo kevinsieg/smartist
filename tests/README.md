@@ -9,14 +9,19 @@ Two test layers — unit tests (no infrastructure) and integration tests (need a
 Test pure helper functions with no server, database, or network required. Run anywhere Node 20+ is available.
 
 ```bash
-node tests/unit.js          # all suites, combined summary
-npm run test:unit           # same, via npm script
+npm run test:unit           # from repo root — runs unit.js and history-client.js
 
 # Individual suites (useful when working on one module)
 node tests/unit/validate.js
 node tests/unit/token.js
 node tests/unit/pdf.js
 node tests/unit/r2.js
+node tests/unit/lyrics.js
+node tests/unit/ratelimit.js
+node tests/unit/gema.js
+node tests/unit/ai.js
+node tests/unit/handler.js
+node tests/history-client.js
 ```
 
 **What is covered:**
@@ -27,6 +32,12 @@ node tests/unit/r2.js
 | `tests/unit/token.js` | `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
 | `tests/unit/pdf.js` | `api/_pdf.js` | `setlistTitle` |
 | `tests/unit/r2.js` | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
+| `tests/unit/lyrics.js` | `api/_lyrics.js` | `LYRICS_SOURCES`, `plainFromSynced` |
+| `tests/unit/ratelimit.js` | `api/_ratelimit.js` | `clientIp`, `isMissingRateLimitTable` |
+| `tests/unit/gema.js` | `api/[band]/gema/import.js` | CSV parsers, GEMA normalizers |
+| `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
+| `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
+| `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
 
 Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
 

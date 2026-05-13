@@ -1,3 +1,5 @@
+const path = require('path');
+
 const G = s => `\x1b[32m${s}\x1b[0m`;
 const R = s => `\x1b[31m${s}\x1b[0m`;
 const D = s => `\x1b[2m${s}\x1b[0m`;
@@ -12,6 +14,18 @@ function makeRunner() {
     test(name, fn) {
       try {
         fn();
+        console.log(`  ${G('✓')} ${name}`);
+        passed++;
+      } catch (e) {
+        console.log(`  ${R('✗')} ${name}`);
+        console.log(`      ${R(e.message)}`);
+        failures.push({ name, error: e.message });
+        failed++;
+      }
+    },
+    async testAsync(name, fn) {
+      try {
+        await fn();
         console.log(`  ${G('✓')} ${name}`);
         passed++;
       } catch (e) {
@@ -47,4 +61,18 @@ function makeRunner() {
   };
 }
 
-module.exports = { makeRunner };
+// Stubs _logger in the require cache so API modules loaded after this call
+// use no-op log functions. Safe to call multiple times (idempotent).
+function stubLogger() {
+  const loggerPath = require.resolve(path.join(__dirname, '../../api/_logger'));
+  if (!require.cache[loggerPath]) {
+    require.cache[loggerPath] = {
+      id: loggerPath,
+      filename: loggerPath,
+      loaded: true,
+      exports: { info: async () => {}, warn: async () => {}, error: async () => {} },
+    };
+  }
+}
+
+module.exports = { makeRunner, stubLogger };

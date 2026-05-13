@@ -8,8 +8,18 @@ const suites = [
   require('./unit/token'),
   require('./unit/pdf'),
   require('./unit/r2'),
+  require('./unit/lyrics'),
+  require('./unit/ratelimit'),
+  require('./unit/gema'),
+  require('./unit/ai'),
+  require('./unit/handler'),
 ];
 
-const r = makeRunner();
-for (const suite of suites) suite(r);
-process.exit(r.summary() > 0 ? 1 : 0);
+(async () => {
+  const r = makeRunner();
+  for (const suite of suites) {
+    const result = suite(r);
+    if (result instanceof Promise) await result;
+  }
+  process.exit(r.summary() > 0 ? 1 : 0);
+})();
