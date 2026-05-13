@@ -213,3 +213,13 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   count        INTEGER NOT NULL DEFAULT 1
 );
+
+-- ── subscribers ──────────────────────────────────────────────────────────────
+-- Landing page email sign-ups. No confirmation flow — simple collection only.
+
+CREATE TABLE IF NOT EXISTS subscribers (
+  id         SERIAL PRIMARY KEY,
+  email      TEXT NOT NULL UNIQUE,
+  source     TEXT NOT NULL DEFAULT 'landing',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
