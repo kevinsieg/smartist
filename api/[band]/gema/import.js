@@ -376,3 +376,15 @@ module.exports = wrap(async function handler(req, res) {
   await logger.info('gema_import', { bandId: band.id, type, dryRun, ...summary });
   return res.json({ dryRun, type, rows, summary });
 });
+
+module.exports._test = {
+  parseCsvLine,
+  parseCsv,
+  parseBeteiligte,
+  normalizeTitle,
+  normLanguage,
+  normRole,
+  parseShare,
+  parseDuration,
+  parseGermanDate,
+};

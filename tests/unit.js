@@ -20,6 +20,8 @@ const { LYRICS_SOURCES, plainFromSynced } =
   require(path.join(__dirname, '../api/_lyrics'));
 const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
+const gemaImport =
+  require(path.join(__dirname, '../api/[band]/gema/import'))._test;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
