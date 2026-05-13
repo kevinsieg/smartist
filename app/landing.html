@@ -42,12 +42,12 @@
 
   /* ── Hero ── */
   .hero { max-width: 680px; margin: 0 auto; padding: 72px 40px 56px; position: relative; overflow: hidden; }
-  .hero-label { font-size: 0.65rem; letter-spacing: 0.3em; text-transform: uppercase; color: #b06a2a; margin-bottom: 20px; }
-  .hero h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 700; line-height: 1.2; letter-spacing: 0.02em; margin-bottom: 20px; }
+  .hero-label { font-size: 0.68rem; letter-spacing: 0.3em; text-transform: uppercase; color: #b06a2a; margin-bottom: 20px; }
+  .hero h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; line-height: 1.2; letter-spacing: 0.02em; margin-bottom: 20px; }
   .hero h1 em { font-style: normal; color: #b06a2a; }
   .divider { width: 40px; height: 2px; background: #b06a2a; margin-bottom: 20px; }
-  .hero p { font-size: 0.92rem; color: #666; line-height: 1.7; max-width: 480px; margin-bottom: 36px; }
-  .cta-btn { display: inline-block; padding: 12px 30px; border: 1.5px solid #b06a2a; color: #b06a2a; font-family: 'Courier New', monospace; font-size: 0.78rem; letter-spacing: 0.22em; text-transform: uppercase; text-decoration: none; border-radius: 2px; transition: background 0.15s, color 0.15s; }
+  .hero p { font-size: 1rem; color: #666; line-height: 1.7; max-width: 480px; margin-bottom: 36px; }
+  .cta-btn { display: inline-block; padding: 12px 30px; border: 1.5px solid #b06a2a; color: #b06a2a; font-family: 'Courier New', monospace; font-size: 0.8rem; letter-spacing: 0.22em; text-transform: uppercase; text-decoration: none; border-radius: 2px; transition: background 0.15s, color 0.15s; }
   .cta-btn:hover, .cta-btn:focus { background: #b06a2a; color: #f5f0ea; }
 
   /* Waveform decoration */
@@ -55,26 +55,41 @@
   .hero-waveform span { display: block; width: 3px; background: #b06a2a; border-radius: 1px; }
 
   /* ── Feature gallery (horizontal scroll) ── */
-  .features { background: #ede5d8; border-top: 1px solid #ddd5c8; border-bottom: 1px solid #ddd5c8; margin-bottom: 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none; cursor: grab; user-select: none; }
+  .features-wrap { display: flex; align-items: center; gap: 8px; margin: 0 16px 32px; }
+  .features { flex: 1; min-width: 0; background: #ede5d8; border: 1px solid #ddd5c8; border-radius: 3px; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scroll-padding-left: 20px; scrollbar-width: none; cursor: grab; user-select: none; padding-left: 20px; }
   .features.is-dragging { cursor: grabbing; scroll-snap-type: none; }
   .features::-webkit-scrollbar { display: none; }
   .features-inner { display: flex; flex-wrap: nowrap; }
-  /* tile width: 85vw on small screens → 25vw on wide screens (4 visible) */
+  .features-inner::after { content: ''; display: block; flex: 0 0 20px; }
+  /* tile width: floor 260px on small screens, 25vw on wide (4 visible) */
   .feature-tile { flex: 0 0 max(260px, 25vw); padding: 32px 26px; border-right: 1px solid #ddd5c8; scroll-snap-align: start; }
   .feature-tile:last-child { border-right: none; }
-  .feature-tile h3 { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: #b06a2a; margin-bottom: 8px; }
-  .feature-tile p { font-size: 0.72rem; color: #666; line-height: 1.65; }
-  .feature-tile .badge { display: inline-block; font-size: 0.49rem; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 6px; border: 1px solid #c89060; color: #c89060; border-radius: 2px; margin-bottom: 7px; }
+  .feature-tile h3 { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: #b06a2a; margin-bottom: 8px; }
+  .feature-tile p { font-size: 0.78rem; color: #666; line-height: 1.65; }
+  .feature-tile .badge { display: inline-block; font-size: 0.52rem; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 6px; border: 1px solid #c89060; color: #c89060; border-radius: 2px; margin-bottom: 7px; }
+
+  /* Scroll arrows */
+  .scroll-arrow { flex: 0 0 auto; width: 30px; height: 30px; background: #f5f0ea; border: 1px solid #ddd5c8; color: #b06a2a; font-family: 'Courier New', monospace; font-size: 0.85rem; line-height: 1; cursor: pointer; border-radius: 2px; display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; padding: 0; }
+  .scroll-arrow:hover { background: #b06a2a; color: #f5f0ea; border-color: #b06a2a; }
+  .scroll-arrow[hidden] { display: none; }
+
+  /* ── Large screen: tighten vertical rhythm to show more above fold ── */
+  @media (min-width: 900px) {
+    .hero { padding: 48px 40px 36px; }
+    .hero p { margin-bottom: 28px; }
+    .feature-tile { padding: 22px 26px; }
+    .features-wrap { margin-bottom: 24px; }
+  }
 
   /* ── Bottom section ── */
   .bottom { border-top: 1px solid #ddd5c8; padding: 48px 20px; }
   .bottom-inner { max-width: 640px; margin: 0 auto; }
-  .bottom-label { font-size: 0.6rem; letter-spacing: 0.3em; text-transform: uppercase; color: #b06a2a; margin-bottom: 8px; }
-  .bottom-intro { font-size: 0.85rem; color: #555; line-height: 1.7; margin-bottom: 36px; }
+  .bottom-label { font-size: 0.65rem; letter-spacing: 0.3em; text-transform: uppercase; color: #b06a2a; margin-bottom: 8px; }
+  .bottom-intro { font-size: 0.9rem; color: #555; line-height: 1.7; margin-bottom: 36px; }
   .bottom-intro a { color: #b06a2a; text-decoration: underline; }
   @media (min-width: 640px) {
     .bottom { padding: 64px 40px; }
-    .bottom-intro { font-size: 0.88rem; max-width: 500px; }
+    .bottom-intro { font-size: 0.95rem; max-width: 500px; }
   }
 
   /* Plans */
@@ -106,6 +121,14 @@
   .subscribe-row button:hover { background: #b06a2a; color: #f5f0ea; }
   .subscribe-msg { font-size: 0.72rem; margin-top: 10px; color: #888; letter-spacing: 0.05em; min-height: 1.2em; }
 
+  /* ── Cookie notice ── */
+  .cookie-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a1a; border-top: 1px solid #333; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; z-index: 100; }
+  .cookie-bar p { font-size: 0.68rem; color: #888; line-height: 1.5; letter-spacing: 0.03em; }
+  .cookie-bar a { color: #b06a2a; text-decoration: underline; }
+  .cookie-bar button { flex: 0 0 auto; padding: 7px 18px; background: transparent; border: 1px solid #b06a2a; color: #b06a2a; font-family: 'Courier New', monospace; font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; border-radius: 2px; white-space: nowrap; transition: background 0.12s, color 0.12s; }
+  .cookie-bar button:hover { background: #b06a2a; color: #f5f0ea; }
+  @media (min-width: 640px) { .cookie-bar { padding: 14px 40px; } }
+
   /* ── Accessibility ── */
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
@@ -122,7 +145,7 @@
   <span class="wordmark">smartist</span>
   <nav>
     <a href="https://github.com/kevinsieg/smartist">github</a>
-    <a href="mailto:sieg.kevin@gmx.de">contact</a>
+    <a href="mailto:hi@smartist.studio">contact</a>
   </nav>
 </header>
 
@@ -145,9 +168,11 @@
   <h1>The toolkit independent musicians <em>actually</em> need.</h1>
   <div class="divider"></div>
   <p>Streamline your artist organisation and keep the full overview — setlists, song catalogue, PRO reporting, social reach, platform availability. Built by a musician, for musicians. No subscriptions. No bloat.</p>
-  <a class="cta-btn" href="/setlist">Open demo →</a>
+  <a class="cta-btn" href="/demo">Open demo →</a>
 </section>
 
+<div class="features-wrap">
+<button class="scroll-arrow scroll-arrow--prev" aria-label="Scroll left" hidden>&#8592;</button>
 <section class="features">
   <h2 class="sr-only">Features</h2>
   <div class="features-inner">
@@ -193,6 +218,8 @@
     </div>
   </div>
 </section>
+<button class="scroll-arrow scroll-arrow--next" aria-label="Scroll right">&#8594;</button>
+</div>
 
 <section class="bottom">
   <div class="bottom-inner">
@@ -224,7 +251,7 @@
           <li>PRO &amp; R2 integration setup</li>
           <li>Priority support</li>
         </ul>
-        <a class="plan-cta" href="mailto:sieg.kevin@gmx.de">Get in touch →</a>
+        <a class="plan-cta" href="mailto:hi@smartist.studio">Get in touch →</a>
       </div>
     </div>
     <div class="subscribe">
@@ -240,10 +267,24 @@
 
 <footer class="site-footer">
   <span class="wordmark">smartist</span>
-  <p>open source · MIT · built by a working musician · 2026</p>
+  <p>open source · MIT · built by a working musician · 2026 · <a href="/impressum" style="color:inherit;text-decoration:underline;">Impressum</a></p>
 </footer>
 
+<div class="cookie-bar" id="cookie-bar" style="display:none">
+  <p>This site stores no tracking cookies. The demo uses session storage for functionality only — cleared when you close the tab.</p>
+  <button id="cookie-ok">Got it</button>
+</div>
+
 <script>
+(function () {
+  var bar = document.getElementById('cookie-bar');
+  if (!localStorage.getItem('cookie_ok')) bar.style.display = '';
+  document.getElementById('cookie-ok').addEventListener('click', function () {
+    localStorage.setItem('cookie_ok', '1');
+    bar.style.display = 'none';
+  });
+}());
+
 (function () {
   var btn   = document.getElementById('sub-btn');
   var input = document.getElementById('sub-email');
@@ -288,6 +329,42 @@
   var strip = document.querySelector('.features');
   if (!strip) return;
 
+  var prev = document.querySelector('.scroll-arrow--prev');
+  var next = document.querySelector('.scroll-arrow--next');
+
+  function updateArrows() {
+    prev.hidden = strip.scrollLeft <= 0;
+    next.hidden = strip.scrollLeft >= strip.scrollWidth - strip.clientWidth - 1;
+  }
+
+  function scrollToTile(direction) {
+    var tiles = Array.from(strip.querySelectorAll('.feature-tile'));
+    var stripLeft = strip.getBoundingClientRect().left;
+    var pad = parseInt(getComputedStyle(strip).paddingLeft) || 0;
+    if (direction === 'next') {
+      for (var i = 0; i < tiles.length; i++) {
+        if (tiles[i].getBoundingClientRect().left > stripLeft + pad + 4) {
+          strip.scrollTo({ left: strip.scrollLeft + tiles[i].getBoundingClientRect().left - stripLeft - pad, behavior: 'smooth' });
+          return;
+        }
+      }
+    } else {
+      for (var i = tiles.length - 1; i >= 0; i--) {
+        if (tiles[i].getBoundingClientRect().left < stripLeft + pad - 4) {
+          strip.scrollTo({ left: strip.scrollLeft + tiles[i].getBoundingClientRect().left - stripLeft - pad, behavior: 'smooth' });
+          return;
+        }
+      }
+      strip.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+  }
+
+  prev.addEventListener('click', function () { scrollToTile('prev'); });
+  next.addEventListener('click', function () { scrollToTile('next'); });
+
+  strip.addEventListener('scroll', updateArrows, { passive: true });
+  updateArrows();
+
   // Convert vertical wheel to horizontal scroll
   strip.addEventListener('wheel', function (e) {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -299,6 +376,8 @@
   // Drag to scroll
   var dragging = false, startX, startScroll;
   strip.addEventListener('mousedown', function (e) {
+    // ignore clicks on the arrow buttons
+    if (e.target.closest('.scroll-arrow')) return;
     dragging = true;
     startX = e.pageX;
     startScroll = strip.scrollLeft;
@@ -314,7 +393,6 @@
     e.preventDefault();
     strip.scrollLeft = startScroll - (e.pageX - startX);
   });
-  // Prevent link/button clicks firing after a drag
   strip.addEventListener('click', function (e) {
     if (Math.abs(strip.scrollLeft - startScroll) > 4) e.preventDefault();
   });

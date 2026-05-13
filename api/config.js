@@ -12,6 +12,24 @@ module.exports = wrap(async function handler(req, res) {
       return res.status(429).json({ error: 'Too many requests — try again later' });
 
     const sql = getDb();
+    const source = req.body?.source === 'demo' ? 'demo' : 'landing';
+
+    if (source === 'demo') {
+      const meta = {
+        country: req.headers['x-vercel-ip-country'] || null,
+        region:  req.headers['x-vercel-ip-country-region'] || null,
+        city:    req.headers['x-vercel-ip-city'] ? decodeURIComponent(req.headers['x-vercel-ip-city']) : null,
+        ua:      req.headers['user-agent'] || null,
+        ref:     req.headers['referer'] || null,
+      };
+      await sql`
+        INSERT INTO subscribers (email, source, meta)
+        VALUES (${email}, 'demo', ${meta})
+        ON CONFLICT (email) DO UPDATE SET source = 'demo', meta = ${meta}
+      `;
+      return res.status(200).json({ ok: true });
+    }
+
     try {
       await sql`INSERT INTO subscribers (email, source) VALUES (${email}, 'landing')`;
     } catch (err) {
