@@ -10,7 +10,9 @@
     { "source": "/setlist-history", "destination": "/app/setlist-history.html" },
     { "source": "/songs",           "destination": "/app/songs.html" },
     { "source": "/stage",           "destination": "/app/stage.html" },
-    { "source": "/gema-import",     "destination": "/app/gema-import.html" }
+    { "source": "/gema-import",     "destination": "/app/gema-import.html" },
+    { "source": "/impressum",       "destination": "/app/impressum.html" },
+    { "source": "/demo",            "destination": "/app/demo.html" }
   ],
   "headers": [
     {

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legal Notice — smartist</title>
+<meta name="robots" content="noindex">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', Courier, monospace; background: #f5f0ea; color: #1a1a1a; -webkit-text-size-adjust: 100%; }
+
+  .site-header { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ddd5c8; }
+  .site-header .wordmark { font-size: 1rem; font-weight: 700; letter-spacing: 0.12em; text-decoration: none; color: inherit; }
+  .site-header nav a { font-size: 0.68rem; color: #999; text-decoration: none; letter-spacing: 0.1em; margin-left: 18px; }
+  .site-header nav a:hover { color: #b06a2a; }
+  @media (min-width: 640px) {
+    .site-header { padding: 20px 40px; }
+    .site-header .wordmark { font-size: 1.1rem; }
+    .site-header nav a { font-size: 0.72rem; margin-left: 24px; }
+  }
+
+  .content { max-width: 600px; margin: 0 auto; padding: 56px 24px 80px; }
+  .content-label { font-size: 0.65rem; letter-spacing: 0.3em; text-transform: uppercase; color: #b06a2a; margin-bottom: 16px; }
+  .content h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.02em; margin-bottom: 32px; }
+  .content h2 { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #b06a2a; margin: 28px 0 10px; }
+  .content p { font-size: 0.88rem; color: #555; line-height: 1.75; }
+  .content a { color: #b06a2a; text-decoration: underline; }
+  .contact-form { margin-top: 4px; display: flex; flex-direction: column; gap: 8px; }
+  .contact-form input, .contact-form textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd5c8; background: #f9f5ef; font-family: 'Courier New', monospace; font-size: 0.82rem; color: #1a1a1a; border-radius: 2px; outline: none; resize: vertical; }
+  .contact-form input::placeholder, .contact-form textarea::placeholder { color: #bbb; }
+  .contact-form textarea { min-height: 100px; }
+  .contact-form button { align-self: flex-start; padding: 10px 22px; background: transparent; border: 1px solid #b06a2a; color: #b06a2a; font-family: 'Courier New', monospace; font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; border-radius: 2px; transition: background 0.15s, color 0.15s; }
+  .contact-form button:hover { background: #b06a2a; color: #f5f0ea; }
+
+  .site-footer { border-top: 1px solid #ddd5c8; padding: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .site-footer .wordmark { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.12em; color: #aaa; }
+  .site-footer p { font-size: 0.62rem; color: #bbb; letter-spacing: 0.08em; }
+  @media (min-width: 640px) { .site-footer { padding: 24px 40px; } }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="wordmark" href="/">smartist</a>
+  <nav>
+    <a href="https://github.com/kevinsieg/smartist">github</a>
+    <a href="mailto:hi@smartist.studio">contact</a>
+  </nav>
+</header>
+
+<main class="content">
+  <div class="content-label">Legal</div>
+  <h1>Legal Notice</h1>
+
+  <h2>Publisher</h2>
+  <p>
+    Kevin Sieg<br>
+    5 Place Saint Etienne<br>
+    76400 Fécamp<br>
+    France
+  </p>
+
+  <h2>Contact</h2>
+  <form class="contact-form" id="cf">
+    <input type="text" id="cf-name" placeholder="Your name" required>
+    <input type="email" id="cf-email" placeholder="Your email" required>
+    <textarea id="cf-msg" placeholder="Message" required></textarea>
+    <button type="submit">Send message</button>
+  </form>
+  <p id="cf-sent" style="display:none;font-size:0.82rem;color:#b06a2a;">Your email client should open with the message pre-filled.</p>
+
+  <h2>Liability for content</h2>
+  <p>The contents of this site have been created with care. However, no guarantee can be given for the accuracy, completeness, or timeliness of the information provided.</p>
+
+  <h2>Liability for links</h2>
+  <p>This site contains links to external third-party websites. We have no influence over their content and accept no liability for it. The respective provider or operator of each linked page is solely responsible for its content.</p>
+</main>
+
+<footer class="site-footer">
+  <span class="wordmark">smartist</span>
+  <p>open source · MIT · built by a working musician · 2026</p>
+</footer>
+
+<script>
+(function () {
+  document.getElementById('cf').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('cf-name').value.trim();
+    var email = document.getElementById('cf-email').value.trim();
+    var msg = document.getElementById('cf-msg').value.trim();
+    var to = atob('bGVnYWxAc21hcnRpc3Quc3R1ZGlv');
+    window.location.href = 'mailto:' + to +
+      '?subject=' + encodeURIComponent('Contact — ' + name) +
+      '&body=' + encodeURIComponent(msg + '\n\nFrom: ' + name + ' <' + email + '>');
+    document.getElementById('cf-sent').style.display = 'block';
+  });
+}());
+</script>
+</body>
+</html>

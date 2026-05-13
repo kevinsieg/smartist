@@ -46,6 +46,10 @@ Setlist management and song catalogue for bands. Runs as a Vercel serverless app
 
 > The `salmons` Vercel project is a separate deployment for `www.salmons.fr` (the band website). It has nothing to do with this repo.
 
+### TODO
+
+- [ ] Create a [Resend](https://resend.com) account and add `RESEND_API_KEY` to Vercel env vars — needed to forward impressum contact form submissions and send demo access confirmations. Wire up `api/_email.js` (already implemented, just needs the key and a verified sending domain `@smartist.studio`).
+
 ---
 
 ## Environments
