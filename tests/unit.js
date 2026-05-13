@@ -49,18 +49,20 @@ function test(name, fn) {
 }
 
 function asyncTest(name, fn) {
-  pending.push((async () => {
-    try {
-      await fn();
-      console.log(`  ${G('✓')} ${name}`);
-      passed++;
-    } catch (e) {
-      console.log(`  ${R('✗')} ${name}`);
-      console.log(`      ${R(e.message)}`);
-      failures.push({ name, error: e.message });
-      failed++;
-    }
-  })());
+  pending.push({ name, fn });
+}
+
+async function runAsyncTest({ name, fn }) {
+  try {
+    await fn();
+    console.log(`  ${G('✓')} ${name}`);
+    passed++;
+  } catch (e) {
+    console.log(`  ${R('✗')} ${name}`);
+    console.log(`      ${R(e.message)}`);
+    failures.push({ name, error: e.message });
+    failed++;
+  }
 }
 
 // ── Assertions ───────────────────────────────────────────────────────────────
@@ -571,7 +573,7 @@ asyncTest('wrap does not write a second response after headers were sent', async
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 (async () => {
-  await Promise.all(pending);
+  for (const entry of pending) await runAsyncTest(entry);
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(
