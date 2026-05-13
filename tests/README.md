@@ -23,6 +23,7 @@ node tests/history-client.js # history page client helper tests only
 | `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
 | `api/_pdf.js` | `setlistTitle` |
 | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
+| `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `app/js/setlist-history.js` | response parsing helpers |
 
 The full unit suite runs automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
