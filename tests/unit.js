@@ -9,6 +9,15 @@ const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
+const loggerPath = require.resolve(path.join(__dirname, '../api/_logger'));
+require.cache[loggerPath] = {
+  exports: {
+    info: async () => {},
+    warn: async () => {},
+    error: async () => {},
+  },
+};
+
 const { validateSongIds, validateStr, validateNum, validateEmail } =
   require(path.join(__dirname, '../api/_validate'));
 const { checkCredentials } =
@@ -77,6 +86,19 @@ function assertEq(a, b, msg) {
   const bStr = JSON.stringify(b);
   if (aStr !== bStr)
     throw new Error(msg || `expected ${bStr}, got ${aStr}`);
+}
+
+async function testAsync(name, fn) {
+  try {
+    await fn();
+    console.log(`  ${G('✓')} ${name}`);
+    passed++;
+  } catch (e) {
+    console.log(`  ${R('✗')} ${name}`);
+    console.log(`      ${R(e.message)}`);
+    failures.push({ name, error: e.message });
+    failed++;
+  }
 }
 
 // ── validateSongIds ───────────────────────────────────────────────────────────
