@@ -2,26 +2,23 @@
 const path = require('path');
 const { makeRunner, stubLogger } = require('./_runner');
 
-// Stub _logger and _ratelimit at module level before config.js is required.
 stubLogger();
-const ratelimitPath = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
-if (!require.cache[ratelimitPath]) {
-  require.cache[ratelimitPath] = {
-    id: ratelimitPath, filename: ratelimitPath, loaded: true,
-    exports: {
-      checkRateLimit: async () => false,
-      clientIp: () => '127.0.0.1',
-      isMissingRateLimitTable: () => false,
-    },
-  };
-}
 
 // Re-require config.js backed by a given sql tagged-template stub.
+// Always overrides _ratelimit so the real DB-backed rate limiter is never called,
+// regardless of what's in require.cache from earlier suites.
 function makeHandler(sqlFn) {
   const dbPath = require.resolve(path.join(__dirname, '../../api/_db'));
+  const rlPath = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+
   delete require.cache[dbPath];
   delete require.cache[configPath];
+
+  require.cache[rlPath] = {
+    id: rlPath, filename: rlPath, loaded: true,
+    exports: { checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
+  };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
     exports: {
@@ -29,6 +26,7 @@ function makeHandler(sqlFn) {
       getBand: async () => ({ id: 1, slug: 'test', name: 'Test', config: {} }),
     },
   };
+
   return require(path.join(__dirname, '../../api/config'));
 }
 
