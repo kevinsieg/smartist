@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/", "has": [{ "type": "host", "value": "smartist.studio" }],     "destination": "/app/landing.html" },
+    { "source": "/", "has": [{ "type": "host", "value": "www.smartist.studio" }], "destination": "/app/landing.html" },
     { "source": "/",                "destination": "/app/index.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
     { "source": "/setlist",         "destination": "/app/setlist.html" },
