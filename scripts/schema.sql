@@ -215,11 +215,16 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 );
 
 -- ── subscribers ──────────────────────────────────────────────────────────────
--- Landing page email sign-ups. No confirmation flow — simple collection only.
+-- Landing page email sign-ups and demo access leads.
+-- source: 'landing' | 'demo'
+-- meta (demo only): { country, region, city, ua, ref }
 
 CREATE TABLE IF NOT EXISTS subscribers (
   id         SERIAL PRIMARY KEY,
   email      TEXT NOT NULL UNIQUE,
   source     TEXT NOT NULL DEFAULT 'landing',
+  meta       JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS meta JSONB;
