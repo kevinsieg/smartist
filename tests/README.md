@@ -9,9 +9,10 @@ Two test layers — unit tests (no infrastructure) and integration tests (need a
 Test pure helper functions with no server, database, or network required. Run anywhere Node 20+ is available.
 
 ```bash
-node tests/unit.js          # from repo root
-npm run test:unit           # from repo root (alias)
+npm run test:unit           # from repo root
 npm run test:unit           # from tests/ directory
+node tests/unit.js          # API helper unit tests only
+node tests/history-client.js # history page client helper tests only
 ```
 
 **What is covered:**
@@ -23,8 +24,9 @@ npm run test:unit           # from tests/ directory
 | `api/_pdf.js` | `setlistTitle` |
 | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
+| `app/js/setlist-history.js` | response parsing helpers |
 
-Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
+The full unit suite runs automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
 
 ---
 
