@@ -9,19 +9,24 @@ Two test layers — unit tests (no infrastructure) and integration tests (need a
 Test pure helper functions with no server, database, or network required. Run anywhere Node 20+ is available.
 
 ```bash
-node tests/unit.js          # from repo root
-npm run test:unit           # from repo root (alias)
-npm run test:unit           # from tests/ directory
+node tests/unit.js          # all suites, combined summary
+npm run test:unit           # same, via npm script
+
+# Individual suites (useful when working on one module)
+node tests/unit/validate.js
+node tests/unit/token.js
+node tests/unit/pdf.js
+node tests/unit/r2.js
 ```
 
 **What is covered:**
 
-| Module | Functions |
-|--------|-----------|
-| `api/_validate.js` | `validateSongIds`, `validateStr`, `validateNum`, `validateEmail` |
-| `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
-| `api/_pdf.js` | `setlistTitle` |
-| `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
+| Suite | Module | Functions |
+|-------|--------|-----------|
+| `tests/unit/validate.js` | `api/_validate.js` | `validateSongIds`, `validateStr`, `validateNum`, `validateEmail` |
+| `tests/unit/token.js` | `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
+| `tests/unit/pdf.js` | `api/_pdf.js` | `setlistTitle` |
+| `tests/unit/r2.js` | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 
 Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
 
