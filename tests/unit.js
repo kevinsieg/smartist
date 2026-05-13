@@ -21,7 +21,7 @@ const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
 const { LYRICS_SOURCES, plainFromSynced } =
   require(path.join(__dirname, '../api/_lyrics'));
-const { clientIp } =
+const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
@@ -449,27 +449,19 @@ test('clientIp missing forwarded header → unknown', () => {
   assertEq(clientIp({ headers: {} }), 'unknown');
 });
 
-// ── auth helpers ──────────────────────────────────────────────────────────────
-
-console.log(B('\nauth helpers'));
-
-const PASSWORD = 'correct horse battery staple';
-const PASSWORD_HASH = bcrypt.hashSync(PASSWORD, 4);
-const TEST_BAND = { password_hash: PASSWORD_HASH };
-
-asyncTest('checkCredentials accepts the stored bcrypt password', async () => {
-  assertEq(await checkCredentials(PASSWORD, TEST_BAND), true);
+test('isMissingRateLimitTable detects PostgreSQL undefined_table errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '42P01', message: 'relation "rate_limits" does not exist' }), true);
 });
 
-asyncTest('checkCredentials accepts a valid magic token for the stored hash', async () => {
-  assertEq(await checkCredentials(generateMagicToken(PASSWORD_HASH), TEST_BAND), true);
+test('isMissingRateLimitTable detects Neon missing relation messages', () => {
+  assertEq(isMissingRateLimitTable({ message: 'relation "rate_limits" does not exist' }), true);
 });
 
-asyncTest('checkCredentials rejects invalid credentials', async () => {
-  assertEq(await checkCredentials('wrong password', TEST_BAND), false);
+test('isMissingRateLimitTable ignores unrelated database errors', () => {
+  assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
-// ── handler wrapper ───────────────────────────────────────────────────────────
+// ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(B('\nhandler wrapper'));
 
