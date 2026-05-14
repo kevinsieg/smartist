@@ -108,6 +108,37 @@ function parseGermanDate(s) {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
+async function replaceRightholdersForWork(sql, workId, rightholders) {
+  await sql`
+    WITH cleared AS (
+      DELETE FROM gema_rightholders WHERE gema_work_id = ${workId}
+    )
+    INSERT INTO gema_rightholders
+      (gema_work_id, name, ip_name_number, role, role_order, publisher_relation,
+       ar_share, vr_share, ar_share_cumulated, vr_share_cumulated,
+       society_ar, society_vr, represents_name, represents_ip, represents_role)
+    SELECT ${workId}, r.*
+    FROM unnest(
+      ${rightholders.map(r => r.name)}::text[],
+      ${rightholders.map(r => r.ip_name_number)}::text[],
+      ${rightholders.map(r => r.role)}::text[],
+      ${rightholders.map(r => r.role_order)}::text[],
+      ${rightholders.map(r => r.publisher_relation)}::text[],
+      ${rightholders.map(r => r.ar_share)}::numeric[],
+      ${rightholders.map(r => r.vr_share)}::numeric[],
+      ${rightholders.map(r => r.ar_share_cumulated)}::numeric[],
+      ${rightholders.map(r => r.vr_share_cumulated)}::numeric[],
+      ${rightholders.map(r => r.society_ar)}::text[],
+      ${rightholders.map(r => r.society_vr)}::text[],
+      ${rightholders.map(r => r.represents_name)}::text[],
+      ${rightholders.map(r => r.represents_ip)}::text[],
+      ${rightholders.map(r => r.represents_role)}::text[]
+    ) AS r(name, ip_name_number, role, role_order, publisher_relation,
+           ar_share, vr_share, ar_share_cumulated, vr_share_cumulated,
+           society_ar, society_vr, represents_name, represents_ip, represents_role)
+  `;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 module.exports = wrap(async function handler(req, res) {
@@ -343,21 +374,7 @@ module.exports = wrap(async function handler(req, res) {
 
     if (!dryRun && found) {
       try {
-        await sql`DELETE FROM gema_rightholders WHERE gema_work_id = ${work.id}`;
-        for (const r of rightholders) {
-          await sql`
-            INSERT INTO gema_rightholders
-              (gema_work_id, name, ip_name_number, role, role_order, publisher_relation,
-               ar_share, vr_share, ar_share_cumulated, vr_share_cumulated,
-               society_ar, society_vr, represents_name, represents_ip, represents_role)
-            VALUES
-              (${work.id}, ${r.name}, ${r.ip_name_number}, ${r.role}, ${r.role_order},
-               ${r.publisher_relation}, ${r.ar_share}, ${r.vr_share},
-               ${r.ar_share_cumulated}, ${r.vr_share_cumulated},
-               ${r.society_ar}, ${r.society_vr},
-               ${r.represents_name}, ${r.represents_ip}, ${r.represents_role})
-          `;
-        }
+        await replaceRightholdersForWork(sql, work.id, rightholders);
       } catch (err) {
         await logger.error('gema_import_row_error', { bandId: band.id, type, workNumber: wn, error: err.message });
         row.error = err.message;
@@ -387,4 +404,5 @@ module.exports._test = {
   parseShare,
   parseDuration,
   parseGermanDate,
+  replaceRightholdersForWork,
 };

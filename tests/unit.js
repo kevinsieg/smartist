@@ -480,6 +480,63 @@ test('isMissingRateLimitTable ignores unrelated database errors', () => {
   assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
+// ── GEMA import helpers ───────────────────────────────────────────────────────
+
+console.log(B('\nGEMA import helpers'));
+
+testAsync('replaceRightholdersForWork uses one atomic SQL statement', async () => {
+  const calls = [];
+  const sql = (strings, ...values) => {
+    calls.push({ text: strings.join(' '), values });
+    return Promise.resolve([]);
+  };
+
+  await gemaImport.replaceRightholdersForWork(sql, 42, [
+    {
+      name: 'ALICE',
+      ip_name_number: '100',
+      role: 'composer',
+      role_order: null,
+      publisher_relation: null,
+      ar_share: 50,
+      vr_share: null,
+      ar_share_cumulated: 50,
+      vr_share_cumulated: null,
+      society_ar: 'GEMA',
+      society_vr: null,
+      represents_name: null,
+      represents_ip: null,
+      represents_role: null,
+    },
+    {
+      name: 'BOB',
+      ip_name_number: '200',
+      role: 'lyricist',
+      role_order: null,
+      publisher_relation: null,
+      ar_share: 50,
+      vr_share: null,
+      ar_share_cumulated: 50,
+      vr_share_cumulated: null,
+      society_ar: 'GEMA',
+      society_vr: null,
+      represents_name: null,
+      represents_ip: null,
+      represents_role: null,
+    },
+  ]);
+
+  assertEq(calls.length, 1, 'delete and insert must be one PostgreSQL statement');
+  assert(calls[0].text.includes('WITH cleared AS'), calls[0].text);
+  assert(calls[0].text.includes('DELETE FROM gema_rightholders'), calls[0].text);
+  assert(calls[0].text.includes('INSERT INTO gema_rightholders'), calls[0].text);
+  assert(calls[0].text.includes('FROM unnest'), calls[0].text);
+  assertEq(calls[0].values[0], 42);
+  assertEq(calls[0].values[1], 42);
+  assertEq(calls[0].values[2], ['ALICE', 'BOB']);
+  assertEq(calls[0].values[4], ['composer', 'lyricist']);
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 async function withAiEnv(apiKey, fetchImpl, fn) {
