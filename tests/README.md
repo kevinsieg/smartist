@@ -20,9 +20,14 @@ node tests/history-client.js # history page client helper tests only
 | Module | Functions |
 |--------|-----------|
 | `api/_validate.js` | `validateSongIds`, `validateStr`, `validateNum`, `validateEmail` |
+| `api/_auth.js` | `checkCredentials` |
 | `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
 | `api/_pdf.js` | `setlistTitle` |
 | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
+| `api/_lyrics.js` | lyric source ordering and synced lyric timestamp stripping |
+| `api/_ratelimit.js` | client IP parsing and missing-table detection |
+| `api/_handler.js` | request logging and sanitized 500 handling |
+| `api/[band]/gema/import.js` | CSV, title, language, role, share, duration, and date parsers |
 | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `app/js/setlist-history.js` | response parsing helpers |
 
