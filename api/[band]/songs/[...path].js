@@ -106,7 +106,7 @@ module.exports = wrap(async function handler(req, res) {
              g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue
       FROM setlists sl
       JOIN setlist_songs ss ON ss.setlist_id = sl.id
-      LEFT JOIN gigs g ON sl.gig_id = g.id
+      LEFT JOIN gigs g ON sl.gig_id = g.id AND g.band_id = sl.band_id
       WHERE ss.song_id = ${songId} AND sl.band_id = ${band.id}
       ORDER BY sl.created_at DESC
     `;

@@ -672,7 +672,46 @@ async function testWrite(slug, token, firstSong) {
       assertStatus(res, json, 400);
     });
 
+    await test('POST /setlists unknown song_id → 400', async () => {
+      const { res, json } = await POST(`/api/${slug}/setlists`,
+        { title: 'x', song_ids: [2147483647] }, { token });
+      assertStatus(res, json, 400);
+    });
+
+    await test('POST /setlists unknown gig_id → 400', async () => {
+      const { res, json } = await POST(`/api/${slug}/setlists`,
+        { title: 'x', song_ids: [firstSong.id], gig_id: 2147483647 }, { token });
+      assertStatus(res, json, 400);
+    });
+
     if (setlist) {
+      await test('PUT /setlists/:id missing song_ids → 400 without clearing songs', async () => {
+        const before = await GET(`/api/${slug}/setlists/${setlist.id}`);
+        assertStatus(before.res, before.json, 200);
+        const beforeIds = before.json.songs.map(s => s.id);
+
+        const { res, json } = await PUT(`/api/${slug}/setlists/${setlist.id}`,
+          { title: '[TEST] missing songs' }, { token });
+        assertStatus(res, json, 400);
+
+        const after = await GET(`/api/${slug}/setlists/${setlist.id}`);
+        assertStatus(after.res, after.json, 200);
+        assert(JSON.stringify(after.json.songs.map(s => s.id)) === JSON.stringify(beforeIds),
+          'song list changed after rejected PUT');
+      });
+
+      await test('PUT /setlists/:id unknown song_id → 400', async () => {
+        const { res, json } = await PUT(`/api/${slug}/setlists/${setlist.id}`,
+          { title: '[TEST] bad song', song_ids: [2147483647] }, { token });
+        assertStatus(res, json, 400);
+      });
+
+      await test('PUT /setlists/:id unknown gig_id → 400', async () => {
+        const { res, json } = await PUT(`/api/${slug}/setlists/${setlist.id}`,
+          { title: '[TEST] bad gig', song_ids: [firstSong.id], gig_id: 2147483647 }, { token });
+        assertStatus(res, json, 400);
+      });
+
       await test('PUT /setlists/:id updates metadata + songs → 200', async () => {
         const { res, json } = await PUT(`/api/${slug}/setlists/${setlist.id}`,
           { title: '[TEST] updated', song_ids: [firstSong.id] }, { token });

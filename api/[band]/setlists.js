@@ -6,6 +6,27 @@ const { sendEmail } = require('../_email');
 const { wrap } = require('../_handler');
 const logger = require('../_logger');
 
+async function validateSetlistRefs(sql, bandId, songIds, gigId) {
+  if (songIds.length) {
+    const [songCheck] = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM songs
+      WHERE band_id = ${bandId} AND id = ANY(${songIds}::int[])
+    `;
+    if (Number(songCheck?.count) !== songIds.length)
+      return { ok: false, error: 'Invalid song_ids' };
+  }
+
+  if (gigId !== null) {
+    const [gig] = await sql`
+      SELECT id FROM gigs WHERE id = ${gigId} AND band_id = ${bandId}
+    `;
+    if (!gig) return { ok: false, error: 'Invalid gig_id' };
+  }
+
+  return { ok: true };
+}
+
 module.exports = wrap(async function handler(req, res) {
   const { band: slug } = req.query;
   const sql = getDb();
@@ -19,10 +40,11 @@ module.exports = wrap(async function handler(req, res) {
         g.name  AS gig_name,
         g.date  AS gig_date,
         g.venue AS gig_venue,
-        COUNT(ss.song_id)::int AS song_count
+        COUNT(count_songs.id)::int AS song_count
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
+      LEFT JOIN songs count_songs ON count_songs.id = ss.song_id AND count_songs.band_id = s.band_id
       WHERE s.band_id = ${band.id}
       GROUP BY s.id, g.name, g.date, g.venue
       ORDER BY s.created_at DESC
@@ -50,7 +72,11 @@ module.exports = wrap(async function handler(req, res) {
       `;
 
       const sourceSongs = await sql`
-        SELECT song_id, position FROM setlist_songs WHERE setlist_id = ${dupId} ORDER BY position
+        SELECT ss.song_id, ss.position
+        FROM setlist_songs ss
+        JOIN songs ON songs.id = ss.song_id AND songs.band_id = ${band.id}
+        WHERE ss.setlist_id = ${dupId}
+        ORDER BY ss.position
       `;
       if (sourceSongs.length > 0) {
         const copyIds   = sourceSongs.map(() => copy.id);
@@ -64,10 +90,11 @@ module.exports = wrap(async function handler(req, res) {
 
       const [created] = await sql`
         SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue,
-               COUNT(ss.song_id)::int AS song_count
+               COUNT(count_songs.id)::int AS song_count
         FROM setlists s
-        LEFT JOIN gigs g ON s.gig_id = g.id
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
         LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
+        LEFT JOIN songs count_songs ON count_songs.id = ss.song_id AND count_songs.band_id = s.band_id
         WHERE s.id = ${copy.id}
         GROUP BY s.id, g.name, g.date, g.venue
       `;
@@ -82,7 +109,7 @@ module.exports = wrap(async function handler(req, res) {
       const [setlist] = await sql`
         SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue
         FROM setlists s
-        LEFT JOIN gigs g ON s.gig_id = g.id
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
         WHERE s.id = ${shareId} AND s.band_id = ${band.id}
       `;
       if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
@@ -90,7 +117,7 @@ module.exports = wrap(async function handler(req, res) {
       const songs = await sql`
         SELECT songs.*, ss.position
         FROM setlist_songs ss
-        JOIN songs ON ss.song_id = songs.id
+        JOIN songs ON ss.song_id = songs.id AND songs.band_id = ${band.id}
         WHERE ss.setlist_id = ${shareId}
         ORDER BY ss.position
       `;
@@ -132,23 +159,33 @@ module.exports = wrap(async function handler(req, res) {
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
 
+    const refs = await validateSetlistRefs(sql, band.id, validIds, gigId);
+    if (!refs.ok) return res.status(400).json({ error: refs.error });
+
+    const positions = validIds.map((_, i) => i);
     const [setlist] = await sql`
-      INSERT INTO setlists (band_id, title, gig_id, comment)
-      VALUES (${band.id}, ${title}, ${gigId}, ${comment})
-      RETURNING *
-    `;
-    const setlistIds = validIds.map(() => setlist.id);
-    const positions  = validIds.map((_, i) => i);
-    await sql`
-      INSERT INTO setlist_songs (setlist_id, song_id, position)
-      SELECT * FROM unnest(${setlistIds}::int[], ${validIds}::int[], ${positions}::int[])
+      WITH created AS (
+        INSERT INTO setlists (band_id, title, gig_id, comment)
+        VALUES (${band.id}, ${title}, ${gigId}, ${comment})
+        RETURNING *
+      ), inserted AS (
+        INSERT INTO setlist_songs (setlist_id, song_id, position)
+        SELECT created.id, songs.song_id, songs.position
+        FROM created
+        CROSS JOIN unnest(${validIds}::int[], ${positions}::int[]) AS songs(song_id, position)
+        RETURNING 1
+      )
+      SELECT created.*
+      FROM created
+      CROSS JOIN (SELECT COUNT(*) FROM inserted) inserted_count
     `;
     const [created] = await sql`
       SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue,
-             COUNT(ss.song_id)::int AS song_count
+             COUNT(count_songs.id)::int AS song_count
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
+      LEFT JOIN songs count_songs ON count_songs.id = ss.song_id AND count_songs.band_id = s.band_id
       WHERE s.id = ${setlist.id}
       GROUP BY s.id, g.name, g.date, g.venue
     `;

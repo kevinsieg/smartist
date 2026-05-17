@@ -6,6 +6,27 @@ const { sendEmail } = require('../../_email');
 const { wrap } = require('../../_handler');
 const logger = require('../../_logger');
 
+async function validateSetlistRefs(sql, bandId, songIds, gigId) {
+  if (songIds.length) {
+    const [songCheck] = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM songs
+      WHERE band_id = ${bandId} AND id = ANY(${songIds}::int[])
+    `;
+    if (Number(songCheck?.count) !== songIds.length)
+      return { ok: false, error: 'Invalid song_ids' };
+  }
+
+  if (gigId !== null) {
+    const [gig] = await sql`
+      SELECT id FROM gigs WHERE id = ${gigId} AND band_id = ${bandId}
+    `;
+    if (!gig) return { ok: false, error: 'Invalid gig_id' };
+  }
+
+  return { ok: true };
+}
+
 module.exports = wrap(async function handler(req, res) {
   // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
   const pathParts = Array.isArray(req.query.path) && req.query.path.length
@@ -35,7 +56,7 @@ module.exports = wrap(async function handler(req, res) {
     const [setlist] = await sql`
       SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
       WHERE s.id = ${setlistId} AND s.band_id = ${band.id}
     `;
     if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
@@ -44,7 +65,7 @@ module.exports = wrap(async function handler(req, res) {
       const songs = await sql`
         SELECT songs.*, ss.position
         FROM setlist_songs ss
-        JOIN songs ON ss.song_id = songs.id
+        JOIN songs ON ss.song_id = songs.id AND songs.band_id = ${band.id}
         WHERE ss.setlist_id = ${setlistId}
         ORDER BY ss.position
       `;
@@ -54,7 +75,9 @@ module.exports = wrap(async function handler(req, res) {
     // PUT — update metadata + rebuild song list
     const { title: rawTitle, comment: rawComment, gig_id: rawGigId, song_ids } = req.body ?? {};
 
-    const validIds = validateSongIds(song_ids ?? []);
+    if (!Array.isArray(song_ids))
+      return res.status(400).json({ error: 'song_ids array is required' });
+    const validIds = validateSongIds(song_ids);
     if (!validIds) return res.status(400).json({ error: 'Invalid song_ids' });
 
     const title = validateStr(rawTitle, 200);
@@ -65,27 +88,40 @@ module.exports = wrap(async function handler(req, res) {
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
 
-    await sql`
-      UPDATE setlists SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
-      WHERE id = ${setlistId} AND band_id = ${band.id}
-    `;
-    await sql`DELETE FROM setlist_songs WHERE setlist_id = ${setlistId}`;
+    const refs = await validateSetlistRefs(sql, band.id, validIds, gigId);
+    if (!refs.ok) return res.status(400).json({ error: refs.error });
 
-    if (validIds.length > 0) {
-      const setlistIds = validIds.map(() => setlistId);
-      const positions  = validIds.map((_, i) => i);
-      await sql`
+    const positions = validIds.map((_, i) => i);
+    await sql`
+      WITH updated AS (
+        UPDATE setlists
+        SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
+        WHERE id = ${setlistId} AND band_id = ${band.id}
+        RETURNING id
+      ), deleted AS (
+        DELETE FROM setlist_songs ss
+        USING updated
+        WHERE ss.setlist_id = updated.id
+        RETURNING ss.setlist_id
+      ), inserted AS (
         INSERT INTO setlist_songs (setlist_id, song_id, position)
-        SELECT * FROM unnest(${setlistIds}::int[], ${validIds}::int[], ${positions}::int[])
-      `;
-    }
+        SELECT updated.id, songs.song_id, songs.position
+        FROM updated
+        CROSS JOIN unnest(${validIds}::int[], ${positions}::int[]) AS songs(song_id, position)
+        RETURNING 1
+      )
+      SELECT
+        (SELECT COUNT(*)::int FROM deleted) AS deleted_count,
+        (SELECT COUNT(*)::int FROM inserted) AS inserted_count
+    `;
 
     const [updated] = await sql`
       SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue,
-             COUNT(ss.song_id)::int AS song_count
+             COUNT(count_songs.id)::int AS song_count
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
+      LEFT JOIN songs count_songs ON count_songs.id = ss.song_id AND count_songs.band_id = s.band_id
       WHERE s.id = ${setlistId} AND s.band_id = ${band.id}
       GROUP BY s.id, g.name, g.date, g.venue
     `;
@@ -111,9 +147,11 @@ module.exports = wrap(async function handler(req, res) {
     `;
 
     const sourceSongs = await sql`
-      SELECT song_id, position FROM setlist_songs
-      WHERE setlist_id = ${setlistId}
-      ORDER BY position
+      SELECT ss.song_id, ss.position
+      FROM setlist_songs ss
+      JOIN songs ON songs.id = ss.song_id AND songs.band_id = ${band.id}
+      WHERE ss.setlist_id = ${setlistId}
+      ORDER BY ss.position
     `;
 
     if (sourceSongs.length > 0) {
@@ -128,10 +166,11 @@ module.exports = wrap(async function handler(req, res) {
 
     const [created] = await sql`
       SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue,
-             COUNT(ss.song_id)::int AS song_count
+             COUNT(count_songs.id)::int AS song_count
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
+      LEFT JOIN songs count_songs ON count_songs.id = ss.song_id AND count_songs.band_id = s.band_id
       WHERE s.id = ${copy.id}
       GROUP BY s.id, g.name, g.date, g.venue
     `;
@@ -148,7 +187,7 @@ module.exports = wrap(async function handler(req, res) {
     const [setlist] = await sql`
       SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.band_id = s.band_id
       WHERE s.id = ${setlistId} AND s.band_id = ${band.id}
     `;
     if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
@@ -156,7 +195,7 @@ module.exports = wrap(async function handler(req, res) {
     const songs = await sql`
       SELECT songs.*, ss.position
       FROM setlist_songs ss
-      JOIN songs ON ss.song_id = songs.id
+      JOIN songs ON ss.song_id = songs.id AND songs.band_id = ${band.id}
       WHERE ss.setlist_id = ${setlistId}
       ORDER BY ss.position
     `;
