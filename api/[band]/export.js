@@ -16,6 +16,7 @@ module.exports = wrap(async function handler(req, res) {
     sql`
       SELECT ss.* FROM setlist_songs ss
       JOIN setlists s ON ss.setlist_id = s.id
+      JOIN songs ON ss.song_id = songs.id AND songs.band_id = s.band_id
       WHERE s.band_id = ${band.id}
       ORDER BY ss.setlist_id, ss.position
     `
