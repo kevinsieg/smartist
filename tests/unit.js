@@ -32,8 +32,13 @@ const { LYRICS_SOURCES, plainFromSynced } =
   require(path.join(__dirname, '../api/_lyrics'));
 const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
+const { suggestLyricsWithAI } =
+  require(path.join(__dirname, '../api/_ai'));
 const gemaImport =
   require(path.join(__dirname, '../api/[band]/gema/import'))._test;
+
+const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const ORIGINAL_FETCH = global.fetch;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -44,7 +49,6 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 // ── Runner ───────────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 const failures = [];
-const asyncTests = [];
 const pending = [];
 
 function test(name, fn) {
@@ -60,22 +64,6 @@ function test(name, fn) {
   }
 }
 
-function testAsync(name, fn) {
-  asyncTests.push({ name, fn });
-}
-
-async function runAsyncTests() {
-  for (const { name, fn } of asyncTests) {
-    try {
-      await fn();
-      console.log(`  ${G('✓')} ${name}`);
-      passed++;
-    } catch (e) {
-      console.log(`  ${R('✗')} ${name}`);
-      console.log(`      ${R(e.message)}`);
-      failures.push({ name, error: e.message });
-      failed++;
-    }
 function asyncTest(name, fn) {
   pending.push({ name, fn });
 }
@@ -105,17 +93,14 @@ function assertEq(a, b, msg) {
     throw new Error(msg || `expected ${bStr}, got ${aStr}`);
 }
 
-async function testAsync(name, fn) {
+async function assertRejects(fn, expectedMessage) {
   try {
     await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
   } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
+    if (expectedMessage !== undefined) assertEq(e.message, expectedMessage);
+    return e;
   }
+  throw new Error('expected rejection');
 }
 
 // ── validateSongIds ───────────────────────────────────────────────────────────
@@ -502,7 +487,95 @@ test('isMissingRateLimitTable ignores unrelated database errors', () => {
   assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────────
+async function withStubbedRateLimit({ rows = [{ count: 1 }], error } = {}, fn) {
+  const dbPath = require.resolve(path.join(__dirname, '../api/_db'));
+  const rateLimitPath = require.resolve(path.join(__dirname, '../api/_ratelimit'));
+  const originalDb = require.cache[dbPath];
+  const originalLogger = require.cache[loggerPath];
+  const originalRateLimit = require.cache[rateLimitPath];
+  const queries = [];
+  const logs = [];
+
+  const sql = async (strings, ...values) => {
+    queries.push({ strings, values });
+    if (error) throw error;
+    return rows;
+  };
+
+  delete require.cache[rateLimitPath];
+  require.cache[dbPath] = {
+    id: dbPath,
+    filename: dbPath,
+    loaded: true,
+    exports: { getDb: () => sql },
+  };
+  require.cache[loggerPath] = {
+    id: loggerPath,
+    filename: loggerPath,
+    loaded: true,
+    exports: {
+      info: async (event, data = {}) => logs.push({ level: 'info', event, data }),
+      warn: async (event, data = {}) => logs.push({ level: 'warn', event, data }),
+      error: async (event, data = {}) => logs.push({ level: 'error', event, data }),
+    },
+  };
+
+  try {
+    const rateLimit = require(rateLimitPath);
+    return await fn(rateLimit, queries, logs);
+  } finally {
+    delete require.cache[rateLimitPath];
+    if (originalRateLimit) require.cache[rateLimitPath] = originalRateLimit;
+    if (originalDb) require.cache[dbPath] = originalDb;
+    else delete require.cache[dbPath];
+    if (originalLogger) require.cache[loggerPath] = originalLogger;
+    else delete require.cache[loggerPath];
+  }
+}
+
+asyncTest('checkRateLimit allows requests at the configured limit', async () => {
+  await withStubbedRateLimit({ rows: [{ count: 10 }] }, async ({ checkRateLimit }, queries, logs) => {
+    assertEq(await checkRateLimit('auth:203.0.113.10', 10, 60), false);
+    assertEq(queries.length, 1);
+    assertEq(queries[0].values[0], 'auth:203.0.113.10');
+    assert(logs.length === 0, 'successful rate-limit check should not log');
+  });
+});
+
+asyncTest('checkRateLimit blocks requests above the configured limit', async () => {
+  await withStubbedRateLimit({ rows: [{ count: 11 }] }, async ({ checkRateLimit }) => {
+    assertEq(await checkRateLimit('auth:203.0.113.10', 10, 60), true);
+  });
+});
+
+asyncTest('checkRateLimit fails open and logs when the rate_limits table is missing', async () => {
+  const error = { code: '42P01', message: 'relation "rate_limits" does not exist' };
+  await withStubbedRateLimit({ error }, async ({ checkRateLimit }, queries, logs) => {
+    assertEq(await checkRateLimit('lyrics-suggest:1:2', 3, 300), false);
+    assertEq(queries.length, 1);
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'warn');
+    assertEq(logs[0].event, 'rate_limit_unavailable');
+    assertEq(logs[0].data.key, 'lyrics-suggest:1:2');
+    assertEq(logs[0].data.code, '42P01');
+  });
+});
+
+asyncTest('checkRateLimit rethrows unrelated database errors', async () => {
+  await withStubbedRateLimit({
+    error: new Error('connection failure'),
+  }, async ({ checkRateLimit }, _queries, logs) => {
+    await assertRejects(
+      () => checkRateLimit('auth:203.0.113.10', 10, 60),
+      'connection failure'
+    );
+    assertEq(logs.length, 0);
+  });
+});
+
+// ── AI lyrics helper ──────────────────────────────────────────────────────────
+
+console.log(B('\nAI lyrics helper'));
 
 async function withAiEnv(apiKey, fetchImpl, fn) {
   if (apiKey === undefined) {
@@ -523,7 +596,7 @@ async function withAiEnv(apiKey, fetchImpl, fn) {
   }
 }
 
-testAsync('no API key → skipped without network call', async () => {
+asyncTest('no API key skips AI lyrics lookup without a network call', async () => {
   let called = false;
   await withAiEnv(undefined, async () => { called = true; }, async () => {
     const result = await suggestLyricsWithAI('Song', 'Artist');
@@ -532,7 +605,7 @@ testAsync('no API key → skipped without network call', async () => {
   });
 });
 
-testAsync('Gemini response → strips markdown, citations, and URL-only links', async () => {
+asyncTest('Gemini lyrics response strips markdown, citations, and URL-only links', async () => {
   let requestBody = null;
   const lyrics =
     '**Premier couplet** [1]\n' +
@@ -563,7 +636,7 @@ testAsync('Gemini response → strips markdown, citations, and URL-only links', 
   });
 });
 
-testAsync('provider quota response → null lyrics with skipped flag', async () => {
+asyncTest('AI provider quota response returns null lyrics with skipped flag', async () => {
   await withAiEnv('test-key', async () => ({
     ok: false,
     status: 429,
@@ -573,11 +646,16 @@ testAsync('provider quota response → null lyrics with skipped flag', async () 
   });
 });
 
-testAsync('network failure → null lyrics without skipped flag', async () => {
+asyncTest('AI network failure returns null lyrics without skipped flag', async () => {
   await withAiEnv('test-key', async () => {
     throw new Error('socket closed');
   }, async () => {
     assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: null });
+  });
+});
+
+// ── Handler wrapper ───────────────────────────────────────────────────────────
+
 console.log(B('\nhandler wrapper'));
 
 function makeRes({ headersSent = false } = {}) {
@@ -679,7 +757,6 @@ asyncTest('wrap does not write a second response after headers were sent', async
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-runAsyncTests().then(() => {
 (async () => {
   for (const entry of pending) await runAsyncTest(entry);
   const total = passed + failed;
@@ -693,5 +770,4 @@ runAsyncTests().then(() => {
     failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
   }
   process.exit(failed > 0 ? 1 : 0);
-});
 })();
