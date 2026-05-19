@@ -20,10 +20,13 @@ node tests/history-client.js # history page client helper tests only
 | Module | Functions |
 |--------|-----------|
 | `api/_validate.js` | `validateSongIds`, `validateStr`, `validateNum`, `validateEmail` |
+| `api/_auth.js` | `checkCredentials` |
 | `api/_token.js` | `generateMagicToken`, `verifyMagicToken` |
 | `api/_pdf.js` | `setlistTitle` |
 | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
+| `api/[band]/gema/import.js` | CSV parsing and GEMA value normalization helpers |
 | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
+| `api/_handler.js` | `wrap` request logging and sanitized error responses |
 | `app/js/setlist-history.js` | response parsing helpers |
 
 The full unit suite runs automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
