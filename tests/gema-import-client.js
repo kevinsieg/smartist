@@ -90,7 +90,7 @@ async function loadGemaImportContext(fetchImpl) {
 
   await test('successful login stores submitted password as bearer token', async () => {
     const fetchCalls = [];
-    const { context, elements, storage } = await loadGemaImportContext(async (url, opts) => {
+    const { context, storage } = await loadGemaImportContext(async (url, opts) => {
       fetchCalls.push({ url, opts });
       return {
         ok: true,
@@ -98,7 +98,7 @@ async function loadGemaImportContext(fetchImpl) {
       };
     });
 
-    elements.get('login-pw').value = 'correct horse battery staple';
+    context.document.getElementById('login-pw').value = 'correct horse battery staple';
     await context.doLogin();
 
     assertEq(fetchCalls.length, 1);
