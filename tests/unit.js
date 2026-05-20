@@ -32,6 +32,8 @@ const { LYRICS_SOURCES, plainFromSynced } =
   require(path.join(__dirname, '../api/_lyrics'));
 const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
+const { suggestLyricsWithAI } =
+  require(path.join(__dirname, '../api/_ai'));
 const gemaImport =
   require(path.join(__dirname, '../api/[band]/gema/import'))._test;
 
@@ -45,7 +47,6 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 let passed = 0, failed = 0;
 const failures = [];
 const asyncTests = [];
-const pending = [];
 
 function test(name, fn) {
   try {
@@ -76,20 +77,6 @@ async function runAsyncTests() {
       failures.push({ name, error: e.message });
       failed++;
     }
-function asyncTest(name, fn) {
-  pending.push({ name, fn });
-}
-
-async function runAsyncTest({ name, fn }) {
-  try {
-    await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
   }
 }
 
@@ -103,19 +90,6 @@ function assertEq(a, b, msg) {
   const bStr = JSON.stringify(b);
   if (aStr !== bStr)
     throw new Error(msg || `expected ${bStr}, got ${aStr}`);
-}
-
-async function testAsync(name, fn) {
-  try {
-    await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
-  }
 }
 
 // ── validateSongIds ───────────────────────────────────────────────────────────
@@ -162,7 +136,7 @@ test('contains non-number string → null', () => {
   assertEq(validateSongIds([1, 'abc', 3]), null);
 });
 
-test('contains NaN (as string "NaN") → null', () => {
+test('contains NaN → null', () => {
   assertEq(validateSongIds([1, NaN, 3]), null);
 });
 
@@ -351,7 +325,7 @@ test('fresh token verifies false with wrong hash', () => {
 test('tampered payload (changed expires) → false', () => {
   const token = generateMagicToken(HASH);
   const raw = JSON.parse(Buffer.from(token, 'base64url').toString());
-  raw.expires += 1000; // alter expires without updating sig
+  raw.expires += 1000;
   const tampered = Buffer.from(JSON.stringify(raw)).toString('base64url');
   assertEq(verifyMagicToken(tampered, HASH), false);
 });
@@ -365,7 +339,6 @@ test('tampered payload (changed sig) → false', () => {
 });
 
 test('expired token (past expires) → false', () => {
-  // Construct a token with an expires timestamp 1 ms in the past
   const expires = Date.now() - 1;
   const sig = crypto.createHmac('sha256', HASH).update(String(expires)).digest('hex');
   const expired = Buffer.from(JSON.stringify({ expires, sig })).toString('base64url');
@@ -387,6 +360,31 @@ test('empty string → false', () => {
 test('valid JSON but missing fields → false', () => {
   const broken = Buffer.from(JSON.stringify({ foo: 'bar' })).toString('base64url');
   assertEq(verifyMagicToken(broken, HASH), false);
+});
+
+// ── checkCredentials ─────────────────────────────────────────────────────────
+
+console.log(B('\ncheckCredentials'));
+
+testAsync('accepts a fresh magic token for the band password hash', async () => {
+  const passwordHash = crypto.randomBytes(32).toString('hex');
+  const token = generateMagicToken(passwordHash);
+  assertEq(await checkCredentials(token, { password_hash: passwordHash }), true);
+});
+
+testAsync('accepts the plaintext password via bcrypt fallback', async () => {
+  const passwordHash = bcrypt.hashSync('correct-password', 4);
+  assertEq(await checkCredentials('correct-password', { password_hash: passwordHash }), true);
+});
+
+testAsync('rejects tampered magic tokens and wrong passwords', async () => {
+  const passwordHash = bcrypt.hashSync('correct-password', 4);
+  const token = generateMagicToken(passwordHash);
+  const raw = JSON.parse(Buffer.from(token, 'base64url').toString());
+  raw.sig = raw.sig.replace(/[0-9a-f]/, c => (parseInt(c, 16) ^ 1).toString(16));
+  const tampered = Buffer.from(JSON.stringify(raw)).toString('base64url');
+  assertEq(await checkCredentials(tampered, { password_hash: passwordHash }), false);
+  assertEq(await checkCredentials('wrong-password', { password_hash: passwordHash }), false);
 });
 
 // ── setlistTitle ──────────────────────────────────────────────────────────────
@@ -502,7 +500,89 @@ test('isMissingRateLimitTable ignores unrelated database errors', () => {
   assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────────
+// ── GEMA import parser helpers ───────────────────────────────────────────────
+
+console.log(B('\nGEMA import parsers'));
+
+test('parseCsvLine keeps quoted commas inside a field', () => {
+  assertEq(
+    gemaImport.parseCsvLine('"Song, With Comma",ABC," spaced "'),
+    ['Song, With Comma', 'ABC', 'spaced']
+  );
+});
+
+test('parseCsv skips preamble and returns rows keyed by the Werknummer header', () => {
+  const rows = gemaImport.parseCsv([
+    'Export generated by GEMA',
+    'Werknummer,Titel,Sprache,Dauer,Erstmals geladen',
+    '15299392-001,"Über Größe",Deutsch,00:03:12,18.07.2026',
+    ',ignored row,Deutsch,00:01:00,01.01.2026',
+  ].join('\n'));
+
+  assertEq(rows.length, 1);
+  assertEq(rows[0].Werknummer, '15299392-001');
+  assertEq(rows[0].Titel, 'Über Größe');
+  assertEq(rows[0].Sprache, 'Deutsch');
+});
+
+test('parseCsv throws a useful error when the Werknummer header is missing', () => {
+  try {
+    gemaImport.parseCsv('Titel,Sprache\nSong,Deutsch');
+  } catch (e) {
+    assert(e.message.includes('Header row "Werknummer,..." not found'), e.message);
+    return;
+  }
+  throw new Error('expected parseCsv to throw');
+});
+
+test('normalizeTitle folds German umlauts and punctuation for matching', () => {
+  assertEq(gemaImport.normalizeTitle('Über Größe!'), 'UEBER GROESSE');
+  assertEq(gemaImport.normalizeTitle('Über Größe!'), gemaImport.normalizeTitle('UEBER GROESSE'));
+});
+
+test('GEMA scalar normalisers handle language, role, shares, durations, and dates', () => {
+  assertEq(gemaImport.normLanguage('Deutsch'), 'DE');
+  assertEq(gemaImport.normLanguage('Französisch'), 'FR');
+  assertEq(gemaImport.normRole('KOMPONIST/-IN'), 'composer');
+  assertEq(gemaImport.parseShare('12,5'), 12.5);
+  assertEq(gemaImport.parseShare('-'), null);
+  assertEq(gemaImport.parseDuration('01:02:03'), 3723);
+  assertEq(gemaImport.parseDuration('03:12'), 192);
+  assertEq(gemaImport.parseGermanDate('18.07.2026'), '2026-07-18');
+});
+
+test('parseBeteiligte maps fixed-position rightholder fields and German shares', () => {
+  const rows = gemaImport.parseBeteiligte([
+    'some preliminary export row',
+    'Werknummer,unused,Name,IP-Name-Nr.,Rolle,Rollenreihenfolge,Verlegerbeziehung,AR-Anteil,VR-Anteil,AR kumuliert,VR kumuliert,Gesellschaft AR,Gesellschaft VR,x,x,Vertretene Name,Vertretene IP,Vertretene Rolle',
+    '15299392-001,,Jane Doe,12345,KOMPONIST/-IN,1,,"12,5",25,50,75,GEMA,GEMA,,,Publisher GmbH,98765,ORIGINALVERLAG',
+  ].join('\n'));
+
+  assertEq(rows, [{
+    gema_work_number: '15299392-001',
+    name: 'Jane Doe',
+    ip_name_number: '12345',
+    role: 'composer',
+    role_order: '1',
+    publisher_relation: null,
+    ar_share: 12.5,
+    vr_share: 25,
+    ar_share_cumulated: 50,
+    vr_share_cumulated: 75,
+    society_ar: 'GEMA',
+    society_vr: 'GEMA',
+    represents_name: 'Publisher GmbH',
+    represents_ip: '98765',
+    represents_role: 'publisher',
+  }]);
+});
+
+// ── AI lyrics helper ─────────────────────────────────────────────────────────
+
+console.log(B('\nAI lyrics helper'));
+
+const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const ORIGINAL_FETCH = global.fetch;
 
 async function withAiEnv(apiKey, fetchImpl, fn) {
   if (apiKey === undefined) {
@@ -578,6 +658,11 @@ testAsync('network failure → null lyrics without skipped flag', async () => {
     throw new Error('socket closed');
   }, async () => {
     assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: null });
+  });
+});
+
+// ── handler wrapper ──────────────────────────────────────────────────────────
+
 console.log(B('\nhandler wrapper'));
 
 function makeRes({ headersSent = false } = {}) {
@@ -600,7 +685,6 @@ function makeRes({ headersSent = false } = {}) {
 }
 
 async function withStubbedLogger(fn) {
-  const loggerPath = require.resolve(path.join(__dirname, '../api/_logger'));
   const handlerPath = require.resolve(path.join(__dirname, '../api/_handler'));
   const originalLogger = require.cache[loggerPath];
   const originalHandler = require.cache[handlerPath];
@@ -629,7 +713,7 @@ async function withStubbedLogger(fn) {
   }
 }
 
-asyncTest('wrap logs successful requests with response status', async () => {
+testAsync('wrap logs successful requests with response status', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes();
     const req = { method: 'GET', url: '/ok' };
@@ -645,7 +729,7 @@ asyncTest('wrap logs successful requests with response status', async () => {
   });
 });
 
-asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () => {
+testAsync('wrap converts unhandled errors to sanitized 500 responses', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes();
     const req = { method: 'POST', url: '/boom' };
@@ -662,7 +746,7 @@ asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () 
   });
 });
 
-asyncTest('wrap does not write a second response after headers were sent', async () => {
+testAsync('wrap does not write a second response after headers were sent', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes({ headersSent: true });
     const req = { method: 'GET', url: '/late-error' };
@@ -679,9 +763,8 @@ asyncTest('wrap does not write a second response after headers were sent', async
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-runAsyncTests().then(() => {
 (async () => {
-  for (const entry of pending) await runAsyncTest(entry);
+  await runAsyncTests();
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(
@@ -692,6 +775,6 @@ runAsyncTests().then(() => {
     console.log(R('\nFailed:'));
     failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
   }
+  assert(total > 0, 'no tests ran');
   process.exit(failed > 0 ? 1 : 0);
-});
 })();
