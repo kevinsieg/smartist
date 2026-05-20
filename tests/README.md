@@ -13,6 +13,7 @@ npm run test:unit           # from repo root
 npm run test:unit           # from tests/ directory
 node tests/unit.js          # API helper unit tests only
 node tests/history-client.js # history page client helper tests only
+node tests/gema-import-client.js # GEMA import client auth tests only
 ```
 
 **What is covered:**
@@ -25,6 +26,7 @@ node tests/history-client.js # history page client helper tests only
 | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `app/js/setlist-history.js` | response parsing helpers |
+| `app/js/gema-import.js` | login token storage |
 
 The full unit suite runs automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
 

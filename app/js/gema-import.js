@@ -44,8 +44,7 @@ async function doLogin() {
     body: JSON.stringify({ password: pw }),
   });
   if (r.ok) {
-    const { token } = await r.json();
-    sessionStorage.setItem('setlist_token', token);
+    sessionStorage.setItem('setlist_token', pw);
     updateAuthIndicator();
     showImportArea();
   } else {
