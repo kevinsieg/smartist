@@ -32,8 +32,13 @@ const { LYRICS_SOURCES, plainFromSynced } =
   require(path.join(__dirname, '../api/_lyrics'));
 const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
+const { suggestLyricsWithAI } =
+  require(path.join(__dirname, '../api/_ai'));
 const gemaImport =
   require(path.join(__dirname, '../api/[band]/gema/import'))._test;
+
+const ORIGINAL_FETCH = global.fetch;
+const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -45,7 +50,6 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 let passed = 0, failed = 0;
 const failures = [];
 const asyncTests = [];
-const pending = [];
 
 function test(name, fn) {
   try {
@@ -76,20 +80,6 @@ async function runAsyncTests() {
       failures.push({ name, error: e.message });
       failed++;
     }
-function asyncTest(name, fn) {
-  pending.push({ name, fn });
-}
-
-async function runAsyncTest({ name, fn }) {
-  try {
-    await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
   }
 }
 
@@ -105,17 +95,14 @@ function assertEq(a, b, msg) {
     throw new Error(msg || `expected ${bStr}, got ${aStr}`);
 }
 
-async function testAsync(name, fn) {
+async function assertRejects(fn, expectedMessage) {
   try {
     await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
   } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
+    if (expectedMessage !== undefined) assertEq(e.message, expectedMessage);
+    return e;
   }
+  throw new Error('expected rejection');
 }
 
 // ── validateSongIds ───────────────────────────────────────────────────────────
@@ -502,7 +489,91 @@ test('isMissingRateLimitTable ignores unrelated database errors', () => {
   assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────────
+async function withStubbedRateLimit(sqlImpl, fn) {
+  const dbPath = require.resolve(path.join(__dirname, '../api/_db'));
+  const loggerPath = require.resolve(path.join(__dirname, '../api/_logger'));
+  const rateLimitPath = require.resolve(path.join(__dirname, '../api/_ratelimit'));
+  const originalDb = require.cache[dbPath];
+  const originalLogger = require.cache[loggerPath];
+  const originalRateLimit = require.cache[rateLimitPath];
+  const logs = [];
+
+  delete require.cache[rateLimitPath];
+  require.cache[dbPath] = {
+    id: dbPath,
+    filename: dbPath,
+    loaded: true,
+    exports: { getDb: () => sqlImpl },
+  };
+  require.cache[loggerPath] = {
+    id: loggerPath,
+    filename: loggerPath,
+    loaded: true,
+    exports: {
+      info: async (event, data = {}) => logs.push({ level: 'info', event, data }),
+      warn: async (event, data = {}) => logs.push({ level: 'warn', event, data }),
+      error: async (event, data = {}) => logs.push({ level: 'error', event, data }),
+    },
+  };
+
+  try {
+    const rateLimit = require(rateLimitPath);
+    return await fn(rateLimit, logs);
+  } finally {
+    delete require.cache[rateLimitPath];
+    if (originalRateLimit) require.cache[rateLimitPath] = originalRateLimit;
+    if (originalDb) require.cache[dbPath] = originalDb;
+    else delete require.cache[dbPath];
+    if (originalLogger) require.cache[loggerPath] = originalLogger;
+    else delete require.cache[loggerPath];
+  }
+}
+
+testAsync('checkRateLimit blocks when the stored count exceeds the limit', async () => {
+  let seenKey;
+  await withStubbedRateLimit(async (_strings, ...values) => {
+    seenKey = values[0];
+    return [{ count: 6 }];
+  }, async ({ checkRateLimit }) => {
+    assertEq(await checkRateLimit('auth:203.0.113.10', 5, 60), true);
+    assertEq(seenKey, 'auth:203.0.113.10');
+  });
+});
+
+testAsync('checkRateLimit allows requests at the limit boundary', async () => {
+  await withStubbedRateLimit(async () => [{ count: 5 }], async ({ checkRateLimit }) => {
+    assertEq(await checkRateLimit('auth:203.0.113.10', 5, 60), false);
+  });
+});
+
+testAsync('checkRateLimit fails open and logs when the rate_limits table is missing', async () => {
+  const missingTable = new Error('relation "rate_limits" does not exist');
+  missingTable.code = '42P01';
+
+  await withStubbedRateLimit(async () => { throw missingTable; }, async ({ checkRateLimit }, logs) => {
+    assertEq(await checkRateLimit('auth:198.51.100.9', 5, 60), false);
+    assertEq(logs.length, 1);
+    assertEq(logs[0].level, 'warn');
+    assertEq(logs[0].event, 'rate_limit_unavailable');
+    assertEq(logs[0].data.key, 'auth:198.51.100.9');
+    assertEq(logs[0].data.code, '42P01');
+  });
+});
+
+testAsync('checkRateLimit rethrows unrelated database failures', async () => {
+  const connectionError = new Error('connection failure');
+  connectionError.code = '08006';
+
+  await withStubbedRateLimit(async () => { throw connectionError; }, async ({ checkRateLimit }, logs) => {
+    const err = await assertRejects(() => checkRateLimit('auth:198.51.100.9', 5, 60));
+    assertEq(err, connectionError);
+    assertEq(logs.length, 0);
+  });
+});
+
+// ── AI lyrics helper ──────────────────────────────────────────────────────────
+
+console.log(B('\nAI lyrics helper'));
 
 async function withAiEnv(apiKey, fetchImpl, fn) {
   if (apiKey === undefined) {
@@ -578,6 +649,9 @@ testAsync('network failure → null lyrics without skipped flag', async () => {
     throw new Error('socket closed');
   }, async () => {
     assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: null });
+  });
+});
+
 console.log(B('\nhandler wrapper'));
 
 function makeRes({ headersSent = false } = {}) {
@@ -629,7 +703,7 @@ async function withStubbedLogger(fn) {
   }
 }
 
-asyncTest('wrap logs successful requests with response status', async () => {
+testAsync('wrap logs successful requests with response status', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes();
     const req = { method: 'GET', url: '/ok' };
@@ -645,7 +719,7 @@ asyncTest('wrap logs successful requests with response status', async () => {
   });
 });
 
-asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () => {
+testAsync('wrap converts unhandled errors to sanitized 500 responses', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes();
     const req = { method: 'POST', url: '/boom' };
@@ -662,7 +736,7 @@ asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () 
   });
 });
 
-asyncTest('wrap does not write a second response after headers were sent', async () => {
+testAsync('wrap does not write a second response after headers were sent', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes({ headersSent: true });
     const req = { method: 'GET', url: '/late-error' };
@@ -680,8 +754,6 @@ asyncTest('wrap does not write a second response after headers were sent', async
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 runAsyncTests().then(() => {
-(async () => {
-  for (const entry of pending) await runAsyncTest(entry);
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(
@@ -694,4 +766,3 @@ runAsyncTests().then(() => {
   }
   process.exit(failed > 0 ? 1 : 0);
 });
-})();
