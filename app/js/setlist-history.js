@@ -875,7 +875,6 @@ async function doDuplicate(id) {
 
     const created = await r.json();
     allSetlists.unshift(created);
-    loadedData.set(created.id, created);
 
     const year     = new Date(created.created_at).getFullYear();
     const yearBody = document.getElementById(`year-${year}`);

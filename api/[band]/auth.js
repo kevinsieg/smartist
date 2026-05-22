@@ -10,11 +10,12 @@ module.exports = wrap(async function handler(req, res) {
   if (!password) return res.status(400).json({ error: 'Password required' });
   if (String(password).length > 1000) return res.status(400).json({ error: 'Invalid password' });
 
-  if (await checkRateLimit(`auth:${clientIp(req)}`, 10, 60))
-    return res.status(429).json({ error: 'Too many attempts — try again later' });
-
   const band = await getBand(slug);
   if (!band) return res.status(404).json({ error: 'Band not found' });
-  if (!await checkCredentials(password, band)) return res.status(401).json({ error: 'Invalid password' });
+  if (!await checkCredentials(password, band)) {
+    if (await checkRateLimit(`auth:${clientIp(req)}`, 10, 60))
+      return res.status(429).json({ error: 'Too many attempts — try again later' });
+    return res.status(401).json({ error: 'Invalid password' });
+  }
   res.json({ ok: true });
 });

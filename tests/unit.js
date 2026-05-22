@@ -30,10 +30,15 @@ const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../api/_r2'));
 const { LYRICS_SOURCES, plainFromSynced } =
   require(path.join(__dirname, '../api/_lyrics'));
+const { suggestLyricsWithAI } =
+  require(path.join(__dirname, '../api/_ai'));
 const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
 const gemaImport =
   require(path.join(__dirname, '../api/[band]/gema/import'))._test;
+
+const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const ORIGINAL_FETCH = global.fetch;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -45,7 +50,6 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 let passed = 0, failed = 0;
 const failures = [];
 const asyncTests = [];
-const pending = [];
 
 function test(name, fn) {
   try {
@@ -76,20 +80,6 @@ async function runAsyncTests() {
       failures.push({ name, error: e.message });
       failed++;
     }
-function asyncTest(name, fn) {
-  pending.push({ name, fn });
-}
-
-async function runAsyncTest({ name, fn }) {
-  try {
-    await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
   }
 }
 
@@ -103,19 +93,6 @@ function assertEq(a, b, msg) {
   const bStr = JSON.stringify(b);
   if (aStr !== bStr)
     throw new Error(msg || `expected ${bStr}, got ${aStr}`);
-}
-
-async function testAsync(name, fn) {
-  try {
-    await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
-  }
 }
 
 // ── validateSongIds ───────────────────────────────────────────────────────────
@@ -389,6 +366,26 @@ test('valid JSON but missing fields → false', () => {
   assertEq(verifyMagicToken(broken, HASH), false);
 });
 
+// ── checkCredentials ──────────────────────────────────────────────────────────
+
+console.log(B('\ncheckCredentials'));
+
+testAsync('valid password matches bcrypt hash', async () => {
+  const passwordHash = await bcrypt.hash('secret', 4);
+  assertEq(await checkCredentials('secret', { password_hash: passwordHash }), true);
+});
+
+testAsync('invalid password does not match bcrypt hash', async () => {
+  const passwordHash = await bcrypt.hash('secret', 4);
+  assertEq(await checkCredentials('wrong', { password_hash: passwordHash }), false);
+});
+
+testAsync('valid magic token matches password hash', async () => {
+  const passwordHash = await bcrypt.hash('secret', 4);
+  const token = generateMagicToken(passwordHash);
+  assertEq(await checkCredentials(token, { password_hash: passwordHash }), true);
+});
+
 // ── setlistTitle ──────────────────────────────────────────────────────────────
 
 console.log(B('\nsetlistTitle'));
@@ -578,6 +575,9 @@ testAsync('network failure → null lyrics without skipped flag', async () => {
     throw new Error('socket closed');
   }, async () => {
     assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: null });
+  });
+});
+
 console.log(B('\nhandler wrapper'));
 
 function makeRes({ headersSent = false } = {}) {
@@ -629,7 +629,49 @@ async function withStubbedLogger(fn) {
   }
 }
 
-asyncTest('wrap logs successful requests with response status', async () => {
+async function withStubbedAuthRoute({ band, rateLimited = false }, fn) {
+  const routePath = require.resolve(path.join(__dirname, '../api/[band]/auth'));
+  const dbPath = require.resolve(path.join(__dirname, '../api/_db'));
+  const rateLimitPath = require.resolve(path.join(__dirname, '../api/_ratelimit'));
+  const originalRoute = require.cache[routePath];
+  const originalDb = require.cache[dbPath];
+  const originalRateLimit = require.cache[rateLimitPath];
+  let rateLimitCalls = 0;
+
+  delete require.cache[routePath];
+  require.cache[dbPath] = {
+    id: dbPath,
+    filename: dbPath,
+    loaded: true,
+    exports: { getBand: async () => band },
+  };
+  require.cache[rateLimitPath] = {
+    id: rateLimitPath,
+    filename: rateLimitPath,
+    loaded: true,
+    exports: {
+      checkRateLimit: async () => {
+        rateLimitCalls++;
+        return rateLimited;
+      },
+      clientIp: () => '203.0.113.10',
+    },
+  };
+
+  try {
+    const handler = require(routePath);
+    await fn(handler, () => rateLimitCalls);
+  } finally {
+    delete require.cache[routePath];
+    if (originalRoute) require.cache[routePath] = originalRoute;
+    if (originalDb) require.cache[dbPath] = originalDb;
+    else delete require.cache[dbPath];
+    if (originalRateLimit) require.cache[rateLimitPath] = originalRateLimit;
+    else delete require.cache[rateLimitPath];
+  }
+}
+
+testAsync('wrap logs successful requests with response status', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes();
     const req = { method: 'GET', url: '/ok' };
@@ -645,7 +687,7 @@ asyncTest('wrap logs successful requests with response status', async () => {
   });
 });
 
-asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () => {
+testAsync('wrap converts unhandled errors to sanitized 500 responses', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes();
     const req = { method: 'POST', url: '/boom' };
@@ -662,7 +704,7 @@ asyncTest('wrap converts unhandled errors to sanitized 500 responses', async () 
   });
 });
 
-asyncTest('wrap does not write a second response after headers were sent', async () => {
+testAsync('wrap does not write a second response after headers were sent', async () => {
   await withStubbedLogger(async (wrap, logs) => {
     const res = makeRes({ headersSent: true });
     const req = { method: 'GET', url: '/late-error' };
@@ -677,11 +719,48 @@ asyncTest('wrap does not write a second response after headers were sent', async
   });
 });
 
+console.log(B('\nauth handler'));
+
+testAsync('successful auth does not consume failed-attempt rate limit', async () => {
+  const passwordHash = await bcrypt.hash('secret', 4);
+  await withStubbedAuthRoute({ band: { password_hash: passwordHash } }, async (handler, rateLimitCalls) => {
+    const res = makeRes();
+    await handler({
+      method: 'POST',
+      url: '/api/demo/auth',
+      query: { band: 'demo' },
+      headers: {},
+      body: { password: 'secret' },
+    }, res);
+
+    assertEq(res.statusCode, 200);
+    assertEq(res.body, { ok: true });
+    assertEq(rateLimitCalls(), 0);
+  });
+});
+
+testAsync('failed auth checks and enforces rate limit', async () => {
+  const passwordHash = await bcrypt.hash('secret', 4);
+  await withStubbedAuthRoute({ band: { password_hash: passwordHash }, rateLimited: true }, async (handler, rateLimitCalls) => {
+    const res = makeRes();
+    await handler({
+      method: 'POST',
+      url: '/api/demo/auth',
+      query: { band: 'demo' },
+      headers: {},
+      body: { password: 'wrong' },
+    }, res);
+
+    assertEq(res.statusCode, 429);
+    assertEq(res.body, { error: 'Too many attempts — try again later' });
+    assertEq(rateLimitCalls(), 1);
+  });
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-runAsyncTests().then(() => {
 (async () => {
-  for (const entry of pending) await runAsyncTest(entry);
+  await runAsyncTests();
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(
@@ -693,5 +772,4 @@ runAsyncTests().then(() => {
     failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
   }
   process.exit(failed > 0 ? 1 : 0);
-});
 })();
