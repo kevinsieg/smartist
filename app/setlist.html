@@ -12,6 +12,85 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
     <link rel="stylesheet" href="/app/css/app.css">
+<style>
+  .setlist-page-wrap { position: relative; }
+
+  /* History accordion — all screen sizes */
+  .hist-item { border-bottom: 1px solid var(--border-color); }
+  .hist-item-header { display:flex; align-items:flex-start; justify-content:space-between; padding:0.6rem 0.3rem; cursor:pointer; gap:0.5rem; user-select:none; border-radius:4px; transition:background 60ms; }
+  .hist-item-header:hover { background:rgba(176,106,42,0.06); }
+  .hist-item-header:hover .hist-item-title { text-decoration:underline; }
+  .hist-item-main { flex:1; min-width:0; }
+  .hist-item-titlerow { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+  .hist-item-title { font-weight:600; font-size:0.9rem; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hist-item-badges { display:flex; gap:0.3rem; flex-shrink:0; align-items:center; }
+  .hist-badge { font-size:0.68rem; padding:0.12rem 0.5rem; border-radius:10px; white-space:nowrap; font-weight:500; }
+  .hist-badge--count { background:var(--secondary-color); color:var(--secondary-ink); }
+  .hist-badge--date { background:var(--primary-color); color:var(--third-color); border:1px solid var(--border-color); }
+  .hist-meta-links--header { padding:0.25rem 0 0; border-bottom:none; margin-bottom:0; }
+  .hist-item-comment { font-size:0.74rem; color:var(--third-color); font-style:italic; margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hist-toggle { background:none; border:none; cursor:pointer; color:var(--third-color); padding:0.1rem; flex-shrink:0; font-size:0.65rem; line-height:1; margin-top:0.3rem; transition:color 60ms; }
+  .hist-toggle:hover { color:var(--secondary-ink); }
+  .hist-body { padding:0.1rem 0 0.75rem; }
+  .hist-meta-links { display:flex; flex-wrap:wrap; gap:0.35rem; padding:0.45rem 0.1rem 0.55rem; border-bottom:1px solid var(--border-color); margin-bottom:0.35rem; }
+  .hist-meta-link { font-size:0.73rem; color:var(--secondary-ink); background:var(--primary-color); border:1px solid var(--border-color); border-radius:4px; padding:0.15rem 0.5rem; cursor:pointer; transition:background 60ms,border-color 60ms; }
+  .hist-meta-link:hover { background:var(--secondary-color); border-color:var(--secondary-color); }
+  .hist-song-row { display:flex; align-items:baseline; gap:0.5rem; padding:0.22rem 0.25rem; font-size:0.84rem; cursor:pointer; border-radius:3px; }
+  .hist-song-row:hover { background:var(--secondary-color); color:var(--secondary-ink); }
+  .hist-song-row--active { background:var(--secondary-color); color:var(--secondary-ink); font-weight:600; }
+  .hist-song-pos { color:var(--third-color); font-size:0.75rem; min-width:1.5rem; text-align:right; flex-shrink:0; }
+  .hist-song-name { flex:1; }
+  .hist-song-key { font-size:0.72rem; color:var(--third-color); }
+  .hist-song-len { font-size:0.72rem; color:var(--third-color); }
+  .hist-songs-total { font-size:0.76rem; color:var(--third-color); margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid var(--border-color); }
+  .hist-nav-btn { background:none; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.45rem; cursor:pointer; font-size:0.78rem; color:var(--secondary-ink); line-height:1.5; flex-shrink:0; transition:background 60ms,border-color 60ms; }
+  .hist-nav-btn:hover { background:var(--secondary-color); border-color:var(--secondary-color); }
+
+  /* Share menu popover */
+  .share-menu { background:#fff; border:1px solid var(--border-color); border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.14); min-width:190px; overflow:hidden; animation:share-menu-in 60ms ease-out; z-index:200; }
+  @keyframes share-menu-in { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+  .share-menu-item { display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; font-size:0.84rem; cursor:pointer; color:var(--secondary-ink); border-bottom:1px solid var(--border-color); }
+  .share-menu-item:last-child { border-bottom:none; }
+  .share-menu-item:hover { background:var(--secondary-color); }
+  .share-menu-icon { font-size:1rem; flex-shrink:0; }
+
+  /* Tab bar — all screen sizes */
+  #setlist-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--border-color);
+    background: var(--primary-color);
+    padding: 0 1rem;
+    position: sticky;
+    top: var(--setlist-tabs-top, 60px);
+    z-index: 9;
+  }
+  .setlist-tab {
+    padding: 0.6rem 1.25rem;
+    font-size: 0.88rem;
+    cursor: pointer;
+    color: var(--third-color);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: inherit;
+    transition: color 60ms;
+  }
+  .setlist-tab:hover { color: var(--secondary-ink); }
+  .setlist-tab--active {
+    color: var(--secondary-ink);
+    font-weight: 700;
+    border-bottom-color: var(--secondary-ink);
+    background: #fff;
+  }
+
+  @media (min-width: 1025px) {
+    #setlist-page-title { margin-top: 1.5rem; }
+    #setlist-content.side-panel-open { padding-right: 380px; }
+  }
+</style>
 </head>
 <body>
 
@@ -23,15 +102,24 @@
 </div>
 
 <main>
-    <section class="app-page">
+    <section class="app-page setlist-page-wrap">
+        <div id="setlist-tabs" style="display:none">
+            <button class="setlist-tab setlist-tab--active" data-tab="generator" onclick="switchTab('generator')">Generator</button>
+            <button class="setlist-tab" data-tab="history" onclick="switchTab('history')">History</button>
+        </div>
         <div class="app-wrap">
-            <h1>Setlist Generator</h1>
+            <h1 id="setlist-page-title">Setlist Generator</h1>
             <div id="setlist-content">
                 <p style="text-align:center;color:var(--third-color);">Loading songs…</p>
             </div>
         </div>
     </section>
 </main>
+
+<!-- History tab: desktop side panel -->
+<div id="view-side-panel" role="complementary" aria-label="Setlist details">
+  <div id="view-side-panel-inner"></div>
+</div>
 
 <!-- Accept / save modal -->
 <div class="modal-overlay" id="accept-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -91,6 +179,7 @@
 </div>
 
 <script src="/app/js/common.js"></script>
+<script src="/app/js/list-view.js"></script>
 <script src="/app/js/setlist.js"></script>
 </body>
 </html>

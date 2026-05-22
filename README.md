@@ -84,7 +84,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables).
 
 | Variable | Value |
 |---|---|
-| `BAND_SLUG` | `bandone` |
+| `ARTIST_SLUG` | `bandone` |
 | `R2_ACCOUNT_ID` | Cloudflare account ID |
 | `RESEND_API_KEY` | Resend API key |
 | `RESEND_FROM` | Sender address |
@@ -96,7 +96,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables).
 |---|---|---|
 | `DATABASE_URL` | Neon `bandone` connection string | Neon `smartist-dev` connection string |
 | `APP_ORIGIN` | `https://smartist.band-one.example` | Preview URL (`smartist-git-dev-*.vercel.app`) |
-| `BAND_ADMIN_EMAIL` | `you@yourdomain.com` | `you+dev@yourdomain.com` |
+| `ARTIST_ADMIN_EMAIL` | `you@yourdomain.com` | `you+dev@yourdomain.com` |
 | `R2_BUCKET_NAME` | `bandone` | `bandone-dev` |
 | `R2_ACCESS_KEY_ID` | Prod R2 token | Dev R2 token |
 | `R2_SECRET_ACCESS_KEY` | Prod R2 secret | Dev R2 secret |
@@ -150,22 +150,22 @@ vercel env pull .env.local   # pulls Preview vars into .env.local (used directly
 vercel dev                   # starts local server on port 3000
 ```
 
-Seed the dev database with fake gigs, setlists, songs, and sample GEMA rows (targets the band from `BAND_SLUG`, or the first band in the DB if unset — run `setup.js` first):
+Seed the dev database with fake gigs, setlists, songs, and sample GEMA rows (targets the artist from `ARTIST_SLUG`, or the first artist in the DB if unset — run `setup.js` first):
 
 ```bash
 node scripts/seed.js --force
 ```
 
-Set `BAND_SLUG` in `.env` or `.env.local` to match the band you created with `setup.js`. Restart `vercel dev` if you change env files.
+Set `ARTIST_SLUG` in `.env` or `.env.local` to match the artist you created with `setup.js`. Restart `vercel dev` if you change env files.
 
 ---
 
-## Band config
+## Artist config
 
-The `config` column on `bands` (JSONB) controls which fields appear in the UI. The setup wizard builds it interactively. To update it directly:
+The `config` column on `artists` (JSONB) controls which fields appear in the UI. The setup wizard builds it interactively. To update it directly:
 
 ```sql
-UPDATE bands SET config = config || '{
+UPDATE artists SET config = config || '{
   "logoUrl": "https://yourdomain.com/img/band-logo.png",
   "displayFields": [
     { "field": "title",      "label": "Song"   },
@@ -197,7 +197,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 | Table | Purpose |
 |-------|---------|
-| `bands` | Slug, name, bcrypt password hash, UI config (JSONB) |
+| `artists` | Slug, name, bcrypt password hash, UI config (JSONB) |
 | `songs` | Catalogue — standard fields + `extra` JSONB; soft-delete via `deleted` flag |
 | `gigs` | Performance events (name, date, venue) |
 | `setlists` | Saved setlists, optionally linked to a gig |
@@ -210,25 +210,25 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 ## API
 
-All endpoints live under `/api/:band/`. Auth uses `Authorization: Bearer <token>` (band password or 30-min magic token). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
+All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` (artist password or 30-min magic token). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
 
 | Method | Endpoint | Auth | Purpose |
 |--------|----------|------|---------|
-| GET | `/api/config` | — | Band config + all active songs |
-| POST | `/api/:band/auth` | — | Verify password, get token |
-| POST | `/api/:band/request-reset` | — | Send magic login link by email |
-| GET | `/api/:band/songs` | — | Songs with play stats and GEMA data |
-| POST | `/api/:band/songs` | ✓ | Create song |
-| PATCH | `/api/:band/songs` | ✓ | Batch update songs |
-| DELETE | `/api/:band/songs/:id` | ✓ | Soft-delete song |
-| POST | `/api/:band/songs/:id/restore` | ✓ | Restore from audit log |
-| GET | `/api/:band/setlists` | — | List setlists with song count |
-| POST | `/api/:band/setlists` | ✓ | Create setlist (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
-| GET | `/api/:band/setlists/:id` | — | Setlist detail with ordered songs |
-| PUT | `/api/:band/setlists/:id` | ✓ | Update metadata + song list |
-| GET | `/api/:band/gigs` | — | List gigs |
-| POST | `/api/:band/gigs` | ✓ | Create gig |
-| GET | `/api/:band/export` | ✓ | Full data export as JSON |
+| GET | `/api/config` | — | Artist config + all active songs |
+| POST | `/api/:artist/auth` | — | Verify password, get token |
+| POST | `/api/:artist/request-reset` | — | Send magic login link by email |
+| GET | `/api/:artist/songs` | — | Songs with play stats and GEMA data |
+| POST | `/api/:artist/songs` | ✓ | Create song |
+| PATCH | `/api/:artist/songs` | ✓ | Batch update songs |
+| DELETE | `/api/:artist/songs/:id` | ✓ | Soft-delete song |
+| POST | `/api/:artist/songs/:id/restore` | ✓ | Restore from audit log |
+| GET | `/api/:artist/setlists` | — | List setlists with song count |
+| POST | `/api/:artist/setlists` | ✓ | Create setlist (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
+| GET | `/api/:artist/setlists/:id` | — | Setlist detail with ordered songs |
+| PUT | `/api/:artist/setlists/:id` | ✓ | Update metadata + song list |
+| GET | `/api/:artist/gigs` | — | List gigs |
+| POST | `/api/:artist/gigs` | ✓ | Create gig |
+| GET | `/api/:artist/export` | ✓ | Full data export as JSON |
 
 ---
 

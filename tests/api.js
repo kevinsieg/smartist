@@ -4,7 +4,7 @@
 // Usage:
 //   npm test                                    # needs vercel dev running
 //   BASE_URL=https://yourapp.example.com npm test    # against production
-//   BAND_PASSWORD=xxx npm test                  # enables write tests
+//   ARTIST_PASSWORD=xxx npm test                  # enables write tests
 
 const fs   = require('fs');
 const path = require('path');
@@ -31,8 +31,8 @@ loadEnvFile(path.join(REPO_ROOT, '.env.local'));
 loadEnvFile(path.join(REPO_ROOT, '.env'));
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
-const SLUG     = process.env.BAND_SLUG;
-const PASSWORD = process.env.BAND_PASSWORD;
+const SLUG     = process.env.ARTIST_SLUG;
+const PASSWORD = process.env.ARTIST_PASSWORD;
 const R2_BASE  = process.env.R2_PUBLIC_URL;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
@@ -188,11 +188,21 @@ async function testGigs(slug) {
   console.log(B(`\n/api/${slug}/gigs`));
   let firstGig = null;
 
-  await test('GET returns array', async () => {
+  await test('GET returns paginated shape', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs`);
     assertStatus(res, json, 200);
-    assert(Array.isArray(json), 'not an array');
-    if (json.length) firstGig = json[0];
+    assert(Array.isArray(json.rows), 'json.rows not an array');
+    assert(typeof json.total === 'number', 'json.total not a number');
+    assert(typeof json.limit === 'number', 'json.limit not a number');
+    assert(typeof json.offset === 'number', 'json.offset not a number');
+    if (json.rows.length) firstGig = json.rows[0];
+  });
+
+  await test('GET ?limit=1&offset=0 returns 1 row', async () => {
+    const { res, json } = await GET(`/api/${slug}/gigs?limit=1&offset=0`);
+    assertStatus(res, json, 200);
+    assert(json.rows.length <= 1, 'more than 1 row returned');
+    assert(json.limit === 1, 'limit not respected');
   });
 
   if (firstGig) {
@@ -200,7 +210,16 @@ async function testGigs(slug) {
       const { res, json } = await GET(`/api/${slug}/gigs/${firstGig.id}`);
       assertStatus(res, json, 200);
       assert(json.id === firstGig.id, 'id mismatch');
-      assert('name' in json, 'missing name');
+      assert('title' in json, 'missing title');
+    });
+
+    await test('GET /:id?refs=1 returns gig with setlists/venue/organizer', async () => {
+      const { res, json } = await GET(`/api/${slug}/gigs/${firstGig.id}?refs=1`);
+      assertStatus(res, json, 200);
+      assert('gig' in json && 'refs' in json, 'missing gig or refs');
+      assert(Array.isArray(json.refs.setlists), 'refs.setlists should be array');
+      assert('venue' in json.refs, 'missing refs.venue');
+      assert('organizer' in json.refs, 'missing refs.organizer');
     });
   }
 
@@ -210,6 +229,108 @@ async function testGigs(slug) {
   });
 
   return firstGig;
+}
+
+async function testVenues(slug) {
+  console.log(B(`\n/api/${slug}/venues`));
+  let firstVenue = null;
+
+  await test('GET returns paginated shape', async () => {
+    const { res, json } = await GET(`/api/${slug}/venues`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json.rows), 'json.rows not an array');
+    assert(typeof json.total === 'number', 'json.total not a number');
+    if (json.rows.length) firstVenue = json.rows[0];
+  });
+
+  await test('GET ?slim=1 still returns plain array', async () => {
+    const { res, json } = await GET(`/api/${slug}/venues?slim=1`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json), 'slim should return plain array');
+  });
+
+  await test('GET ?q= filters results', async () => {
+    const { res, json } = await GET(`/api/${slug}/venues?q=zzznomatch`);
+    assertStatus(res, json, 200);
+    assert(json.rows.length === 0, 'expected 0 rows for non-matching query');
+    assert(json.total === 0, 'expected total 0 for non-matching query');
+  });
+
+  if (firstVenue) {
+    await test('GET /:id returns venue', async () => {
+      const { res, json } = await GET(`/api/${slug}/venues/${firstVenue.id}`);
+      assertStatus(res, json, 200);
+      assert(json.id === firstVenue.id, 'id mismatch');
+      assert('name' in json, 'missing name');
+    });
+
+    await test('GET /:id?refs=1 returns venue with refs', async () => {
+      const { res, json } = await GET(`/api/${slug}/venues/${firstVenue.id}?refs=1`);
+      assertStatus(res, json, 200);
+      assert('venue' in json && 'refs' in json, 'missing venue or refs');
+      assert(Array.isArray(json.refs.gigs), 'refs.gigs should be an array');
+      if (json.refs.gigs.length > 0) {
+        const g = json.refs.gigs[0];
+        assert('id' in g && 'title' in g && 'date' in g, 'gig missing id/title/date');
+      }
+    });
+  }
+
+  await test('GET /:id with id=0 → 400', async () => {
+    const { res, json } = await GET(`/api/${slug}/venues/0`);
+    assertStatus(res, json, 400);
+  });
+}
+
+async function testOrganizers(slug) {
+  console.log(B(`\n/api/${slug}/organizers`));
+  let firstOrg = null;
+
+  await test('GET returns paginated shape', async () => {
+    const { res, json } = await GET(`/api/${slug}/organizers`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json.rows), 'json.rows not an array');
+    assert(typeof json.total === 'number', 'json.total not a number');
+    if (json.rows.length) firstOrg = json.rows[0];
+  });
+
+  await test('GET ?slim=1 still returns plain array', async () => {
+    const { res, json } = await GET(`/api/${slug}/organizers?slim=1`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json), 'slim should return plain array');
+  });
+
+  await test('GET ?q= filters results', async () => {
+    const { res, json } = await GET(`/api/${slug}/organizers?q=zzznomatch`);
+    assertStatus(res, json, 200);
+    assert(json.rows.length === 0, 'expected 0 rows for non-matching query');
+    assert(json.total === 0, 'expected total 0 for non-matching query');
+  });
+
+  if (firstOrg) {
+    await test('GET /:id returns organizer', async () => {
+      const { res, json } = await GET(`/api/${slug}/organizers/${firstOrg.id}`);
+      assertStatus(res, json, 200);
+      assert(json.id === firstOrg.id, 'id mismatch');
+      assert('name' in json, 'missing name');
+    });
+
+    await test('GET /:id?refs=1 returns organizer with refs', async () => {
+      const { res, json } = await GET(`/api/${slug}/organizers/${firstOrg.id}?refs=1`);
+      assertStatus(res, json, 200);
+      assert('organizer' in json && 'refs' in json, 'missing organizer or refs');
+      assert(Array.isArray(json.refs.gigs), 'refs.gigs should be an array');
+      if (json.refs.gigs.length > 0) {
+        const g = json.refs.gigs[0];
+        assert('id' in g && 'title' in g && 'date' in g, 'gig missing id/title/date');
+      }
+    });
+  }
+
+  await test('GET /:id with id=0 → 400', async () => {
+    const { res, json } = await GET(`/api/${slug}/organizers/0`);
+    assertStatus(res, json, 400);
+  });
 }
 
 async function testSetlists(slug) {
@@ -715,7 +836,7 @@ async function main() {
   if (!R2_BASE) console.log(Y('  R2_PUBLIC_URL not set — R2-dependent tests will be skipped'));
 
   if (!SLUG) {
-    console.log(R('\nBAND_SLUG not set. Add it to .env.local or set it in the environment.'));
+    console.log(R('\nARTIST_SLUG not set. Add it to .env.local or set it in the environment.'));
     process.exit(1);
   }
 
@@ -728,6 +849,8 @@ async function main() {
     testSongs(slug),
     testSongLogs(slug),
     testGigs(slug),
+    testVenues(slug),
+    testOrganizers(slug),
     testSetlists(slug),
     testAuth(slug),
     testFileIdValidation(slug),
@@ -737,7 +860,7 @@ async function main() {
     await testWrite(slug, PASSWORD, firstSong);
   } else {
     console.log(B('\nWrite ops'));
-    console.log(D('  Set BAND_PASSWORD=<password> to enable write tests'));
+    console.log(D('  Set ARTIST_PASSWORD=<password> to enable write tests'));
   }
 
   printSummary();

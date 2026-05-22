@@ -17,7 +17,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
   const maxMB = maxBytes / 1024 / 1024;
 
   return async function handler(req, res) {
-    const { band: slug, id } = req.query;
+    const { artist: slug, id } = req.query;
     const songId = Number(id);
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });
@@ -74,7 +74,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       }
 
       const [song] = await sql`
-        SELECT * FROM songs WHERE id = ${songId} AND band_id = ${band.id} AND deleted = false
+        SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
       `;
       if (!song) return res.status(404).json({ error: 'Song not found' });
 
@@ -82,7 +82,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       const newExtra = { ...(song.extra ?? {}), [extraKey]: publicUrl };
       const [updated] = await sql`
         UPDATE songs SET extra = ${newExtra}
-        WHERE id = ${songId} AND band_id = ${band.id}
+        WHERE id = ${songId} AND artist_id = ${band.id}
         RETURNING *
       `;
 
@@ -103,7 +103,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
     // ── DELETE: remove file from R2 and clear DB field ─────────────────────
     if (req.method === 'DELETE') {
       const [song] = await sql`
-        SELECT extra FROM songs WHERE id = ${songId} AND band_id = ${band.id} AND deleted = false
+        SELECT extra FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
       `;
       if (!song) return res.status(404).json({ error: 'Song not found' });
 
@@ -118,7 +118,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
 
       await sql`
         UPDATE songs SET extra = extra - ${extraKey}
-        WHERE id = ${songId} AND band_id = ${band.id}
+        WHERE id = ${songId} AND artist_id = ${band.id}
       `;
 
       return res.json({ ok: true });

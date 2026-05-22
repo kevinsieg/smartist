@@ -61,6 +61,8 @@ async function init() {
       <ul class="stage-list">${items}</ul>
       ${totalMin ? `<p class="stage-total">${songs.length} song${songs.length !== 1 ? 's' : ''} &middot; ${formatLength(totalMin)}</p>` : ''}`;
 
+    if (params.get('print') === '1') setTimeout(function() { window.print(); }, 400);
+
   } catch {
     el.innerHTML = '<p class="stage-message">Setlist not found.</p>';
   }

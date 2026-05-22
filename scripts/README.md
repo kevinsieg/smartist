@@ -36,7 +36,7 @@ node scripts/seed.js            # seed (skips if songs already exist)
 node scripts/seed.js --force    # wipe all band data and reseed
 ```
 
-Targets the band whose slug matches `BAND_SLUG` in your `.env`, or the first band in the database.
+Targets the band whose slug matches `ARTIST_SLUG` in your `.env`, or the first band in the database.
 
 **Production guard:** the database hostname is shown on startup and must be confirmed before anything runs. Combined with the `--force` requirement for wipes, this prevents accidental data loss.
 
