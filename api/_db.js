@@ -19,21 +19,32 @@ function getDb() {
   return _sql;
 }
 
-async function getBand(slug) {
+async function getArtist(slug) {
   const sql = getDb();
-  const rows = await sql`SELECT * FROM bands WHERE slug = ${slug} LIMIT 1`;
+  const rows = await sql`SELECT * FROM artists WHERE slug = ${slug} LIMIT 1`;
   return rows[0] ?? null;
 }
 
-async function insertAuditLog(sql, bandId, songId, action, songData) {
+async function insertAuditLog(sql, artistId, songId, action, songData) {
   try {
     await sql`
-      INSERT INTO song_logs (band_id, song_id, action, song_data)
-      VALUES (${bandId}, ${songId}, ${action}, ${songData})
+      INSERT INTO song_logs (artist_id, song_id, action, song_data)
+      VALUES (${artistId}, ${songId}, ${action}, ${songData})
     `;
   } catch (err) {
     console.error('[audit] failed to log:', err.message);
   }
 }
 
-module.exports = { getDb, getBand, insertAuditLog };
+// Extract the artist slug from req.query or the URL path (Vercel dev workaround).
+function getSlug(req) {
+  return req.query.artist || req.url.split('?')[0].split('/')[2];
+}
+
+function parsePage(req) {
+  const limit  = Math.min(Math.max(parseInt(req.query.limit)  || 50, 1), 200);
+  const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+  return { limit, offset };
+}
+
+module.exports = { getDb, getArtist, insertAuditLog, getSlug, parsePage };

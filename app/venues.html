@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Venues</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css">
+  <style>
+    .venues-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+    .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
+    .toolbar input[type="text"] { flex: 1 1 220px; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.88rem; font-family: inherit; outline: none; }
+    .toolbar input[type="text"]:focus { border-color: var(--secondary-color); }
+    .placeholder-section { margin-bottom: 1.5rem; }
+    .placeholder-section h2 { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.75rem; }
+    .empty-hint { text-align: center; padding: 3rem 1rem; color: var(--third-color); font-size: 0.88rem; }
+    .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
+    .status-msg.error { color: #e55; }
+  </style>
+</head>
+<body>
+<script src="/app/js/common.js"></script>
+<div class="app-wrap venues-wrap">
+  <h1>Venues</h1>
+  <div class="toolbar">
+    <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…">
+    <button class="btn active" onclick="openAddModal()">+ Add venue</button>
+  </div>
+  <div id="sort-bar" class="sort-bar"></div>
+  <div class="placeholder-section">
+    <h2>Placeholders</h2>
+    <div id="placeholder-list"><p class="empty-hint">Loading…</p></div>
+  </div>
+  <div id="venues-list"><p class="empty-hint">Loading…</p></div>
+  <div id="venues-footer" style="display:none;text-align:center;margin-top:1.5rem;">
+    <p id="venues-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
+    <button id="venues-load-more-btn" class="btn" onclick="loadMoreVenues()">Load more</button>
+  </div>
+</div>
+
+<!-- Add/Edit modal -->
+<div class="modal-overlay" id="venue-modal">
+  <div class="modal" style="max-width:480px;">
+    <h2 id="venue-modal-title">Add venue</h2>
+    <div class="modal-field">
+      <label>Name *</label>
+      <input type="text" id="vm-name" placeholder="Venue name">
+    </div>
+    <div class="modal-field" style="display:flex;gap:0.6rem;">
+      <div style="flex:0 0 90px;">
+        <label>Postcode</label>
+        <input type="text" id="vm-postcode" placeholder="75001" autocomplete="postal-code" style="width:100%;">
+      </div>
+      <div style="flex:1 1 auto;">
+        <label>City</label>
+        <input type="text" id="vm-city" placeholder="City" autocomplete="address-level2" style="width:100%;">
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Country</label>
+      <input type="text" id="vm-country" placeholder="Country" autocomplete="country-name">
+    </div>
+    <div class="modal-field">
+      <label>Status</label>
+      <select id="vm-status">
+        <option value="">—</option>
+        <option value="prospect">Prospect</option>
+        <option value="contacted">Contacted</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="declined">Declined</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Category</label>
+      <input type="text" id="vm-category" placeholder="bar, club, festival…">
+    </div>
+    <div class="modal-field">
+      <label>Email</label>
+      <input type="email" id="vm-email" placeholder="booking@venue.com">
+    </div>
+    <div class="modal-field">
+      <label>Website</label>
+      <input type="url" id="vm-website" placeholder="https://…">
+    </div>
+    <div class="modal-field">
+      <label>Capacity</label>
+      <input type="number" id="vm-size" placeholder="500">
+    </div>
+    <div class="modal-field">
+      <label>Comment</label>
+      <textarea id="vm-comment" placeholder="Notes…" rows="2"></textarea>
+    </div>
+      <div class="related-section" id="vm-gigs-section" style="display:none;">
+        <h4>Gigs at this venue</h4>
+        <div id="vm-gigs-list"></div>
+      </div>
+    <div class="status-msg" id="vm-status-msg"></div>
+    <div class="modal-actions">
+      <button class="btn active" id="vm-save-btn" onclick="saveVenue()">Save</button>
+      <button class="btn" onclick="closeVenueModal()">Cancel</button>
+      <button class="btn" id="vm-delete-btn" style="margin-left:auto;color:#e55;" onclick="softDeleteVenue()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hard delete confirm modal -->
+<div class="modal-overlay" id="hard-delete-modal">
+  <div class="modal" style="max-width:380px;">
+    <h2>Permanently delete venue?</h2>
+    <p id="hd-refs-msg" style="font-size:0.85rem;color:var(--third-color);"></p>
+    <div id="hd-cascade-opts"></div>
+    <div class="status-msg error" id="hd-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>
+      <button class="btn" onclick="closeHardDeleteModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app/js/geo.js"></script>
+<script src="/app/js/venues.js"></script>
+</body>
+</html>

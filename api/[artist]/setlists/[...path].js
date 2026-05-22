@@ -1,4 +1,4 @@
-const { getDb, getBand } = require('../../_db');
+const { getDb, getArtist, getSlug } = require('../../_db');
 const { requireAuth } = require('../../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../../_validate');
 const { buildSetlistPdf, setlistTitle } = require('../../_pdf');
@@ -12,11 +12,36 @@ module.exports = wrap(async function handler(req, res) {
     ? req.query.path
     : req.url.split('?')[0].split('/setlists/')[1]?.split('/') ?? [];
   const [rawId, action] = pathParts;
+  const slug = getSlug(req);
+
+  // ── Export (merged from export.js via vercel.json rewrite) ───────────────
+  if (rawId === 'export') {
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+    const sql = getDb();
+    const [songs, gigs, setlists, setlist_songs] = await Promise.all([
+      sql`SELECT * FROM songs WHERE artist_id = ${band.id} ORDER BY id`,
+      sql`SELECT * FROM gigs WHERE artist_id = ${band.id} ORDER BY id`,
+      sql`SELECT * FROM setlists WHERE artist_id = ${band.id} ORDER BY id`,
+      sql`
+        SELECT ss.* FROM setlist_songs ss
+        JOIN setlists s ON ss.setlist_id = s.id
+        WHERE s.artist_id = ${band.id}
+        ORDER BY ss.setlist_id, ss.position
+      `,
+    ]);
+    const date = new Date().toISOString().slice(0, 10);
+    const safeSlug = String(slug ?? 'artist').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'artist';
+    res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}-export-${date}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    return res.json({ artist: { slug: band.slug, name: band.name }, songs, gigs, setlists, setlist_songs });
+  }
+
   const setlistId = Number(rawId);
   if (!Number.isInteger(setlistId) || setlistId <= 0)
     return res.status(400).json({ error: 'Invalid setlist id' });
 
-  const slug = req.query.band || req.url.split('?')[0].split('/')[2];
   const sql = getDb();
 
   // ── GET/PUT setlist ───────────────────────────────────────────────────────
@@ -28,15 +53,16 @@ module.exports = wrap(async function handler(req, res) {
       band = await requireAuth(req, res, slug);
       if (!band) return;
     } else {
-      band = await getBand(slug);
+      band = await getArtist(slug);
       if (!band) return res.status(404).json({ error: 'Band not found' });
     }
 
     const [setlist] = await sql`
-      SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
-      WHERE s.id = ${setlistId} AND s.band_id = ${band.id}
+      LEFT JOIN venues v ON v.id = g.venue_id
+      WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
     `;
     if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
 
@@ -67,7 +93,7 @@ module.exports = wrap(async function handler(req, res) {
 
     await sql`
       UPDATE setlists SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
-      WHERE id = ${setlistId} AND band_id = ${band.id}
+      WHERE id = ${setlistId} AND artist_id = ${band.id}
     `;
     await sql`DELETE FROM setlist_songs WHERE setlist_id = ${setlistId}`;
 
@@ -81,13 +107,14 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const [updated] = await sql`
-      SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue,
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue,
              COUNT(ss.song_id)::int AS song_count
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
-      WHERE s.id = ${setlistId} AND s.band_id = ${band.id}
-      GROUP BY s.id, g.name, g.date, g.venue
+      WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
+      GROUP BY s.id, g.title, g.date, v.name
     `;
     return res.json(updated);
   }
@@ -100,12 +127,12 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
 
     const [source] = await sql`
-      SELECT * FROM setlists WHERE id = ${setlistId} AND band_id = ${band.id}
+      SELECT * FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}
     `;
     if (!source) return res.status(404).json({ error: 'Setlist not found' });
 
     const [copy] = await sql`
-      INSERT INTO setlists (band_id, title, gig_id, comment)
+      INSERT INTO setlists (artist_id, title, gig_id, comment)
       VALUES (${band.id}, ${source.title ? source.title + ' (copy)' : null}, null, ${source.comment ?? null})
       RETURNING *
     `;
@@ -127,13 +154,14 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const [created] = await sql`
-      SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue,
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue,
              COUNT(ss.song_id)::int AS song_count
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
+      LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
       WHERE s.id = ${copy.id}
-      GROUP BY s.id, g.name, g.date, g.venue
+      GROUP BY s.id, g.title, g.date, v.name
     `;
     return res.status(201).json(created);
   }
@@ -146,10 +174,11 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
 
     const [setlist] = await sql`
-      SELECT s.*, g.name AS gig_name, g.date AS gig_date, g.venue AS gig_venue
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
-      WHERE s.id = ${setlistId} AND s.band_id = ${band.id}
+      LEFT JOIN venues v ON v.id = g.venue_id
+      WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
     `;
     if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
 

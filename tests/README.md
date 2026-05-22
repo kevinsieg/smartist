@@ -34,7 +34,7 @@ node tests/history-client.js
 | `tests/unit/r2.js` | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 | `tests/unit/lyrics.js` | `api/_lyrics.js` | `LYRICS_SOURCES`, `plainFromSynced` |
 | `tests/unit/ratelimit.js` | `api/_ratelimit.js` | `clientIp`, `isMissingRateLimitTable` |
-| `tests/unit/gema.js` | `api/[band]/gema/import.js` | CSV parsers, GEMA normalizers |
+| `tests/unit/gema.js` | `api/[artist]/gema/import.js` | CSV parsers, GEMA normalizers |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
 | `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
@@ -54,7 +54,7 @@ Integration tests load `.env.local` then `.env` from the **repo root** (paths ar
 To enable write tests, add your band password:
 
 ```
-BAND_PASSWORD=yourpassword
+ARTIST_PASSWORD=yourpassword
 ```
 
 ### Running
@@ -62,11 +62,11 @@ BAND_PASSWORD=yourpassword
 ```bash
 # Local (needs vercel dev running on port 3000)
 cd tests && npm test
-BAND_PASSWORD=xxx npm test
+ARTIST_PASSWORD=xxx npm test
 
 # Against the dev Preview deployment
 npm run test:dev
-BAND_PASSWORD=xxx npm run test:dev
+ARTIST_PASSWORD=xxx npm run test:dev
 
 # Against production (read-only)
 npm run test:prod
@@ -82,31 +82,31 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | Area | Checks |
 |------|--------|
 | `GET /api/config` | returns slug, name, songs array |
-| `GET /api/:band/songs` | array with play_count and last_played_at |
-| `GET /api/:band/songs/:id/setlists` | appearances list |
-| `GET /api/:band/song-logs` | audit log with action and song_data |
-| `GET /api/:band/gigs` | array; single gig by id |
-| `GET /api/:band/setlists` | array with song_count; single setlist with ordered songs |
+| `GET /api/:artist/songs` | array with play_count and last_played_at |
+| `GET /api/:artist/songs/:id/setlists` | appearances list |
+| `GET /api/:artist/song-logs` | audit log with action and song_data |
+| `GET /api/:artist/gigs` | array; single gig by id |
+| `GET /api/:artist/setlists` | array with song_count; single setlist with ordered songs |
 | Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; PUT /setlists/:id → 401 |
 | Validation | id=0 → 400, non-integer id → 400, missing required fields → 400, unknown id → 404 |
 
-**Write (requires `BAND_PASSWORD`)**
+**Write (requires `ARTIST_PASSWORD`)**
 
 | Area | Checks |
 |------|--------|
-| `POST /api/:band/auth` | correct password → 200 |
+| `POST /api/:artist/auth` | correct password → 200 |
 | Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
-| `POST /api/:band/songs` | missing title → 400 |
+| `POST /api/:artist/songs` | missing title → 400 |
 | Lyrics suggest | rejects songs without an artist before calling external providers |
 | Setlist lifecycle | `POST` (create) → 201, `POST` (share) validates email + unknown id, `PUT` updates title, `POST` (duplicate) → 201 with new id + matching song count |
-| `POST /api/:band/setlists` | missing song_ids → 400 |
+| `POST /api/:artist/setlists` | missing song_ids → 400 |
 | File upload validation | extension, MIME type, size, presigned URL prefix checks |
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
-| `GET /api/:band/export` | 200 with `Content-Disposition: attachment`, songs/setlists/gigs arrays present |
+| `GET /api/:artist/export` | 200 with `Content-Disposition: attachment`, songs/setlists/gigs arrays present |
 
 > **Note:** write tests create two setlists named `[TEST]` that cannot be deleted via the API. Remove them manually from the setlist history page if needed.
 
 ### Exit codes
 
 - `0` — all tests passed
-- `1` — one or more tests failed or `BAND_SLUG` is not set
+- `1` — one or more tests failed or `ARTIST_SLUG` is not set

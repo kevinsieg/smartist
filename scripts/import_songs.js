@@ -2,11 +2,11 @@
 /**
  * Band Tools — Song importer
  *
- * Imports songs from a JSON file into the database for a given band.
- * Run setup.js first to create the band if it does not exist yet.
+ * Imports songs from a JSON file into the database for a given artist.
+ * Run setup.js first to create the artist if it does not exist yet.
  *
  * Usage:
- *   node scripts/import_songs.js --band <slug> <file.json>
+ *   node scripts/import_songs.js --artist <slug> <file.json>
  *
  * JSON format — array of song objects:
  *   [
@@ -52,16 +52,16 @@ loadEnv(path.join(__dirname, '..', '.env.local'));
 
 // ── Args ───────────────────────────────────────────────────────────────────
 
-const args    = process.argv.slice(2);
-const bandIdx = args.indexOf('--band');
+const args      = process.argv.slice(2);
+const artistIdx = args.indexOf('--artist');
 
-if (bandIdx === -1 || !args[bandIdx + 1]) {
-  console.error('Usage: node scripts/import_songs.js --band <slug> <file.json>');
+if (artistIdx === -1 || !args[artistIdx + 1]) {
+  console.error('Usage: node scripts/import_songs.js --artist <slug> <file.json>');
   process.exit(1);
 }
 
-const slug = args[bandIdx + 1];
-const file = args.find((a, i) => i !== bandIdx && i !== bandIdx + 1);
+const slug = args[artistIdx + 1];
+const file = args.find((a, i) => i !== artistIdx && i !== artistIdx + 1);
 
 if (!file) {
   console.error('No JSON file specified.');
@@ -99,9 +99,9 @@ function confirmDb(url) {
     process.exit(1);
   }
 
-  const [band] = await sql`SELECT id FROM bands WHERE slug = ${slug} LIMIT 1`;
-  if (!band) {
-    console.error(`Band "${slug}" not found. Run setup.js first.`);
+  const [artist] = await sql`SELECT id FROM artists WHERE slug = ${slug} LIMIT 1`;
+  if (!artist) {
+    console.error(`Artist "${slug}" not found. Run setup.js first.`);
     process.exit(1);
   }
 
@@ -116,10 +116,10 @@ function confirmDb(url) {
 
     await sql`
       INSERT INTO songs
-        (band_id, title, active, key, genre, tempo, length_min,
+        (artist_id, title, active, key, genre, tempo, length_min,
          interpret, reference_interpret, comment, extra)
       VALUES (
-        ${band.id},
+        ${artist.id},
         ${String(s.title).trim()},
         ${s.active ?? true},
         ${s.key        ?? null},

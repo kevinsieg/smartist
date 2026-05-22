@@ -1,10 +1,10 @@
 const bcrypt = require('bcryptjs');
-const { getBand } = require('./_db');
+const { getArtist } = require('./_db');
 const { verifyMagicToken } = require('./_token');
 
-async function checkCredentials(token, band) {
-  return verifyMagicToken(token, band.password_hash) ||
-         await bcrypt.compare(token, band.password_hash);
+async function checkCredentials(token, artist) {
+  return verifyMagicToken(token, artist.password_hash) ||
+         await bcrypt.compare(token, artist.password_hash);
 }
 
 async function requireAuth(req, res, slug) {
@@ -14,16 +14,16 @@ async function requireAuth(req, res, slug) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
   }
-  const band = await getBand(slug);
-  if (!band) {
-    res.status(404).json({ error: 'Band not found' });
+  const artist = await getArtist(slug);
+  if (!artist) {
+    res.status(404).json({ error: 'Artist not found' });
     return null;
   }
-  if (!await checkCredentials(token, band)) {
+  if (!await checkCredentials(token, artist)) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
   }
-  return band;
+  return artist;
 }
 
 module.exports = { requireAuth, checkCredentials };

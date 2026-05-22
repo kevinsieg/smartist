@@ -1,16 +1,33 @@
 // Songs management page
 
-let bandSlug = '';
-let songs = [];
-const dirty = new Set();
-let newRowCounter = 0;
-let currentPlayerSid = null;
-let currentSheetSid    = null;
-let currentPlaybackSid = null;
-let currentLyricsSid   = null;
-let _lyricsSuggestAbort = null;
+var artistSlug = '';
+var songs = [];
+var dirty = new Set();
+var newRowCounter = 0;
+var currentPlayerSid = null;
+var currentSheetSid    = null;
+var currentPlaybackSid = null;
+var currentLyricsSid   = null;
+var _lyricsSuggestAbort = null;
 
-let _configPromise = null;
+var _pendingSetlistId = 0;
+var _pendingSongId    = '';
+var _newPanelEscapeHandler = null;
+var SONGS_BULK_EDIT_KEY = 'songs_bulk_edit';
+
+function isMobile() { return window.innerWidth <= 1024; }
+function isBulkEdit() { return !isMobile() && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
+
+function toggleBulkEdit() {
+  if (localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1') {
+    localStorage.removeItem(SONGS_BULK_EDIT_KEY);
+  } else {
+    localStorage.setItem(SONGS_BULK_EDIT_KEY, '1');
+  }
+  renderTable();
+}
+
+var _configPromise = null;
 function getConfig() {
   if (!_configPromise) _configPromise = loadConfig();
   return _configPromise;
@@ -24,152 +41,50 @@ async function init() {
   const magic = params.get('magic');
   if (magic) {
     history.replaceState(null, '', window.location.pathname);
-    if (await verifyToken(magic)) {
-      sessionStorage.setItem('setlist_token', magic);
-      await loadAndRender();
-      return;
-    }
-  }
-  const token = sessionStorage.getItem('setlist_token');
-  if (token && await verifyToken(token)) {
-    await loadAndRender();
-  } else {
-    renderAuthGate();
-  }
-}
-
-async function verifyToken(token) {
-  try {
-    const cfg = await getConfig().catch(() => null);
-    if (!cfg) return false;
-    bandSlug = cfg.slug;
-    applyNav(cfg.name, cfg.config);
-    const r = await fetch(`/api/${bandSlug}/auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: token }),
-    });
-    return r.ok;
-  } catch { return false; }
-}
-
-// --- Auth gate ---
-
-function renderAuthGate() {
-  document.getElementById('page-content').innerHTML = `
-    <div class="auth-gate">
-      <p>Enter the band password to manage songs.</p>
-      <div class="auth-row">
-        <div class="pw-wrapper">
-          <input type="password" id="pw-input" placeholder="Password" autocomplete="current-password">
-          <button type="button" class="pw-toggle" id="pw-toggle">show</button>
-        </div>
-        <button class="btn" id="pw-btn">Login</button>
-      </div>
-      <div class="auth-error" id="auth-error"></div>
-      <button class="reset-link" id="reset-toggle">Forgot password?</button>
-      <div class="reset-form" id="reset-form" style="display:none">
-        <div class="auth-row">
-          <input type="email" id="reset-email" placeholder="Band email address" autocomplete="email">
-          <button class="btn" id="reset-btn">Send link</button>
-        </div>
-        <div class="auth-error" id="reset-msg"></div>
-      </div>
-    </div>`;
-  document.getElementById('pw-btn').addEventListener('click', doLogin);
-  document.getElementById('pw-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
-  document.getElementById('pw-toggle').addEventListener('click', () => {
-    const input = document.getElementById('pw-input');
-    const btn   = document.getElementById('pw-toggle');
-    const show  = input.type === 'password';
-    input.type      = show ? 'text' : 'password';
-    btn.textContent = show ? 'hide' : 'show';
-  });
-  document.getElementById('reset-toggle').addEventListener('click', () => {
-    const form = document.getElementById('reset-form');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    if (form.style.display !== 'none') document.getElementById('reset-email').focus();
-  });
-  document.getElementById('reset-btn').addEventListener('click', doRequestReset);
-  document.getElementById('reset-email').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doRequestReset();
-  });
-  setTimeout(() => document.getElementById('pw-input')?.focus(), 50);
-}
-
-async function doRequestReset() {
-  const email = document.getElementById('reset-email').value.trim();
-  if (!email) return;
-  const btn = document.getElementById('reset-btn');
-  const msg = document.getElementById('reset-msg');
-  btn.disabled = true; btn.textContent = '…';
-  msg.textContent = '';
-  try {
-    if (!bandSlug) {
+    try {
       const cfg = await getConfig();
-      bandSlug = cfg.slug;
-    }
-    await fetch(`/api/${bandSlug}/request-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    msg.style.color = 'var(--secondary-color)';
-    msg.textContent = 'If that email is correct, a login link has been sent.';
-  } catch {
-    msg.style.color = '';
-    msg.textContent = 'Failed to send. Try again.';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Send link';
+      artistSlug = cfg.slug;
+      applyNav(cfg.name, cfg.config);
+      const r = await fetch(`/api/${artistSlug}/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: magic }),
+      });
+      if (r.ok) {
+        sessionStorage.setItem(AUTH_TOKEN_KEY, magic);
+        await loadAndRender();
+        return;
+      }
+    } catch {}
   }
-}
-
-async function doLogin() {
-  const pw = document.getElementById('pw-input').value.trim();
-  if (!pw) return;
-  const btn = document.getElementById('pw-btn');
-  btn.disabled = true; btn.textContent = '…';
-  try {
-    const cfg = await getConfig();
-    bandSlug = cfg.slug;
-    applyNav(cfg.name, cfg.config);
-    const r = await fetch(`/api/${bandSlug}/auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
-    });
-    if (!r.ok) throw new Error('wrong');
-    sessionStorage.setItem('setlist_token', pw);
-    await loadAndRender();
-  } catch {
-    document.getElementById('auth-error').textContent = 'Wrong password.';
-    btn.disabled = false; btn.textContent = 'Login';
-  }
+  requireLogin();
+  await loadAndRender();
 }
 
 // --- Data ---
 
 async function loadAndRender() {
   try {
-    if (!bandSlug) {
+    if (!artistSlug) {
       const cfg = await getConfig();
-      bandSlug = cfg.slug;
+      artistSlug = cfg.slug;
       applyNav(cfg.name, cfg.config);
     }
-    songs = await fetch(`/api/${bandSlug}/songs`).then(r => r.json());
+    songs = await fetch(`/api/${artistSlug}/songs`).then(r => r.json());
+    var _qp = new URLSearchParams(location.search);
+    _pendingSetlistId = Number(_qp.get('setlist_id'));
+    _pendingSongId    = String(_qp.get('id') || '');
     renderTable();
     loadLogs();
   } catch {
-    document.getElementById('page-content').innerHTML =
-      '<p style="color:var(--third-color);text-align:center;">Failed to load songs.</p>';
+    const el = document.getElementById('page-content');
+    if (el) el.innerHTML = '<p style="color:var(--third-color);text-align:center;">Failed to load songs.</p>';
   }
 }
 
 // --- Table ---
 
-const COLS = [
+var COLS = [
   { key: 'title',               label: 'title',              type: 'text',   cls: 'col-title',   width: 180 },
   { key: 'active',              label: 'active',             type: 'bool',   cls: 'col-active',  width: 48  },
   { key: 'extra.listenUrl',    label: '▶',                  type: 'listen',   cls: 'col-listen',   width: 52, title: 'Listen — reference recording'  },
@@ -191,7 +106,7 @@ const COLS = [
   { key: 'genre',            label: 'genre',           type: 'text',   cls: 'col-cat',     width: 100 },
   { key: 'tempo',               label: 'tempo',              type: 'text',   cls: 'col-tempo',   width: 70  },
   { key: 'bpm',                 label: 'bpm',                type: 'number', cls: 'col-bpm',     width: 55  },
-  { key: 'length_min',          label: 'length_min',         type: 'time',   cls: 'col-len',     width: 68  },
+  { key: 'length_min',          label: 'length',             type: 'time',   cls: 'col-len',     width: 68  },
   { key: 'extra.author',        label: 'author',             type: 'text',   cls: 'col-author',  width: 130 },
   { key: 'interpret',           label: 'interpret',          type: 'text',   cls: 'col-interp',  width: 140 },
   { key: 'reference_interpret', label: 'reference_interpret', type: 'text',  cls: 'col-refint',  width: 140 },
@@ -200,7 +115,7 @@ const COLS = [
   { key: 'comment',             label: 'comment',            type: 'text',   cls: 'col-comment', width: 160 },
 ];
 
-const COL_WIDTHS_KEY = 'songs_col_widths';
+var COL_WIDTHS_KEY = 'songs_col_widths';
 
 function minsToTime(mins) {
   if (mins === null || mins === undefined || mins === '') return '';
@@ -232,30 +147,76 @@ function getSavedWidths() {
   try { return JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || '{}'); } catch { return {}; }
 }
 
-const filters = { text: '', active: true, lead: '', genre: '' };
+var filters = { text: '', active: true, lead: '', genre: '', interpret: '', setlist: '' };
+
+var _setlistFilterIds   = null;   // null = no filter; Set<songId>
+var _setlistFilterOrder = [];     // song IDs in setlist position order
+var _setlistFilterTimer = null;
+var _allSetlistsMeta    = null;   // [{id, name}] fetched once on demand
+var _songsView          = null;
 
 function getVisibleSongs() {
-  return songs.filter(s => {
-    if (filters.active   && !s.active) return false;
-    if (filters.text     && !s.title.toLowerCase().includes(filters.text)) return false;
-    if (filters.lead     && !(s.extra?.lead || '').toLowerCase().includes(filters.lead)) return false;
-    if (filters.genre && !(s.genre || '').toLowerCase().includes(filters.genre)) return false;
+  var result = songs.filter(function(s) {
+    if (filters.active    && !s.active) return false;
+    if (filters.text      && !(s.title || '').toLowerCase().includes(filters.text)) return false;
+    if (filters.lead      && !(s.extra?.lead || '').toLowerCase().includes(filters.lead)) return false;
+    if (filters.genre     && !(s.genre || '').toLowerCase().includes(filters.genre)) return false;
+    if (filters.interpret && !(s.interpret || '').toLowerCase().includes(filters.interpret)) return false;
+    if (_setlistFilterIds !== null && !_setlistFilterIds.has(s.id)) return false;
     return true;
   });
+  if (_setlistFilterIds !== null && _setlistFilterOrder.length) {
+    result = result.slice().sort(function(a, b) {
+      return _setlistFilterOrder.indexOf(a.id) - _setlistFilterOrder.indexOf(b.id);
+    });
+  }
+  return result;
+}
+
+async function _applySetlistById(id) {
+  // Ensure metadata cache is populated so we can show the name in the filter input
+  if (!_allSetlistsMeta) {
+    try {
+      var r = await fetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = await r.json();
+      if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
+    } catch { _allSetlistsMeta = []; }
+  }
+  try {
+    var detail = await fetch('/api/' + artistSlug + '/setlists/' + id).then(function(r) { return r.json(); });
+    var songsList = Array.isArray(detail) ? detail : (detail.songs || []);
+    songsList = songsList.slice().sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
+    _setlistFilterOrder = songsList.map(function(s) { return s.id; });
+    _setlistFilterIds = new Set(_setlistFilterOrder);
+  } catch {
+    _setlistFilterIds = new Set();
+    _setlistFilterOrder = [];
+  }
+  // Update filter input with setlist name
+  var found = (_allSetlistsMeta || []).find(function(s) { return s.id === id; });
+  if (found) {
+    filters.setlist = (found.name || '').toLowerCase();
+    var el = document.getElementById('filter-setlist');
+    if (el) el.value = found.name || '';
+  }
+  applyFilter();
 }
 
 function applyFilter() {
-  const visible = getVisibleSongs();
-  const tbody = document.getElementById('tbody');
-  if (!tbody) return;
-  const newRows = [...tbody.querySelectorAll('tr[data-id^="_new_"]')];
-  tbody.innerHTML = visible.map(s => renderRow(s)).join('');
-  newRows.forEach(r => tbody.appendChild(r));
-  const countEl = document.getElementById('filter-count');
-  if (countEl) countEl.textContent = `${visible.length} / ${songs.length}`;
+  if (isBulkEdit()) {
+    var visible = getVisibleSongs();
+    var tbody = document.getElementById('tbody');
+    if (!tbody) return;
+    var newRows = Array.from(tbody.querySelectorAll('tr[data-id^="_new_"]'));
+    tbody.innerHTML = visible.map(renderRow).join('');
+    newRows.forEach(function(r) { tbody.appendChild(r); });
+    var countEl = document.getElementById('filter-count');
+    if (countEl) countEl.textContent = visible.length + ' / ' + songs.length;
+  }
+  // In list-view mode, the factory manages its own pipeline
 }
 
-const FILTER_COLS = {
+var FILTER_COLS = {
   'title':      () => `<input type="text" id="filter-text" class="col-filter" placeholder="Search…" value="${escHtml(filters.text)}" autocomplete="off">`,
   'active':     () => `<input type="checkbox" id="filter-active" class="col-filter-check" title="Active only" ${filters.active ? 'checked' : ''}>`,
   'extra.lead': () => `<input type="text" id="filter-lead" class="col-filter" placeholder="…" value="${escHtml(filters.lead)}" autocomplete="off">`,
@@ -263,6 +224,417 @@ const FILTER_COLS = {
 };
 
 function renderTable() {
+  if (isBulkEdit()) { _renderBulkEditTable(); return; }
+  _renderSongsListView();
+}
+
+async function _resolveSetlistFilter(q) {
+  if (!_allSetlistsMeta) {
+    try {
+      var r = await fetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = await r.json();
+      if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
+    } catch { _allSetlistsMeta = []; }
+  }
+  var matches = _allSetlistsMeta.filter(function(s) {
+    return (s.name || '').toLowerCase().includes(q.toLowerCase());
+  });
+  if (!matches.length) return new Set();
+
+  try {
+    var detail = await fetch('/api/' + artistSlug + '/setlists/' + matches[0].id)
+      .then(function(r) { return r.json(); });
+    var songsList = Array.isArray(detail) ? detail : (detail.songs || []);
+    return new Set(songsList.map(function(s) { return s.id; }));
+  } catch {
+    return new Set();
+  }
+}
+
+function _getSongsForFactory(state) {
+  var setlistIds = state.setlist; // Set<id> | undefined
+  return songs.filter(function(s) {
+    if (state.active && !s.active) return false;
+    if (state.title && !(s.title || '').toLowerCase().includes(state.title)) return false;
+    if (state.interpret && !(s.interpret || '').toLowerCase().includes(state.interpret)) return false;
+    if (state.genre && (s.genre || '') !== state.genre) return false;
+    if (setlistIds !== undefined && !setlistIds.has(s.id)) return false;
+    return true;
+  });
+}
+
+function _renderSongsListView() {
+  _songsView = createListView({
+    container: document.getElementById('page-content'),
+    filters: [
+      { id: 'title',     label: 'Title',       type: FILTER_TYPES.TEXT,       field: 'title'     },
+      { id: 'interpret', label: 'Interpret',    type: FILTER_TYPES.TEXT,       field: 'interpret' },
+      { id: 'setlist',   label: 'Setlist',      type: FILTER_TYPES.ASYNC_TEXT,
+        resolve: _resolveSetlistFilter },
+      { id: 'active',    label: 'Active only',  type: FILTER_TYPES.CHECKBOX,   field: 'active', 'default': true },
+      { id: 'genre',     label: 'Genre',        type: FILTER_TYPES.CHIPS,      field: 'genre',
+        getValues: function() {
+          return Array.from(new Set(songs.map(function(s) { return s.genre; }).filter(Boolean))).sort();
+        }},
+    ],
+    actions: [
+      { label: '+ Add song',  onClick: _openNewSongPanel },
+      { label: 'Bulk Edit',   onClick: toggleBulkEdit, desktopOnly: true },
+      { label: 'Export CSV',  onClick: exportCsv },
+    ],
+    getData:   _getSongsForFactory,
+    getTotal:  function() { return songs.length; },
+    getItemId: function(s) { return s.id; },
+    renderRow: renderListRowHtml,
+    onOpen:    _openSongPanelContent,
+  });
+
+  requestAnimationFrame(function() {
+    var hdr = document.querySelector('.app-header');
+    if (hdr) document.documentElement.style.setProperty('--songs-toolbar-top', hdr.getBoundingClientRect().height + 'px');
+  });
+
+  if (_pendingSetlistId) {
+    _applySetlistByIdForView(_pendingSetlistId);
+    _pendingSetlistId = 0;
+  } else if (_pendingSongId) {
+    _songsView.select(_pendingSongId);
+    _pendingSongId = '';
+  }
+
+  loadLogs();
+}
+
+function _openSongPanelContent(item, panelEl) {
+  var song = songs.find(function(s) { return String(s.id) === String(item.id); });
+  if (!song) return;
+  var sid = String(song.id);
+
+  var title = escHtml(song.title || '(untitled)');
+  var activeDot = song.active
+    ? '<span class="vsp-active-dot vsp-active-dot--on">&#9679; active</span>'
+    : '<span class="vsp-active-dot vsp-active-dot--off">&#9679; inactive</span>';
+
+  var listenUrl   = getVal(song, 'extra.listenUrl');
+  var playbackUrl = getVal(song, 'extra.playbackUrl');
+  var lyricsVal   = String(getVal(song, 'extra.lyrics') || '').trim();
+  var sheetUrl    = getVal(song, 'extra.sheetUrl');
+  var sidEsc      = escHtml(sid);
+  var audioRe     = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
+
+  var audioHtml = '';
+  if (listenUrl  && audioRe.test(listenUrl))
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; Listen</div><audio class="vsp-audio" controls src="' + escHtml(listenUrl) + '"></audio></div>';
+  if (playbackUrl && audioRe.test(playbackUrl))
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; Playback</div><audio class="vsp-audio" controls src="' + escHtml(playbackUrl) + '"></audio></div>';
+
+  var actions = '';
+  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" onclick="openPlayer(\'' + sidEsc + '\')">&#9654; Listen</button>';
+  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" onclick="openPlayback(\'' + sidEsc + '\')">&#9655; Playback</button>';
+  if (lyricsVal)  actions += '<button class="btn" onclick="openLyrics(\'' + sidEsc + '\')">&#182; Lyrics</button>';
+  if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; Sheet</button>';
+  actions += '<button class="btn icon-btn" data-tooltip="Edit song" onclick="_openSongEditForm(\'' + sidEsc + '\', document.getElementById(\'view-side-panel-inner\'))">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
+    '</svg>' +
+  '</button>';
+
+  var key     = getVal(song, 'key');
+  var tempo   = getVal(song, 'tempo');
+  var bpm     = getVal(song, 'bpm');
+  var len     = minsToTime(getVal(song, 'length_min'));
+  var lead    = getVal(song, 'extra.lead');
+  var gitCapo = getVal(song, 'extra.gitCapo');
+  var bjCapo  = getVal(song, 'extra.banjoCapo');
+  var git2    = getVal(song, 'extra.git2');
+  var harp    = getVal(song, 'extra.harp');
+  var perfCells =
+    (key     ? _vspCell('Key',        escHtml(String(key)))     : '') +
+    (tempo   ? _vspCell('Tempo',      escHtml(String(tempo)))   : '') +
+    (bpm     ? _vspCell('BPM',        escHtml(String(bpm)))     : '') +
+    (len     ? _vspCell('Length',     escHtml(len))             : '') +
+    (lead    ? _vspCell('Lead',       escHtml(String(lead)))    : '') +
+    (gitCapo ? _vspCell('Git capo',   escHtml(String(gitCapo))) : '') +
+    (bjCapo  ? _vspCell('Banjo capo', escHtml(String(bjCapo)))  : '') +
+    (git2    ? _vspCell('2nd guitar', '&#10003;')               : '') +
+    (harp    ? _vspCell('Harmonica',  '&#10003;')               : '');
+  var perfHtml = perfCells ? _vspSection('Performance', perfCells) : '';
+
+  var genre   = getVal(song, 'genre');
+  var interp  = getVal(song, 'interpret');
+  var refInt  = getVal(song, 'reference_interpret');
+  var author  = getVal(song, 'extra.author');
+  var comment = getVal(song, 'comment');
+  var refUrl  = getVal(song, 'extra.referenceUrl');
+  var infoUrl = getVal(song, 'extra.songinfoUrl');
+  var aboutCells =
+    (genre   ? _vspCell('Genre',          escHtml(String(genre)))  : '') +
+    (interp  ? _vspCell('Interpret',      escHtml(String(interp))) : '') +
+    (refInt  ? _vspCell('Ref. interpret', escHtml(String(refInt))) : '') +
+    (author  ? _vspCell('Author',         escHtml(String(author))) : '') +
+    (comment ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Comment</div><div class="vsp-cell-value">' + escHtml(String(comment)) + '</div></div>' : '') +
+    (refUrl  ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Reference</div><div class="vsp-cell-value"><a href="' + escHtml(String(refUrl))  + '" target="_blank" rel="noopener">' + escHtml(String(refUrl))  + '</a></div></div>' : '') +
+    (infoUrl ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Song info</div><div class="vsp-cell-value"><a href="' + escHtml(String(infoUrl)) + '" target="_blank" rel="noopener">' + escHtml(String(infoUrl)) + '</a></div></div>' : '');
+  var aboutHtml = aboutCells ? _vspSection('About', aboutCells) : '';
+
+  var plays    = getVal(song, 'play_count');
+  var lastLive = getVal(song, 'last_played_at');
+  var statsCells =
+    (plays    ? _vspCell('Plays',     escHtml(String(plays))) : '') +
+    (lastLive ? _vspCell('Last live', escHtml(String(lastLive).slice(0, 10))) : '');
+  var statsHtml = statsCells ? _vspSection('Stats', statsCells) : '';
+
+  var lang   = getVal(song, 'gema_language') || (song.extra && song.extra.language) || '';
+  var gemaNr = getVal(song, 'gema_work_number');
+  var iswc   = song.iswc || (song.extra && song.extra.iswc) || '';
+  var isrc   = (song.extra && song.extra.isrc) || '';
+  var rightsCells =
+    (lang   ? _vspCell('Lang',    escHtml(String(lang)))   : '') +
+    (gemaNr ? _vspCell('GEMA-Nr', escHtml(String(gemaNr))) : '') +
+    (iswc   ? _vspCell('ISWC',   escHtml(String(iswc)))   : '') +
+    (isrc   ? _vspCell('ISRC',   escHtml(String(isrc)))   : '');
+  var rightsHtml = rightsCells ? _vspSection('Rights', rightsCells) : '';
+
+  var lyricsHtml = lyricsVal
+    ? '<div class="vsp-section-label">Lyrics</div><div class="vsp-lyrics">' + escHtml(lyricsVal) + '</div>'
+    : '';
+
+  panelEl.innerHTML =
+    '<div class="vsp-header">' +
+      '<div class="vsp-header-text">' +
+        '<h3 class="vsp-title">' + title + '</h3>' + activeDot +
+      '</div>' +
+      '<button class="vsp-close" onclick="_songsView && _songsView.deselect()" aria-label="Close">&#215;</button>' +
+    '</div>' +
+    (audioHtml || actions ? audioHtml + '<div class="vsp-actions">' + actions + '</div>' : '') +
+    perfHtml + aboutHtml + statsHtml + rightsHtml +
+    '<div class="vsp-cell vsp-cell--full" id="vsp-setlist-link" style="color:var(--third-color);font-size:0.82rem;">Loading setlists…</div>' +
+    lyricsHtml;
+
+  // Async: setlist count
+  var _panelSid = sid;
+  fetch('/api/' + artistSlug + '/songs/' + sid + '/setlists')
+    .then(function(r) { return r.json(); })
+    .then(function(ids) {
+      var linkEl = document.getElementById('vsp-setlist-link');
+      if (!linkEl) return;
+      if (!ids || !ids.length) { linkEl.textContent = 'Not in any setlist'; return; }
+      var songTitle = song.title || '';
+      linkEl.innerHTML = '<a href="#" onclick="event.preventDefault();navigate(\'/setlist?view=history&song=' + encodeURIComponent(songTitle) + '\')" style="color:var(--secondary-ink)">&#8594; ' + ids.length + ' setlist' + (ids.length !== 1 ? 's' : '') + ' with this song</a>';
+    })
+    .catch(function() {
+      var linkEl = document.getElementById('vsp-setlist-link');
+      if (linkEl) linkEl.textContent = '';
+    });
+}
+
+function _openSongEditForm(sid, panelEl) {
+  var isNew = sid === null;
+  var song  = isNew ? { extra: {}, active: true } : songs.find(function(s) { return String(s.id) === String(sid); });
+  if (!song && !isNew) return;
+
+  var id = isNew ? ('_new_panel_' + Date.now()) : String(sid);
+
+  var title    = escHtml(getVal(song, 'title') || '');
+  var active   = song.active ? ' checked' : '';
+  var genre    = escHtml(getVal(song, 'genre') || '');
+  var tempo    = escHtml(getVal(song, 'tempo') || '');
+  var bpm      = escHtml(String(getVal(song, 'bpm') || ''));
+  var length   = escHtml(minsToTime(getVal(song, 'length_min')));
+  var key      = escHtml(getVal(song, 'key') || '');
+  var lead     = escHtml(getVal(song, 'extra.lead') || '');
+  var git2     = getVal(song, 'extra.git2') ? ' checked' : '';
+  var gitCapo  = escHtml(String(getVal(song, 'extra.gitCapo') || ''));
+  var bjCapo   = escHtml(String(getVal(song, 'extra.banjoCapo') || ''));
+  var harp     = getVal(song, 'extra.harp') ? ' checked' : '';
+  var listen   = escHtml(getVal(song, 'extra.listenUrl') || '');
+  var sheet    = escHtml(getVal(song, 'extra.sheetUrl') || '');
+  var playback = escHtml(getVal(song, 'extra.playbackUrl') || '');
+  var lyrics   = escHtml(String(getVal(song, 'extra.lyrics') || ''));
+  var author   = escHtml(getVal(song, 'extra.author') || '');
+  var interp   = escHtml(getVal(song, 'interpret') || '');
+  var refInt   = escHtml(getVal(song, 'reference_interpret') || '');
+  var refUrl   = escHtml(getVal(song, 'extra.referenceUrl') || '');
+  var infoUrl  = escHtml(getVal(song, 'extra.songinfoUrl') || '');
+  var comment  = escHtml(getVal(song, 'comment') || '');
+  var lang     = (song.extra && song.extra.language) ? song.extra.language : 'EN';
+  var iswc     = song.iswc || (song.extra && song.extra.iswc) || '';
+  var gemaNr   = song.gema_work_number || '';
+  var isrc     = (song.extra && song.extra.isrc) || '';
+
+  var inp = function(key, val, type) {
+    type = type || 'text';
+    return '<input type="' + type + '" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" oninput="markPanelEditDirty()">';
+  };
+  var num = function(key, val) {
+    return '<input type="number" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" min="0" step="any" oninput="markPanelEditDirty()">';
+  };
+  var chk = function(key, checked) {
+    return '<input type="checkbox" data-id="' + id + '" data-key="' + key + '"' + checked + ' onchange="markPanelEditDirty()">';
+  };
+
+  var langOpts = ['EN', 'FR', 'DE'].map(function(o) {
+    return '<option value="' + o + '"' + (o === lang ? ' selected' : '') + '>' + o + '</option>';
+  }).join('');
+
+  panelEl.innerHTML =
+    '<div class="vsp-header">' +
+      '<div class="vsp-header-text"><h3 class="vsp-title">' + (isNew ? 'New song' : escHtml(song.title || 'Edit song')) + '</h3></div>' +
+      (!isNew ? '<button class="vsp-close" onclick="_openSongPanelContent({id:' + sid + '}, document.getElementById(\'view-side-panel-inner\'))" aria-label="Cancel">&#215;</button>' : '') +
+    '</div>' +
+    '<div style="padding:0 0.5rem;">' +
+      '<details class="edit-section" open><summary class="edit-section-summary">General</summary>' +
+        '<div class="edit-section-body">' +
+          _editField('Title', '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="Song title">') +
+          _editField('', '<div class="edit-toggle-row"><span>Active</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
+          _editField('Genre', inp('genre', genre)) +
+          _editField('Tempo', inp('tempo', tempo)) +
+          _editField('BPM', num('bpm', bpm)) +
+          _editField('Length (MM:SS)', '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
+        '</div>' +
+      '</details>' +
+      '<details class="edit-section"><summary class="edit-section-summary">Performance</summary>' +
+        '<div class="edit-section-body">' +
+          _editField('Key', inp('key', key)) +
+          _editField('Lead', inp('extra.lead', lead)) +
+          _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>2nd guitar</span></div>') +
+          _editField('Guitar capo', num('extra.gitCapo', gitCapo)) +
+          _editField('Banjo capo', num('extra.banjoCapo', bjCapo)) +
+          _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>Harmonica</span></div>') +
+        '</div>' +
+      '</details>' +
+      '<details class="edit-section"><summary class="edit-section-summary">Files & Lyrics</summary>' +
+        '<div class="edit-section-body">' +
+          _editField('Listen URL', inp('extra.listenUrl', listen, 'text')) +
+          _editField('Sheet URL', inp('extra.sheetUrl', sheet, 'text')) +
+          _editField('Playback URL', inp('extra.playbackUrl', playback, 'text')) +
+          _editField('Lyrics', '<textarea class="edit-textarea edit-input" data-id="' + id + '" data-key="extra.lyrics" oninput="markPanelEditDirty()" placeholder="Enter lyrics…">' + lyrics + '</textarea>') +
+        '</div>' +
+      '</details>' +
+      '<details class="edit-section"><summary class="edit-section-summary">Metadata</summary>' +
+        '<div class="edit-section-body">' +
+          _editField('Author', inp('extra.author', author)) +
+          _editField('Interpret', inp('interpret', interp)) +
+          _editField('Reference interpret', inp('reference_interpret', refInt)) +
+          _editField('Reference URL', inp('extra.referenceUrl', refUrl, 'url')) +
+          _editField('Song info URL', inp('extra.songinfoUrl', infoUrl, 'url')) +
+          _editField('Comment', inp('comment', comment)) +
+        '</div>' +
+      '</details>' +
+      '<details class="edit-section"><summary class="edit-section-summary">GEMA / Rights</summary>' +
+        '<div class="edit-section-body">' +
+          _editField('Language', '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
+          (iswc   ? _editField('ISWC',    '<div class="edit-readonly">' + escHtml(iswc)   + '</div>') : '') +
+          (gemaNr ? _editField('GEMA-Nr', '<div class="edit-readonly">' + escHtml(gemaNr) + '</div>') : '') +
+          (isrc   ? _editField('ISRC',    '<div class="edit-readonly">' + escHtml(isrc)   + '</div>') : '') +
+        '</div>' +
+      '</details>' +
+      '<div class="status-msg" id="song-panel-edit-error"></div>' +
+      '<div class="modal-actions">' +
+        '<button class="btn active" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? 'Add' : 'Save') + '</button>' +
+        (!isNew ? '<button class="btn" onclick="_songsView && _songsView.select(\'' + sid + '\')">Cancel</button>' : '') +
+      '</div>' +
+    '</div>';
+
+  var titleInput = panelEl.querySelector('input[data-key="title"]');
+  if (titleInput) titleInput.focus();
+}
+
+async function _savePanelSong(formId, isNew, realSid) {
+  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) { requireLogin(); return; }
+
+  var btn = document.getElementById('song-panel-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  var data = collectRow(formId);
+
+  try {
+    var r;
+    if (isNew) {
+      if (!data.title) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+        return;
+      }
+      r = await fetch('/api/' + artistSlug + '/songs', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body:    JSON.stringify(data),
+      });
+    } else {
+      r = await fetch('/api/' + artistSlug + '/songs', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body:    JSON.stringify([Object.assign({ id: parseInt(realSid, 10) }, data)]),
+      });
+    }
+
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (!r.ok) throw new Error('save failed');
+
+    var newSong = isNew ? await r.json() : null;
+    songs = await fetch('/api/' + artistSlug + '/songs').then(function(r) { return r.json(); });
+    if (_songsView) {
+      _songsView.refresh();
+      var targetId = isNew ? String(newSong.id) : String(realSid);
+      _songsView.select(targetId);
+    }
+    loadLogs();
+  } catch {
+    var errEl = document.getElementById('song-panel-edit-error');
+    if (errEl) { errEl.textContent = 'Save failed — try again.'; errEl.className = 'status-msg error'; }
+    if (btn) { btn.disabled = false; btn.textContent = isNew ? 'Add' : 'Save'; }
+  }
+}
+
+function _openNewSongPanel() {
+  var panel = document.getElementById('view-side-panel');
+  var inner = document.getElementById('view-side-panel-inner');
+  if (!panel || !inner) return;
+
+  var prev = document.querySelector('.lv-row--selected');
+  if (prev) prev.classList.remove('lv-row--selected');
+
+  _openSongEditForm(null, inner);
+  panel.classList.add('open');
+  document.getElementById('page-content').classList.add('side-panel-open');
+  if (window.innerWidth <= 1024) document.body.style.overflow = 'hidden';
+
+  if (_newPanelEscapeHandler) document.removeEventListener('keydown', _newPanelEscapeHandler);
+  _newPanelEscapeHandler = function(e) {
+    if (e.key === 'Escape') _closeNewSongPanel();
+  };
+  document.addEventListener('keydown', _newPanelEscapeHandler);
+}
+
+function _closeNewSongPanel() {
+  if (_newPanelEscapeHandler) {
+    document.removeEventListener('keydown', _newPanelEscapeHandler);
+    _newPanelEscapeHandler = null;
+  }
+  var panel = document.getElementById('view-side-panel');
+  if (panel) panel.classList.remove('open');
+  var content = document.getElementById('page-content');
+  if (content) content.classList.remove('side-panel-open');
+  document.body.style.overflow = '';
+}
+
+async function _applySetlistByIdForView(id) {
+  if (!_allSetlistsMeta) {
+    try {
+      var r = await fetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = await r.json();
+      if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
+    } catch { _allSetlistsMeta = []; }
+  }
+  var found = (_allSetlistsMeta || []).find(function(s) { return s.id === id; });
+  if (found && _songsView) {
+    _songsView.setFilterValue('setlist', found.name || '');
+  }
+}
+
+function _renderBulkEditTable() {
+  // bulk edit table — populated below by moving old renderTable body
   const saved = getSavedWidths();
   const headers = COLS.map((c, i) => {
     const w = saved[c.key] ?? c.width;
@@ -283,6 +655,8 @@ function renderTable() {
       <button class="btn" id="add-btn">+ Add song</button>
       <span class="status" id="status"></span>
       <span class="filter-count" id="filter-count">${visible.length} / ${songs.length}</span>
+      <button class="btn" onclick="toggleBulkEdit()">← List</button>
+      <button class="btn" onclick="exportCsv()">Export CSV</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -327,6 +701,104 @@ function renderTable() {
       tableWrap.style.maxHeight = `${window.innerHeight - top - 24}px`;
     }
   });
+
+  if (_pendingSetlistId) {
+    var pending = _pendingSetlistId;
+    _pendingSetlistId = 0;
+    _applySetlistById(pending);
+  }
+}
+
+function renderListRowHtml(s) {
+  var sid       = String(s.id);
+  var title     = escHtml(s.title || '(untitled)');
+  var interp    = escHtml(s.interpret || '');
+  var genre     = escHtml(s.genre || '');
+  var key       = escHtml(String(getVal(s, 'key') || ''));
+  var tempo     = escHtml(String(getVal(s, 'tempo') || ''));
+  var hasListen = !!getVal(s, 'extra.listenUrl');
+  var hasLyrics = !!(String(getVal(s, 'extra.lyrics') || '').trim());
+
+  var borderCls = s.active ? 'songs-list-row--active' : 'songs-list-row--inactive';
+  var titleCls  = s.active ? '' : ' songs-list-row-title--inactive';
+
+  var icons = '';
+  if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="Listen">&#9654;</button>';
+  if (hasLyrics) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="Lyrics">&#182;</button>';
+
+  return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
+    '<div class="songs-list-row-stack">' +
+      '<span class="songs-list-row-title' + titleCls + '">' + title + '</span>' +
+      (interp ? '<span class="songs-list-row-interpret">' + interp + '</span>' : '') +
+    '</div>' +
+    (genre ? '<span class="songs-list-row-genre">' + genre + '</span>' : '') +
+    (key   ? '<span class="songs-list-row-key">'   + key   + '</span>' : '') +
+    (tempo ? '<span class="songs-list-row-tempo">'  + tempo + '</span>' : '') +
+    (icons ? '<span class="songs-list-row-icons">'  + icons + '</span>' : '') +
+  '</div>';
+}
+
+
+function _csvCell(val) {
+  var s = (val === null || val === undefined) ? '' : String(val);
+  if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function _editField(label, html) {
+  return '<div class="edit-field">' +
+    (label ? '<span class="edit-field-label">' + escHtml(label) + '</span>' : '') +
+    html +
+  '</div>';
+}
+
+function markPanelEditDirty() {
+  var btn = document.getElementById('song-panel-save-btn');
+  if (btn) btn.disabled = false;
+}
+
+function _vspCell(label, value) {
+  return '<div class="vsp-cell"><div class="vsp-cell-label">' + label + '</div><div class="vsp-cell-value">' + value + '</div></div>';
+}
+
+function _vspSection(heading, cellsHtml) {
+  return '<div class="vsp-section-label">' + heading + '</div><div class="vsp-grid">' + cellsHtml + '</div>';
+}
+
+function exportCsv() {
+  var visible = getVisibleSongs();
+  var header = COLS.map(function(c) { return _csvCell(c.label); }).join(',');
+  var rows = visible.map(function(song) {
+    return COLS.map(function(c) {
+      var raw = getVal(song, c.key);
+      var val;
+      if (c.type === 'bool') {
+        val = (raw == null) ? '' : (raw ? 'true' : 'false');
+      } else if (c.type === 'time') {
+        val = minsToTime(raw);
+      } else {
+        val = (raw === null || raw === undefined) ? '' : String(raw);
+      }
+      return _csvCell(val);
+    }).join(',');
+  }).join('\r\n');
+
+  var csv = '﻿' + header + '\r\n' + rows;
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var d = new Date();
+  var dateStr = d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+  a.href = url;
+  a.download = 'songs-' + dateStr + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 100);
 }
 
 function initResizableColumns() {
@@ -566,8 +1038,8 @@ async function deleteRow(sid) {
 
   if (!confirm('Delete this song? It will also be removed from any saved setlists.')) return;
 
-  const token = sessionStorage.getItem('setlist_token');
-  const r = await fetch(`/api/${bandSlug}/songs/${sid}`, {
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const r = await fetch(`/api/${artistSlug}/songs/${sid}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -578,8 +1050,8 @@ async function deleteRow(sid) {
     songs = songs.filter(s => String(s.id) !== String(sid));
     if (dirty.size === 0) setStatus('', '');
   } else if (r.status === 401) {
-    sessionStorage.removeItem('setlist_token');
-    renderAuthGate();
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    requireLogin();
   } else {
     setStatus('error', 'Could not delete song — try again');
   }
@@ -594,8 +1066,8 @@ function discardAll() {
 }
 
 async function saveAll() {
-  const token = sessionStorage.getItem('setlist_token');
-  if (!token) { renderAuthGate(); return; }
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) { requireLogin(); return; }
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -615,18 +1087,18 @@ async function saveAll() {
     }
 
     if (toUpdate.length > 0) {
-      const r = await fetch(`/api/${bandSlug}/songs`, {
+      const r = await fetch(`/api/${artistSlug}/songs`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(toUpdate),
       });
-      if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+      if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
       if (!r.ok) throw new Error('patch failed');
     }
 
     for (const data of toInsert) {
       if (!data.title) continue;
-      const r = await fetch(`/api/${bandSlug}/songs`, {
+      const r = await fetch(`/api/${artistSlug}/songs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(data),
@@ -651,9 +1123,9 @@ async function saveAll() {
 
 async function loadLogs() {
   const el = document.getElementById('logs-section');
-  if (!el || !bandSlug) return;
+  if (!el || !artistSlug) return;
   try {
-    const logs = await fetch(`/api/${bandSlug}/song-logs`).then(r => r.json());
+    const logs = await fetch(`/api/${artistSlug}/song-logs`).then(r => r.json());
     renderLogs(logs);
   } catch {
     el.innerHTML = '';
@@ -673,7 +1145,7 @@ function renderLogs(logs) {
   if (!el) return;
   if (!logs.length) { el.innerHTML = ''; return; }
 
-  const token = sessionStorage.getItem('setlist_token');
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
   const items = logs.map(log => {
     const title = log.song_data?.title ?? '(unknown)';
     const badge = log.action === 'create' ? 'log-create'
@@ -697,13 +1169,13 @@ function renderLogs(logs) {
 }
 
 async function restoreSong(songId) {
-  const token = sessionStorage.getItem('setlist_token');
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) return;
-  const r = await fetch(`/api/${bandSlug}/songs/${songId}/restore`, {
+  const r = await fetch(`/api/${artistSlug}/songs/${songId}/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
   });
-  if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+  if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
   if (r.ok) {
     await loadAndRender();
   } else {
@@ -723,7 +1195,7 @@ async function openAppearances(songId) {
   modal.classList.add('open');
 
   try {
-    const data = await fetch(`/api/${bandSlug}/songs/${songId}/setlists`).then(r => r.json());
+    const data = await fetch(`/api/${artistSlug}/songs/${songId}/setlists`).then(r => r.json());
     if (!data.length) {
       list.innerHTML = '<p class="appearance-empty">Not in any setlist yet.</p>';
       return;
@@ -763,7 +1235,7 @@ async function openGema(songId) {
   content.innerHTML = '<p class="gema-loading">Loading…</p>';
   modal.classList.add('open');
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${songId}/gema`);
+    const r = await fetch(`/api/${artistSlug}/songs/${songId}/gema`);
     const { works, rightholders } = await r.json();
     content.innerHTML = works.length ? renderGemaContent(works, rightholders) : '<p class="gema-loading">No GEMA registration linked.</p>';
   } catch {
@@ -843,15 +1315,15 @@ async function handleAudioFile(input, sid) {
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -866,15 +1338,15 @@ async function handleAudioFile(input, sid) {
     // Confirm upload: save publicUrl to DB, delete previous file from R2 if any
     const song = songs.find(s => String(s.id) === String(sid));
     
-    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
       method: 'PUT',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ publicUrl }),
     });
-    if (confirm.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (confirm.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
 
     // Update local cache and swap ↑ for ▶ in the table cell
@@ -912,13 +1384,13 @@ function toEmbedUrl(url) {
 }
 
 function openPlayer(sid) {
-  const row = document.getElementById(`row-${sid}`);
-  if (!row) return;
-  const url = row.querySelector('.listen-cell input[type="text"]')?.value?.trim();
+  const row  = document.getElementById(`row-${sid}`);
+  const song = songs.find(s => String(s.id) === String(sid));
+  const url  = (row?.querySelector('.listen-cell input[type="text"]')?.value?.trim())
+             || song?.extra?.listenUrl || '';
   if (!url) return;
 
-  const song  = songs.find(s => String(s.id) === String(sid));
-  const title = song?.title ?? row.querySelector('[data-key="title"]')?.value ?? 'Listen';
+  const title = song?.title ?? row?.querySelector('[data-key="title"]')?.value ?? 'Listen';
 
   currentPlayerSid = sid;
   document.getElementById('player-title').textContent = `♪ ${title}`;
@@ -942,7 +1414,7 @@ function openPlayer(sid) {
   document.getElementById('player-history').innerHTML = '';
 
   // Fetch audio history for this song
-  fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderPlayerHistory)
     .catch(() => {});
@@ -975,11 +1447,11 @@ async function confirmDeleteAudio() {
   closePlayer();
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!r.ok) { setStatus('error', 'Could not remove audio file'); return; }
 
     // Update local cache and swap ▶ back to ↑ in the table cell
@@ -1022,15 +1494,15 @@ async function handleReplaceFile(input) {
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closePlayer(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closePlayer(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1040,11 +1512,11 @@ async function handleReplaceFile(input) {
 
     const song = songs.find(s => String(s.id) === String(sid));
     
-    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/audio`, {
+    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
       method: 'PUT',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ publicUrl }),
     });
@@ -1067,7 +1539,7 @@ async function handleReplaceFile(input) {
     }
 
     // Refresh history
-    fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
       .then(r2 => r2.ok ? r2.json() : [])
       .then(renderPlayerHistory)
       .catch(() => {});
@@ -1119,15 +1591,15 @@ async function handleSheetFile(input, sid) {
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ filename: file.name, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1137,15 +1609,15 @@ async function handleSheetFile(input, sid) {
 
     const song = songs.find(s => String(s.id) === String(sid));
     
-    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
       method: 'PUT',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ publicUrl }),
     });
-    if (confirm.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (confirm.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
 
     if (song) { song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl }; }
@@ -1172,13 +1644,13 @@ async function handleSheetFile(input, sid) {
 }
 
 function openSheet(sid) {
-  const row = document.getElementById(`row-${sid}`);
-  if (!row) return;
-  const url = row.querySelector('.sheet-cell input[type="text"]')?.value?.trim();
+  const row  = document.getElementById(`row-${sid}`);
+  const song = songs.find(s => String(s.id) === String(sid));
+  const url  = (row?.querySelector('.sheet-cell input[type="text"]')?.value?.trim())
+             || song?.extra?.sheetUrl || '';
   if (!url) return;
 
-  const song  = songs.find(s => String(s.id) === String(sid));
-  const title = song?.title ?? row.querySelector('[data-key="title"]')?.value ?? 'Sheet';
+  const title = song?.title ?? row?.querySelector('[data-key="title"]')?.value ?? 'Sheet';
 
   currentSheetSid = sid;
   document.getElementById('sheet-title').textContent = `≡ ${title}`;
@@ -1190,7 +1662,7 @@ function openSheet(sid) {
   document.getElementById('sheet-delete-btn').style.display = '';
   document.getElementById('sheet-history').innerHTML = '';
 
-  fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderSheetHistory)
     .catch(() => {});
@@ -1223,11 +1695,11 @@ async function confirmDeleteSheet() {
   closeSheet();
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!r.ok) { setStatus('error', 'Could not remove sheet'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1269,15 +1741,15 @@ async function handleReplaceSheet(input) {
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ filename: file.name, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closeSheet(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closeSheet(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1287,11 +1759,11 @@ async function handleReplaceSheet(input) {
 
     const song = songs.find(s => String(s.id) === String(sid));
     
-    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/sheet`, {
+    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
       method: 'PUT',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ publicUrl }),
     });
@@ -1305,7 +1777,7 @@ async function handleReplaceSheet(input) {
     document.getElementById('sheet-content').innerHTML =
       `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
 
-    fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
       .then(r2 => r2.ok ? r2.json() : [])
       .then(renderSheetHistory)
       .catch(() => {});
@@ -1363,12 +1835,12 @@ async function handlePlaybackFile(input, sid) {
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1378,12 +1850,12 @@ async function handlePlaybackFile(input, sid) {
 
     const song = songs.find(s => String(s.id) === String(sid));
     
-    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ publicUrl }),
     });
-    if (confirm.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (confirm.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
 
     if (song) { song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl }; }
@@ -1410,13 +1882,13 @@ async function handlePlaybackFile(input, sid) {
 }
 
 function openPlayback(sid) {
-  const row = document.getElementById(`row-${sid}`);
-  if (!row) return;
-  const url = row.querySelector('.playback-cell input[type="text"]')?.value?.trim();
+  const row  = document.getElementById(`row-${sid}`);
+  const song = songs.find(s => String(s.id) === String(sid));
+  const url  = (row?.querySelector('.playback-cell input[type="text"]')?.value?.trim())
+             || song?.extra?.playbackUrl || '';
   if (!url) return;
 
-  const song  = songs.find(s => String(s.id) === String(sid));
-  const title = song?.title ?? row.querySelector('[data-key="title"]')?.value ?? 'Playback';
+  const title = song?.title ?? row?.querySelector('[data-key="title"]')?.value ?? 'Playback';
 
   currentPlaybackSid = sid;
   document.getElementById('playback-title').textContent = `▷ ${title}`;
@@ -1436,7 +1908,7 @@ function openPlayback(sid) {
   document.getElementById('playback-delete-btn').style.display = '';
   document.getElementById('playback-history').innerHTML = '';
 
-  fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderPlaybackHistory)
     .catch(() => {});
@@ -1469,11 +1941,11 @@ async function confirmDeletePlayback() {
   closePlayback();
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!r.ok) { setStatus('error', 'Could not remove playback file'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1515,12 +1987,12 @@ async function handleReplacePlayback(input) {
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closePlayback(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closePlayback(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1530,9 +2002,9 @@ async function handleReplacePlayback(input) {
 
     const song = songs.find(s => String(s.id) === String(sid));
     
-    const confirm = await fetch(`/api/${bandSlug}/songs/${sid}/playback`, {
+    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ publicUrl }),
     });
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
@@ -1544,7 +2016,7 @@ async function handleReplacePlayback(input) {
     document.getElementById('playback-content').innerHTML =
       `<audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio>`;
 
-    fetch(`/api/${bandSlug}/song-logs?songId=${sid}`)
+    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
       .then(r2 => r2.ok ? r2.json() : [])
       .then(renderPlaybackHistory)
       .catch(() => {});
@@ -1639,11 +2111,11 @@ async function suggestLyrics() {
   _lyricsShowSuggestState('Searching lyrics.ovh, lrclib, AI…', '', false);
   _lyricsSuggestAbort = new AbortController();
   try {
-    const r = await fetch(`/api/${bandSlug}/songs`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionStorage.getItem('setlist_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
       body: JSON.stringify({ lyrics_suggest_id: currentLyricsSid }),
       signal: _lyricsSuggestAbort.signal,
@@ -1712,12 +2184,12 @@ async function saveLyrics() {
   _lyricsSaveStatus('', false);
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ lyrics_update_id: sid, lyrics: text }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); closeLyrics(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closeLyrics(); return; }
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       const msg = body.error ?? `Save failed (${r.status})`;
@@ -1780,12 +2252,12 @@ async function confirmDeleteLyrics() {
   closeLyrics();
 
   try {
-    const r = await fetch(`/api/${bandSlug}/songs`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('setlist_token')}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ lyrics_delete_id: sid }),
     });
-    if (r.status === 401) { sessionStorage.removeItem('setlist_token'); renderAuthGate(); return; }
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
     if (!r.ok) { setStatus('error', 'Could not delete lyrics'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1815,7 +2287,7 @@ document.getElementById('lyrics-modal').addEventListener('click', e => {
 
 // ── URL preview modal ─────────────────────────────────────────────────────────
 
-let _urlPreviewSourceInput = null;
+var _urlPreviewSourceInput = null;
 
 function _setPreviewSrc(url) {
   const iframe  = document.getElementById('url-preview-iframe');

@@ -14,6 +14,197 @@
     <style>
         /* Songs page needs full-width layout, not max-width 960px */
         .songs-page .app-wrap { max-width: 100%; }
+
+        /* --- Shared card styles (mobile + desktop view mode) --- */
+        .toolbar--cards {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: var(--primary-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .cards-filter-input {
+            flex: 1;
+            min-width: 120px;
+            padding: 0.45rem 0.7rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            background: #fff;
+        }
+        .filter-active-label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            color: var(--third-color);
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .song-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem 4rem;
+        }
+        .song-cards--desktop {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.75rem;
+            padding: 1rem 1rem 4rem;
+        }
+        .song-card {
+            background: #fff;
+            border-radius: 6px;
+            border-left: 3px solid var(--border-color);
+            cursor: pointer;
+            min-height: 44px;
+            transition: box-shadow 100ms;
+        }
+        .song-card:active { box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .song-card--active  { border-left-color: var(--secondary-color); }
+        .song-card--inactive { opacity: 0.72; }
+        .song-card-body {
+            padding: 0.55rem 0.75rem;
+        }
+        .song-card-primary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .song-card-title {
+            font-weight: 600;
+            font-size: 0.92rem;
+        }
+        .song-card-title--inactive {
+            font-weight: normal;
+            color: var(--third-color);
+        }
+        .song-card-icons {
+            display: flex;
+            gap: 0.15rem;
+            flex-shrink: 0;
+        }
+        .song-card-icon-btn {
+            background: none;
+            border: none;
+            padding: 0.2rem 0.35rem;
+            font-size: 0.82rem;
+            color: var(--third-color);
+            cursor: pointer;
+            border-radius: 4px;
+            line-height: 1;
+        }
+        .song-card-icon-btn:hover { background: var(--border-color); }
+        .song-card-secondary {
+            font-size: 0.76rem;
+            color: var(--third-color);
+            margin-top: 0.18rem;
+        }
+
+        /* View mode button — hidden on mobile, shown on desktop */
+        .btn-view-mode { margin-left: auto; }
+
+        /* --- Toggle switch (iOS-style pill) --- */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            cursor: pointer;
+        }
+        .toggle-track {
+            position: absolute;
+            inset: 0;
+            background: var(--border-color);
+            border-radius: 10px;
+            transition: background 180ms;
+            cursor: pointer;
+        }
+        .toggle-switch input:checked + .toggle-track { background: var(--secondary-color); }
+        .toggle-thumb {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 180ms;
+            pointer-events: none;
+        }
+        .toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); }
+
+        /* --- Mobile-only styles (≤ 1024px) --- */
+        @media (max-width: 1024px) {
+            .btn-view-mode { display: none !important; }
+
+        }
+
+        /* In-panel song edit form */
+        .edit-section { margin-bottom: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); }
+        .edit-section-summary { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.84rem; font-weight: 600; }
+        .edit-section-body { padding: 0.5rem 0.75rem 0.75rem; }
+        .edit-field { margin-bottom: 0.55rem; display: flex; flex-direction: column; gap: 0.2rem; }
+        .edit-field-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--third-color); }
+        .edit-input, .edit-select { width: 100%; font-size: 0.85rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: #fff; font-family: inherit; box-sizing: border-box; }
+        .edit-textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+        .edit-readonly { font-size: 0.84rem; color: var(--third-color); padding: 0.2rem 0; }
+        .edit-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; }
+        .edit-check-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+
+        /* --- Desktop view mode panel (side panel) --- */
+        @media (min-width: 1025px) {
+            .song-card--selected { box-shadow: 0 0 0 2px var(--secondary-color); }
+
+            /* Darken muted text in list/filter/panel — override the global #A09C93 */
+            .filter-bar, .lv-body, #view-side-panel { --third-color: #7a7570; }
+
+            /* Genre chips (songs-only) */
+            .filter-bar-row2 {
+                display: flex;
+                align-items: center;
+                gap: 0.35rem;
+                padding: 0 1rem 0.5rem;
+                flex-wrap: wrap;
+            }
+            .filter-genre-label {
+                font-size: 0.72rem;
+                color: var(--third-color);
+                margin-right: 0.1rem;
+            }
+            .genre-chip {
+                padding: 0.2rem 0.65rem;
+                font-size: 0.78rem;
+                border: 1px solid var(--border-color);
+                border-radius: 20px;
+                background: #fff;
+                cursor: pointer;
+                color: var(--third-color);
+                font-family: inherit;
+                line-height: 1.4;
+            }
+            .genre-chip--active {
+                background: var(--secondary-color);
+                color: #fff;
+                border-color: var(--secondary-color);
+            }
+        }
     </style>
 </head>
 <body>
@@ -152,7 +343,13 @@
   </div>
 </div>
 
+<!-- Desktop view-mode side panel -->
+<div id="view-side-panel" role="complementary" aria-label="Song details">
+  <div id="view-side-panel-inner"></div>
+</div>
+
 <script src="/app/js/common.js"></script>
+<script src="/app/js/list-view.js"></script>
 <script src="/app/js/songs.js"></script>
 </body>
 </html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Organizers</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css">
+  <style>
+    .organizers-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+    .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
+    .toolbar input[type="text"] { flex: 1 1 220px; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.88rem; font-family: inherit; outline: none; }
+    .toolbar input[type="text"]:focus { border-color: var(--secondary-color); }
+    .empty-hint { text-align: center; padding: 3rem 1rem; color: var(--third-color); font-size: 0.88rem; }
+    .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
+    .status-msg.error { color: #e55; }
+  </style>
+</head>
+<body>
+<script src="/app/js/common.js"></script>
+<div class="app-wrap organizers-wrap">
+  <h1>Organizers</h1>
+  <div class="toolbar">
+    <input type="text" id="filter-input" placeholder="Search name, city, country, email…">
+    <button class="btn active" onclick="openAddModal()">+ Add organizer</button>
+  </div>
+  <div id="sort-bar" class="sort-bar"></div>
+  <div id="organizers-list"><p class="empty-hint">Loading…</p></div>
+  <div id="organizers-footer" style="display:none;text-align:center;margin-top:1.5rem;">
+    <p id="organizers-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
+    <button id="organizers-load-more-btn" class="btn" onclick="loadMoreOrganizers()">Load more</button>
+  </div>
+</div>
+
+<!-- Add/Edit modal -->
+<div class="modal-overlay" id="organizer-modal">
+  <div class="modal" style="max-width:460px;">
+    <h2 id="organizer-modal-title">Add organizer</h2>
+    <div class="modal-field">
+      <label>Name *</label>
+      <input type="text" id="om-name" placeholder="Organizer name">
+    </div>
+    <div class="modal-field">
+      <label>Type</label>
+      <select id="om-type">
+        <option value="">—</option>
+        <option value="person">Person</option>
+        <option value="organization">Organization</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Email</label>
+      <input type="email" id="om-email" placeholder="contact@…">
+    </div>
+    <div class="modal-field">
+      <label>Phone</label>
+      <input type="tel" id="om-phone" placeholder="+49…">
+    </div>
+    <div class="modal-field">
+      <label>Website</label>
+      <input type="url" id="om-website" placeholder="https://…">
+    </div>
+    <div class="modal-field">
+      <label>City</label>
+      <input type="text" id="om-city" placeholder="City" autocomplete="address-level2">
+    </div>
+    <div class="modal-field">
+      <label>Country</label>
+      <input type="text" id="om-country" placeholder="Country" autocomplete="country-name">
+    </div>
+    <div class="modal-field">
+      <label>Comment</label>
+      <textarea id="om-comment" placeholder="Notes…" rows="2"></textarea>
+    </div>
+    <div class="related-section" id="om-gigs-section" style="display:none;">
+      <h4>Gigs with this organizer</h4>
+      <div id="om-gigs-list"></div>
+    </div>
+    <div class="status-msg" id="om-status-msg"></div>
+    <div class="modal-actions">
+      <button class="btn active" onclick="saveOrganizer()">Save</button>
+      <button class="btn" onclick="closeOrgModal()">Cancel</button>
+      <button class="btn" id="om-delete-btn" style="margin-left:auto;color:#e55;" onclick="softDeleteOrganizer()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hard delete confirm modal -->
+<div class="modal-overlay" id="hard-delete-modal">
+  <div class="modal" style="max-width:380px;">
+    <h2>Permanently delete organizer?</h2>
+    <p id="hd-refs-msg" style="font-size:0.85rem;color:var(--third-color);"></p>
+    <div id="hd-cascade-opts"></div>
+    <div class="status-msg error" id="hd-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>
+      <button class="btn" onclick="closeHardDeleteModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app/js/geo.js"></script>
+<script src="/app/js/organizers.js"></script>
+</body>
+</html>
