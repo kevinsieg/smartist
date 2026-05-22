@@ -21,8 +21,7 @@
             <h1>History</h1>
 
             <div class="history-subnav">
-              <button class="subnav-btn active" id="subnav-setlists" onclick="setView('setlists')">Setlists</button>
-              <button class="subnav-btn" id="subnav-gigs" onclick="setView('gigs')">Gigs</button>
+              <span class="subnav-label" style="font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--third-color);">Gig timeline</span>
             </div>
 
             <div class="history-filterbar">
@@ -36,6 +35,13 @@
             <div id="history-content">
                 <p style="text-align:center;color:var(--third-color);">Loading…</p>
             </div>
+
+            <div id="history-footer" style="display:none;text-align:center;margin-top:1.5rem;">
+              <p id="history-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
+              <button id="history-load-more-btn" class="btn" onclick="loadMoreHistory()">Load more gigs</button>
+            </div>
+
+            <div id="unlinked-section" style="margin-top:2rem;"></div>
 
             <!-- print-only: header + rendered setlist -->
             <div id="print-header">
@@ -99,11 +105,13 @@
             </div>
             <div class="modal-field">
               <label for="gig-edit-venue">Venue</label>
-              <input type="text" id="gig-edit-venue" placeholder="Venue">
+              <select id="gig-edit-venue">
+                <option value="">— no venue —</option>
+              </select>
             </div>
             <div class="modal-field">
-              <label for="gig-edit-notes">Notes</label>
-              <textarea id="gig-edit-notes" placeholder="Notes…"></textarea>
+              <label for="gig-edit-comment">Comment</label>
+              <textarea id="gig-edit-comment" placeholder="Comment…"></textarea>
             </div>
             <div class="status-msg" id="gig-edit-status"></div>
             <div class="modal-actions">
@@ -166,11 +174,13 @@
     </div>
     <div class="modal-field">
       <label for="gig-modal-venue">Venue</label>
-      <input type="text" id="gig-modal-venue" placeholder="Venue">
+      <select id="gig-modal-venue">
+        <option value="">— no venue —</option>
+      </select>
     </div>
     <div class="modal-field">
-      <label for="gig-modal-notes">Notes</label>
-      <textarea id="gig-modal-notes" placeholder="Notes…"></textarea>
+      <label for="gig-modal-comment">Comment</label>
+      <textarea id="gig-modal-comment" placeholder="Comment…"></textarea>
     </div>
     <div class="status-msg" id="gig-modal-status"></div>
     <div class="modal-actions">

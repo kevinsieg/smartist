@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Gigs</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css">
+  <style>
+    .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+    .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
+    .gigs-section-title { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin: 1.75rem 0 0.75rem; }
+    .empty-hint { text-align: center; padding: 2rem 1rem; color: var(--third-color); font-size: 0.88rem; }
+    .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
+    .status-msg.error { color: #e55; }
+  </style>
+</head>
+<body>
+<script src="/app/js/common.js"></script>
+<div class="app-wrap gigs-wrap">
+  <h1>Gigs</h1>
+  <div class="filter-bar" id="gigs-filter-bar">
+    <div class="filter-bar-row1">
+      <label class="filter-bar-field">
+        <span class="filter-bar-label">Gig</span>
+        <input type="text" id="gig-f-gig" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+      </label>
+      <label class="filter-bar-field">
+        <span class="filter-bar-label">Venue</span>
+        <input type="text" id="gig-f-venue" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+      </label>
+      <label class="filter-bar-field">
+        <span class="filter-bar-label">Organizer</span>
+        <input type="text" id="gig-f-organizer" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+      </label>
+      <label class="filter-bar-field">
+        <span class="filter-bar-label">Setlist</span>
+        <input type="text" id="gig-f-setlist" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+      </label>
+      <label class="filter-bar-field">
+        <span class="filter-bar-label">Song</span>
+        <input type="text" id="gig-f-song" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+      </label>
+      <span class="filter-count" id="gig-filter-count"></span>
+      <button class="btn active" onclick="openAddModal()">+ Add gig</button>
+    </div>
+  </div>
+  <div id="sort-bar" class="sort-bar"></div>
+  <div class="gigs-section-title">Upcoming</div>
+  <div id="upcoming-list"><p class="empty-hint">Loading…</p></div>
+  <div class="gigs-section-title">Past</div>
+  <div id="past-list"><p class="empty-hint">Loading…</p></div>
+  <div id="gigs-footer" style="display:none;text-align:center;margin-top:1.5rem;">
+    <p id="gigs-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
+    <button id="gigs-load-more-btn" class="btn" onclick="loadMoreGigs()">Load more</button>
+  </div>
+</div>
+
+<!-- Add/Edit gig modal -->
+<div class="modal-overlay" id="gig-modal">
+  <div class="modal" style="max-width:460px;">
+    <h2 id="gig-modal-title">Add gig</h2>
+    <div class="modal-field">
+      <label>Title *</label>
+      <input type="text" id="gm-title" placeholder="Gig title">
+    </div>
+    <div class="modal-field">
+      <label>Date</label>
+      <input type="date" id="gm-date">
+    </div>
+    <div class="modal-field">
+      <label>Type</label>
+      <select id="gm-type">
+        <option value="">—</option>
+        <option value="concert">Concert</option>
+        <option value="festival">Festival</option>
+        <option value="wedding">Wedding</option>
+        <option value="private">Private</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Venue</label>
+      <div class="typeahead-wrap">
+        <input type="text" id="gm-venue-input" placeholder="Search venue…" autocomplete="off">
+        <input type="hidden" id="gm-venue-id">
+      </div>
+      <div class="quick-create-form" id="gm-venue-qc">
+        <div class="qc-row">
+          <input type="text" id="gm-venue-qc-name" placeholder="Venue name *">
+          <input type="text" id="gm-venue-qc-city" placeholder="City">
+        </div>
+        <div class="qc-actions">
+          <button class="btn active" type="button" onclick="quickCreateVenue()">Add venue</button>
+          <button class="btn" type="button" onclick="closeVenueQc()">Cancel</button>
+        </div>
+        <div class="status-msg" id="gm-venue-qc-status"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Organizer</label>
+      <div class="typeahead-wrap">
+        <input type="text" id="gm-organizer-input" placeholder="Search organizer…" autocomplete="off">
+        <input type="hidden" id="gm-organizer-id">
+      </div>
+      <div class="quick-create-form" id="gm-organizer-qc">
+        <div class="qc-row">
+          <input type="text" id="gm-organizer-qc-name" placeholder="Organizer name *">
+          <input type="text" id="gm-organizer-qc-city" placeholder="City">
+        </div>
+        <div class="qc-actions">
+          <button class="btn active" type="button" onclick="quickCreateOrganizer()">Add organizer</button>
+          <button class="btn" type="button" onclick="closeOrganizerQc()">Cancel</button>
+        </div>
+        <div class="status-msg" id="gm-organizer-qc-status"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Start time</label>
+      <input type="time" id="gm-time-start">
+    </div>
+    <div class="modal-field">
+      <label>End time</label>
+      <input type="time" id="gm-time-end">
+    </div>
+    <div class="modal-field">
+      <label>Link</label>
+      <input type="url" id="gm-link" placeholder="https://…">
+    </div>
+    <div class="modal-field">
+      <label>Comment</label>
+      <textarea id="gm-comment" rows="2" placeholder="Notes…"></textarea>
+    </div>
+    <div class="related-section" id="gm-related" style="display:none;">
+      <h4>Related</h4>
+      <div id="gm-related-content"></div>
+    </div>
+    <div class="status-msg" id="gm-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" onclick="saveGig()">Save</button>
+      <button class="btn" onclick="closeGigModal()">Cancel</button>
+      <button class="btn" id="gm-soft-delete-btn" style="margin-left:auto;color:#e55;" onclick="softDeleteGig()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hard delete modal -->
+<div class="modal-overlay" id="hard-delete-modal">
+  <div class="modal" style="max-width:380px;">
+    <h2>Permanently delete gig?</h2>
+    <p id="hd-refs-msg" style="font-size:0.85rem;color:var(--third-color);"></p>
+    <div id="hd-cascade-opts"></div>
+    <div class="status-msg error" id="hd-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>
+      <button class="btn" onclick="closeHardDeleteModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app/js/gigs.js"></script>
+</body>
+</html>

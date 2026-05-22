@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Profile</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css">
+  <style>
+    .profile-wrap {
+      max-width: 520px;
+      margin: 2.5rem auto;
+      padding: 0 1.25rem 4rem;
+    }
+
+    /* Photo / monogram */
+    .photo-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+    .photo-frame {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      border-radius: 4px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .photo-frame:hover .photo-overlay { opacity: 1; }
+    .photo-monogram {
+      width: 100%;
+      height: 100%;
+      background: var(--secondary-color);
+      color: var(--white);
+      font-size: 2.4rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+    }
+    .photo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .photo-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .photo-hint {
+      font-size: 0.68rem;
+      color: var(--third-color);
+      letter-spacing: 0.06em;
+      cursor: pointer;
+    }
+    .photo-hint:hover { color: var(--secondary-ink); }
+    .photo-progress {
+      font-size: 0.68rem;
+      color: var(--third-color);
+      letter-spacing: 0.06em;
+      min-height: 1.2em;
+    }
+
+    /* Fields */
+    .profile-section { margin-bottom: 2rem; }
+    .profile-section label {
+      display: block;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--third-color);
+      margin-bottom: 0.4rem;
+    }
+    .profile-section input[type="text"] {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: var(--black);
+      background: var(--white);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .profile-section input[type="text"]:focus { border-color: var(--secondary-color); }
+    .profile-section input[type="text"]:disabled { background: var(--primary-color); color: var(--third-color); cursor: default; }
+    .slug-value {
+      font-size: 0.88rem;
+      color: var(--third-color);
+      padding: 0.4rem 0;
+      font-family: 'Courier New', monospace;
+    }
+
+    .save-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.6rem; }
+    .save-msg { font-size: 0.72rem; color: var(--third-color); min-height: 1.2em; }
+    .save-msg.ok { color: #4a9a6a; }
+    .save-msg.err { color: var(--danger-color); }
+
+    .auth-notice {
+      text-align: center;
+      padding: 2rem 0;
+      color: var(--third-color);
+      font-size: 0.88rem;
+    }
+    .auth-notice a { color: var(--secondary-ink); text-decoration: underline; }
+  </style>
+</head>
+<body>
+<script src="/app/js/common.js"></script>
+
+<div class="app-wrap profile-wrap">
+  <h1>Profile</h1>
+
+  <div id="profile-loading" style="text-align:center;color:var(--third-color);padding:2rem 0;">Loading…</div>
+  <div id="profile-auth-notice" class="auth-notice" style="display:none;">
+    <a href="/">Log in</a> to edit your profile.
+  </div>
+
+  <div id="profile-content" style="display:none;">
+
+    <!-- Photo -->
+    <div class="photo-block">
+      <div class="photo-frame" id="photo-frame" title="Click to upload a photo">
+        <div class="photo-monogram" id="photo-monogram"></div>
+        <img class="photo-img" id="photo-img" src="" alt="" style="display:none;">
+        <div class="photo-overlay">Change photo</div>
+      </div>
+      <span class="photo-hint" id="photo-hint">Click to upload a photo</span>
+      <div class="photo-progress" id="photo-progress"></div>
+      <input type="file" id="photo-input" accept="image/*" style="display:none;">
+    </div>
+
+    <!-- Band name -->
+    <div class="profile-section">
+      <label for="band-name-input">Band / Artist name</label>
+      <input type="text" id="band-name-input" maxlength="200" disabled>
+      <div class="save-row">
+        <button class="btn" id="save-name-btn" disabled>Save</button>
+        <span class="save-msg" id="save-name-msg"></span>
+      </div>
+    </div>
+
+    <!-- Slug (read-only) -->
+    <div class="profile-section">
+      <label>Slug (URL identifier)</label>
+      <div class="slug-value" id="slug-value"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var artistSlug = '';
+
+  async function init() {
+    requireLogin();
+    try {
+      var cfg = await loadConfig();
+      artistSlug = cfg.slug;
+      applyNav(cfg.name, cfg.config);
+      document.getElementById('profile-loading').style.display = 'none';
+      renderProfile(cfg);
+    } catch (e) {
+      document.getElementById('profile-loading').textContent = 'Could not load profile.';
+    }
+  }
+
+  function initials(name) {
+    return (name || '?').split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
+  }
+
+  function renderProfile(cfg) {
+    document.getElementById('profile-content').style.display = '';
+
+    // Photo / monogram
+    document.getElementById('photo-monogram').textContent = initials(cfg.name);
+    if (cfg.config && cfg.config.logoUrl) {
+      showPhoto(cfg.config.logoUrl);
+    }
+
+    // Name
+    var nameInput = document.getElementById('band-name-input');
+    nameInput.value = cfg.name || '';
+    nameInput.disabled = false;
+    document.getElementById('save-name-btn').disabled = false;
+
+    // Slug
+    document.getElementById('slug-value').textContent = cfg.slug;
+
+    // Name input hint
+    nameInput.addEventListener('input', function () {
+      document.getElementById('photo-monogram').textContent = initials(nameInput.value);
+    });
+
+    // Save name
+    document.getElementById('save-name-btn').addEventListener('click', function () {
+      var btn = this;
+      var msg = document.getElementById('save-name-msg');
+      var name = nameInput.value.trim();
+      if (!name) { msg.textContent = 'Name required.'; msg.className = 'save-msg err'; return; }
+      btn.disabled = true;
+      msg.textContent = '';
+      fetch('/api/config', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+        },
+        body: JSON.stringify({ name: name }),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (r) {
+          if (r.ok) {
+            msg.textContent = 'Saved.';
+            msg.className = 'save-msg ok';
+            sessionStorage.removeItem('artist_config_cache');
+            applyNav(name, null);
+          } else {
+            msg.textContent = r.data.error || 'Error saving.';
+            msg.className = 'save-msg err';
+          }
+          btn.disabled = false;
+        })
+        .catch(function () {
+          msg.textContent = 'Network error.';
+          msg.className = 'save-msg err';
+          btn.disabled = false;
+        });
+    });
+
+    // Photo upload
+    var photoInput = document.getElementById('photo-input');
+    var frame = document.getElementById('photo-frame');
+    var hint = document.getElementById('photo-hint');
+    frame.addEventListener('click', function () { photoInput.click(); });
+    hint.addEventListener('click', function () { photoInput.click(); });
+
+    photoInput.addEventListener('change', function () {
+      var file = photoInput.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        document.getElementById('photo-progress').textContent = 'Please select an image file.';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        document.getElementById('photo-progress').textContent = 'Max file size is 5 MB.';
+        return;
+      }
+      uploadPhoto(file);
+    });
+  }
+
+  function showPhoto(url) {
+    var img = document.getElementById('photo-img');
+    var mono = document.getElementById('photo-monogram');
+    img.src = url;
+    img.style.display = 'block';
+    mono.style.display = 'none';
+  }
+
+  function uploadPhoto(file) {
+    var progress = document.getElementById('photo-progress');
+    progress.textContent = 'Getting upload URL…';
+    fetch('/api/config?action=photo-url&type=' + encodeURIComponent(file.type), {
+      headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.uploadUrl) throw new Error(d.error || 'Failed to get upload URL');
+        progress.textContent = 'Uploading…';
+        return fetch(d.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        }).then(function (r) {
+          if (!r.ok) throw new Error('Upload failed');
+          return d.publicUrl;
+        });
+      })
+      .then(function (publicUrl) {
+        progress.textContent = 'Saving…';
+        return fetch('/api/config', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+          },
+          body: JSON.stringify({ config: { logoUrl: publicUrl } }),
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: publicUrl, data: d }; }); });
+      })
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.data.error || 'Failed to save');
+        showPhoto(r.publicUrl);
+        sessionStorage.removeItem('artist_config_cache');
+        progress.textContent = 'Photo updated.';
+        setTimeout(function () { progress.textContent = ''; }, 2500);
+      })
+      .catch(function (err) {
+        progress.textContent = err.message || 'Upload failed.';
+      });
+  }
+
+  init();
+}());
+</script>
+</body>
+</html>

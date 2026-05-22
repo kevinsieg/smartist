@@ -1,14 +1,15 @@
-let bandSlug = '';
+var artistSlug = '';
 
 async function init() {
-  const params = new URLSearchParams(window.location.search);
-  const magic  = params.get('magic');
-  if (magic) history.replaceState(null, '', window.location.pathname);
+  const params     = new URLSearchParams(window.location.search);
+  const magic      = params.get('magic');
+  const oauthError = params.get('oauth_error');
+  if (magic || oauthError) history.replaceState(null, '', window.location.pathname);
 
   let cfg;
   try {
     cfg = await loadConfig();
-    bandSlug = cfg.slug;
+    artistSlug = cfg.slug;
     applyNav(cfg.name, cfg.config);
     document.title = cfg.name || 'Band Tools';
   } catch {
@@ -16,25 +17,30 @@ async function init() {
     return;
   }
 
-  if (magic) {
-    const ok = await verifyToken(magic);
-    if (ok) { sessionStorage.setItem('setlist_token', magic); renderLoggedIn(cfg); }
-    else     { renderLogin('Invalid or expired login link.'); }
+  if (oauthError) {
+    renderLogin('Sign-in failed — the account email does not match the configured admin address.', cfg);
     return;
   }
 
-  const token = sessionStorage.getItem('setlist_token');
+  if (magic) {
+    const ok = await verifyToken(magic);
+    if (ok) { sessionStorage.setItem(AUTH_TOKEN_KEY, magic); renderLoggedIn(cfg); }
+    else     { renderLogin('Invalid or expired login link.', cfg); }
+    return;
+  }
+
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
   if (token && await verifyToken(token)) {
     renderLoggedIn(cfg);
   } else {
-    sessionStorage.removeItem('setlist_token');
-    renderLogin();
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    renderLogin(null, cfg);
   }
 }
 
 async function verifyToken(token) {
   try {
-    const r = await fetch(`/api/${bandSlug}/auth`, {
+    const r = await fetch(`/api/${artistSlug}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: token }),
@@ -46,32 +52,31 @@ async function verifyToken(token) {
 // ── Logged-in state ───────────────────────────────────────────────────────────
 
 function renderLoggedIn(cfg) {
-  updateAuthIndicator();
-  const el = document.getElementById('landing-auth');
-  if (!el) return;
-  el.innerHTML =
-    '<nav class="landing-nav">' +
-      '<a href="/setlist"         class="landing-nav-link">Setlist generator</a>' +
-      '<a href="/setlist-history" class="landing-nav-link">Setlist history</a>' +
-      '<a href="/songs"           class="landing-nav-link">Song catalogue</a>' +
-      '<a href="/gema-import"     class="landing-nav-link">PRO</a>' +
-    '</nav>' +
-    '<button class="reset-link landing-logout" onclick="handleLogout()">logout</button>';
-}
-
-function handleLogout() {
-  doLogout();
-  renderLogin();
+  const next = new URLSearchParams(window.location.search).get('next');
+  const dest = (next && next.startsWith('/') && !next.startsWith('//')) ? next : '/dashboard';
+  window.location.href = dest;
 }
 
 // ── Login form ────────────────────────────────────────────────────────────────
 
-function renderLogin(errorMsg) {
+function renderLogin(errorMsg, cfg) {
   const el = document.getElementById('landing-auth');
   if (!el) return;
 
+  const showGoogle   = !!cfg?.googleLogin;
+  const showFacebook = !!cfg?.facebookLogin;
+  const showOAuth    = showGoogle || showFacebook;
+
+  const oauthHtml = !showOAuth ? '' :
+    '<div class="oauth-btns">' +
+      (showGoogle   ? '<button class="btn oauth-btn" id="google-btn">Continue with Google</button>'   : '') +
+      (showFacebook ? '<button class="btn oauth-btn" id="facebook-btn">Continue with Facebook</button>' : '') +
+    '</div>' +
+    '<div class="auth-divider"><span>or</span></div>';
+
   el.innerHTML =
     '<div class="landing-login">' +
+      oauthHtml +
       '<div class="auth-row">' +
         '<div class="pw-wrapper">' +
           '<input type="password" id="pw-input" placeholder="Password" autocomplete="current-password">' +
@@ -83,12 +88,15 @@ function renderLogin(errorMsg) {
       '<button class="reset-link" id="reset-toggle">Forgot password?</button>' +
       '<div class="reset-form" id="reset-form" style="display:none">' +
         '<div class="auth-row">' +
-          '<input type="email" id="reset-email" placeholder="Band email address" autocomplete="email">' +
+          '<input type="email" id="reset-email" placeholder="Email address" autocomplete="email">' +
           '<button class="btn" id="reset-btn">Send link</button>' +
         '</div>' +
         '<div class="auth-error" id="reset-msg"></div>' +
       '</div>' +
     '</div>';
+
+  if (showGoogle)   document.getElementById('google-btn').addEventListener('click',   () => startOAuth('google'));
+  if (showFacebook) document.getElementById('facebook-btn').addEventListener('click', () => startOAuth('facebook'));
 
   document.getElementById('pw-btn').addEventListener('click', doLogin);
   document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
@@ -110,6 +118,26 @@ function renderLogin(errorMsg) {
   setTimeout(() => document.getElementById('pw-input')?.focus(), 50);
 }
 
+async function startOAuth(provider) {
+  const btn = document.getElementById(`${provider}-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r    = await fetch(`/api/config?action=${provider}-url`);
+    const data = await r.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      const err = document.getElementById('auth-error');
+      if (err) err.textContent = data.error || `${provider} login is not configured`;
+      if (btn) { btn.disabled = false; btn.textContent = `Continue with ${provider[0].toUpperCase() + provider.slice(1)}`; }
+    }
+  } catch {
+    const err = document.getElementById('auth-error');
+    if (err) err.textContent = 'Connection error. Try again.';
+    if (btn) { btn.disabled = false; btn.textContent = `Continue with ${provider[0].toUpperCase() + provider.slice(1)}`; }
+  }
+}
+
 async function doLogin() {
   const pw  = document.getElementById('pw-input').value.trim();
   if (!pw) return;
@@ -118,14 +146,14 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
     const cfg = await loadConfig();
-    bandSlug = cfg.slug;
-    const r = await fetch(`/api/${bandSlug}/auth`, {
+    artistSlug = cfg.slug;
+    const r = await fetch(`/api/${artistSlug}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: pw }),
     });
     if (!r.ok) throw new Error();
-    sessionStorage.setItem('setlist_token', pw);
+    sessionStorage.setItem(AUTH_TOKEN_KEY, pw);
     applyNav(cfg.name, cfg.config);
     renderLoggedIn(cfg);
   } catch {
@@ -141,8 +169,8 @@ async function doRequestReset() {
   const msg = document.getElementById('reset-msg');
   btn.disabled = true; btn.textContent = '…'; msg.textContent = '';
   try {
-    if (!bandSlug) { const cfg = await loadConfig(); bandSlug = cfg.slug; }
-    await fetch(`/api/${bandSlug}/request-reset`, {
+    if (!artistSlug) { const cfg = await loadConfig(); artistSlug = cfg.slug; }
+    await fetch(`/api/${artistSlug}/request-reset`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),

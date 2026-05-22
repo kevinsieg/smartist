@@ -1,62 +1,15 @@
 'use strict';
 
-let _csvText = null;
-let _csvType = null;
-let _validationResult = null;
-let bandSlug = null;
+var _csvText = null;
+var _csvType = null;
+var _validationResult = null;
+var artistSlug = null;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
-(async function init() {
-  const cfg = await loadConfig();
-  bandSlug = cfg.slug;
-  applyNav(cfg.name, cfg.config);
-
-  window.onNavAuthEmpty = function(el) {
-    el.innerHTML = '<button class="nav-auth-login" onclick="showLoginArea()">login to import</button>';
-  };
-
-  if (sessionStorage.getItem('setlist_token')) {
-    showImportArea();
-  } else {
-    showLoginArea();
-  }
-})();
-
-function showLoginArea() {
-  document.getElementById('login-area').style.display = '';
-  document.getElementById('import-area').style.display = 'none';
-}
-
-function showImportArea() {
-  document.getElementById('login-area').style.display = 'none';
+initPage(async cfg => {
+  artistSlug = cfg.slug;
   document.getElementById('import-area').style.display = '';
-}
-
-// ── Login ─────────────────────────────────────────────────────────────────────
-
-async function doLogin() {
-  const pw = document.getElementById('login-pw').value;
-  if (!pw) return;
-  const r = await fetch(`/api/${bandSlug}/auth`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pw }),
-  });
-  if (r.ok) {
-    const { token } = await r.json();
-    sessionStorage.setItem('setlist_token', token);
-    updateAuthIndicator();
-    showImportArea();
-  } else {
-    const err = document.getElementById('login-error');
-    err.textContent = 'Wrong password.';
-    err.style.display = '';
-  }
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.activeElement?.id === 'login-pw') doLogin();
 });
 
 // ── File handling ─────────────────────────────────────────────────────────────
@@ -142,20 +95,12 @@ async function runImport() {
 }
 
 async function callImport({ dryRun }) {
-  const r = await fetch(`/api/${bandSlug}/gema/import`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${sessionStorage.getItem('setlist_token')}`,
-    },
-    body: JSON.stringify({
-      type: _csvType,
-      csv: _csvText,
-      dryRun,
-      ownerIpNameNumber: document.getElementById('owner-ip').value.trim() || undefined,
-    }),
+  const r = await apiFetch(`/api/${artistSlug}/gema/import`, 'POST', {
+    type: _csvType,
+    csv: _csvText,
+    dryRun,
+    ownerIpNameNumber: document.getElementById('owner-ip').value.trim() || undefined,
   });
-  if (r.status === 401) { sessionStorage.removeItem('setlist_token'); showLoginArea(); throw new Error('Session expired — please log in again'); }
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || 'Import failed');
   return data;

@@ -1,4 +1,4 @@
-const { getDb, getBand, insertAuditLog } = require('../_db');
+const { getDb, getArtist, insertAuditLog, getSlug } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
@@ -8,11 +8,36 @@ const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
 const logger = require('../_logger');
 
 module.exports = wrap(async function handler(req, res) {
-  const { band: slug } = req.query;
+  const slug = getSlug(req);
   const sql = getDb();
 
+  // ── song-logs (merged from song-logs.js via vercel.json rewrite) ──────────
+  if (req.url.includes('song-logs')) {
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+    const band = await getArtist(slug);
+    if (!band) return res.status(404).json({ error: 'Band not found' });
+    const { songId } = req.query;
+    let logs;
+    if (songId) {
+      const sid = Number(songId);
+      if (!Number.isInteger(sid) || sid <= 0) return res.status(400).json({ error: 'Invalid songId' });
+      logs = await sql`
+        SELECT * FROM song_logs
+        WHERE artist_id = ${band.id} AND song_id = ${sid}
+          AND action IN ('audio_replace','audio_delete','sheet_replace','sheet_delete','playback_replace','playback_delete')
+        ORDER BY changed_at DESC LIMIT 20
+      `;
+    } else {
+      logs = await sql`
+        SELECT * FROM song_logs WHERE artist_id = ${band.id}
+        ORDER BY changed_at DESC LIMIT 10
+      `;
+    }
+    return res.json(logs);
+  }
+
   if (req.method === 'GET') {
-    const band = await getBand(slug);
+    const band = await getArtist(slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
     const songs = await sql`
       SELECT s.*,
@@ -29,7 +54,7 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY gema_work_number
         LIMIT 1
       ) g ON true
-      WHERE s.band_id = ${band.id} AND s.deleted = false
+      WHERE s.artist_id = ${band.id} AND s.deleted = false
       GROUP BY s.id, g.iswc, g.gema_work_number, g.language
       ORDER BY s.title
     `;
@@ -56,7 +81,7 @@ module.exports = wrap(async function handler(req, res) {
         SELECT language, gema_genre FROM gema_works
         WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
       ) g ON true
-      WHERE s.id = ${songId} AND s.band_id = ${band.id} AND s.deleted = false
+      WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
@@ -139,7 +164,7 @@ module.exports = wrap(async function handler(req, res) {
     const lyricsVal = lyrics.trim() || null;
     const [song] = await sql`
       UPDATE songs SET extra = extra || ${{ lyrics: lyricsVal }}
-      WHERE id = ${songId} AND band_id = ${band.id} AND deleted = false
+      WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
       RETURNING id, title
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
@@ -158,11 +183,11 @@ module.exports = wrap(async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid song id' });
 
     const [song] = await sql`
-      SELECT id FROM songs WHERE id = ${songId} AND band_id = ${band.id} AND deleted = false
+      SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
-    await sql`UPDATE songs SET extra = extra - 'lyrics' WHERE id = ${songId} AND band_id = ${band.id}`;
+    await sql`UPDATE songs SET extra = extra - 'lyrics' WHERE id = ${songId} AND artist_id = ${band.id}`;
     return res.json({ ok: true });
   }
 
@@ -194,7 +219,7 @@ module.exports = wrap(async function handler(req, res) {
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
 
     const [song] = await sql`
-      INSERT INTO songs (band_id, title, active, key, genre, tempo, bpm, length_min,
+      INSERT INTO songs (artist_id, title, active, key, genre, tempo, bpm, length_min,
                          interpret, reference_interpret, comment, extra)
       VALUES (${band.id}, ${title}, ${active ?? true}, ${key},
               ${genre}, ${tempo}, ${bpm}, ${length_min},
@@ -254,7 +279,7 @@ module.exports = wrap(async function handler(req, res) {
           reference_interpret = ${reference_interpret},
           comment             = ${comment},
           extra               = songs.extra || ${update.extra ?? {}}
-        WHERE id = ${songId} AND band_id = ${band.id}
+        WHERE id = ${songId} AND artist_id = ${band.id}
         RETURNING *
       `;
       if (updated) { await insertAuditLog(sql, band.id, updated.id, 'update', updated); applied++; }

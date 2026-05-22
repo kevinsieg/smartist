@@ -23,7 +23,7 @@ function makeHandler(sqlFn) {
     id: dbPath, filename: dbPath, loaded: true,
     exports: {
       getDb: () => sqlFn,
-      getBand: async () => ({ id: 1, slug: 'test', name: 'Test', config: {} }),
+      getArtist: async () => ({ id: 1, slug: 'test', name: 'Test', config: {} }),
     },
   };
 

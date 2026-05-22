@@ -157,7 +157,7 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const flag   = k => { const i = args.indexOf(k); return i !== -1 ? args[i + 1] : null; };
 
-  const slug           = flag('--band') || process.env.BAND_SLUG;
+  const slug           = flag('--band') || process.env.ARTIST_SLUG;
   const idsFile        = flag('--ids');
   const infoFile       = flag('--info');
   const beteiligteFile = flag('--beteiligte');
@@ -185,12 +185,12 @@ async function main() {
   });
 
   const sql  = neon(process.env.DATABASE_URL);
-  const rows = await sql`SELECT id FROM bands WHERE slug = ${slug} LIMIT 1`;
+  const rows = await sql`SELECT id FROM artists WHERE slug = ${slug} LIMIT 1`;
   if (!rows.length) { console.error(`Band "${slug}" not found`); process.exit(1); }
   const bandId = rows[0].id;
 
   // Build lookup: UPPERCASE_TITLE → song_id
-  const songs  = await sql`SELECT id, title FROM songs WHERE band_id = ${bandId} AND deleted = false`;
+  const songs  = await sql`SELECT id, title FROM songs WHERE artist_id = ${bandId} AND deleted = false`;
   const songMap = new Map(songs.map(s => [s.title.toUpperCase(), s.id]));
 
   // Parse CSVs
@@ -216,7 +216,7 @@ async function main() {
     if (songId) matched++; else unmatched++;
 
     const record = {
-      band_id:                bandId,
+      artist_id:                bandId,
       gema_work_number:       wn,
       title,
       iswc:                   id?.ISWC                  || null,
@@ -240,16 +240,16 @@ async function main() {
     try {
       await sql`
         INSERT INTO gema_works
-          (band_id, gema_work_number, title, iswc, isrc, publisher_work_numbers,
+          (artist_id, gema_work_number, title, iswc, isrc, publisher_work_numbers,
            language, performers, gema_genre, duration_sec, first_registered_at,
            last_updated_at, song_id)
         VALUES
-          (${record.band_id}, ${record.gema_work_number}, ${record.title},
+          (${record.artist_id}, ${record.gema_work_number}, ${record.title},
            ${record.iswc}, ${record.isrc}, ${record.publisher_work_numbers},
            ${record.language}, ${record.performers}, ${record.gema_genre},
            ${record.duration_sec}, ${record.first_registered_at},
            ${record.last_updated_at}, ${record.song_id})
-        ON CONFLICT (band_id, gema_work_number) DO UPDATE SET
+        ON CONFLICT (artist_id, gema_work_number) DO UPDATE SET
           title                  = EXCLUDED.title,
           iswc                   = COALESCE(EXCLUDED.iswc,                  gema_works.iswc),
           isrc                   = COALESCE(EXCLUDED.isrc,                  gema_works.isrc),
@@ -284,7 +284,7 @@ async function main() {
   const allWorkNums = [...new Set(bRows.map(r => r.gema_work_number))];
   const dbWorks = await sql`
     SELECT id, gema_work_number FROM gema_works
-    WHERE band_id = ${bandId} AND gema_work_number = ANY(${allWorkNums})
+    WHERE artist_id = ${bandId} AND gema_work_number = ANY(${allWorkNums})
   `;
   const workIdMap = new Map(dbWorks.map(w => [w.gema_work_number, w.id]));
 

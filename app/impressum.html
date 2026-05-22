@@ -62,12 +62,12 @@
 
   <h2>Contact</h2>
   <form class="contact-form" id="cf">
-    <input type="text" id="cf-name" placeholder="Your name" required>
-    <input type="email" id="cf-email" placeholder="Your email" required>
+    <input type="text" id="cf-name" placeholder="Your name" required autocomplete="name">
+    <input type="email" id="cf-email" placeholder="Your email" required autocomplete="email">
     <textarea id="cf-msg" placeholder="Message" required></textarea>
     <button type="submit">Send message</button>
   </form>
-  <p id="cf-sent" style="display:none;font-size:0.82rem;color:#b06a2a;">Your email client should open with the message pre-filled.</p>
+  <p id="cf-status" style="font-size:0.82rem;min-height:1.4em;margin-top:4px;"></p>
 
   <h2>Liability for content</h2>
   <p>The contents of this site have been created with care. However, no guarantee can be given for the accuracy, completeness, or timeliness of the information provided.</p>
@@ -83,16 +83,43 @@
 
 <script>
 (function () {
-  document.getElementById('cf').addEventListener('submit', function (e) {
+  var form   = document.getElementById('cf');
+  var status = document.getElementById('cf-status');
+
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
     var name = document.getElementById('cf-name').value.trim();
     var email = document.getElementById('cf-email').value.trim();
-    var msg = document.getElementById('cf-msg').value.trim();
-    var to = atob('bGVnYWxAc21hcnRpc3Quc3R1ZGlv');
-    window.location.href = 'mailto:' + to +
-      '?subject=' + encodeURIComponent('Contact — ' + name) +
-      '&body=' + encodeURIComponent(msg + '\n\nFrom: ' + name + ' <' + email + '>');
-    document.getElementById('cf-sent').style.display = 'block';
+    var msg  = document.getElementById('cf-msg').value.trim();
+    if (!name || !email || !msg) return;
+
+    var btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    status.textContent = '';
+    status.style.color = '#888';
+
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'contact', name: name, email: email, message: msg }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (r) {
+        if (r.ok) {
+          form.reset();
+          status.textContent = "Message sent — we’ll be in touch soon.";
+          status.style.color = '#b06a2a';
+        } else {
+          status.textContent = (r.data && r.data.error) || 'Something went wrong — try again.';
+          status.style.color = '#c0392b';
+          btn.disabled = false;
+        }
+      })
+      .catch(function () {
+        status.textContent = 'Network error — try again.';
+        status.style.color = '#c0392b';
+        btn.disabled = false;
+      });
   });
 }());
 </script>
