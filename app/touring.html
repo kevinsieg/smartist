@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Touring</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css">
+  <style>
+    .touring-wrap { max-width: 960px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+
+    .wip-bar { display: flex; align-items: center; gap: 0.75rem; background: var(--primary-color); border: 1px solid var(--secondary-color); border-radius: 4px; padding: 0.6rem 1rem; margin-bottom: 1.75rem; font-size: 0.78rem; color: var(--third-color); }
+    .wip-badge { font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase; background: var(--secondary-color); color: var(--white); padding: 2px 8px; border-radius: 3px; white-space: nowrap; }
+
+    .tour-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+
+    .tour-panel { border: 1px solid #e8e8e8; border-radius: 6px; padding: 1.25rem; background: var(--white); position: relative; }
+    .tour-panel .tp-header { display: flex; align-items: flex-start; gap: 0.85rem; margin-bottom: 0.9rem; }
+    .tp-icon { width: 36px; height: 36px; border-radius: 4px; background: var(--primary-color); border: 1px solid var(--secondary-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; opacity: 0.7; }
+    .tp-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.15rem; }
+    .tp-desc { font-size: 0.73rem; color: var(--third-color); line-height: 1.45; }
+    .tp-status { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--third-color); border: 1px solid #e0e0e0; border-radius: 3px; padding: 2px 6px; }
+    .tour-panel .tp-action { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1px solid #f0f0f0; }
+    .tp-action .btn { font-size: 0.68rem; padding: 0.3rem 0.7rem; opacity: 0.4; cursor: not-allowed; }
+
+    .section-label { font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.85rem; margin-top: 0.25rem; }
+
+    .timeline-stub { border: 1px solid #e8e8e8; border-radius: 6px; background: var(--white); overflow: hidden; }
+    .timeline-row { display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1.1rem; border-bottom: 1px solid #f4f4f4; }
+    .timeline-row:last-child { border-bottom: none; }
+    .tl-date { font-size: 0.7rem; color: var(--third-color); width: 72px; flex-shrink: 0; font-family: 'Courier New', monospace; }
+    .tl-dot { width: 8px; height: 8px; border-radius: 50%; background: #e0e0e0; flex-shrink: 0; }
+    .tl-dot.filled { background: var(--secondary-color); opacity: 0.45; }
+    .tl-info { flex: 1; }
+    .tl-venue { font-size: 0.8rem; font-weight: 500; color: #bbb; }
+    .tl-city { font-size: 0.68rem; color: #ccc; }
+    .tl-empty { text-align: center; padding: 2.5rem 1rem; color: var(--third-color); font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+<script src="/app/js/common.js"></script>
+
+<div class="app-wrap touring-wrap">
+  <h1>Touring</h1>
+
+  <div class="wip-bar">
+    <span class="wip-badge">In development</span>
+    Plan routes, track bookings, forecast revenue, and manage your tour calendar — all in one place.
+  </div>
+
+  <div class="section-label">Tools</div>
+  <div class="tour-grid">
+
+    <div class="tour-panel">
+      <span class="tp-status">Soon</span>
+      <div class="tp-header">
+        <div class="tp-icon">🗺</div>
+        <div>
+          <div class="tp-title">Route Planner</div>
+          <div class="tp-desc">AI-assisted tour routing — minimize travel, cluster nearby venues, and visualize your tour on a map.</div>
+        </div>
+      </div>
+      <div class="tp-action"><button class="btn" disabled>Plan a route</button></div>
+    </div>
+
+    <div class="tour-panel">
+      <span class="tp-status">Soon</span>
+      <div class="tp-header">
+        <div class="tp-icon">📬</div>
+        <div>
+          <div class="tp-title">Booking Outreach</div>
+          <div class="tp-desc">Draft and track booking emails for venues. Know who replied, who's pending, and who said no.</div>
+        </div>
+      </div>
+      <div class="tp-action"><button class="btn" disabled>Start outreach</button></div>
+    </div>
+
+    <div class="tour-panel">
+      <span class="tp-status">Soon</span>
+      <div class="tp-header">
+        <div class="tp-icon">💶</div>
+        <div>
+          <div class="tp-title">Revenue Forecast</div>
+          <div class="tp-desc">Estimate tour income from fees, merch, and door splits. Compare against travel and accommodation costs.</div>
+        </div>
+      </div>
+      <div class="tp-action"><button class="btn" disabled>Open forecast</button></div>
+    </div>
+
+    <div class="tour-panel">
+      <span class="tp-status">Soon</span>
+      <div class="tp-header">
+        <div class="tp-icon">⚠️</div>
+        <div>
+          <div class="tp-title">Conflict Detection</div>
+          <div class="tp-desc">Automatically flag double-booked dates, tight travel windows, and scheduling gaps before they become problems.</div>
+        </div>
+      </div>
+      <div class="tp-action"><button class="btn" disabled>Check conflicts</button></div>
+    </div>
+
+  </div>
+
+  <div class="section-label">Upcoming dates</div>
+  <div class="timeline-stub">
+    <div class="timeline-row">
+      <div class="tl-date">—</div>
+      <div class="tl-dot filled"></div>
+      <div class="tl-info">
+        <div class="tl-venue" style="color:var(--third-color)">No dates scheduled yet</div>
+        <div class="tl-city">Add gigs from the Gigs page or connect your venue bookings here</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(async function () {
+  try { const cfg = await loadConfig(); applyNav(cfg.name, cfg.config); } catch {}
+}());
+</script>
+</body>
+</html>

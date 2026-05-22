@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Artist Hub</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css">
+  <style>
+    .hub-wrap { max-width: 960px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+
+    .section-label { font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--third-color); margin: 1.75rem 0 0.75rem; }
+
+    /* Platform grid */
+    .platform-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.65rem; }
+
+    .platform-card {
+      border: 1px solid #e8e8e8; border-radius: 6px; padding: 0.9rem 1rem 0.8rem;
+      background: var(--white); cursor: pointer; transition: border-color 0.12s;
+      display: flex; flex-direction: column; gap: 0.55rem;
+    }
+    .platform-card:hover { border-color: var(--secondary-color); }
+    .platform-card.pc-on { border-color: rgba(74,154,106,0.4); background: rgba(74,154,106,0.03); }
+    .platform-card.pc-on:hover { border-color: rgba(74,154,106,0.75); }
+    .platform-card.pc-add { border-style: dashed; border-color: #d0d0d0; background: transparent; }
+    .platform-card.pc-add:hover { border-color: var(--secondary-color); background: rgba(249,191,143,0.04); }
+
+    .pc-top { display: flex; align-items: center; gap: 0.6rem; }
+    .pc-icon {
+      width: 30px; height: 30px; border-radius: 4px; flex-shrink: 0;
+      background: var(--primary-color); border: 1px solid rgba(160,156,147,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; color: var(--third-color);
+      font-family: "Courier New", Courier, monospace;
+    }
+    .pc-icon-add { font-size: 1.1rem; font-weight: 300; font-family: inherit; }
+    .pc-info { min-width: 0; }
+    .pc-name { font-size: 0.82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pc-status { font-size: 0.65rem; color: var(--third-color); display: flex; align-items: center; gap: 0.3rem; margin-top: 1px; }
+    .pc-dot { width: 6px; height: 6px; border-radius: 50%; background: #d0d0d0; flex-shrink: 0; }
+    .pc-dot-on { background: #4a9a6a; }
+    .pc-url {
+      font-size: 0.68rem; color: var(--third-color); font-family: "Courier New", Courier, monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pc-links { display: flex; gap: 0.4rem; }
+    .pc-visit { font-size: 0.68rem; padding: 0.2rem 0.55rem; }
+
+    /* Reach & tools panels */
+    .hub-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .hub-panel { border: 1px solid #e8e8e8; border-radius: 6px; padding: 1.25rem; background: var(--white); position: relative; }
+    .hp-status { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--third-color); border: 1px solid #e0e0e0; border-radius: 3px; padding: 2px 6px; }
+    .hp-header { display: flex; align-items: flex-start; gap: 0.85rem; margin-bottom: 0.9rem; }
+    .hp-icon { width: 36px; height: 36px; border-radius: 4px; background: var(--primary-color); border: 1px solid var(--secondary-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; opacity: 0.7; }
+    .hp-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.15rem; }
+    .hp-desc { font-size: 0.73rem; color: var(--third-color); line-height: 1.45; }
+    .hp-action { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1px solid #f0f0f0; }
+    .hp-action .btn { font-size: 0.68rem; padding: 0.3rem 0.7rem; opacity: 0.4; cursor: not-allowed; }
+
+    .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
+    .status-msg.error { color: #e55; }
+  </style>
+</head>
+<body>
+<script src="/app/js/common.js"></script>
+
+<div class="app-wrap hub-wrap">
+  <h1>Artist Hub</h1>
+
+  <div class="section-label">Streaming platforms</div>
+  <div class="platform-grid" id="streaming-grid"></div>
+
+  <div class="section-label">Social &amp; video</div>
+  <div class="platform-grid" id="social-grid"></div>
+
+  <div class="section-label">Custom integrations</div>
+  <div class="platform-grid" id="custom-grid"></div>
+
+  <div class="section-label" style="margin-top:2.5rem;">Reach &amp; tools</div>
+  <div class="hub-panels">
+
+    <div class="hub-panel">
+      <span class="hp-status">Soon</span>
+      <div class="hp-header">
+        <div class="hp-icon">&#x1F4CA;</div>
+        <div>
+          <div class="hp-title">Streaming Analytics</div>
+          <div class="hp-desc">Monthly listeners, top markets, stream counts — aggregated across connected platforms.</div>
+        </div>
+      </div>
+      <div class="hp-action"><button class="btn" disabled>View analytics</button></div>
+    </div>
+
+    <div class="hub-panel">
+      <span class="hp-status">Soon</span>
+      <div class="hp-header">
+        <div class="hp-icon">&#x1F517;</div>
+        <div>
+          <div class="hp-title">Smart Link</div>
+          <div class="hp-desc">One link to all your platforms. Auto-detects the listener's preferred service.</div>
+        </div>
+      </div>
+      <div class="hp-action"><button class="btn" disabled>Generate link</button></div>
+    </div>
+
+    <div class="hub-panel">
+      <span class="hp-status">Soon</span>
+      <div class="hp-header">
+        <div class="hp-icon">&#x1F4CB;</div>
+        <div>
+          <div class="hp-title">Press Kit</div>
+          <div class="hp-desc">Auto-generate an EPK with bio, streaming stats, and upcoming dates — ready to send.</div>
+        </div>
+      </div>
+      <div class="hp-action"><button class="btn" disabled>Build EPK</button></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Platform connect / edit modal -->
+<div class="modal-overlay" id="platform-modal">
+  <div class="modal" style="max-width:420px;">
+    <h2 id="pm-title">Connect platform</h2>
+    <div class="modal-field" id="pm-label-row">
+      <label>Name *</label>
+      <input type="text" id="pm-label" placeholder="Platform name">
+    </div>
+    <div class="modal-field">
+      <label>Profile URL *</label>
+      <input type="url" id="pm-url" placeholder="https://…">
+    </div>
+    <div class="modal-field">
+      <label>Note <span style="font-weight:400;color:var(--third-color);font-size:0.78rem;">(optional)</span></label>
+      <input type="text" id="pm-note" placeholder="e.g. main account">
+    </div>
+    <div class="status-msg" id="pm-status"></div>
+    <div class="modal-actions">
+      <button class="btn active" onclick="savePlatform()">Save</button>
+      <button class="btn" onclick="closePlatformModal()">Cancel</button>
+      <button class="btn" id="pm-disconnect" style="margin-left:auto;color:#e55;" onclick="disconnectPlatform()">Disconnect</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app/js/hub.js"></script>
+</body>
+</html>

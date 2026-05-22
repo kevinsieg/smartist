@@ -14,21 +14,21 @@ const PROVIDER = {
   envVar:    'RESEND_API_KEY',
   url:       'https://api.resend.com/emails',
   auth:      key => `Bearer ${key}`,
-  buildBody: ({ from, to, subject, text, html, attachments }) =>
-    ({ from, to, subject, text, html, attachments }),
+  buildBody: ({ from, to, subject, text, html, attachments, reply_to }) =>
+    ({ from, to, subject, text, html, attachments, ...(reply_to ? { reply_to } : {}) }),
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FROM = process.env.RESEND_FROM || 'Band Tools <noreply@example.com>';
 
-async function sendEmail({ to, subject, text, html, attachments }) {
+async function sendEmail({ to, subject, text, html, attachments, reply_to }) {
   const apiKey = process.env[PROVIDER.envVar];
   if (!apiKey) throw new Error(`${PROVIDER.envVar} not configured`);
 
   const r = await fetch(PROVIDER.url, {
     method:  'POST',
     headers: { 'Authorization': PROVIDER.auth(apiKey), 'Content-Type': 'application/json' },
-    body:    JSON.stringify(PROVIDER.buildBody({ from: FROM, to, subject, text, html, attachments })),
+    body:    JSON.stringify(PROVIDER.buildBody({ from: FROM, to, subject, text, html, attachments, reply_to })),
   });
 
   if (!r.ok) {

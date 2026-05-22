@@ -1,5 +1,10 @@
 {
   "rewrites": [
+    { "source": "/auth/callback", "destination": "/api/config?action=oauth-callback" },
+    { "source": "/api/:artist/request-reset",  "destination": "/api/:artist/auth" },
+    { "source": "/api/:artist/song-logs",      "destination": "/api/:artist/songs" },
+    { "source": "/api/:artist/gema/import",    "destination": "/api/:artist/songs/gema-import" },
+    { "source": "/api/:artist/export",         "destination": "/api/:artist/setlists/export" },
     { "source": "/",            "has": [{ "type": "host", "value": "smartist.studio" }],     "destination": "/app/landing.html" },
     { "source": "/",            "has": [{ "type": "host", "value": "www.smartist.studio" }], "destination": "/app/landing.html" },
     { "source": "/robots.txt",  "has": [{ "type": "host", "value": "smartist.studio" }],     "destination": "/app/robots-studio.txt" },
@@ -12,7 +17,13 @@
     { "source": "/stage",           "destination": "/app/stage.html" },
     { "source": "/gema-import",     "destination": "/app/gema-import.html" },
     { "source": "/impressum",       "destination": "/app/impressum.html" },
-    { "source": "/demo",            "destination": "/app/demo.html" }
+    { "source": "/demo",            "destination": "/app/demo.html" },
+    { "source": "/profile",          "destination": "/app/profile.html" },
+    { "source": "/venues",           "destination": "/app/venues.html" },
+    { "source": "/gigs",             "destination": "/app/gigs.html" },
+    { "source": "/organizers",       "destination": "/app/organizers.html" },
+    { "source": "/hub",              "destination": "/app/hub.html" },
+    { "source": "/dashboard",        "destination": "/app/dashboard.html" }
   ],
   "headers": [
     {

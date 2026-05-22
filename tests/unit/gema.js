@@ -4,7 +4,7 @@ const { stubLogger } = require('./_runner');
 stubLogger();
 
 const gemaImport =
-  require(path.join(__dirname, '../../api/[band]/gema/import'))._test;
+  require(path.join(__dirname, '../../api/[artist]/songs/[...path]'))._test;
 
 function run(r) {
   const { test, assert, assertEq, B } = r;

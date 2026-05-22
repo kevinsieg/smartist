@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Band Tools — Setup Wizard
+ * Artist Tools — Setup Wizard
  *
- * Guides through first-time setup or band reconfiguration:
+ * Guides through first-time setup or artist reconfiguration:
  *   1. Verify (and optionally apply) the database schema
- *   2. Create a new band or update an existing one
+ *   2. Create a new artist or update an existing one
  *   3. Configure display fields, filter fields, and logo
  *   4. Review and save
  *
@@ -88,7 +88,7 @@ async function confirmDb(url) {
 
 async function schemaApplied(sql) {
   try {
-    await sql`SELECT 1 FROM bands LIMIT 0`;
+    await sql`SELECT 1 FROM artists LIMIT 0`;
     return true;
   } catch {
     return false;
@@ -163,26 +163,26 @@ async function stepSchema(sql) {
   }
 }
 
-// ── Step 2 — Band ──────────────────────────────────────────────────────────
+// ── Step 2 — Artist ────────────────────────────────────────────────────────
 
-async function stepBand(sql) {
-  header(2, 4, 'Band');
+async function stepArtist(sql) {
+  header(2, 4, 'Artist');
 
-  const existing = await sql`SELECT id, slug, name, config FROM bands ORDER BY name`;
+  const existing = await sql`SELECT id, slug, name, config FROM artists ORDER BY name`;
 
-  let band = null;
+  let artist = null;
   let isNew = true;
 
   if (existing.length) {
-    console.log('\n  Existing bands:');
+    console.log('\n  Existing artists:');
     existing.forEach(b => console.log(`    · ${B(b.name)} ${D(`(${b.slug})`)}`));
     console.log('');
-    const choice = await ask('Create a new band or reconfigure existing? (new / slug)');
+    const choice = await ask('Create a new artist or reconfigure existing? (new / slug)');
 
     if (choice !== 'new') {
-      band = existing.find(b => b.slug === choice);
-      if (!band) {
-        console.log(R(`\n  Band "${choice}" not found.`));
+      artist = existing.find(b => b.slug === choice);
+      if (!artist) {
+        console.log(R(`\n  Artist "${choice}" not found.`));
         process.exit(1);
       }
       isNew = false;
@@ -191,19 +191,19 @@ async function stepBand(sql) {
 
   if (isNew) {
     console.log('');
-    const slug = await ask('Slug', 'myband');
+    const slug = await ask('Slug', 'myartist');
     if (!slug || !/^[a-z0-9_-]+$/.test(slug)) {
       console.log(R('\n  Invalid slug — use lowercase letters, digits, hyphens, underscores.'));
       process.exit(1);
     }
-    const [taken] = await sql`SELECT 1 FROM bands WHERE slug = ${slug}`;
+    const [taken] = await sql`SELECT 1 FROM artists WHERE slug = ${slug}`;
     if (taken) {
       console.log(R(`\n  Slug "${slug}" is already in use.`));
       process.exit(1);
     }
 
-    const name = await ask('Band name');
-    if (!name) { console.log(R('\n  Band name is required.')); process.exit(1); }
+    const name = await ask('Artist name');
+    if (!name) { console.log(R('\n  Artist name is required.')); process.exit(1); }
 
     const password = await ask('Password');
     if (password.length < 6) { console.log(R('\n  Password must be at least 6 characters.')); process.exit(1); }
@@ -212,21 +212,21 @@ async function stepBand(sql) {
 
     const hash = await bcrypt.hash(password, 10);
     const [created] = await sql`
-      INSERT INTO bands (slug, name, password_hash, config)
+      INSERT INTO artists (slug, name, password_hash, config)
       VALUES (${slug}, ${name}, ${hash}, ${{}}::jsonb)
       RETURNING id, slug, name, config
     `;
-    band = created;
-    ok(`Band ${B(name)} created`);
+    artist = created;
+    ok(`Artist ${B(name)} created`);
   } else {
-    ok(`Selected: ${B(band.name)} ${D(`(${band.slug})`)}`);
-    if (band.config && Object.keys(band.config).length) {
-      warn('This band already has a config — it will be replaced by the new one.');
+    ok(`Selected: ${B(artist.name)} ${D(`(${artist.slug})`)}`);
+    if (artist.config && Object.keys(artist.config).length) {
+      warn('This artist already has a config — it will be replaced by the new one.');
       if (!await confirm('Continue?')) { process.exit(0); }
     }
   }
 
-  return band;
+  return artist;
 }
 
 // ── Step 3 — Fields ────────────────────────────────────────────────────────
@@ -258,7 +258,7 @@ async function stepFields() {
   // ── Custom extra fields ─────────────────────────────────────────────────
 
   const extraFields = [];
-  console.log(`\n  ${B('Custom (extra) fields')} — band-specific data stored in JSONB`);
+  console.log(`\n  ${B('Custom (extra) fields')} — artist-specific data stored in JSONB`);
   console.log(`  ${D('Format:  fieldName : Label : type')}`);
   console.log(`  ${D('Types:   text (default) | integer | boolean')}`);
   console.log(`  ${D('Example: lead:Lead Singer:text   or   capo:Capo:integer')}`);
@@ -316,10 +316,10 @@ async function stepFields() {
 
 // ── Step 4 — Review & save ─────────────────────────────────────────────────
 
-async function stepReview(sql, band, { displayFields, filterFields, logoUrl }) {
+async function stepReview(sql, artist, { displayFields, filterFields, logoUrl }) {
   header(4, 4, 'Review & save');
 
-  console.log(`\n  Band:   ${B(band.name)} ${D(`(${band.slug})`)}`);
+  console.log(`\n  Artist: ${B(artist.name)} ${D(`(${artist.slug})`)}`);
   console.log(`  Logo:   ${D(logoUrl)}`);
   console.log(`\n  Display fields:`);
   displayFields.forEach((f, i) =>
@@ -341,8 +341,19 @@ async function stepReview(sql, band, { displayFields, filterFields, logoUrl }) {
   }
 
   const config = { logoUrl, displayFields, filterFields };
-  await sql`UPDATE bands SET config = ${config} WHERE id = ${band.id}`;
-  ok(`Config saved for ${B(band.name)}`);
+  await sql`UPDATE artists SET config = ${config} WHERE id = ${artist.id}`;
+  ok(`Config saved for ${B(artist.name)}`);
+
+  // Seed placeholder venues (idempotent)
+  const placeholders = ['Private Event', 'One-off / TBD', 'Festival (unlisted)'];
+  for (const name of placeholders) {
+    await sql`
+      INSERT INTO venues (artist_id, name, category)
+      VALUES (${artist.id}, ${name}, 'placeholder')
+      ON CONFLICT DO NOTHING
+    `;
+  }
+  ok('Placeholder venues seeded');
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -350,7 +361,7 @@ async function stepReview(sql, band, { displayFields, filterFields, logoUrl }) {
 async function main() {
   console.log('');
   console.log(B('┌──────────────────────────────────────────┐'));
-  console.log(B('│   Band Tools — Setup Wizard               │'));
+  console.log(B('│   Artist Tools — Setup Wizard             │'));
   console.log(B('└──────────────────────────────────────────┘'));
 
   if (!process.env.DATABASE_URL) {
@@ -365,9 +376,9 @@ async function main() {
 
   try {
     await stepSchema(sql);
-    const band   = await stepBand(sql);
+    const artist = await stepArtist(sql);
     const fields = await stepFields();
-    await stepReview(sql, band, fields);
+    await stepReview(sql, artist, fields);
 
     console.log(`\n  ${G('All done!')} ${D('Start the app with: vercel dev')}\n`);
   } catch (e) {
