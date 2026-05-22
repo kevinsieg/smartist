@@ -131,6 +131,36 @@ function loadHistoryContext() {
   return context;
 }
 
+function setHistoryState(ctx, state = {}) {
+  const {
+    allSongs = [],
+    allSetlists = [],
+    allGigs = [],
+    currentView = 'setlists',
+    filterName = '',
+    filterSong = '',
+    filterDateFrom = '',
+    filterDateTo = '',
+    songFilterIds = null,
+  } = state;
+  const songFilterExpr = songFilterIds === null
+    ? 'null'
+    : `new Set(${JSON.stringify(songFilterIds)})`;
+
+  vm.runInContext(`
+    allSongs = ${JSON.stringify(allSongs)};
+    allSetlists = ${JSON.stringify(allSetlists)};
+    allGigs = ${JSON.stringify(allGigs)};
+    currentView = ${JSON.stringify(currentView)};
+    filterName = ${JSON.stringify(filterName)};
+    filterSong = ${JSON.stringify(filterSong)};
+    filterDateFrom = ${JSON.stringify(filterDateFrom)};
+    filterDateTo = ${JSON.stringify(filterDateTo)};
+    songFilterIds = ${songFilterExpr};
+    songTimer = null;
+  `, ctx);
+}
+
 (async () => {
   console.log(B('\nhistory page response helpers'));
   const ctx = loadHistoryContext();
@@ -175,6 +205,64 @@ function loadHistoryContext() {
         json: async () => ({ error: 'not an array' }),
       }),
       'Invalid response: expected an array'
+    );
+  });
+
+  console.log(B('\nhistory page filters'));
+
+  await test('filteredSetlists uses gig date before saved date and combines filters', async () => {
+    setHistoryState(ctx, {
+      allSetlists: [
+        { id: 1, title: 'Acoustic Night', gig_name: 'Festival', gig_date: '2026-03-10', created_at: '2026-05-01T10:00:00Z' },
+        { id: 2, title: 'Acoustic Rehearsal', gig_name: 'Studio', gig_date: null, created_at: '2026-03-12T10:00:00Z' },
+        { id: 3, title: 'Acoustic Brunch', gig_name: 'Cafe', gig_date: '2026-04-01', created_at: '2026-04-01T10:00:00Z' },
+        { id: 4, title: 'Acoustic Afterparty', gig_name: 'Club', gig_date: '2026-02-28', created_at: '2026-03-15T10:00:00Z' },
+      ],
+      filterName: 'acoustic',
+      filterDateFrom: '2026-03-01',
+      filterDateTo: '2026-03-31',
+      songFilterIds: [1, 2, 4],
+    });
+
+    assertEq(vm.runInContext('filteredSetlists().map(s => s.id)', ctx), [1, 2]);
+  });
+
+  await test('filteredGigs applies inclusive date bounds and excludes unscheduled gigs when bounded', async () => {
+    setHistoryState(ctx, {
+      allGigs: [
+        { id: 10, name: 'Town Hall', date: '2026-03-01' },
+        { id: 11, name: 'River Hall', date: '2026-03-31T20:00:00Z' },
+        { id: 12, name: 'Future Hall', date: null },
+        { id: 13, name: 'Garden Hall', date: '2026-04-01' },
+      ],
+      filterName: 'hall',
+      filterDateFrom: '2026-03-01',
+      filterDateTo: '2026-03-31',
+    });
+
+    assertEq(vm.runInContext('filteredGigs().map(g => g.id)', ctx), [10, 11]);
+  });
+
+  await test('setView clears song filters when switching to gigs', async () => {
+    setHistoryState(ctx, {
+      allGigs: [{ id: 20, name: 'Release Hall', date: '2026-05-10' }],
+      currentView: 'setlists',
+      filterSong: 'banjo',
+      songFilterIds: [],
+    });
+    const songInput = ctx.document.getElementById('filter-song');
+    songInput.value = 'banjo';
+    songInput.hidden = false;
+
+    ctx.setView('gigs');
+
+    assertEq(vm.runInContext('filterSong', ctx), '');
+    assertEq(vm.runInContext('songFilterIds === null', ctx), true);
+    assertEq(songInput.value, '');
+    assertEq(songInput.hidden, true);
+    assert(
+      ctx.document.getElementById('history-content').innerHTML.includes('Release Hall'),
+      'expected gigs view to render after clearing setlist-only song filter'
     );
   });
 

@@ -34,6 +34,11 @@ const { clientIp, isMissingRateLimitTable } =
   require(path.join(__dirname, '../api/_ratelimit'));
 const gemaImport =
   require(path.join(__dirname, '../api/[band]/gema/import'))._test;
+const { suggestLyricsWithAI } =
+  require(path.join(__dirname, '../api/_ai'));
+
+const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const ORIGINAL_FETCH = global.fetch;
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -44,7 +49,6 @@ const B = s => `\x1b[1m${s}\x1b[0m`;
 // ── Runner ───────────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 const failures = [];
-const asyncTests = [];
 const pending = [];
 
 function test(name, fn) {
@@ -60,22 +64,6 @@ function test(name, fn) {
   }
 }
 
-function testAsync(name, fn) {
-  asyncTests.push({ name, fn });
-}
-
-async function runAsyncTests() {
-  for (const { name, fn } of asyncTests) {
-    try {
-      await fn();
-      console.log(`  ${G('✓')} ${name}`);
-      passed++;
-    } catch (e) {
-      console.log(`  ${R('✗')} ${name}`);
-      console.log(`      ${R(e.message)}`);
-      failures.push({ name, error: e.message });
-      failed++;
-    }
 function asyncTest(name, fn) {
   pending.push({ name, fn });
 }
@@ -103,19 +91,6 @@ function assertEq(a, b, msg) {
   const bStr = JSON.stringify(b);
   if (aStr !== bStr)
     throw new Error(msg || `expected ${bStr}, got ${aStr}`);
-}
-
-async function testAsync(name, fn) {
-  try {
-    await fn();
-    console.log(`  ${G('✓')} ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ${R('✗')} ${name}`);
-    console.log(`      ${R(e.message)}`);
-    failures.push({ name, error: e.message });
-    failed++;
-  }
 }
 
 // ── validateSongIds ───────────────────────────────────────────────────────────
@@ -502,7 +477,7 @@ test('isMissingRateLimitTable ignores unrelated database errors', () => {
   assertEq(isMissingRateLimitTable({ code: '08006', message: 'connection failure' }), false);
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────────
+// ── AI lyrics helper ──────────────────────────────────────────────────────────
 
 async function withAiEnv(apiKey, fetchImpl, fn) {
   if (apiKey === undefined) {
@@ -523,7 +498,7 @@ async function withAiEnv(apiKey, fetchImpl, fn) {
   }
 }
 
-testAsync('no API key → skipped without network call', async () => {
+asyncTest('no API key → skipped without network call', async () => {
   let called = false;
   await withAiEnv(undefined, async () => { called = true; }, async () => {
     const result = await suggestLyricsWithAI('Song', 'Artist');
@@ -532,7 +507,7 @@ testAsync('no API key → skipped without network call', async () => {
   });
 });
 
-testAsync('Gemini response → strips markdown, citations, and URL-only links', async () => {
+asyncTest('Gemini response → strips markdown, citations, and URL-only links', async () => {
   let requestBody = null;
   const lyrics =
     '**Premier couplet** [1]\n' +
@@ -563,7 +538,7 @@ testAsync('Gemini response → strips markdown, citations, and URL-only links', 
   });
 });
 
-testAsync('provider quota response → null lyrics with skipped flag', async () => {
+asyncTest('provider quota response → null lyrics with skipped flag', async () => {
   await withAiEnv('test-key', async () => ({
     ok: false,
     status: 429,
@@ -573,11 +548,14 @@ testAsync('provider quota response → null lyrics with skipped flag', async () 
   });
 });
 
-testAsync('network failure → null lyrics without skipped flag', async () => {
+asyncTest('network failure → null lyrics without skipped flag', async () => {
   await withAiEnv('test-key', async () => {
     throw new Error('socket closed');
   }, async () => {
     assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: null });
+  });
+});
+
 console.log(B('\nhandler wrapper'));
 
 function makeRes({ headersSent = false } = {}) {
@@ -679,7 +657,6 @@ asyncTest('wrap does not write a second response after headers were sent', async
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-runAsyncTests().then(() => {
 (async () => {
   for (const entry of pending) await runAsyncTest(entry);
   const total = passed + failed;
@@ -693,5 +670,4 @@ runAsyncTests().then(() => {
     failures.forEach(f => console.log(`  ✗ ${f.name}\n    ${f.error}`));
   }
   process.exit(failed > 0 ? 1 : 0);
-});
 })();
