@@ -187,13 +187,33 @@ function toggleControls(forceCollapse) {
   }
 }
 
+function computeSplitIndex(songs) {
+  if (songs.length < 2) return songs.length;
+  let total = 0;
+  for (const s of songs) total += s.length_min || 4;
+  const half = total / 2;
+  let cum = 0;
+  for (let i = 0; i < songs.length; i++) {
+    cum += songs[i].length_min || 4;
+    if (cum >= half) return i + 1;
+  }
+  return Math.ceil(songs.length / 2);
+}
+
 function onGenerate() {
   const filtered  = getFilteredSongs();
   const targetMin = parseFloat(document.getElementById('target-min')?.value) || 0;
+  const split     = document.getElementById('split-sets')?.checked;
   currentSet = generateSet(filtered, targetMin);
-  currentSet = applyCapoOpts(currentSet);
+  if (split && currentSet.length >= 2) {
+    const mid  = computeSplitIndex(currentSet);
+    const set1 = applyCapoOpts(currentSet.slice(0, mid));
+    const set2 = applyCapoOpts(currentSet.slice(mid));
+    currentSet = [...set1, ...set2];
+  } else {
+    currentSet = applyCapoOpts(currentSet);
+  }
   renderResult(currentSet);
-  if (window.innerWidth < 640) toggleControls(true);
 }
 
 function moveSong(index, dir) {
@@ -255,41 +275,35 @@ function renderControls() {
 
   document.getElementById('setlist-content').innerHTML = `
     <div class="setlist-controls">
-      <div class="controls-header">
-        <button class="controls-toggle" id="controls-toggle" onclick="toggleControls()" aria-expanded="true">
-          <span class="toggle-arrow">▲</span> Filters
-        </button>
-        <div class="duration-input">
-          <label for="target-min">Min</label>
-          <input type="number" id="target-min" min="0" max="300" value="45">
-        </div>
+      <div class="gen-sentence">
         <button class="btn generate-btn" onclick="onGenerate()">Generate</button>
+        <span class="gen-prose">a setlist of</span>
+        <input type="number" id="target-min" min="0" max="300" value="45" class="gen-duration-input">
+        <span class="gen-prose">min${filterRows ? ' with' : ''}</span>
+        ${filterRows ? `<button class="controls-toggle" id="controls-toggle" onclick="toggleControls()" aria-expanded="false"><span class="toggle-arrow">▼</span> Filters</button>` : ''}
       </div>
-      <hr class="controls-divider">
-      <div id="controls-body">
+      <div id="controls-body" style="display:none">
         ${filterRows}
-        <div class="filter-row">
-          <span class="filter-label">Tempo</span>
-          <div class="tempo-slider-wrap">
-            <span class="tempo-label">Slow</span>
-            <input type="range" id="tempo-slider" min="0" max="100" value="50" class="tempo-slider">
-            <span class="tempo-label">Fast</span>
-          </div>
+      </div>
+      <div class="gen-options">
+        <div class="tempo-slider-wrap">
+          <span class="tempo-label">Slow</span>
+          <input type="range" id="tempo-slider" min="0" max="100" value="50" class="tempo-slider">
+          <span class="tempo-label">Fast</span>
         </div>
-        <hr class="controls-divider">
-        <div class="filter-row">
-          <label class="active-toggle">
-            <input type="checkbox" id="active-only" checked onchange="refreshFilterOptions()">
-            Active songs only
-          </label>
-        </div>
-        <div class="filter-row">
-          <span class="active-toggle">
-            Minimize capo changes
-            <label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo"> banjo</label>
-            <label class="active-toggle"><input type="checkbox" id="minimize-git-capo"> guitar</label>
-          </span>
-        </div>
+        <label class="active-toggle">
+          <input type="checkbox" id="active-only" checked onchange="refreshFilterOptions()">
+          Active only
+        </label>
+        <label class="active-toggle">
+          <input type="checkbox" id="split-sets">
+          Split into 2 sets
+        </label>
+        <span class="active-toggle">
+          Capo:
+          <label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> banjo</label>
+          <label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> guitar</label>
+        </span>
       </div>
     </div>
     <div id="result-area"></div>`;
@@ -314,11 +328,19 @@ function renderResult(songs) {
     return;
   }
 
-  let totalMin = 0;
+  const split   = document.getElementById('split-sets')?.checked;
+  const splitAt = split && songs.length >= 2 ? computeSplitIndex(songs) : null;
 
-  const items = songs.map((song, i) => {
-    totalMin += song.length_min || 4;
-    const prev = i > 0 ? songs[i - 1] : null;
+  let totalMin = 0;
+  let set1Min  = 0;
+
+  const itemHtmls = songs.map((song, i) => {
+    const dur = song.length_min || 4;
+    totalMin += dur;
+    if (splitAt && i < splitAt) set1Min += dur;
+
+    // Don't show capo-change across the break
+    const prev = (i > 0 && !(splitAt && i === splitAt)) ? songs[i - 1] : null;
 
     const banjo = song.extra?.banjoCapo != null ? String(song.extra.banjoCapo) : null;
     const git   = song.extra?.gitCapo   != null ? String(song.extra.gitCapo)   : null;
@@ -347,10 +369,11 @@ function renderResult(songs) {
 
     const printLabels = song.genre ? `<span>${escHtml(song.genre)}</span>` : '';
 
+    const displayNum = splitAt && i >= splitAt ? (i - splitAt + 1) : (i + 1);
     const isFirst = i === 0, isLast = i === songs.length - 1;
     return `<li class="song-item" draggable="true" data-index="${i}">
       <span class="drag-handle" aria-hidden="true">⠿</span>
-      <span class="song-num">${i + 1}.</span>
+      <span class="song-num">${displayNum}.</span>
       <div class="song-main">
         <div class="song-top">
           <span class="song-title">${escHtml(song.title)}</span>
@@ -365,7 +388,19 @@ function renderResult(songs) {
         <button class="song-remove-btn" onclick="removeFromSet(${i})" title="Remove">&#215;</button>
       </div>
     </li>`;
-  }).join('');
+  });
+
+  if (splitAt) {
+    const set2Min = totalMin - set1Min;
+    itemHtmls.splice(splitAt, 0,
+      `<li class="set-break">
+        <span class="set-break-label">— Break —</span>
+        <span class="set-break-meta">Set 1: ${splitAt} songs &bull; ${formatLength(set1Min)} &ensp;|&ensp; Set 2: ${songs.length - splitAt} songs &bull; ${formatLength(set2Min)}</span>
+      </li>`
+    );
+  }
+
+  const items = itemHtmls.join('');
 
   const inSetIds = new Set(songs.map(s => s.id));
   const available = allSongs
@@ -375,9 +410,13 @@ function renderResult(songs) {
     `<option value="${s.id}">${escHtml(s.title)}</option>`
   ).join('');
 
+  const headerText = splitAt
+    ? `${songs.length} songs &bull; ${formatLength(totalMin)} &ensp;(2 sets)`
+    : `${songs.length} songs &bull; ${formatLength(totalMin)}`;
+
   resultArea.innerHTML = `
     <div class="setlist-result">
-      <h2>${songs.length} songs &bull; ${formatLength(totalMin)}</h2>
+      <h2>${headerText}</h2>
       <ul class="song-list">${items}</ul>
       <div class="add-song-row">
         <select id="add-song-select" onchange="addSongToSet(this)">
@@ -1287,7 +1326,7 @@ function _openSongPanel(setlistSid, songId) {
     var val = cellVal(field);
     if (val === null || val === undefined || val === '') return '';
     var label = fieldMap[field] || field.replace('extra.', '').replace(/_/g, ' ');
-    var display = field === 'length_min' ? formatLength(val) : escHtml(String(val));
+    var display = field === 'length_min' ? formatLength(val) : field === 'key' ? escHtml(formatKey(String(val))) : escHtml(String(val));
     return '<div class="vsp-cell">' +
       '<div class="vsp-cell-label">' + escHtml(label) + '</div>' +
       '<div class="vsp-cell-value">' + display + '</div>' +

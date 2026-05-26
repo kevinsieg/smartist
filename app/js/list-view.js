@@ -79,9 +79,14 @@ function createListView(opts) {
     }).join('');
 
     var actionsHtml = (opts.actions || []).map(function(a) {
-      var cls = 'btn' + (a.desktopOnly ? ' btn-desktop-only' : '');
-      return '<button class="' + cls + '" data-lv-action="' + escHtml(a.label) + '">' +
-        escHtml(a.label) + '</button>';
+      var cls = 'btn' +
+        (a.desktopOnly  ? ' btn-desktop-only' : '') +
+        (a.authRequired ? ' auth-only'        : '') +
+        (a.icon         ? ' icon-btn'         : '');
+      var titleAttr = a.title ? ' title="' + escHtml(a.title) + '"' : '';
+      var content   = a.icon  ? a.icon : escHtml(a.label);
+      return '<button class="' + cls + '" data-lv-action="' + escHtml(a.label) + '"' + titleAttr + '>' +
+        content + '</button>';
     }).join('');
 
     var countHtml = '<span class="filter-count" id="lv-count"></span>';
