@@ -38,13 +38,11 @@ Setlist management and song catalogue for bands. Runs as a Vercel serverless app
 
 | Service | Project / resource | Purpose |
 |---|---|---|
-| Vercel | `smartist` project | Hosts this app — linked to this GitHub repo |
-| Neon | `smartist-dev` project | Development database |
-| Neon | `bandone` project | Production database |
-| Cloudflare R2 | `bandone` bucket | Production file storage |
-| Cloudflare R2 | `bandone-dev` bucket | Development file storage |
-
-> The `bandone` Vercel project is a separate deployment for `band-one.example` (the band website). It has nothing to do with this repo.
+| Vercel | one project | Hosts this app — linked to this GitHub repo |
+| Neon | one project (dev database) | Development database |
+| Neon | one project (production database) | Production database |
+| Cloudflare R2 | one bucket (production) | Production file storage |
+| Cloudflare R2 | one bucket (development) | Development file storage |
 
 ### TODO
 
@@ -58,8 +56,8 @@ Setlist management and song catalogue for bands. Runs as a Vercel serverless app
 
 | Git branch | Vercel environment | Domain | Database |
 |---|---|---|---|
-| `dev` *(default)* | Preview | `smartist-git-dev-*.vercel.app` | Neon `smartist-dev` |
-| `main` | Production | `smartist.band-one.example` | Neon `bandone` |
+| `dev` *(default)* | Preview | `<project>-git-dev-*.vercel.app` | Neon dev project |
+| `main` | Production | your custom domain | Neon production project |
 
 - Push to `dev` → Vercel auto-deploys to the Preview URL
 - Push to `main` is blocked — only PR merges from `dev` trigger a production deployment
@@ -84,7 +82,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables).
 
 | Variable | Value |
 |---|---|
-| `ARTIST_SLUG` | `bandone` |
+| `ARTIST_SLUG` | Your artist's slug (e.g. `myband`) |
 | `R2_ACCOUNT_ID` | Cloudflare account ID |
 | `RESEND_API_KEY` | Resend API key |
 | `RESEND_FROM` | Sender address |
@@ -94,10 +92,10 @@ Set these in the Vercel dashboard (Settings → Environment Variables).
 
 | Variable | Production | Preview + Development |
 |---|---|---|
-| `DATABASE_URL` | Neon `bandone` connection string | Neon `smartist-dev` connection string |
-| `APP_ORIGIN` | `https://smartist.band-one.example` | Preview URL (`smartist-git-dev-*.vercel.app`) |
+| `DATABASE_URL` | Production Neon connection string | Dev Neon connection string |
+| `APP_ORIGIN` | `https://yourdomain.com` | Preview URL (`<project>-git-dev-*.vercel.app`) |
 | `ARTIST_ADMIN_EMAIL` | `you@yourdomain.com` | `you+dev@yourdomain.com` |
-| `R2_BUCKET_NAME` | `bandone` | `bandone-dev` |
+| `R2_BUCKET_NAME` | Production bucket name | Dev bucket name |
 | `R2_ACCESS_KEY_ID` | Prod R2 token | Dev R2 token |
 | `R2_SECRET_ACCESS_KEY` | Prod R2 secret | Dev R2 secret |
 | `R2_PUBLIC_URL` | Prod bucket public URL | Dev bucket public URL |
