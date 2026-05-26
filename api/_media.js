@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { getDb, insertAuditLog } = require('./_db');
+const { getDb, insertAuditLog, getSlug } = require('./_db');
 const { requireAuth } = require('./_auth');
 const { wrap } = require('./_handler');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
@@ -17,7 +17,8 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
   const maxMB = maxBytes / 1024 / 1024;
 
   return async function handler(req, res) {
-    const { artist: slug, id } = req.query;
+    const slug = getSlug(req);
+    const { id } = req.query;
     const songId = Number(id);
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });

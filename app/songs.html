@@ -229,9 +229,9 @@
     <div id="player-content"></div>
     <div id="player-history" class="player-history"></div>
     <div class="modal-actions">
-      <button class="btn" id="player-replace-btn" onclick="triggerReplaceAudio()">Replace</button>
+      <button class="btn auth-only" id="player-replace-btn" onclick="triggerReplaceAudio()">Replace</button>
       <input type="file" id="player-file-input" accept="audio/*" style="display:none" onchange="handleReplaceFile(this)">
-      <button class="btn" id="player-delete-btn" onclick="showDeleteConfirm()">Remove file</button>
+      <button class="btn auth-only" id="player-delete-btn" onclick="showDeleteConfirm()">Remove file</button>
       <div id="player-delete-confirm" class="player-delete-confirm" style="display:none">
         <span>Delete audio?</span>
         <button class="btn btn-danger" onclick="confirmDeleteAudio()">Yes, delete</button>
@@ -249,9 +249,9 @@
     <div id="sheet-history" class="player-history"></div>
     <div class="modal-actions">
       <a id="sheet-open-link" href="#" target="_blank" rel="noopener" class="btn">Open ↗</a>
-      <button class="btn" id="sheet-replace-btn" onclick="triggerReplaceSheet()">Replace</button>
+      <button class="btn auth-only" id="sheet-replace-btn" onclick="triggerReplaceSheet()">Replace</button>
       <input type="file" id="sheet-file-input" accept=".pdf,application/pdf" style="display:none" onchange="handleReplaceSheet(this)">
-      <button class="btn" id="sheet-delete-btn" onclick="showSheetDeleteConfirm()">Remove</button>
+      <button class="btn auth-only" id="sheet-delete-btn" onclick="showSheetDeleteConfirm()">Remove</button>
       <div id="sheet-delete-confirm" class="player-delete-confirm" style="display:none">
         <span>Delete sheet?</span>
         <button class="btn btn-danger" onclick="confirmDeleteSheet()">Yes, delete</button>
@@ -268,9 +268,9 @@
     <div id="playback-content"></div>
     <div id="playback-history" class="player-history"></div>
     <div class="modal-actions">
-      <button class="btn" id="playback-replace-btn" onclick="triggerReplacePlayback()">Replace</button>
+      <button class="btn auth-only" id="playback-replace-btn" onclick="triggerReplacePlayback()">Replace</button>
       <input type="file" id="playback-file-input" accept="audio/*" style="display:none" onchange="handleReplacePlayback(this)">
-      <button class="btn" id="playback-delete-btn" onclick="showPlaybackDeleteConfirm()">Remove</button>
+      <button class="btn auth-only" id="playback-delete-btn" onclick="showPlaybackDeleteConfirm()">Remove</button>
       <div id="playback-delete-confirm" class="player-delete-confirm" style="display:none">
         <span>Delete playback?</span>
         <button class="btn btn-danger" onclick="confirmDeletePlayback()">Yes, delete</button>
@@ -295,8 +295,8 @@
       </div>
     </div>
     <div class="modal-actions" id="lyrics-actions-view">
-      <button class="btn" onclick="startEditLyrics()">Edit</button>
-      <button class="btn" id="lyrics-delete-btn" onclick="showLyricsDeleteConfirm()">Delete</button>
+      <button class="btn auth-only" onclick="startEditLyrics()">Edit</button>
+      <button class="btn auth-only" id="lyrics-delete-btn" onclick="showLyricsDeleteConfirm()">Delete</button>
       <div id="lyrics-delete-confirm" class="player-delete-confirm" style="display:none">
         <span>Delete lyrics?</span>
         <button class="btn btn-danger" onclick="confirmDeleteLyrics()">Yes, delete</button>
@@ -305,7 +305,7 @@
       <button class="btn" onclick="closeLyrics()">Close</button>
     </div>
     <p id="lyrics-save-status" style="display:none;font-size:0.8rem;margin-top:0.5rem;color:var(--third-color)"></p>
-    <div class="modal-actions" id="lyrics-actions-edit" style="display:none">
+    <div class="modal-actions auth-only" id="lyrics-actions-edit" style="display:none">
       <button class="btn" id="lyrics-save-btn" onclick="saveLyrics()">Save</button>
       <button class="btn" id="lyrics-suggest-btn" onclick="suggestLyrics()" title="Search for lyrics online using AI">AI ✦</button>
       <button class="btn" onclick="cancelEditLyrics()">Cancel</button>
