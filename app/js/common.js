@@ -81,6 +81,12 @@ function getInitials(name) {
 
   // SPA navigation — swap page content without reloading the shell.
   document.addEventListener('click', function(e) {
+    if (e.target.closest('.nav-auth-login, .go-login')) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      goToLogin();
+      return;
+    }
     var a = e.target.closest('.nav-links a');
     if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (a.href === window.location.href) return;
@@ -345,6 +351,16 @@ function applyNav(bandName, bandConfig) {
   updateAuthIndicator();
 }
 
+function loginPageUrl() {
+  var next = window.location.pathname + window.location.search;
+  return '/?next=' + encodeURIComponent(next);
+}
+
+function goToLogin() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  window.location.assign(loginPageUrl());
+}
+
 function updateAuthIndicator() {
   var el = document.getElementById('nav-auth');
   if (!el) return;
@@ -359,7 +375,8 @@ function updateAuthIndicator() {
     if (onLanding) {
       el.innerHTML = '';
     } else {
-      el.innerHTML = '<a class="nav-auth-login nav-auth-login--vm" href="/">Login &#8594;</a>';
+      el.innerHTML = '<a class="nav-auth-login nav-auth-login--vm go-login" href="' +
+        loginPageUrl() + '">Login &#8594;</a>';
     }
     if (typeof window.onNavAuthEmpty === 'function') window.onNavAuthEmpty(el);
   }
@@ -375,7 +392,7 @@ function doLogout() {
 // redirect was triggered so callers can bail out early (e.g. initPage).
 function requireLogin() {
   if (!sessionStorage.getItem(AUTH_TOKEN_KEY)) {
-    window.location.href = '/?next=' + encodeURIComponent(window.location.pathname);
+    goToLogin();
     return true;
   }
   return false;
@@ -677,6 +694,12 @@ async function warmPage(href) {
 }
 
 async function navigate(href) {
+  var path = new URL(href, location.origin).pathname.replace(/\/+$/, '') || '/';
+  if (path === '/') {
+    goToLogin();
+    return;
+  }
+
   const version = ++_navVersion;
   document.documentElement.style.opacity = '0';
 
@@ -736,7 +759,6 @@ async function navigate(href) {
     }
 
     history.pushState(null, document.title, href);
-    const path = new URL(href).pathname.replace(/\/+$/, '');
     document.querySelectorAll('.nav-links a').forEach(function(a) {
       a.classList.toggle('current', a.getAttribute('href').replace(/\/+$/, '') === path);
     });

@@ -83,7 +83,7 @@ async function loadAndRender(viewMode) {
       applyViewMode();
       var notice = document.createElement('div');
       notice.className = 'view-mode-notice';
-      notice.innerHTML = 'View mode — <a href="/">Login</a> for full access.';
+      notice.innerHTML = 'View mode — <a class="go-login" href="#">Login</a> for full access.';
       var page = document.querySelector('.app-page') || document.body;
       page.insertBefore(notice, page.firstChild);
     }
