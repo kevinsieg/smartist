@@ -29,6 +29,7 @@ function getR2Client() {
     region:      STORAGE.region,
     endpoint:    STORAGE.endpoint(),
     credentials: { accessKeyId: STORAGE.accessKeyId(), secretAccessKey: STORAGE.secretAccessKey() },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
   });
 }
 

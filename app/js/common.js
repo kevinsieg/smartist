@@ -75,7 +75,7 @@ function getInitials(name) {
       document.querySelectorAll('.app-logo-initials').forEach(el => { el.textContent = _initials; });
       if (cached.config?.logoUrl) {
         document.querySelectorAll('.app-logo-img').forEach(img => {
-          img.src = cached.config.logoUrl; img.alt = cached.name || '';
+          img.src = cached.config.logoUrl.replace(/^http:/i, 'https:'); img.alt = cached.name || '';
           img.onerror = function() { this.style.display = 'none'; const s = this.nextElementSibling; if (s) s.classList.add('app-logo-initials--show'); };
         });
         document.querySelectorAll('.app-logo').forEach(el => { el.setAttribute('aria-label', cached.name || ''); });
@@ -204,7 +204,7 @@ function printSetlistSongs(songs, title, cfg) {
   if (logoEl) {
     var logoUrl = cfg && cfg.config && cfg.config.logoUrl;
     if (logoUrl) {
-      logoEl.src = logoUrl;
+      logoEl.src = logoUrl.replace(/^http:/i, 'https:');
       logoEl.alt = (cfg && cfg.name) || '';
       logoEl.style.display = '';
     } else {
@@ -334,7 +334,7 @@ function applyNav(bandName, bandConfig) {
     img.alt = bandName || '';
     const initialsEl = img.nextElementSibling;
     if (logoUrl) {
-      img.src = logoUrl;
+      img.src = logoUrl.replace(/^http:/i, 'https:');
       img.style.display = '';
       img.onerror = function() {
         this.style.display = 'none';
