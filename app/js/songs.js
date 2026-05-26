@@ -17,7 +17,7 @@ var SONGS_BULK_EDIT_KEY = 'songs_bulk_edit';
 var _viewMode = false;
 var _songsOffset = 0;
 var _songsTotal = 0;
-var SONGS_VIEW_PAGE = 20;
+var SONGS_VIEW_PAGE = 30;
 
 function isMobile() { return window.innerWidth <= 1024; }
 function isBulkEdit() { return !isMobile() && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
@@ -88,6 +88,7 @@ async function fetchSongsList(reset) {
   const params = new URLSearchParams({
     limit: String(SONGS_VIEW_PAGE),
     offset: String(_songsOffset),
+    active: '1',
   });
   const r = await fetch(`/api/${artistSlug}/songs?${params}`);
   if (!r.ok) throw new Error('songs fetch failed');
@@ -140,14 +141,7 @@ async function loadAndRender(viewMode) {
     renderTable();
     loadLogs();
     _viewMode = viewMode || false;
-    if (viewMode) {
-      applyViewMode();
-      var notice = document.createElement('div');
-      notice.className = 'view-mode-notice';
-      notice.innerHTML = 'View mode — <a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.';
-      var page = document.querySelector('.app-page') || document.body;
-      page.insertBefore(notice, page.firstChild);
-    }
+    if (viewMode) applyViewMode();
   } catch {
     const el = document.getElementById('page-content');
     if (el) el.innerHTML = '<p style="color:var(--third-color);text-align:center;">Failed to load songs.</p>';
@@ -349,11 +343,16 @@ function _renderSongsListView() {
           return Array.from(new Set(songs.map(function(s) { return s.genre; }).filter(Boolean))).sort();
         }},
     ],
-    actions: [
-      { label: '+ Add song',  onClick: _openNewSongPanel },
-      { label: 'Bulk Edit',   onClick: toggleBulkEdit, desktopOnly: true },
-      { label: 'Export CSV',  onClick: exportCsv },
-    ],
+    actions: (isViewMode() ? [] : [
+      { label: '+ Add song', onClick: _openNewSongPanel },
+      { label: 'Bulk Edit',
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg>',
+        title: 'Bulk Edit',
+        onClick: toggleBulkEdit,
+        desktopOnly: true },
+    ]).concat([
+      { label: 'Export CSV', onClick: exportCsv },
+    ]),
     getData:   _getSongsForFactory,
     getTotal:  function() { return getToken() ? songs.length : _songsTotal; },
     getItemId: function(s) { return s.id; },
@@ -586,9 +585,9 @@ function _openSongEditForm(sid, panelEl) {
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">Files & Lyrics</summary>' +
         '<div class="edit-section-body">' +
-          _editField('Listen URL', inp('extra.listenUrl', listen, 'text')) +
-          _editField('Sheet URL', inp('extra.sheetUrl', sheet, 'text')) +
-          _editField('Playback URL', inp('extra.playbackUrl', playback, 'text')) +
+          _editField('Listen', '<div class="panel-file-row">' + inp('extra.listenUrl', listen) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-audio-' + id + '\')">&#8593;</button><input type="file" id="pf-audio-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'audio\')">' : '') + '</div>') +
+          _editField('Sheet', '<div class="panel-file-row">' + inp('extra.sheetUrl', sheet) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-sheet-' + id + '\')">&#8593;</button><input type="file" id="pf-sheet-' + id + '" style="display:none" accept=".pdf,application/pdf" onchange="_panelUploadHandler(this,\'' + id + '\',\'sheet\')">' : '') + '</div>') +
+          _editField('Playback', '<div class="panel-file-row">' + inp('extra.playbackUrl', playback) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-playback-' + id + '\')">&#8593;</button><input type="file" id="pf-playback-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'playback\')">' : '') + '</div>') +
           _editField('Lyrics', '<textarea class="edit-textarea edit-input" data-id="' + id + '" data-key="extra.lyrics" oninput="markPanelEditDirty()" placeholder="Enter lyrics…">' + lyrics + '</textarea>') +
         '</div>' +
       '</details>' +
@@ -1349,6 +1348,63 @@ document.getElementById('gema-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeGema();
 });
 
+// --- Panel file upload (side-panel edit form) ---
+
+function _panelUploadFile(inputId) {
+  var el = document.getElementById(inputId);
+  if (el) el.click();
+}
+
+async function _panelUploadHandler(input, sid, mediaType) {
+  var file = input.files[0];
+  input.value = '';
+  if (!file) return;
+
+  var maxBytes = mediaType === 'sheet' ? 20 * 1024 * 1024 : 50 * 1024 * 1024;
+  if (file.size > maxBytes) { setStatus('error', 'File too large'); return; }
+
+  var btn = input.previousElementSibling;
+  var origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '…'; btn.disabled = true; }
+
+  try {
+    var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+    var r = await fetch('/api/' + artistSlug + '/songs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ upload_presign_id: sid, upload_type: mediaType, filename: file.name, contentType: file.type, size: file.size }),
+    });
+    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
+
+    var json = await r.json();
+    var put = await fetch(json.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
+
+    var confirm = await fetch('/api/' + artistSlug + '/songs/' + sid + '/' + mediaType, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ publicUrl: json.publicUrl }),
+    });
+    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
+
+    var keyMap = { audio: 'extra.listenUrl', sheet: 'extra.sheetUrl', playback: 'extra.playbackUrl' };
+    var panelInput = document.querySelector('[data-key="' + keyMap[mediaType] + '"][data-id="' + sid + '"]');
+    if (panelInput) { panelInput.value = json.publicUrl; markPanelEditDirty(); }
+
+    var song = songs.find(function(s) { return String(s.id) === String(sid); });
+    var extraKeyMap = { audio: 'listenUrl', sheet: 'sheetUrl', playback: 'playbackUrl' };
+    if (song) song.extra = Object.assign({}, song.extra, { [extraKeyMap[mediaType]]: json.publicUrl });
+
+    setStatus('saved', 'File uploaded');
+    setTimeout(function() { setStatus('', ''); }, 3000);
+  } catch {
+    setStatus('error', 'Upload failed — check your connection');
+  } finally {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
+}
+
 // --- Audio upload ---
 
 function triggerAudioUpload(sid) {
@@ -1371,13 +1427,13 @@ async function handleAudioFile(input, sid) {
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'audio', filename: file.name, contentType: file.type, size: file.size }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
@@ -1393,7 +1449,7 @@ async function handleAudioFile(input, sid) {
 
     // Confirm upload: save publicUrl to DB, delete previous file from R2 if any
     const song = songs.find(s => String(s.id) === String(sid));
-    
+
     const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
       method: 'PUT',
       headers: {
@@ -1550,13 +1606,13 @@ async function handleReplaceFile(input) {
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'audio', filename: file.name, contentType: file.type, size: file.size }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closePlayer(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
@@ -1567,7 +1623,7 @@ async function handleReplaceFile(input) {
     if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
-    
+
     const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
       method: 'PUT',
       headers: {
@@ -1647,13 +1703,13 @@ async function handleSheetFile(input, sid) {
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ filename: file.name, size: file.size }),
+      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'sheet', filename: file.name, size: file.size }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
@@ -1664,7 +1720,7 @@ async function handleSheetFile(input, sid) {
     if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
-    
+
     const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
       method: 'PUT',
       headers: {
@@ -1797,13 +1853,13 @@ async function handleReplaceSheet(input) {
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ filename: file.name, size: file.size }),
+      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'sheet', filename: file.name, size: file.size }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closeSheet(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
@@ -1814,7 +1870,7 @@ async function handleReplaceSheet(input) {
     if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
-    
+
     const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
       method: 'PUT',
       headers: {
@@ -1891,10 +1947,10 @@ async function handlePlaybackFile(input, sid) {
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'playback', filename: file.name, contentType: file.type, size: file.size }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
@@ -1905,7 +1961,7 @@ async function handlePlaybackFile(input, sid) {
     if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
-    
+
     const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
@@ -2043,10 +2099,10 @@ async function handleReplacePlayback(input) {
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
+    const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'playback', filename: file.name, contentType: file.type, size: file.size }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closePlayback(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
@@ -2057,7 +2113,7 @@ async function handleReplacePlayback(input) {
     if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
-    
+
     const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
