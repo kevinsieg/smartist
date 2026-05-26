@@ -38,6 +38,26 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(logs);
   }
 
+  // ── GET setlist appearances for one song (/songs?setlists=<id>) ────────────
+  if (req.method === 'GET' && req.query.setlists != null) {
+    const songId = Number(req.query.setlists);
+    if (!Number.isInteger(songId) || songId <= 0)
+      return res.status(400).json({ error: 'Invalid song id' });
+    const band = await getArtist(slug);
+    if (!band) return res.status(404).json({ error: 'Band not found' });
+    const setlists = await sql`
+      SELECT sl.id, sl.title, sl.comment, sl.created_at,
+             g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
+      FROM setlists sl
+      JOIN setlist_songs ss ON ss.setlist_id = sl.id
+      LEFT JOIN gigs g ON sl.gig_id = g.id
+      LEFT JOIN venues v ON v.id = g.venue_id
+      WHERE ss.song_id = ${songId} AND sl.artist_id = ${band.id}
+      ORDER BY sl.created_at DESC
+    `;
+    return res.json(setlists);
+  }
+
   if (req.method === 'GET') {
     const band = await getArtist(slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });

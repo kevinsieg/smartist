@@ -493,7 +493,7 @@ function _openSongPanelContent(item, panelEl) {
 
   // Async: setlist count
   var _panelSid = sid;
-  fetch('/api/' + artistSlug + '/songs/' + sid + '/setlists')
+  fetch('/api/' + artistSlug + '/songs?setlists=' + sid)
     .then(function(r) { return r.json(); })
     .then(function(ids) {
       var linkEl = document.getElementById('vsp-setlist-link');
@@ -1250,7 +1250,7 @@ async function openAppearances(songId) {
   modal.classList.add('open');
 
   try {
-    const data = await fetch(`/api/${artistSlug}/songs/${songId}/setlists`).then(r => r.json());
+    const data = await fetch(`/api/${artistSlug}/songs?setlists=${songId}`).then(r => r.json());
     if (!data.length) {
       list.innerHTML = '<p class="appearance-empty">Not in any setlist yet.</p>';
       return;
