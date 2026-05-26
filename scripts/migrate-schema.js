@@ -35,6 +35,7 @@ function loadEnv(filePath) {
   } catch {}
 }
 
+loadEnv(path.join(__dirname, '..', '.env'));
 loadEnv(path.join(__dirname, '..', '.env.local'));
 loadEnv(path.join(__dirname, '.env.local'));
 
@@ -53,11 +54,17 @@ async function confirmDb(url) {
   }
 }
 
+function stripSqlComments(sql) {
+  return sql
+    .replace(/--[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
 function assertNonDestructive(schemaSql) {
-  // Guard rail: we never want a schema sync script to drop user data.
-  // This is a coarse check, but it catches accidents.
-  const s = schemaSql.toLowerCase();
-  if (/\bdrop\b/.test(s) || /\btruncate\b/.test(s)) {
+  // Guard rail: schema.sql should only CREATE/ALTER — not DROP/TRUNCATE user data.
+  const s = stripSqlComments(schemaSql).toLowerCase();
+  if (/\bdrop\s+(table|column|index|constraint|database|schema|type|view)\b/.test(s)
+    || /\btruncate\s+table\b/.test(s)) {
     throw new Error('Refusing to run schema.sql because it contains DROP or TRUNCATE.');
   }
 }

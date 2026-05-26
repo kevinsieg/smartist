@@ -76,12 +76,11 @@ All three scripts are idempotent — each checks current state before acting. Ru
 # Step 1: rename bands→artists, gigs.name→title, gigs.notes→comment
 DATABASE_URL=<neon-prod-connection-string> node scripts/migrate_rename.js
 
-# Step 2: migrate gigs.venue text column → venues rows + backfill venue_id
-#          must run before step 3, which drops the venue column
-DATABASE_URL=<neon-prod-connection-string> node scripts/migrate_venues.js
-
-# Step 3: apply remaining schema additions (new tables, new columns)
+# Step 2: apply schema additions (venues/organizers tables, venue_id, etc.)
 DATABASE_URL=<neon-prod-connection-string> node scripts/migrate-schema.js
+
+# Step 3: migrate gigs.venue text → venues rows + backfill venue_id, then drop venue column
+DATABASE_URL=<neon-prod-connection-string> node scripts/migrate_venues.js
 ```
 
 **What each script does on a prod DB:**
@@ -89,8 +88,8 @@ DATABASE_URL=<neon-prod-connection-string> node scripts/migrate-schema.js
 | Script | Effect |
 |--------|--------|
 | `migrate_rename.js` | `bands → artists`, `band_id → artist_id`, `gigs.name → title`, `gigs.notes → comment` |
-| `migrate_venues.js` | reads `gigs.venue` text, creates `venues` rows, backfills `gigs.venue_id`, checks for existing rows (safe to re-run) |
-| `migrate-schema.js` | drops `gigs.venue`; adds `venue_id`, `organizer_id`, `type`, `time_start/end`, `deleted`, `last_updated`; creates `venues` + `organizers` tables; all other statements are no-ops |
+| `migrate-schema.js` | creates `venues` + `organizers` tables; adds `venue_id`, `organizer_id`, `type`, `time_start/end`, `deleted`, `last_updated`; all other statements are no-ops |
+| `migrate_venues.js` | reads `gigs.venue` text, creates `venues` rows, backfills `gigs.venue_id`, drops `gigs.venue` (safe to re-run) |
 
 ### 2. OAuth env vars (required for Google/Facebook login)
 
