@@ -27,13 +27,13 @@
   <h1>Organizers</h1>
   <div class="toolbar">
     <input type="text" id="filter-input" placeholder="Search name, city, country, email…">
-    <button class="btn active" onclick="openAddModal()">+ Add organizer</button>
+    <button class="btn active auth-action" id="organizer-add-btn" onclick="openAddModal()">+ Add organizer</button>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
   <div id="organizers-list"><p class="empty-hint">Loading…</p></div>
   <div id="organizers-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="organizers-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="organizers-load-more-btn" class="btn" onclick="loadMoreOrganizers()">Load more</button>
+    <button id="organizers-load-more-btn" class="btn auth-action" onclick="loadMoreOrganizers()">Load more</button>
   </div>
 </div>
 
@@ -83,9 +83,9 @@
     </div>
     <div class="status-msg" id="om-status-msg"></div>
     <div class="modal-actions">
-      <button class="btn active" onclick="saveOrganizer()">Save</button>
-      <button class="btn" onclick="closeOrgModal()">Cancel</button>
-      <button class="btn" id="om-delete-btn" style="margin-left:auto;color:#e55;" onclick="softDeleteOrganizer()">Delete</button>
+      <button class="btn active" type="button" onclick="saveOrganizer()">Save</button>
+      <button class="btn" type="button" onclick="closeOrgModal()">Cancel</button>
+      <button class="btn" type="button" id="om-delete-btn" style="margin-left:auto;color:#e55;" onclick="softDeleteOrganizer()">Delete</button>
     </div>
   </div>
 </div>
@@ -98,8 +98,8 @@
     <div id="hd-cascade-opts"></div>
     <div class="status-msg error" id="hd-status"></div>
     <div class="modal-actions">
-      <button class="btn active" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>
-      <button class="btn" onclick="closeHardDeleteModal()">Cancel</button>
+      <button class="btn active" type="button" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>
+      <button class="btn" type="button" onclick="closeHardDeleteModal()">Cancel</button>
     </div>
   </div>
 </div>

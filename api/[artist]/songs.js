@@ -39,6 +39,7 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'GET') {
     const band = await getArtist(slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
+    const viewMode = !req.headers.authorization;
     const songs = await sql`
       SELECT s.*,
         COUNT(DISTINCT ss.setlist_id)::int AS play_count,
@@ -58,7 +59,7 @@ module.exports = wrap(async function handler(req, res) {
       GROUP BY s.id, g.iswc, g.gema_work_number, g.language
       ORDER BY s.title
     `;
-    return res.json(songs);
+    return res.json(viewMode ? songs.slice(0, 20) : songs);
   }
 
   // ── POST lyrics-suggest ───────────────────────────────────────────────────

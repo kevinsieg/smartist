@@ -50,7 +50,9 @@
         .stage-header {
             margin-bottom: 2.5rem;
             padding-bottom: 1.25rem;
+            padding-right: 3rem;
             border-bottom: 1px solid rgba(249,191,143,0.18);
+            position: relative;
         }
         .stage-list { list-style: none; }
         .stage-song {
@@ -84,6 +86,16 @@
             white-space: nowrap;
             flex-shrink: 0;
         }
+        .stage-capo {
+            font-size: 0.88rem;
+            color: var(--s-muted);
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 0.2rem 0.55rem;
+            border-radius: 4px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
         .stage-total {
             margin-top: 2rem;
             font-size: 0.82rem;
@@ -99,6 +111,175 @@
             .stage-wrap { padding: 1.5rem 1.25rem 4rem; }
             .stage-song { gap: 0.75rem; }
         }
+        @page { margin: 1.5cm; }
+        @media print {
+            .stage-share-btn, .stage-share-menu, .stage-modal-overlay { display: none !important; }
+            html, body { background: #fff !important; color: #111 !important; }
+            .stage-wrap { padding: 1rem 1.5rem !important; max-width: none !important; }
+            .stage-band { color: #666 !important; opacity: 1 !important; margin-bottom: 0.3rem !important; }
+            .stage-title { font-size: 1.3rem !important; color: #111 !important; margin-bottom: 0.2rem !important; }
+            .stage-sub { color: #555 !important; margin-bottom: 0.15rem !important; }
+            .stage-header {
+                border-bottom-color: #bbb !important;
+                margin-bottom: 1rem !important;
+                padding-bottom: 0.6rem !important;
+                padding-right: 0 !important;
+            }
+            .stage-song { padding: 0.35rem 0 !important; border-bottom-color: #e0e0e0 !important; }
+            .stage-num { color: #999 !important; opacity: 1 !important; font-size: 0.75rem !important; min-width: 1.8rem !important; }
+            .stage-song-title { font-size: 1rem !important; color: #111 !important; }
+            .stage-key { color: #222 !important; background: transparent !important; border-color: #888 !important; font-size: 0.72rem !important; padding: 0.1rem 0.35rem !important; }
+            .stage-capo { color: #444 !important; background: transparent !important; border-color: #bbb !important; font-size: 0.72rem !important; padding: 0.1rem 0.35rem !important; }
+            .stage-total { color: #888 !important; margin-top: 0.5rem !important; font-size: 0.75rem !important; }
+        }
+
+        /* Share button — sits inside .stage-header (position:relative) */
+        .stage-share-btn {
+            position: absolute;
+            top: 0; right: 0;
+            background: transparent;
+            border: 1.5px solid rgba(240,237,232,0.4);
+            color: var(--s-text);
+            font-family: inherit;
+            font-size: 0.82rem;
+            padding: 0.4rem 0.5rem;
+            border-radius: 2px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.1s, background 0.06s;
+        }
+        .stage-share-btn:hover { background: var(--s-text); color: var(--s-bg); border-color: var(--s-text); }
+        .stage-share-menu {
+            position: absolute;
+            top: 2.1rem; right: 0;
+            background: #1e1e1e;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            min-width: 175px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            z-index: 101;
+            animation: s-menu-in 60ms ease-out;
+        }
+        @keyframes s-menu-in { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:none; } }
+        .stage-share-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.65rem 1rem;
+            font-size: 0.84rem;
+            cursor: pointer;
+            color: var(--s-text);
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            font-family: inherit;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+        .stage-share-item:last-child { border-bottom: none; }
+        .stage-share-item:hover { background: rgba(255,255,255,0.07); }
+        .stage-share-icon { font-size: 1rem; flex-shrink: 0; }
+
+        /* Song stage view */
+        .song-stage-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        /* Recordings / links sections */
+        .song-stage-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-bottom: 1.75rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid rgba(249,191,143,0.12);
+        }
+        .song-stage-rec {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .song-stage-rec-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--s-muted);
+        }
+        .song-stage-audio {
+            width: 100%;
+            height: 32px;
+            display: block;
+        }
+        .song-stage-links {
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .song-stage-link {
+            font-size: 0.82rem;
+            color: var(--s-accent);
+            opacity: 0.8;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(249,191,143,0.3);
+            padding-bottom: 1px;
+        }
+        .song-stage-link:hover { opacity: 1; }
+        .song-stage-lyrics {
+            font-size: clamp(1.2rem, 3.5vw, 1.7rem);
+            font-weight: 300;
+            line-height: 1.75;
+            white-space: pre-wrap;
+            color: var(--s-text);
+        }
+
+        /* Email share modal */
+        .stage-modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.75);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 200;
+        }
+        .stage-modal {
+            background: #1e1e1e;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            padding: 1.5rem;
+            width: min(320px, 90vw);
+            font-family: "Courier New", Courier, monospace;
+            color: var(--s-text);
+        }
+        .stage-modal h3 { font-size: 0.95rem; font-weight: 400; margin-bottom: 1.1rem; }
+        .stage-modal-field { margin-bottom: 0.7rem; }
+        .stage-modal-field label { display: block; font-size: 0.75rem; color: var(--s-muted); margin-bottom: 0.28rem; text-transform: uppercase; letter-spacing: 0.06em; }
+        .stage-modal-input {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.14);
+            color: var(--s-text);
+            font-family: inherit;
+            font-size: 0.88rem;
+            padding: 0.45rem 0.6rem;
+            border-radius: 5px;
+        }
+        .stage-modal-input:focus { outline: none; border-color: var(--s-accent); }
+        .stage-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+        .stage-modal-action-btn {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.14);
+            color: var(--s-text);
+            font-family: inherit;
+            font-size: 0.82rem;
+            padding: 0.38rem 0.85rem;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .stage-modal-action-btn.primary { background: var(--s-accent); color: #111; border-color: var(--s-accent); font-weight: 600; }
+        .stage-modal-action-btn:hover { opacity: 0.85; }
+        .stage-modal-status { font-size: 0.78rem; color: var(--s-muted); margin-top: 0.5rem; min-height: 1.1em; }
     </style>
 </head>
 <body>
@@ -107,6 +288,27 @@
             <p class="stage-message">Loading…</p>
         </div>
     </div>
+
+    <div class="stage-modal-overlay" id="stage-share-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+        <div class="stage-modal">
+            <h3>Share via email</h3>
+            <div class="stage-modal-field" id="stage-modal-pw-field">
+                <label>Password</label>
+                <input type="password" class="stage-modal-input" id="stage-share-pw" placeholder="Band password" autocomplete="current-password">
+            </div>
+            <div class="stage-modal-field">
+                <label>Email</label>
+                <input type="email" class="stage-modal-input" id="stage-share-email" placeholder="recipient@example.com">
+            </div>
+            <div class="stage-modal-status" id="stage-share-status"></div>
+            <div class="stage-modal-actions">
+                <button class="stage-modal-action-btn" onclick="document.getElementById('stage-share-modal').style.display='none'">Cancel</button>
+                <button class="stage-modal-action-btn primary" id="stage-share-send" onclick="stageSendEmail()">Send PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/app/js/share-utils.js"></script>
     <script src="/app/js/stage.js"></script>
 </body>
 </html>

@@ -135,6 +135,117 @@ function calcPrintFontSize(songCount) {
   return Math.min(18, Math.max(7, Math.floor((681 / n - 4) / 2.065)));
 }
 
+function formatKey(key) {
+  if (!key) return key;
+  return key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+}
+
+// columns: Array<{ label: string, getValue: (row) => string }>
+function exportTableCsv(rows, columns, filename) {
+  function cell(val) {
+    var s = (val === null || val === undefined) ? '' : String(val);
+    if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+  var header = columns.map(function(c) { return cell(c.label); }).join(',');
+  var body = rows.map(function(row) {
+    return columns.map(function(c) { return cell(c.getValue(row)); }).join(',');
+  }).join('\r\n');
+  var csv = '﻿' + header + '\r\n' + body;
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var d = new Date();
+  a.href = url;
+  a.download = filename + '-' + d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+}
+
+function printSetlistSongs(songs, title, cfg) {
+  var area = document.getElementById('print-area');
+  if (!area) return;
+
+  var logoEl = document.querySelector('#print-header .app-logo-img');
+  if (logoEl) {
+    var logoUrl = cfg && cfg.config && cfg.config.logoUrl;
+    if (logoUrl) {
+      logoEl.src = logoUrl;
+      logoEl.alt = (cfg && cfg.name) || '';
+      logoEl.style.display = '';
+    } else {
+      logoEl.style.display = 'none';
+    }
+  }
+
+  var now = new Date();
+  var date = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  var time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  var tsEl = document.getElementById('print-timestamp');
+  if (tsEl) tsEl.textContent = date + ' — ' + time;
+
+  var items = songs.map(function(song, i) {
+    var span = function(v, field, ttl) {
+      return v ? '<span data-field="' + escHtml(field) + '" title="' + escHtml(ttl) + '">' + escHtml(v) + '</span>' : '';
+    };
+    var banjo = song.extra && song.extra.banjoCapo != null ? String(song.extra.banjoCapo) : null;
+    var git   = song.extra && song.extra.gitCapo   != null ? String(song.extra.gitCapo)   : null;
+    var capoParts = [
+      banjo !== null && banjo !== '0' ? 'B ' + escHtml(banjo) : '',
+      git   !== null && git   !== '0' ? 'G ' + escHtml(git)   : ''
+    ].filter(Boolean);
+    var capoSpan = capoParts.length
+      ? '<span class="capo-badge" title="Capo">Capo: ' + capoParts.join(' | ') + '</span>'
+      : '';
+    var metaSpans = [
+      span((song.extra && song.extra.lead) || '', 'extra.lead', 'Lead'),
+      span(song.key ? formatKey(song.key) : '',   'key',        'Key'),
+      capoSpan,
+      span(song.tempo || '', 'tempo', 'Tempo'),
+      span(song.genre || '', 'genre', 'Genre'),
+      song.extra && song.extra.harp ? span('harmonica', 'extra.harp', 'Harmonica') : '',
+      song.extra && song.extra.git2 ? span('guitar 2',  'extra.git2', 'Second guitar') : ''
+    ].filter(Boolean).join('');
+    var printLabels = song.genre ? '<span>' + escHtml(song.genre) + '</span>' : '';
+
+    return '<li class="song-item">' +
+      '<span class="song-num">' + (i + 1) + '.</span>' +
+      '<div class="song-main">' +
+        '<div class="song-top">' +
+          '<span class="song-title">' + escHtml(song.title || '') + '</span>' +
+          (printLabels ? '<span class="print-labels">' + printLabels + '</span>' : '') +
+          '<span class="song-time">' + formatLength(song.length_min) + '</span>' +
+        '</div>' +
+        (metaSpans ? '<div class="song-meta">' + metaSpans + '</div>' : '') +
+      '</div>' +
+    '</li>';
+  }).join('');
+
+  area.innerHTML =
+    (title ? '<h2 class="print-setlist-title">' + escHtml(title) + '</h2>' : '') +
+    '<ul class="song-list">' + items + '</ul>';
+
+  var size = calcPrintFontSize(songs.length);
+  document.documentElement.style.setProperty('--print-song-size', size + 'pt');
+
+  var _printCleanup = function() {
+    document.documentElement.style.removeProperty('--print-song-size');
+    area.innerHTML = '';
+    window.removeEventListener('afterprint', _printCleanup);
+  };
+  window.addEventListener('afterprint', _printCleanup);
+  setTimeout(function() {
+    window.print();
+    setTimeout(_printCleanup, 5000); // fallback in case afterprint never fires
+  }, 50);
+}
+
 function formatLength(mins) {
   const val = mins || 4;
   const m = Math.floor(val);
@@ -146,7 +257,24 @@ function formatLength(mins) {
 // First call waits for the network; subsequent calls within the same tab
 // return the cached response immediately and refresh the cache in the background.
 const _CONFIG_KEY    = 'artist_config_cache';
-const AUTH_TOKEN_KEY = 'setlist_token';
+const AUTH_TOKEN_KEY = 'smartist_token';
+
+function isViewMode() {
+  return !sessionStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+// Disable all write-action buttons currently in the DOM.
+// Pages that render buttons dynamically should also check isViewMode()
+// in their render functions and add the disabled attribute there.
+function applyViewMode() {
+  document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
+    el.disabled = true;
+    el.title = 'Login required';
+  });
+  document.querySelectorAll('.auth-only').forEach(function(el) {
+    el.style.display = 'none';
+  });
+}
 
 async function loadConfig() {
   let cached = null;
@@ -218,15 +346,21 @@ function applyNav(bandName, bandConfig) {
 }
 
 function updateAuthIndicator() {
-  const el = document.getElementById('nav-auth');
+  var el = document.getElementById('nav-auth');
   if (!el) return;
-  const authed = !!sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var authed = !!sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var header = document.querySelector('.app-header');
+  if (header) header.classList.toggle('app-header--authed', authed);
   if (authed) {
-    el.innerHTML = `<span class="nav-auth-badge">&#10004; logged in</span>
-       <button class="nav-auth-logout" onclick="doLogout()">logout</button>`;
+    el.innerHTML = '<span class="nav-auth-badge">&#10004; logged in</span>' +
+      '<button class="nav-auth-logout" onclick="doLogout()">logout</button>';
   } else {
-    const onLanding = window.location.pathname === '/' || window.location.pathname === '';
-    el.innerHTML = onLanding ? '' : '<a class="nav-auth-login" href="/">login</a>';
+    var onLanding = window.location.pathname === '/' || window.location.pathname === '';
+    if (onLanding) {
+      el.innerHTML = '';
+    } else {
+      el.innerHTML = '<a class="nav-auth-login nav-auth-login--vm" href="/">Login &#8594;</a>';
+    }
     if (typeof window.onNavAuthEmpty === 'function') window.onNavAuthEmpty(el);
   }
 }
@@ -263,20 +397,24 @@ async function apiFetch(url, method = 'GET', body) {
   }
   const r = await fetch(url, opts);
   if (r.status === 401) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    requireLogin();
+    if (!isViewMode()) {
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      requireLogin();
+    }
     throw new Error('Session expired');
   }
   return r;
 }
 
-// Standard page bootstrap: auth guard → config → nav → page-specific callback.
+// Standard page bootstrap: config → nav → page-specific callback.
+// Does NOT require login — pages render in view mode when no token is present.
 async function initPage(onReady) {
-  if (requireLogin()) return;
   try {
-    const cfg = await loadConfig();
+    var cfg = await loadConfig();
     applyNav(cfg.name, cfg.config);
-    await onReady(cfg);
+    var viewMode = isViewMode();
+    if (viewMode) document.body.classList.add('view-mode');
+    await onReady(cfg, viewMode);
   } catch (e) { console.error(e); }
 }
 
@@ -615,3 +753,46 @@ async function navigate(href) {
 }
 
 window.addEventListener('popstate', function() { navigate(window.location.href); });
+
+// ── Resizable side panel ──────────────────────────────────────────────────────
+function initPanelResize() {
+  var panel = document.getElementById('view-side-panel');
+  if (!panel) return;
+  var handle = panel.querySelector('.panel-resize-handle');
+  if (!handle) return;
+
+  var LS_KEY = 'smartist_panel_w';
+  var MIN_W  = 260;
+  var MAX_W  = 700;
+
+  var saved = parseInt(localStorage.getItem(LS_KEY), 10);
+  if (saved && saved >= MIN_W && saved <= MAX_W) {
+    document.documentElement.style.setProperty('--panel-w', saved + 'px');
+  }
+
+  handle.addEventListener('mousedown', function(e) {
+    if (window.innerWidth <= 1024) return;
+    e.preventDefault();
+    handle.classList.add('resizing');
+    document.body.style.userSelect = 'none';
+
+    function onMove(e) {
+      var w = Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - e.clientX));
+      document.documentElement.style.setProperty('--panel-w', w + 'px');
+    }
+
+    function onUp(e) {
+      handle.classList.remove('resizing');
+      document.body.style.userSelect = '';
+      var w = Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - e.clientX));
+      document.documentElement.style.setProperty('--panel-w', w + 'px');
+      localStorage.setItem(LS_KEY, w);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+document.addEventListener('DOMContentLoaded', initPanelResize);

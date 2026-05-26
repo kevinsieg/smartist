@@ -42,7 +42,7 @@
                     <p style="color:var(--third-color);margin-bottom:1rem;">Login required to import GEMA data.</p>
                     <div class="gema-login-row">
                         <input type="password" id="login-pw" class="gema-login-input" placeholder="Password" autocomplete="current-password"/>
-                        <button class="btn" onclick="doLogin()">Login</button>
+                        <button class="btn auth-action" onclick="doLogin()">Login</button>
                     </div>
                     <p id="login-error" style="color:var(--danger-color);margin-top:0.5rem;display:none"></p>
                 </div>
@@ -74,15 +74,15 @@
                     </div>
 
                     <div class="gema-actions" id="step1-actions" style="display:none">
-                        <button class="btn" id="validate-btn" onclick="runValidate()">Validate</button>
+                        <button class="btn auth-action" id="validate-btn" onclick="runValidate()">Validate</button>
                     </div>
 
                     <div id="preview-area" style="display:none">
                         <div id="preview-summary" class="gema-summary"></div>
                         <div id="preview-table-wrap" class="gema-table-wrap"></div>
                         <div class="gema-actions">
-                            <button class="btn" id="import-btn" onclick="runImport()">Import</button>
-                            <button class="btn" onclick="resetImport()">Reset</button>
+                            <button class="btn auth-action" id="import-btn" onclick="runImport()">Import</button>
+                            <button class="btn auth-action" onclick="resetImport()">Reset</button>
                         </div>
                     </div>
 
@@ -90,7 +90,7 @@
                         <div id="result-summary" class="gema-summary"></div>
                         <div id="result-table-wrap" class="gema-table-wrap"></div>
                         <div class="gema-actions">
-                            <button class="btn" onclick="resetImport()">Import another file</button>
+                            <button class="btn auth-action" onclick="resetImport()">Import another file</button>
                         </div>
                     </div>
 
