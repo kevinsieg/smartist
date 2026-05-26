@@ -157,7 +157,7 @@
       <label for="band-name-input">Band / Artist name</label>
       <input type="text" id="band-name-input" maxlength="200" disabled>
       <div class="save-row">
-        <button class="btn" id="save-name-btn" disabled>Save</button>
+        <button class="btn auth-action" id="save-name-btn" disabled>Save</button>
         <span class="save-msg" id="save-name-msg"></span>
       </div>
     </div>
@@ -176,13 +176,26 @@
   var artistSlug = '';
 
   async function init() {
-    requireLogin();
+    var viewMode = isViewMode();
+    if (viewMode) document.body.classList.add('view-mode');
     try {
       var cfg = await loadConfig();
       artistSlug = cfg.slug;
       applyNav(cfg.name, cfg.config);
       document.getElementById('profile-loading').style.display = 'none';
       renderProfile(cfg);
+      if (viewMode) {
+        applyViewMode();
+        var notice = document.createElement('div');
+        notice.className = 'view-mode-notice';
+        notice.innerHTML = 'View mode — <a href="/">Login</a> for full access.';
+        var page = document.querySelector('.profile-wrap') || document.querySelector('.app-page') || document.body;
+        page.insertBefore(notice, page.firstChild);
+        var frame = document.getElementById('photo-frame');
+        var hint = document.getElementById('photo-hint');
+        if (frame) { frame.style.pointerEvents = 'none'; frame.style.cursor = 'default'; }
+        if (hint) { hint.style.display = 'none'; }
+      }
     } catch (e) {
       document.getElementById('profile-loading').textContent = 'Could not load profile.';
     }

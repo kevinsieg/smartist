@@ -68,23 +68,29 @@ Key implementation notes:
 
 ## Production deployment
 
-### 1. Schema migration (required — run once against prod DB)
+### 1. Schema migration (required — run in order against prod DB)
+
+All three scripts are idempotent — each checks current state before acting. Run them in this order:
 
 ```bash
-# Get your Neon prod connection string from Vercel env vars or Neon console
+# Step 1: rename bands→artists, gigs.name→title, gigs.notes→comment
+DATABASE_URL=<neon-prod-connection-string> node scripts/migrate_rename.js
+
+# Step 2: migrate gigs.venue text column → venues rows + backfill venue_id
+#          must run before step 3, which drops the venue column
+DATABASE_URL=<neon-prod-connection-string> node scripts/migrate_venues.js
+
+# Step 3: apply remaining schema additions (new tables, new columns)
 DATABASE_URL=<neon-prod-connection-string> node scripts/migrate-schema.js
 ```
 
-The script is idempotent — safe to run multiple times. It runs the full `schema.sql` which uses `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and inline `DO $$ BEGIN … END $$` blocks for column renames.
+**What each script does on a prod DB:**
 
-**What the migration does on a prod DB:**
-- Renames `bands` table to `artists` (if still on old name)
-- Renames `gigs.name → gigs.title` and `gigs.notes → gigs.comment`
-- Drops deprecated `gigs.venue` text column (if present)
-- Adds `gigs.venue_id`, `gigs.organizer_id`, `gigs.type`, `gigs.time_start`, `gigs.time_end`, `gigs.deleted`, `gigs.last_updated`
-- Creates `venues` table (if not exists)
-- Creates `organizers` table (if not exists)
-- All other `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` statements are no-ops if already present
+| Script | Effect |
+|--------|--------|
+| `migrate_rename.js` | `bands → artists`, `band_id → artist_id`, `gigs.name → title`, `gigs.notes → comment` |
+| `migrate_venues.js` | reads `gigs.venue` text, creates `venues` rows, backfills `gigs.venue_id`, checks for existing rows (safe to re-run) |
+| `migrate-schema.js` | drops `gigs.venue`; adds `venue_id`, `organizer_id`, `type`, `time_start/end`, `deleted`, `last_updated`; creates `venues` + `organizers` tables; all other statements are no-ops |
 
 ### 2. OAuth env vars (required for Google/Facebook login)
 
