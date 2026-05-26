@@ -11,7 +11,7 @@ function renderDashboard(cfg, viewMode) {
   if (!el) return;
 
   var actionRow = viewMode
-    ? '<p class="dash-vm-cta"><a class="go-login" href="#">Login</a> for full access.</p>'
+    ? '<p class="dash-vm-cta"><a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.</p>'
     : '<a href="/setlist" class="dash-cta">+ Create setlist</a>';
 
   el.innerHTML =

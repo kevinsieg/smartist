@@ -4,6 +4,14 @@ async function init() {
   const params     = new URLSearchParams(window.location.search);
   const magic      = params.get('magic');
   const oauthError = params.get('oauth_error');
+  const path       = window.location.pathname.replace(/\/+$/, '') || '/';
+
+  // Unauthenticated visits to / (not magic/oauth) → dedicated login URL
+  if (path === '/' && !magic && !oauthError && !sessionStorage.getItem(AUTH_TOKEN_KEY)) {
+    window.location.replace('/login' + window.location.search);
+    return;
+  }
+
   if (magic || oauthError) history.replaceState(null, '', window.location.pathname);
 
   let cfg;
