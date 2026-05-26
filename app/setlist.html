@@ -100,6 +100,7 @@
         <p id="print-timestamp"></p>
     </div>
 </div>
+<div id="print-area"></div>
 
 <main>
     <section class="app-page setlist-page-wrap">
@@ -118,6 +119,7 @@
 
 <!-- History tab: desktop side panel -->
 <div id="view-side-panel" role="complementary" aria-label="Setlist details">
+  <div class="panel-resize-handle"></div>
   <div id="view-side-panel-inner"></div>
 </div>
 
@@ -171,7 +173,7 @@
             </div>
             <div class="status-msg" id="save-error"></div>
             <div class="modal-actions">
-                <button class="btn active" id="save-btn">Save</button>
+                <button class="btn active auth-action" id="save-btn">Save</button>
                 <button class="btn" onclick="closeModal()">Cancel</button>
             </div>
         </div>

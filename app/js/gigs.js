@@ -15,6 +15,7 @@ var _gigAllSetlists = [];
 var _gigSongTimer = null;
 var _gigSongMatchGigIds = null;  // null = no filter; Set<gigId>
 var cfg = null;
+var _viewMode = false;
 
 var GIG_COLUMNS = [
   { field: 'date',           label: 'Date',      width: '100px', sortable: true, type: 'date' },
@@ -25,15 +26,20 @@ var GIG_COLUMNS = [
   { field: 'organizer_name', label: 'Organizer', width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
     if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>';
-    var setsLink = '<a class="sl-action-link" href="#" style="font-size:0.8rem;margin-left:0.5rem" ' +
-      'onclick="event.preventDefault();navigate(\'/setlist?view=history&gig=' + encodeURIComponent(g.title) + '\')">' +
-      'Setlists</a>';
-    return '<button class="btn sl-del-btn" onclick="promptHardDelete(' + g.id + ')">Delete</button>' + setsLink;
+    var setsBtn = '<button class="btn sl-sets-btn" title="View setlists" style="margin-left:0.35rem"' +
+      ' onclick="navigate(\'/setlist?view=history&gig=' + encodeURIComponent(g.title) + '\')">' +
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
+      '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
+      '</svg></button>';
+    if (_viewMode) return setsBtn;
+    return '<button class="btn sl-del-btn" onclick="promptHardDelete(' + g.id + ')">Delete</button>' + setsBtn;
   }},
 ];
 
-initPage(async function(config) {
+initPage(async function(config, viewMode) {
   cfg = config;
+  _viewMode = viewMode;
   artistSlug = cfg.slug;
 
   upcomingTable = createSortableList({
@@ -41,24 +47,34 @@ initPage(async function(config) {
     sortBarId:      'sort-bar',
     columns:        GIG_COLUMNS,
     defaultSort:    'date',
-    defaultSortDir: 1,
+    defaultSortDir: -1,
     rowClass:       function(g) { return g.deleted ? 'deleted' : ''; },
-    onRowClick:     function(g) { return !g.deleted && openEditModal(g.id); },
+    onRowClick:     function(g) { return !_viewMode && !g.deleted && openEditModal(g.id); },
     emptyHint:      'No upcoming gigs.',
   });
 
   pastTable = createSortableList({
     containerId:     'past-list',
+    sortBarId:       'sort-bar',
     columns:         GIG_COLUMNS,
     defaultSort:     'date',
     defaultSortDir:  -1,
     separateDeleted: true,
     rowClass:        function(g) { return g.deleted ? 'deleted' : ''; },
-    onRowClick:      function(g) { return !g.deleted && openEditModal(g.id); },
+    onRowClick:      function(g) { return !_viewMode && !g.deleted && openEditModal(g.id); },
     emptyHint:       'No past gigs.',
   });
 
   await loadGigs();
+
+  if (_viewMode) {
+    applyViewMode();
+    var notice = document.createElement('div');
+    notice.className = 'view-mode-notice';
+    notice.innerHTML = 'View mode — <a href="/">Login</a> for full access.';
+    var page = document.querySelector('.app-page') || document.body;
+    page.insertBefore(notice, page.firstChild);
+  }
 
   // Fetch setlists for cross-entity filter
   try {
@@ -393,7 +409,7 @@ async function renderGigRelated(gigId) {
     : '';
 
   const setlistPart = refs.setlists.length
-    ? `<div class="related-row">Setlists &nbsp;${refs.setlists.map(s => `<span style="font-size:0.82rem;margin-right:0.5rem;">${escHtml(s.title || '(untitled)')}</span>`).join(' · ')}</div>`
+    ? `<div class="related-row">Setlists &nbsp;${refs.setlists.map(s => `<a href="/stage?id=${s.id}" target="_blank" style="font-size:0.82rem;margin-right:0.5rem;">${escHtml(s.title || '(untitled)')}</a>`).join(' · ')}</div>`
     : '';
 
   content.innerHTML = venuePart + orgPart + setlistPart

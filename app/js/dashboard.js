@@ -1,19 +1,23 @@
 var artistSlug = '';
 
-initPage(async cfg => {
+initPage(async function(cfg, viewMode) {
   artistSlug = cfg.slug;
   document.title = cfg.name || 'Dashboard';
-  renderDashboard(cfg);
+  renderDashboard(cfg, viewMode);
 });
 
-function renderDashboard(cfg) {
-  const el = document.getElementById('dash-content');
+function renderDashboard(cfg, viewMode) {
+  var el = document.getElementById('dash-content');
   if (!el) return;
 
+  var actionRow = viewMode
+    ? '<p class="dash-vm-cta"><a href="/">Login</a> for full access.</p>'
+    : '<a href="/setlist" class="dash-cta">+ Create setlist</a>';
+
   el.innerHTML =
-    '<a href="/setlist" class="dash-cta">+ Create setlist</a>' +
+    actionRow +
     '<div class="dash-grid">' +
-      '<a href="/setlist-history" class="dash-card">' +
+      '<a href="/setlist" class="dash-card">' +
         '<span class="dash-card-label">Setlists</span>' +
         '<span class="dash-card-count" id="dc-setlists">—</span>' +
       '</a>' +
@@ -46,15 +50,15 @@ function renderDashboard(cfg) {
         '<span class="dash-card-count--muted">settings · photo</span>' +
       '</a>' +
     '</div>' +
-    '<button class="reset-link landing-logout" onclick="handleLogout()">logout</button>';
+    (viewMode ? '' : '<button class="reset-link landing-logout" onclick="handleLogout()">logout</button>');
 
-  const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-  const c = cfg.counts || {};
+  var set = function(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; };
+  var c = cfg.counts || {};
   set('dc-songs',      (cfg.songs || []).length);
-  set('dc-setlists',   c.setlists   ?? '—');
-  set('dc-gigs',       c.gigs       ?? '—');
-  set('dc-venues',     c.venues     ?? '—');
-  set('dc-organizers', c.organizers ?? '—');
+  set('dc-setlists',   c.setlists   !== undefined ? c.setlists   : '—');
+  set('dc-gigs',       c.gigs       !== undefined ? c.gigs       : '—');
+  set('dc-venues',     c.venues     !== undefined ? c.venues     : '—');
+  set('dc-organizers', c.organizers !== undefined ? c.organizers : '—');
 }
 
 function handleLogout() {
