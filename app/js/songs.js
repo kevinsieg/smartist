@@ -15,6 +15,9 @@ var _pendingSongId    = '';
 var _newPanelEscapeHandler = null;
 var SONGS_BULK_EDIT_KEY = 'songs_bulk_edit';
 var _viewMode = false;
+var _songsOffset = 0;
+var _songsTotal = 0;
+var SONGS_VIEW_PAGE = 20;
 
 function isMobile() { return window.innerWidth <= 1024; }
 function isBulkEdit() { return !isMobile() && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
@@ -65,6 +68,64 @@ async function init() {
 
 // --- Data ---
 
+function _applySongsResponse(json, reset) {
+  if (Array.isArray(json)) {
+    songs = reset ? json : songs.concat(json);
+    _songsTotal = songs.length;
+    return;
+  }
+  _songsTotal = json.total;
+  songs = reset ? json.rows : songs.concat(json.rows);
+}
+
+async function fetchSongsList(reset) {
+  if (reset) _songsOffset = 0;
+  if (getToken()) {
+    const r = await apiFetch(`/api/${artistSlug}/songs`);
+    _applySongsResponse(await r.json(), true);
+    return;
+  }
+  const params = new URLSearchParams({
+    limit: String(SONGS_VIEW_PAGE),
+    offset: String(_songsOffset),
+  });
+  const r = await fetch(`/api/${artistSlug}/songs?${params}`);
+  if (!r.ok) throw new Error('songs fetch failed');
+  _applySongsResponse(await r.json(), reset);
+}
+
+async function loadMoreSongs() {
+  if (getToken()) return;
+  _songsOffset += SONGS_VIEW_PAGE;
+  await fetchSongsList(false);
+  if (_songsView) _songsView.refresh();
+  else renderTable();
+  updateSongsFooter();
+}
+
+function updateSongsFooter() {
+  var footer = document.getElementById('songs-footer');
+  var counter = document.getElementById('songs-counter');
+  var btn = document.getElementById('songs-load-more-btn');
+  if (!footer || !counter) return;
+  var total = getToken() ? songs.length : _songsTotal;
+  counter.textContent = 'Showing ' + songs.length + ' of ' + total + ' song' + (total !== 1 ? 's' : '');
+  footer.style.display = total > 0 ? '' : 'none';
+  if (btn) btn.style.display = (!getToken() && songs.length < total) ? '' : 'none';
+}
+
+function _ensureSongsFooter() {
+  if (document.getElementById('songs-footer')) return;
+  var footer = document.createElement('div');
+  footer.id = 'songs-footer';
+  footer.style.cssText = 'display:none;text-align:center;margin-top:1.5rem;';
+  footer.innerHTML =
+    '<p id="songs-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>' +
+    '<button id="songs-load-more-btn" class="btn" onclick="loadMoreSongs()">Load more</button>';
+  var container = document.getElementById('page-content');
+  if (container) container.appendChild(footer);
+}
+
 async function loadAndRender(viewMode) {
   try {
     if (!artistSlug) {
@@ -72,7 +133,7 @@ async function loadAndRender(viewMode) {
       artistSlug = cfg.slug;
       applyNav(cfg.name, cfg.config);
     }
-    songs = await fetch(`/api/${artistSlug}/songs`).then(r => r.json());
+    await fetchSongsList(true);
     var _qp = new URLSearchParams(location.search);
     _pendingSetlistId = Number(_qp.get('setlist_id'));
     _pendingSongId    = String(_qp.get('id') || '');
@@ -294,7 +355,7 @@ function _renderSongsListView() {
       { label: 'Export CSV',  onClick: exportCsv },
     ],
     getData:   _getSongsForFactory,
-    getTotal:  function() { return songs.length; },
+    getTotal:  function() { return getToken() ? songs.length : _songsTotal; },
     getItemId: function(s) { return s.id; },
     renderRow: renderListRowHtml,
     onOpen:    _openSongPanelContent,
@@ -304,6 +365,9 @@ function _renderSongsListView() {
     var hdr = document.querySelector('.app-header');
     if (hdr) document.documentElement.style.setProperty('--songs-toolbar-top', hdr.getBoundingClientRect().height + 'px');
   });
+
+  _ensureSongsFooter();
+  updateSongsFooter();
 
   if (_pendingSetlistId) {
     _applySetlistByIdForView(_pendingSetlistId);
@@ -590,7 +654,7 @@ async function _savePanelSong(formId, isNew, realSid) {
     if (!r.ok) throw new Error('save failed');
 
     var newSong = isNew ? await r.json() : null;
-    songs = await fetch('/api/' + artistSlug + '/songs').then(function(r) { return r.json(); });
+    await fetchSongsList(true);
     if (_songsView) {
       _songsView.refresh();
       var targetId = isNew ? String(newSong.id) : String(realSid);

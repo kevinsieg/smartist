@@ -20,6 +20,24 @@ async function main() {
   if (!url) { console.error('DATABASE_URL not set'); process.exit(1); }
   const sql = neon(url);
 
+  const venuesTable = await sql`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'venues'
+  `;
+  if (!venuesTable.length) {
+    console.error('\nrelation "venues" does not exist — apply schema first:\n  node scripts/migrate-schema.js\n');
+    process.exit(1);
+  }
+
+  const venueIdCol = await sql`
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'gigs' AND column_name = 'venue_id'
+  `;
+  if (!venueIdCol.length) {
+    console.error('\ngigs.venue_id missing — apply schema first:\n  node scripts/migrate-schema.js\n');
+    process.exit(1);
+  }
+
   // Check the venue column still exists (migration is safe to skip if already run)
   const cols = await sql`
     SELECT 1 FROM information_schema.columns

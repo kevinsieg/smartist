@@ -98,11 +98,7 @@ DO $$ BEGIN
     ALTER TABLE gigs RENAME COLUMN notes TO comment;
   END IF;
 END $$;
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gigs' AND column_name='venue') THEN
-    ALTER TABLE gigs DROP COLUMN venue;
-  END IF;
-END $$;
+-- gigs.venue (legacy text) is removed by scripts/migrate_venues.js after backfill.
 
 CREATE INDEX IF NOT EXISTS gigs_artist_id_idx ON gigs(artist_id);
 
