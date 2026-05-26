@@ -116,20 +116,22 @@ async function testSongs(slug) {
   console.log(B(`\n/api/${slug}/songs`));
   let firstSong = null;
 
-  await test('GET songs unauthenticated returns ≤20 items', async () => {
+  await test('GET songs unauthenticated returns paginated view-mode page', async () => {
     const { res, json } = await GET(`/api/${slug}/songs`);
     assertStatus(res, json, 200);
-    assert(Array.isArray(json) && json.length <= 20, `expected ≤20, got ${Array.isArray(json) ? json.length : 'non-array'}`);
+    assert(Array.isArray(json.rows) && json.rows.length <= 20, `expected ≤20 rows, got ${json.rows?.length}`);
+    assert(typeof json.total === 'number', 'json.total not a number');
+    assert(json.limit <= 20, `limit must be capped at 20, got ${json.limit}`);
   });
 
-  await test('GET returns array with play stats', async () => {
+  await test('GET returns rows with play stats', async () => {
     const { res, json } = await GET(`/api/${slug}/songs`);
     assertStatus(res, json, 200);
-    assert(Array.isArray(json), 'not an array');
-    if (json.length) {
-      firstSong = json[0];
-      assert('play_count' in json[0], 'missing play_count');
-      assert('last_played_at' in json[0] || json[0].last_played_at === null, 'missing last_played_at');
+    assert(Array.isArray(json.rows), 'json.rows not an array');
+    if (json.rows.length) {
+      firstSong = json.rows[0];
+      assert('play_count' in json.rows[0], 'missing play_count');
+      assert('last_played_at' in json.rows[0] || json.rows[0].last_played_at === null, 'missing last_played_at');
     }
   });
 
@@ -670,7 +672,7 @@ async function testLyricsLifecycle(slug, token, songId) {
   });
 
   await test('GET /songs reflects saved lyrics in extra.lyrics', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs`);
+    const { res, json } = await GET(`/api/${slug}/songs`, { token });
     assertStatus(res, json, 200);
     const song = json.find(s => s.id === songId);
     assert(song, 'test song not found in GET /songs');
@@ -686,7 +688,7 @@ async function testLyricsLifecycle(slug, token, songId) {
   });
 
   await test('GET /songs confirms lyrics removed', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs`);
+    const { res, json } = await GET(`/api/${slug}/songs`, { token });
     assertStatus(res, json, 200);
     const song = json.find(s => s.id === songId);
     assert(song, 'test song not found');

@@ -1,4 +1,4 @@
-const { getDb, getArtist, insertAuditLog, getSlug } = require('../_db');
+const { getDb, getArtist, insertAuditLog, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
@@ -40,6 +40,38 @@ module.exports = wrap(async function handler(req, res) {
     const band = await getArtist(slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
     const viewMode = !req.headers.authorization;
+    if (viewMode) {
+      const { limit: rawLimit, offset } = parsePage(req);
+      const limit = Math.min(rawLimit, 20);
+      const rows = await sql`
+        SELECT s.*,
+          COUNT(DISTINCT ss.setlist_id)::int AS play_count,
+          MAX(sl.created_at)                 AS last_played_at,
+          g.iswc, g.gema_work_number, g.language AS gema_language,
+          COUNT(*) OVER()::int AS total
+        FROM songs s
+        LEFT JOIN setlist_songs ss ON ss.song_id = s.id
+        LEFT JOIN setlists sl      ON sl.id = ss.setlist_id
+        LEFT JOIN LATERAL (
+          SELECT iswc, gema_work_number, language
+          FROM gema_works
+          WHERE song_id = s.id
+          ORDER BY gema_work_number
+          LIMIT 1
+        ) g ON true
+        WHERE s.artist_id = ${band.id} AND s.deleted = false
+        GROUP BY s.id, g.iswc, g.gema_work_number, g.language
+        ORDER BY s.title
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      const total = Number(rows[0]?.total ?? 0);
+      return res.json({
+        rows: rows.map(({ total: _, ...row }) => row),
+        total,
+        limit,
+        offset,
+      });
+    }
     const songs = await sql`
       SELECT s.*,
         COUNT(DISTINCT ss.setlist_id)::int AS play_count,
@@ -59,7 +91,7 @@ module.exports = wrap(async function handler(req, res) {
       GROUP BY s.id, g.iswc, g.gema_work_number, g.language
       ORDER BY s.title
     `;
-    return res.json(viewMode ? songs.slice(0, 20) : songs);
+    return res.json(songs);
   }
 
   // ── POST lyrics-suggest ───────────────────────────────────────────────────
