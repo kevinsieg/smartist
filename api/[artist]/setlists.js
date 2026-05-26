@@ -13,6 +13,7 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'GET') {
     const band = await getArtist(slug);
     if (!band) return res.status(404).json({ error: 'Artist not found' });
+    const viewMode = !req.headers.authorization;
     const setlists = await sql`
       SELECT
         s.*,
@@ -28,7 +29,7 @@ module.exports = wrap(async function handler(req, res) {
       GROUP BY s.id, g.title, g.date, v.name
       ORDER BY s.created_at DESC
     `;
-    return res.json(setlists);
+    return res.json(viewMode ? setlists.slice(0, 20) : setlists);
   }
 
   if (req.method === 'POST') {

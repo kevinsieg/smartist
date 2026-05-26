@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>404 — Page not found</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css">
+  <style>
+    .not-found-page {
+      min-height: calc(100vh - 5rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem 1rem 4rem;
+    }
+    .not-found-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      width: 100%;
+      max-width: 920px;
+    }
+    .not-found-art {
+      order: -1;
+      flex-shrink: 0;
+      width: min(78vw, 260px);
+      line-height: 0;
+      animation: not-found-art-in 0.65s ease 0.08s both;
+    }
+    .not-found-art img {
+      display: block;
+      width: 100%;
+      height: auto;
+      transform: rotate(-4deg);
+      filter: drop-shadow(0 12px 24px rgba(176, 106, 42, 0.22));
+    }
+    .not-found-card {
+      width: 100%;
+      max-width: 26rem;
+      text-align: center;
+      padding: 2rem 1.25rem 1.75rem;
+      border: 1px solid rgba(221, 213, 200, 0.85);
+      border-radius: 4px;
+      background: var(--surface-color);
+      box-shadow: 0 14px 40px rgba(26, 26, 26, 0.06);
+      animation: not-found-in 0.55s ease both;
+    }
+    @keyframes not-found-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes not-found-art-in {
+      from { opacity: 0; transform: translateX(16px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .not-found-code {
+      display: inline-block;
+      font-size: 0.72rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--secondary-ink);
+      margin-bottom: 0.85rem;
+    }
+    .not-found-card h1 {
+      font-size: clamp(1.5rem, 5vw, 2.1rem);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.75rem;
+      color: var(--black);
+    }
+    .not-found-lead {
+      font-size: clamp(0.88rem, 2.8vw, 0.95rem);
+      line-height: 1.65;
+      color: var(--third-color);
+      margin-bottom: 1.5rem;
+    }
+    .not-found-actions {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .not-found-actions .btn {
+      width: 100%;
+      text-align: center;
+    }
+    @media (min-width: 480px) {
+      .not-found-actions .btn { width: auto; }
+    }
+    @media (min-width: 640px) {
+      .not-found-page {
+        min-height: calc(100vh - 5.5rem);
+        padding: 2rem 1.25rem 4rem;
+      }
+      .not-found-layout {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem 2.75rem;
+      }
+      .not-found-card {
+        flex: 1 1 20rem;
+        padding: 2.5rem 2rem 2.25rem;
+        text-align: left;
+      }
+      .not-found-actions { justify-content: flex-start; }
+      .not-found-art {
+        order: 2;
+        width: min(36vw, 320px);
+        margin-right: -0.5rem;
+      }
+      @keyframes not-found-art-in {
+        from { opacity: 0; transform: translateX(24px); }
+        to   { opacity: 1; transform: translateX(0); }
+      }
+    }
+    @media (min-width: 900px) {
+      .not-found-art { width: 360px; }
+    }
+  </style>
+</head>
+<body>
+<main class="app-page not-found-page">
+  <div class="not-found-layout">
+    <div class="not-found-card">
+      <p class="not-found-code">404</p>
+      <h1>O minor.</h1>
+      <p class="not-found-lead">Not a real chord — and not a real page. Somewhere a guitarist is squinting at the chart. Head home and play something that actually resolves.</p>
+      <div class="not-found-actions">
+        <a href="/" class="btn active">Back to home</a>
+      </div>
+    </div>
+    <div class="not-found-art" aria-hidden="true">
+      <!-- CC0 illustration by GDJ via ClipSafari -->
+      <img src="/app/img/broken-guitar.svg" width="2181" height="1679" alt="">
+    </div>
+  </div>
+</main>
+<script src="/app/js/common.js"></script>
+</body>
+</html>

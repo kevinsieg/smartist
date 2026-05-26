@@ -15,11 +15,6 @@
   .site-header nav a:hover { color: #b06a2a; }
   @media (min-width: 640px) { .site-header { padding: 20px 40px; } }
 
-  /* Progress dots */
-  .progress { display: flex; justify-content: center; gap: 8px; padding: 28px 0 0; }
-  .progress-dot { width: 7px; height: 7px; border-radius: 50%; background: #ddd5c8; transition: background 0.2s; }
-  .progress-dot.active { background: #b06a2a; }
-
   /* Gate layout */
   .gate { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 24px 48px; }
   .gate-inner { width: 100%; max-width: 440px; }
@@ -40,32 +35,15 @@
   .field input::placeholder { color: #bbb; }
   .field-label { font-size: 0.63rem; letter-spacing: 0.18em; text-transform: uppercase; color: #888; }
 
-  /* Genre chips */
-  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 24px; }
-  .chip { padding: 6px 12px; border: 1px solid #ddd5c8; background: #f9f5ef; font-family: 'Courier New', monospace; font-size: 0.68rem; letter-spacing: 0.08em; color: #666; border-radius: 2px; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
-  .chip:hover { border-color: #b06a2a; color: #b06a2a; }
-  .chip.active { background: #b06a2a; border-color: #b06a2a; color: #f5f0ea; }
-
   /* Buttons */
   .btn-row { display: flex; gap: 10px; align-items: center; }
   .btn-primary { flex: 1; padding: 12px; background: transparent; border: 1.5px solid #b06a2a; color: #b06a2a; font-family: 'Courier New', monospace; font-size: 0.78rem; letter-spacing: 0.22em; text-transform: uppercase; cursor: pointer; border-radius: 2px; transition: background 0.15s, color 0.15s; }
   .btn-primary:hover:not(:disabled) { background: #b06a2a; color: #f5f0ea; }
   .btn-primary:disabled { opacity: 0.5; cursor: default; }
-  .btn-back { padding: 12px 16px; background: transparent; border: 1px solid #ddd5c8; color: #aaa; font-family: 'Courier New', monospace; font-size: 0.72rem; letter-spacing: 0.12em; cursor: pointer; border-radius: 2px; transition: border-color 0.12s, color 0.12s; }
-  .btn-back:hover { border-color: #b06a2a; color: #b06a2a; }
   .gate-msg { font-size: 0.73rem; color: #b06a2a; min-height: 1.2em; margin-top: 10px; }
 
   .gate-note { margin-top: 18px; font-size: 0.67rem; color: #aaa; line-height: 1.6; }
   .gate-note a { color: #b06a2a; text-decoration: underline; }
-
-  /* Logo preview */
-  .logo-preview { display: flex; align-items: center; gap: 14px; padding: 16px; background: #ede5d8; border: 1px solid #ddd5c8; border-radius: 3px; margin-bottom: 22px; }
-  .logo-mark { flex: 0 0 48px; height: 48px; background: #ddd5c8; color: #bbb; font-family: 'Courier New', monospace; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; border-radius: 2px; text-transform: uppercase; transition: background 0.18s, color 0.18s; }
-  .logo-mark.filled { background: #b06a2a; color: #f5f0ea; }
-  .logo-preview-text { display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
-  .logo-band-name { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.06em; color: #bbb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.18s; }
-  .logo-band-name.filled { color: #1a1a1a; }
-  .logo-workspace { font-size: 0.58rem; letter-spacing: 0.22em; text-transform: uppercase; color: #b06a2a; }
 
   .site-footer { border-top: 1px solid #ddd5c8; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   .site-footer span { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; color: #aaa; }
@@ -82,18 +60,10 @@
   </nav>
 </header>
 
-<div class="progress">
-  <div class="progress-dot active" id="dot-1"></div>
-  <div class="progress-dot" id="dot-2"></div>
-  <div class="progress-dot" id="dot-3"></div>
-</div>
-
 <main class="gate">
   <div class="gate-inner">
-
-    <!-- Step 1: Email -->
     <div class="step-panel active" id="step-1">
-      <div class="step-label">Step 1 of 3</div>
+      <div class="step-label">Demo access</div>
       <h1>See smartist in <em>action.</em></h1>
       <div class="divider"></div>
       <p>Enter your email to access a live demo workspace — real setlists, song catalogue, and gig management.</p>
@@ -106,65 +76,6 @@
       <div class="gate-msg" id="s1-msg"></div>
       <p class="gate-note">No spam — unsubscribe anytime. <a href="/impressum">Legal notice</a></p>
     </div>
-
-    <!-- Step 2: Name + genres -->
-    <div class="step-panel" id="step-2">
-      <div class="step-label">Step 2 of 3</div>
-      <h1>Tell us about your <em>music.</em></h1>
-      <div class="divider"></div>
-      <div class="logo-preview">
-        <div class="logo-mark" id="logo-mark">?</div>
-        <div class="logo-preview-text">
-          <div class="logo-band-name" id="logo-band-name">Your band name</div>
-          <div class="logo-workspace">smartist workspace</div>
-        </div>
-      </div>
-      <div class="field">
-        <span class="field-label">Artist or band name</span>
-        <input id="s2-name" type="text" placeholder="e.g. The Midnight Sons" autocomplete="off">
-      </div>
-      <div class="field">
-        <span class="field-label">Genres you play</span>
-      </div>
-      <div class="chips" id="genre-chips">
-        <button type="button" class="chip" data-genre="Folk / Acoustic">Folk / Acoustic</button>
-        <button type="button" class="chip" data-genre="Rock">Rock</button>
-        <button type="button" class="chip" data-genre="Pop">Pop</button>
-        <button type="button" class="chip" data-genre="Jazz">Jazz</button>
-        <button type="button" class="chip" data-genre="Blues">Blues</button>
-        <button type="button" class="chip" data-genre="Country">Country</button>
-        <button type="button" class="chip" data-genre="Electronic">Electronic</button>
-        <button type="button" class="chip" data-genre="Hip-Hop">Hip-Hop</button>
-        <button type="button" class="chip" data-genre="Classical">Classical</button>
-        <button type="button" class="chip" data-genre="Metal">Metal</button>
-        <button type="button" class="chip" data-genre="R&amp;B / Soul">R&amp;B / Soul</button>
-        <button type="button" class="chip" data-genre="World Music">World Music</button>
-        <button type="button" class="chip" data-genre="Reggae">Reggae</button>
-        <button type="button" class="chip" data-genre="Latin">Latin</button>
-        <button type="button" class="chip" data-genre="Indie">Indie</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn-back" id="s2-back">← Back</button>
-        <button class="btn-primary" id="s2-next">Next →</button>
-      </div>
-    </div>
-
-    <!-- Step 3: Country + submit -->
-    <div class="step-panel" id="step-3">
-      <div class="step-label">Step 3 of 3</div>
-      <h1>Where do you <em>perform?</em></h1>
-      <div class="divider"></div>
-      <div class="field">
-        <span class="field-label">Country</span>
-        <input id="s3-country" type="text" placeholder="e.g. France, Germany, USA…" autocomplete="country-name">
-      </div>
-      <div class="btn-row">
-        <button class="btn-back" id="s3-back">← Back</button>
-        <button class="btn-primary" id="s3-submit">Open demo →</button>
-      </div>
-      <div class="gate-msg" id="s3-msg"></div>
-    </div>
-
   </div>
 </main>
 
@@ -175,43 +86,8 @@
 
 <script>
 (function () {
-  var email = '', name = '', genres = [], country = '';
+  var email = '';
 
-  function showStep(n) {
-    document.querySelectorAll('.step-panel').forEach(function (p) { p.classList.remove('active'); });
-    document.getElementById('step-' + n).classList.add('active');
-    [1, 2, 3].forEach(function (i) {
-      document.getElementById('dot-' + i).classList.toggle('active', i <= n);
-    });
-  }
-
-  // Live logo preview
-  document.getElementById('s2-name').addEventListener('input', function () {
-    var val = this.value.trim();
-    var mark = document.getElementById('logo-mark');
-    var nameEl = document.getElementById('logo-band-name');
-    if (val) {
-      var initials = val.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
-      mark.textContent = initials;
-      mark.classList.add('filled');
-      nameEl.textContent = val;
-      nameEl.classList.add('filled');
-    } else {
-      mark.textContent = '?';
-      mark.classList.remove('filled');
-      nameEl.textContent = 'Your band name';
-      nameEl.classList.remove('filled');
-    }
-  });
-
-  // Genre chips
-  document.querySelectorAll('.chip').forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      chip.classList.toggle('active');
-    });
-  });
-
-  // Step 1 → 2
   document.getElementById('s1-next').addEventListener('click', function () {
     var val = document.getElementById('s1-email').value.trim();
     var msg = document.getElementById('s1-msg');
@@ -221,61 +97,35 @@
     }
     msg.textContent = '';
     email = val;
-    showStep(2);
-    document.getElementById('s2-name').focus();
-  });
-  document.getElementById('s1-email').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') document.getElementById('s1-next').click();
-  });
-
-  // Step 2 → 1
-  document.getElementById('s2-back').addEventListener('click', function () { showStep(1); });
-
-  // Step 2 → 3
-  document.getElementById('s2-next').addEventListener('click', function () {
-    name = document.getElementById('s2-name').value.trim();
-    genres = Array.from(document.querySelectorAll('.chip.active')).map(function (c) { return c.dataset.genre; });
-    showStep(3);
-    document.getElementById('s3-country').focus();
-  });
-
-  // Step 3 → 2
-  document.getElementById('s3-back').addEventListener('click', function () { showStep(2); });
-
-  // Step 3 → Submit
-  document.getElementById('s3-submit').addEventListener('click', function () {
-    country = document.getElementById('s3-country').value.trim();
-    var btn = document.getElementById('s3-submit');
-    var msg = document.getElementById('s3-msg');
-    btn.disabled = true;
-    msg.textContent = '';
+    var btn = document.getElementById('s1-next');
+    btn.disabled = true; btn.textContent = '…';
     fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, source: 'demo', name: name, genres: genres, perform_country: country }),
+      body: JSON.stringify({ email: email, source: 'demo' }),
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); })
       .then(function (r) {
         if (r.ok || r.status === 409) {
           sessionStorage.setItem('demo_email', email);
-          sessionStorage.setItem('demo_name', name || email.split('@')[0]);
-          sessionStorage.setItem('demo_genres', JSON.stringify(genres));
-          sessionStorage.setItem('demo_country', country);
-          if (r.data && r.data.token) sessionStorage.setItem('setlist_token', r.data.token);
-          window.location.href = '/setlist';
+          sessionStorage.setItem('demo_name', email.split('@')[0]);
+          window.location.href = '/dashboard';
         } else {
           msg.textContent = (r.data && r.data.error) || 'Something went wrong — try again.';
-          btn.disabled = false;
+          btn.disabled = false; btn.textContent = 'Next →';
         }
       })
       .catch(function () {
         msg.textContent = 'Network error — try again.';
-        btn.disabled = false;
+        btn.disabled = false; btn.textContent = 'Next →';
       });
   });
-  document.getElementById('s3-country').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') document.getElementById('s3-submit').click();
+
+  document.getElementById('s1-email').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('s1-next').click();
   });
+
+  setTimeout(function () { document.getElementById('s1-email').focus(); }, 50);
 }());
 </script>
 </body>

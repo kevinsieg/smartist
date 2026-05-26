@@ -18,6 +18,7 @@
     --danger-color:    #a03030;
     --border-color:    #ddd5c8;
     --surface-color:   #f9f5ef;
+    --panel-w:         380px;
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────────── */
@@ -134,6 +135,71 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
 }
 .nav-auth-logout:hover,
 .nav-auth-login:hover { color: var(--black); }
+
+/* View-mode notice bar shown at top of page content */
+.view-mode-notice {
+    font-size: 0.72rem; color: var(--third-color);
+    padding: 0.45rem 0.9rem; background: var(--primary-color);
+    border-bottom: 1px solid var(--border-color);
+    letter-spacing: 0.03em;
+}
+.view-mode-notice a { color: var(--secondary-color); text-decoration: underline; }
+
+/* Make the login prompt in view mode stand out more */
+.nav-auth-login--vm {
+    border: 1px solid var(--secondary-color);
+    border-radius: 2px;
+    padding: 0.2rem 0.6rem;
+    color: var(--secondary-color) !important;
+    text-decoration: none !important;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    transition: background 0.12s, color 0.12s;
+}
+.nav-auth-login--vm:hover {
+    background: var(--secondary-color);
+    color: var(--primary-color) !important;
+}
+
+/* Authenticated header — darker to distinguish from view-mode */
+.app-header--authed {
+    background: var(--secondary-ink);
+    border-bottom-color: rgba(0,0,0,0.15);
+}
+.app-header--authed .band-name { color: var(--primary-color); }
+.app-header--authed .nav-links a { color: var(--primary-color); font-weight: 700; }
+.app-header--authed .nav-links a:hover { color: var(--primary-color); }
+.app-header--authed .nav-links a.current {
+    color: var(--secondary-ink);
+    background: var(--primary-color);
+}
+.app-header--authed .app-logo-initials {
+    background: rgba(255,255,255,0.2);
+    color: var(--primary-color);
+}
+.app-header--authed .nav-auth-badge { color: var(--primary-color); font-weight: 700; }
+.app-header--authed .nav-auth-logout {
+    color: var(--primary-color);
+    font-weight: 700;
+    text-decoration-color: rgba(245,240,234,0.5);
+}
+.app-header--authed .nav-auth-logout:hover { color: var(--primary-color); }
+
+/* Disabled write-action buttons in view mode */
+body.view-mode button[disabled],
+body.view-mode input[type="submit"][disabled] {
+    opacity: 0.4;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+/* Hub platform cards in view mode — not clickable */
+.platform-card.pc-view { cursor: default; }
+.platform-card.pc-view:hover { background: inherit; }
+
+/* Dashboard view-mode CTA */
+.dash-vm-cta { font-size: 0.85rem; color: var(--third-color); margin-bottom: 1.5rem; }
+.dash-vm-cta a { color: var(--secondary-color); text-decoration: underline; }
 
 /* sm: expand nav to full desktop sizing */
 @media (min-width: 480px) {
@@ -1186,7 +1252,8 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
     font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase;
     background: #e55; color: #fff; padding: 2px 6px; border-radius: 3px;
 }
-.sl-del-btn { font-size: 0.75rem; padding: 0.2rem 0.5rem; color: #e55; border-color: #e55; }
+.sl-del-btn  { font-size: 0.75rem; padding: 0.2rem 0.5rem; color: #e55; border-color: #e55; }
+.sl-sets-btn { font-size: 0.75rem; padding: 0.2rem 0.4rem; display: inline-flex; align-items: center; justify-content: center; }
 
 /* ── Animations ──────────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
@@ -1211,6 +1278,11 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
     #history-content, .history-actions { display: none !important; }
 
     #print-area { display: block !important; }
+    #setlist-content .song-list { display: none !important; }
+    .print-setlist-title {
+        font-size: 9pt; color: #666; font-weight: normal;
+        margin: 0 0 6pt; letter-spacing: 0.04em;
+    }
     body { background: white; color: black; }
 
     #print-header {
@@ -1237,7 +1309,7 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
     .song-num   { color: #999; min-width: 1.8em; flex-shrink: 0; font-size: 0.7em; padding-top: 0.2em; }
     .song-main  { flex: 1; min-width: 0; }
     .song-top   { display: flex; align-items: baseline; gap: 0.5em; }
-    .song-title { flex: 1; }
+    .song-title { flex: 1; color: #000; font-weight: 600; }
     .song-time  { color: #888; font-size: 0.75em; white-space: nowrap; }
 
     .song-meta {
@@ -1245,9 +1317,10 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
         font-size: 0.55em; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.15em;
     }
     .song-meta span { color: #111 !important; background: none; border: none; padding: 0; }
+    .song-meta span[data-field="key"] { text-transform: none; letter-spacing: 0; }
     .song-meta span::after { content: " ·"; margin-left: 0.2em; }
     .song-meta span:last-child::after { content: ""; }
-    .capo-badge { display: none !important; }
+    .capo-badge { display: inline !important; color: #111 !important; background: none !important; border: none !important; padding: 0 !important; }
 
     .print-labels {
         display: inline; font-size: 0.55em; color: #888;
@@ -1403,15 +1476,26 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
 @media (min-width: 1025px) {
   #view-side-panel {
     inset: auto;
-    top: var(--songs-toolbar-top, 0); right: -380px; bottom: 0;
-    width: 380px;
+    top: var(--songs-toolbar-top, 0); right: calc(-1 * var(--panel-w, 380px)); bottom: 0;
+    width: var(--panel-w, 380px);
     border-left: 1px solid var(--border-color);
     z-index: 50;
     transform: none;
     transition: right 220ms ease-out;
   }
   #view-side-panel.open { right: 0; transform: none; }
-  .side-panel-open { padding-right: 380px; }
+  .side-panel-open { padding-right: var(--panel-w, 380px); }
+
+  .panel-resize-handle {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    z-index: 1;
+    transition: background 120ms;
+  }
+  .panel-resize-handle:hover,
+  .panel-resize-handle.resizing { background: var(--secondary-color); opacity: 0.5; }
   .filter-bar-row1 { padding: 0.6rem 1rem 0.5rem; }
   .filter-bar-field { min-width: 150px; }
 

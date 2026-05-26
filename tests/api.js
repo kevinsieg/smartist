@@ -116,6 +116,12 @@ async function testSongs(slug) {
   console.log(B(`\n/api/${slug}/songs`));
   let firstSong = null;
 
+  await test('GET songs unauthenticated returns ≤20 items', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json) && json.length <= 20, `expected ≤20, got ${Array.isArray(json) ? json.length : 'non-array'}`);
+  });
+
   await test('GET returns array with play stats', async () => {
     const { res, json } = await GET(`/api/${slug}/songs`);
     assertStatus(res, json, 200);
@@ -188,6 +194,13 @@ async function testGigs(slug) {
   console.log(B(`\n/api/${slug}/gigs`));
   let firstGig = null;
 
+  await test('GET gigs unauthenticated returns ≤20 items', async () => {
+    const { res, json } = await GET(`/api/${slug}/gigs`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json.rows) && json.rows.length <= 20, `expected ≤20, got ${json.rows?.length}`);
+    assert(json.total <= 20, `total must be capped at 20 in view mode, got ${json.total}`);
+  });
+
   await test('GET returns paginated shape', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs`);
     assertStatus(res, json, 200);
@@ -198,11 +211,12 @@ async function testGigs(slug) {
     if (json.rows.length) firstGig = json.rows[0];
   });
 
-  await test('GET ?limit=1&offset=0 returns 1 row', async () => {
+  await test('GET ?limit=1&offset=0 unauthenticated ignores params, returns view-mode shape', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs?limit=1&offset=0`);
     assertStatus(res, json, 200);
-    assert(json.rows.length <= 1, 'more than 1 row returned');
-    assert(json.limit === 1, 'limit not respected');
+    assert(Array.isArray(json.rows), 'json.rows not an array');
+    assert(json.limit === 20, `unauthenticated: expected view-mode limit=20, got ${json.limit}`);
+    assert(json.total <= 20, `unauthenticated: total must be capped at 20, got ${json.total}`);
   });
 
   if (firstGig) {
@@ -336,6 +350,12 @@ async function testOrganizers(slug) {
 async function testSetlists(slug) {
   console.log(B(`\n/api/${slug}/setlists`));
   let firstSetlist = null;
+
+  await test('GET setlists unauthenticated returns ≤20 items', async () => {
+    const { res, json } = await GET(`/api/${slug}/setlists`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json) && json.length <= 20, `expected ≤20, got ${Array.isArray(json) ? json.length : 'non-array'}`);
+  });
 
   await test('GET returns array with song_count', async () => {
     const { res, json } = await GET(`/api/${slug}/setlists`);

@@ -12,6 +12,8 @@ var _histGigMap  = {};   // gig.id → gig object
 var _histLoaded  = false;
 var _histLoadedSongs = {}; // setlistId → song array (lazy cache)
 var _histPendingOpenId = null; // set after save → opened once history tab loads
+var _viewMode = false;
+var _editSongs = null;
 
 // --- Demo personalisation ---
 
@@ -40,6 +42,11 @@ async function init() {
     bandConfig = cfg.config ?? {};
     allSongs   = cfg.songs ?? [];
     applyNav(cfg.name, cfg.config);
+    _viewMode = isViewMode();
+    if (_viewMode) {
+      document.body.classList.add('view-mode');
+      applyViewMode();
+    }
     if (cfg.config?.logoUrl) {
       const printLogo = document.querySelector('#print-header .app-logo-img');
       if (printLogo) printLogo.src = cfg.config.logoUrl;
@@ -227,7 +234,9 @@ function refreshFilterOptions() {
       return a.localeCompare(b);
     });
     container.innerHTML = sorted.map(v => {
-      const label = f.field === 'length_min' ? formatLength(Number(v)) : v;
+      const label = f.field === 'length_min' ? formatLength(Number(v))
+        : f.field === 'key' ? formatKey(v)
+        : v;
       return `<button class="filter-btn${currentActive.has(v) ? ' active' : ''}" data-field="${escHtml(f.field)}" data-value="${escHtml(v)}" onclick="toggleFilter(this)">${escHtml(label)}</button>`;
     }).join('');
   }
@@ -328,7 +337,7 @@ function renderResult(songs) {
     const s = (v, field, title) => v ? `<span data-field="${escHtml(field)}" title="${escHtml(title)}">${escHtml(v)}</span>` : '';
     const metaSpans = [
       s(song.extra?.lead || '',  'extra.lead',   'Lead vocalist / instrument'),
-      s(song.key         || '',  'key',           'Key'),
+      s(song.key ? formatKey(song.key) : '',  'key',           'Key'),
       capoSpan,
       s(song.tempo       || '',  'tempo',         'Tempo'),
       s(song.genre       || '',  'genre',         'Genre'),
@@ -772,25 +781,28 @@ function _openHistPanelContent(item, panelEl) {
       '<button class="vsp-close" onclick="_histView && _histView.deselect()" aria-label="Close">&#215;</button>' +
     '</div>' +
     '<div class="vsp-actions" style="margin-bottom:1rem;">' +
-      '<button class="btn icon-btn" data-tooltip="Edit setlist" onclick="_histEdit(\'' + sid + '\')">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-          '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
-        '</svg>' +
-      '</button>' +
-      '<button class="btn icon-btn" data-tooltip="Duplicate" onclick="_histDuplicate(\'' + sid + '\')">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-          '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
-          '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
-        '</svg>' +
-      '</button>' +
+      (_viewMode ? '' :
+        '<button class="btn icon-btn" data-tooltip="Edit setlist" onclick="_histEdit(\'' + sid + '\')">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
+          '</svg>' +
+        '</button>') +
+      (_viewMode ? '' :
+        '<button class="btn icon-btn" data-tooltip="Duplicate" onclick="_histDuplicate(\'' + sid + '\')">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
+            '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
+          '</svg>' +
+        '</button>') +
       '<button class="btn" onclick="_histStage(\'' + sid + '\')">Stage</button>' +
-      '<button class="btn share-btn" onclick="_histShareMenu(\'' + sid + '\', this)">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px">' +
-          '<path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>' +
-          '<polyline points="16 6 12 2 8 6"/>' +
-          '<line x1="12" y1="2" x2="12" y2="15"/>' +
-        '</svg>Share' +
-      '</button>' +
+      (_viewMode ? '' :
+        '<button class="btn share-btn" onclick="_histShareMenu(\'' + sid + '\', this)">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px">' +
+            '<path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>' +
+            '<polyline points="16 6 12 2 8 6"/>' +
+            '<line x1="12" y1="2" x2="12" y2="15"/>' +
+          '</svg>Share' +
+        '</button>') +
     '</div>' +
     gigBlock + venueBlock + orgBlock + commentBlock +
     '<div id="hist-song-detail"></div>';
@@ -924,21 +936,24 @@ function _toggleHistItemBody(sid) {
   }
 }
 
+async function _loadHistSongs(sid) {
+  sid = String(sid);
+  if (_histLoadedSongs[sid]) return;
+  try {
+    var detail = await fetch('/api/' + artistSlug + '/setlists/' + sid).then(function(r) { return r.json(); });
+    var songs = Array.isArray(detail) ? detail : (detail.songs || []);
+    _histLoadedSongs[sid] = songs.slice().sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
+  } catch {
+    // leave cache unset so the caller can retry on transient failures
+  }
+}
+
 async function _loadAndRenderHistSongs(sid) {
   sid = String(sid);
   var body = document.getElementById('hist-body-' + sid);
   if (!body) return;
 
-  if (!_histLoadedSongs[sid]) {
-    try {
-      var detail = await fetch('/api/' + artistSlug + '/setlists/' + sid).then(function(r) { return r.json(); });
-      var songs = Array.isArray(detail) ? detail : (detail.songs || []);
-      songs = songs.slice().sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
-      _histLoadedSongs[sid] = songs;
-    } catch {
-      _histLoadedSongs[sid] = [];
-    }
-  }
+  await _loadHistSongs(sid);
 
   // If row was removed while loading, accordion body may no longer exist
   body = document.getElementById('hist-body-' + sid);
@@ -956,7 +971,7 @@ async function _loadAndRenderHistSongs(sid) {
     return '<div class="hist-song-row" data-song-id="' + song.id + '" onclick="_openSongPanel(\'' + sid + '\',' + song.id + ')">' +
       '<span class="hist-song-pos">' + (i + 1) + '.</span>' +
       '<span class="hist-song-name">' + escHtml(song.title || '') + '</span>' +
-      (song.key ? '<span class="hist-song-key">' + escHtml(song.key) + '</span>' : '') +
+      (song.key ? '<span class="hist-song-key">' + escHtml(formatKey(song.key)) + '</span>' : '') +
       '<span class="hist-song-len">' + formatLength(song.length_min) + '</span>' +
     '</div>';
   }).join('');
@@ -965,16 +980,132 @@ async function _loadAndRenderHistSongs(sid) {
 }
 
 function _histCancelEdit(sid) {
+  _editSongs = null;
   if (_histView) _histView.select(String(sid));
 }
 
-function _histEdit(sid) {
+function _renderEditSongsList(sid) {
+  var ul = document.getElementById('hist-edit-songs-ul');
+  if (!ul) return;
+  if (!_editSongs || !_editSongs.length) {
+    ul.innerHTML = '<li style="color:var(--third-color);font-size:0.82rem;padding:0.4rem 0;list-style:none;">No songs.</li>';
+    _refreshEditAddDropdown(sid);
+    return;
+  }
+  var n = _editSongs.length;
+  ul.innerHTML = _editSongs.map(function(song, i) {
+    var isFirst = i === 0, isLast = i === n - 1;
+    return '<li class="song-item" draggable="true" data-index="' + i + '">' +
+      '<span class="drag-handle" aria-hidden="true">⠿</span>' +
+      '<span class="song-num">' + (i + 1) + '.</span>' +
+      '<div class="song-main">' +
+        '<div class="song-top">' +
+          '<span class="song-title">' + escHtml(song.title || '') + '</span>' +
+          '<span class="song-time">' + formatLength(song.length_min) + '</span>' +
+        '</div>' +
+        (song.key ? '<div class="song-meta"><span>' + escHtml(formatKey(song.key)) + '</span></div>' : '') +
+      '</div>' +
+      '<div class="song-actions">' +
+        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',-1,\'' + sid + '\')" ' + (isFirst ? 'disabled' : '') + ' aria-label="Move up">↑</button>' +
+        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',1,\'' + sid + '\')" ' + (isLast ? 'disabled' : '') + ' aria-label="Move down">↓</button>' +
+        '<button class="move-btn" onclick="_histEditRemoveSong(' + i + ',\'' + sid + '\')" title="Remove">&#215;</button>' +
+      '</div>' +
+    '</li>';
+  }).join('');
+  _refreshEditAddDropdown(sid);
+}
+
+function _refreshEditAddDropdown(sid) {
+  var sel = document.getElementById('hist-edit-add-select');
+  if (!sel) return;
+  var inSetIds = new Set((_editSongs || []).map(function(s) { return s.id; }));
+  var available = allSongs
+    .filter(function(s) { return s.active && !inSetIds.has(s.id); })
+    .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
+  sel.innerHTML = '<option value="">+ add a song…</option>' +
+    available.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.title || '') + '</option>'; }).join('');
+}
+
+function _histEditMoveSong(index, dir, sid) {
+  if (!_editSongs) return;
+  var newIndex = index + dir;
+  if (newIndex < 0 || newIndex >= _editSongs.length) return;
+  var tmp = _editSongs[index];
+  _editSongs[index] = _editSongs[newIndex];
+  _editSongs[newIndex] = tmp;
+  _renderEditSongsList(sid);
+}
+
+function _histEditRemoveSong(index, sid) {
+  if (!_editSongs) return;
+  _editSongs.splice(index, 1);
+  _renderEditSongsList(sid);
+}
+
+function _histEditAddSong(sel, sid) {
+  var songId = Number(sel.value);
+  if (!songId) return;
+  var song = allSongs.find(function(s) { return s.id === songId; });
+  if (!song || (_editSongs && _editSongs.some(function(s) { return s.id === songId; }))) return;
+  if (!_editSongs) _editSongs = [];
+  _editSongs.push(song);
+  _renderEditSongsList(sid);
+}
+
+function _initEditSongsDnd(sid) {
+  var ul = document.getElementById('hist-edit-songs-ul');
+  if (!ul) return;
+  var dragSrcIndex = null;
+  ul.addEventListener('dragstart', function(e) {
+    var li = e.target.closest('li[data-index]');
+    if (!li) return;
+    dragSrcIndex = Number(li.dataset.index);
+    li.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  ul.addEventListener('dragend', function() {
+    ul.querySelectorAll('.song-item').forEach(function(el) {
+      el.classList.remove('dragging', 'drag-over');
+    });
+  });
+  ul.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    var li = e.target.closest('li[data-index]');
+    if (!li) return;
+    ul.querySelectorAll('.song-item').forEach(function(el) { el.classList.remove('drag-over'); });
+    if (Number(li.dataset.index) !== dragSrcIndex) li.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'move';
+  });
+  ul.addEventListener('drop', function(e) {
+    e.preventDefault();
+    var li = e.target.closest('li[data-index]');
+    if (!li || dragSrcIndex === null || !_editSongs) return;
+    var destIndex = Number(li.dataset.index);
+    if (dragSrcIndex === destIndex) return;
+    var moved = _editSongs.splice(dragSrcIndex, 1)[0];
+    _editSongs.splice(destIndex, 0, moved);
+    dragSrcIndex = null;
+    _renderEditSongsList(sid);
+  });
+}
+
+async function _histEdit(sid) {
   sid = String(sid);
   var s = _histSets.find(function(x) { return String(x.id) === sid; });
   if (!s) return;
 
   var inner = document.getElementById('view-side-panel-inner');
   if (!inner) return;
+
+  inner.innerHTML =
+    '<div class="vsp-header">' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">Edit Setlist</h2></div>' +
+      '<button class="vsp-close" onclick="_histCancelEdit(\'' + sid + '\')" aria-label="Cancel">×</button>' +
+    '</div>' +
+    '<p style="padding:1rem;color:var(--third-color);">Loading…</p>';
+
+  await _loadHistSongs(sid);
+  _editSongs = (_histLoadedSongs[sid] || []).slice();
 
   var gigOptions = '<option value="">— no gig —</option>' +
     _histGigs.map(function(g) {
@@ -988,7 +1119,7 @@ function _histEdit(sid) {
       '<div class="vsp-header-text"><h2 class="vsp-title">Edit Setlist</h2></div>' +
       '<button class="vsp-close" onclick="_histCancelEdit(\'' + sid + '\')" aria-label="Cancel">×</button>' +
     '</div>' +
-    '<div style="padding:0 1rem;">' +
+    '<div style="padding:0 1rem 1rem;">' +
       '<div class="modal-field">' +
         '<label for="hist-edit-title">Name</label>' +
         '<input type="text" id="hist-edit-title" value="' + escHtml(s.title || '') + '" autocomplete="off">' +
@@ -1001,6 +1132,15 @@ function _histEdit(sid) {
         '<label for="hist-edit-comment">Comment (optional)</label>' +
         '<textarea id="hist-edit-comment" placeholder="Notes…">' + escHtml(s.comment || '') + '</textarea>' +
       '</div>' +
+      '<div class="modal-field">' +
+        '<label>Songs</label>' +
+        '<ul id="hist-edit-songs-ul" class="song-list" style="margin:0;padding:0;"></ul>' +
+        '<div class="add-song-row" style="margin-top:0.5rem;">' +
+          '<select id="hist-edit-add-select" onchange="_histEditAddSong(this,\'' + sid + '\')">' +
+            '<option value="">+ add a song…</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
       '<div class="status-msg" id="hist-edit-error"></div>' +
       '<div class="modal-actions">' +
         '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + sid + '\')">Save</button>' +
@@ -1008,6 +1148,8 @@ function _histEdit(sid) {
       '</div>' +
     '</div>';
 
+  _renderEditSongsList(sid);
+  _initEditSongsDnd(sid);
   document.getElementById('hist-edit-title').focus();
 }
 
@@ -1031,25 +1173,7 @@ async function _saveHistEdit(sid) {
   var saveBtn = document.getElementById('hist-edit-save');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
-  // Get song IDs — use cached songs if already loaded, else fetch
-  var songs = _histLoadedSongs[sid];
-  var songIds;
-  if (songs) {
-    songIds = songs.map(function(song) { return song.id; });
-  } else {
-    try {
-      var detail = await fetch('/api/' + artistSlug + '/setlists/' + sid).then(function(r) { return r.json(); });
-      songs = Array.isArray(detail) ? detail : (detail.songs || []);
-      songs = songs.slice().sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
-      _histLoadedSongs[sid] = songs;
-      songIds = songs.map(function(song) { return song.id; });
-    } catch {
-      var errEl2 = document.getElementById('hist-edit-error');
-      if (errEl2) { errEl2.textContent = 'Could not load songs. Please try again.'; errEl2.className = 'status-msg error'; }
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
-      return;
-    }
-  }
+  var songIds = (_editSongs || []).map(function(song) { return song.id; });
 
   try {
     var r = await fetch('/api/' + artistSlug + '/setlists/' + sid, {
@@ -1073,21 +1197,34 @@ async function _saveHistEdit(sid) {
       return;
     }
 
-    // Update in-memory cache
-    s.title   = titleVal;
-    s.gig_id  = gigId ? Number(gigId) : null;
-    s.comment = comment;
+    // Update in-memory caches
+    s.title      = titleVal;
+    s.gig_id     = gigId ? Number(gigId) : null;
+    s.comment    = comment;
+    s.song_count = songIds.length;
     var updGig   = s.gig_id ? _histGigMap[s.gig_id] : null;
-    s.gig_name  = updGig ? (updGig.title      || '') : null;
-    s.gig_date  = updGig ? (updGig.date        || '') : null;
-    s.gig_venue = updGig ? (updGig.venue_name  || '') : null;
-    // Bust song cache so reopening panel reloads fresh
-    delete _histLoadedSongs[sid];
+    s.gig_name   = updGig ? (updGig.title      || '') : null;
+    s.gig_date   = updGig ? (updGig.date        || '') : null;
+    s.gig_venue  = updGig ? (updGig.venue_name  || '') : null;
+    _histLoadedSongs[sid] = (_editSongs || []).map(function(song, i) {
+      return Object.assign({}, song, { position: i + 1 });
+    });
+    _editSongs = null;
 
-    if (_histView) {
-      _histView.refresh();
-      _histView.select(sid);
+    var okEl = document.getElementById('hist-edit-error');
+    if (okEl) {
+      okEl.textContent = 'Saved.';
+      okEl.className = 'status-msg success';
+      okEl.style.display = 'block';
+      okEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+
+    setTimeout(function() {
+      if (_histView) {
+        _histView.refresh();
+        _histView.select(sid);
+      }
+    }, 900);
   } catch {
     var errEl5 = document.getElementById('hist-edit-error');
     if (errEl5) { errEl5.textContent = 'Network error. Please try again.'; errEl5.className = 'status-msg error'; }
@@ -1185,8 +1322,12 @@ function _histStage(sid) {
   window.open('/stage?id=' + sid, '_blank');
 }
 
-function _histExportPdf(sid) {
-  window.open('/stage?id=' + sid + '&print=1', '_blank');
+async function _histExportPdf(sid) {
+  sid = String(sid);
+  var s = _histSets.find(function(x) { return String(x.id) === sid; });
+  await _loadHistSongs(sid);
+  var cfg = await loadConfig();
+  printSetlistSongs(_histLoadedSongs[sid] || [], (s && s.title) || '', cfg);
 }
 
 function _histShareMenu(sid, btn) {
@@ -1369,19 +1510,9 @@ async function _histDuplicate(sid) {
 
 // --- PDF export ---
 
-function printSetlist() {
-  const now = new Date();
-  const date = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  document.getElementById('print-timestamp').textContent = `${date} — ${time}`;
-
-  const size = calcPrintFontSize(currentSet.length);
-  document.documentElement.style.setProperty('--print-song-size', size + 'pt');
-
-  setTimeout(() => {
-    window.print();
-    setTimeout(() => document.documentElement.style.removeProperty('--print-song-size'), 500);
-  }, 50);
+async function printSetlist() {
+  var cfg = await loadConfig();
+  printSetlistSongs(currentSet, '', cfg);
 }
 
 document.addEventListener('keydown', function(e) {

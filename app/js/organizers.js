@@ -9,6 +9,7 @@ var _orgsTotal = 0;
 var _orgsOffset = 0;
 var _orgsQ = '';
 var _orgsTimer = null;
+var _viewMode = false;
 
 var ORGANIZER_COLUMNS = [
   { field: 'name',    label: 'Name',    width: '1.5fr', sortable: true, filterable: true },
@@ -17,13 +18,15 @@ var ORGANIZER_COLUMNS = [
   { field: 'city',    label: 'City',    width: '1fr',   sortable: true, filterable: true, muted: true },
   { field: 'country', label: 'Country', width: '1fr',   sortable: true, filterable: true, muted: true },
   { field: 'email',   label: 'Email',   width: '1fr',   sortable: true, filterable: true, muted: true },
-  { width: 'auto', actions: true, render: o => {
-    if (o.deleted) return `<span class="sl-deleted-badge">deleted</span>`;
-    return `<button class="btn sl-del-btn" onclick="promptHardDelete(${o.id})">Delete</button>`;
+  { width: 'auto', actions: true, render: function(o) {
+    if (o.deleted) return '<span class="sl-deleted-badge">deleted</span>';
+    if (_viewMode) return '';
+    return '<button class="btn sl-del-btn" onclick="promptHardDelete(' + o.id + ')">Delete</button>';
   }},
 ];
 
-initPage(async cfg => {
+initPage(async function(cfg, viewMode) {
+  _viewMode = viewMode;
   artistSlug = cfg.slug;
 
   organizerTable = createSortableList({
@@ -32,7 +35,7 @@ initPage(async cfg => {
     columns:       ORGANIZER_COLUMNS,
     defaultSort:   'name',
     rowClass:      o => o.deleted ? 'deleted' : '',
-    onRowClick:    o => openEditModal(o.id),
+    onRowClick:    function(o) { return !_viewMode && openEditModal(o.id); },
     emptyHint:     'No organizers yet. Add one above.',
   });
 
@@ -49,6 +52,16 @@ initPage(async cfg => {
   }
 
   await loadOrganizers();
+
+  if (_viewMode) {
+    applyViewMode();
+    var notice = document.createElement('div');
+    notice.className = 'view-mode-notice';
+    notice.innerHTML = 'View mode — <a href="/">Login</a> for full access.';
+    var page = document.querySelector('.app-page') || document.body;
+    page.insertBefore(notice, page.firstChild);
+  }
+
   initGeoFields('om-city', 'om-country');
 
   var _orgDeepId = Number(new URLSearchParams(location.search).get('id'));

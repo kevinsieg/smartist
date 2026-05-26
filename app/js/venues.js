@@ -10,6 +10,7 @@ var _venuesTotal = 0;
 var _venuesOffset = 0;
 var _venuesQ = '';
 var _venuesTimer = null;
+var _viewMode = false;
 
 var VENUE_COLUMNS = [
   { field: 'name',    label: 'Name',     width: '1.5fr', sortable: true, filterable: true },
@@ -19,14 +20,16 @@ var VENUE_COLUMNS = [
   { field: 'size',    label: 'Capacity', width: '70px',  sortable: true, type: 'number',   muted: true },
   { field: 'status',  label: 'Status',   width: '90px',
     render: v => v.status ? `<span class="sl-badge">${escHtml(v.status)}</span>` : '' },
-  { width: 'auto', actions: true, render: v => {
-    if (v.deleted)                          return `<span class="sl-deleted-badge">deleted</span>`;
+  { width: 'auto', actions: true, render: function(v) {
+    if (v.deleted)                          return '<span class="sl-deleted-badge">deleted</span>';
     if (v.category === 'placeholder')       return '';
-    return `<button class="btn sl-del-btn" onclick="promptHardDelete(${v.id})">Delete</button>`;
+    if (_viewMode)                          return '';
+    return '<button class="btn sl-del-btn" onclick="promptHardDelete(' + v.id + ')">Delete</button>';
   }},
 ];
 
-initPage(async cfg => {
+initPage(async function(cfg, viewMode) {
+  _viewMode = viewMode;
   artistSlug = cfg.slug;
 
   venueTable = createSortableList({
@@ -35,7 +38,7 @@ initPage(async cfg => {
     columns:        VENUE_COLUMNS,
     defaultSort:    'name',
     rowClass:       v => v.deleted ? 'deleted' : '',
-    onRowClick:     v => openEditModal(v.id),
+    onRowClick:     function(v) { return !_viewMode && openEditModal(v.id); },
     emptyHint:      'No venues yet. Add one above.',
   });
 
@@ -44,7 +47,7 @@ initPage(async cfg => {
     columns:     VENUE_COLUMNS,
     defaultSort: 'name',
     rowClass:    v => v.deleted ? 'deleted' : '',
-    onRowClick:  v => openEditModal(v.id),
+    onRowClick:  function(v) { return !_viewMode && openEditModal(v.id); },
     emptyHint:   'None.',
   });
 
@@ -61,6 +64,16 @@ initPage(async cfg => {
   }
 
   await loadVenues();
+
+  if (_viewMode) {
+    applyViewMode();
+    var notice = document.createElement('div');
+    notice.className = 'view-mode-notice';
+    notice.innerHTML = 'View mode — <a href="/">Login</a> for full access.';
+    var page = document.querySelector('.app-page') || document.body;
+    page.insertBefore(notice, page.firstChild);
+  }
+
   initGeoFields('vm-city', 'vm-country', 'vm-postcode');
 
   var _venueDeepId = Number(new URLSearchParams(location.search).get('id'));

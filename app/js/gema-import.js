@@ -7,9 +7,26 @@ var artistSlug = null;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
-initPage(async cfg => {
+var _viewMode = false;
+
+initPage(async function(cfg, viewMode) {
+  _viewMode = viewMode;
   artistSlug = cfg.slug;
   document.getElementById('import-area').style.display = '';
+  if (_viewMode) {
+    applyViewMode();
+    var notice = document.createElement('div');
+    notice.className = 'view-mode-notice';
+    notice.innerHTML = 'View mode — <a href="/">Login</a> for full access.';
+    var page = document.querySelector('.app-page') || document.body;
+    page.insertBefore(notice, page.firstChild);
+    var dropZone = document.getElementById('drop-zone');
+    if (dropZone) {
+      dropZone.style.pointerEvents = 'none';
+      dropZone.style.opacity = '0.4';
+      dropZone.onclick = null;
+    }
+  }
 });
 
 // ── File handling ─────────────────────────────────────────────────────────────

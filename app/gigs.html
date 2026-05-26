@@ -18,6 +18,10 @@
     .empty-hint { text-align: center; padding: 2rem 1rem; color: var(--third-color); font-size: 0.88rem; }
     .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
     .status-msg.error { color: #e55; }
+    /* Keep add-button on the same line as filters by nesting fields in their own flex container */
+    #gigs-filter-bar .filter-bar-row1 { flex-wrap: nowrap; align-items: flex-start; }
+    #gigs-filter-bar .filter-bar-fields { display: flex; flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; min-width: 0; }
+    #gigs-filter-bar .filter-bar-row1 > .btn { margin-top: 0.9rem; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -26,28 +30,30 @@
   <h1>Gigs</h1>
   <div class="filter-bar" id="gigs-filter-bar">
     <div class="filter-bar-row1">
-      <label class="filter-bar-field">
-        <span class="filter-bar-label">Gig</span>
-        <input type="text" id="gig-f-gig" class="filter-bar-input" placeholder="Search…" autocomplete="off">
-      </label>
-      <label class="filter-bar-field">
-        <span class="filter-bar-label">Venue</span>
-        <input type="text" id="gig-f-venue" class="filter-bar-input" placeholder="Search…" autocomplete="off">
-      </label>
-      <label class="filter-bar-field">
-        <span class="filter-bar-label">Organizer</span>
-        <input type="text" id="gig-f-organizer" class="filter-bar-input" placeholder="Search…" autocomplete="off">
-      </label>
-      <label class="filter-bar-field">
-        <span class="filter-bar-label">Setlist</span>
-        <input type="text" id="gig-f-setlist" class="filter-bar-input" placeholder="Search…" autocomplete="off">
-      </label>
-      <label class="filter-bar-field">
-        <span class="filter-bar-label">Song</span>
-        <input type="text" id="gig-f-song" class="filter-bar-input" placeholder="Search…" autocomplete="off">
-      </label>
-      <span class="filter-count" id="gig-filter-count"></span>
-      <button class="btn active" onclick="openAddModal()">+ Add gig</button>
+      <div class="filter-bar-fields">
+        <label class="filter-bar-field">
+          <span class="filter-bar-label">Gig</span>
+          <input type="text" id="gig-f-gig" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+        </label>
+        <label class="filter-bar-field">
+          <span class="filter-bar-label">Venue</span>
+          <input type="text" id="gig-f-venue" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+        </label>
+        <label class="filter-bar-field">
+          <span class="filter-bar-label">Organizer</span>
+          <input type="text" id="gig-f-organizer" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+        </label>
+        <label class="filter-bar-field">
+          <span class="filter-bar-label">Setlist</span>
+          <input type="text" id="gig-f-setlist" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+        </label>
+        <label class="filter-bar-field">
+          <span class="filter-bar-label">Song</span>
+          <input type="text" id="gig-f-song" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+        </label>
+        <span class="filter-count" id="gig-filter-count"></span>
+      </div>
+      <button class="btn active auth-action" id="gig-add-btn" onclick="openAddModal()">+ Add gig</button>
     </div>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
@@ -57,7 +63,7 @@
   <div id="past-list"><p class="empty-hint">Loading…</p></div>
   <div id="gigs-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="gigs-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="gigs-load-more-btn" class="btn" onclick="loadMoreGigs()">Load more</button>
+    <button id="gigs-load-more-btn" class="btn auth-action" onclick="loadMoreGigs()">Load more</button>
   </div>
 </div>
 
@@ -142,9 +148,9 @@
     </div>
     <div class="status-msg" id="gm-status"></div>
     <div class="modal-actions">
-      <button class="btn active" onclick="saveGig()">Save</button>
-      <button class="btn" onclick="closeGigModal()">Cancel</button>
-      <button class="btn" id="gm-soft-delete-btn" style="margin-left:auto;color:#e55;" onclick="softDeleteGig()">Delete</button>
+      <button class="btn active" type="button" onclick="saveGig()">Save</button>
+      <button class="btn" type="button" onclick="closeGigModal()">Cancel</button>
+      <button class="btn" type="button" id="gm-soft-delete-btn" style="margin-left:auto;color:#e55;" onclick="softDeleteGig()">Delete</button>
     </div>
   </div>
 </div>
@@ -157,8 +163,8 @@
     <div id="hd-cascade-opts"></div>
     <div class="status-msg error" id="hd-status"></div>
     <div class="modal-actions">
-      <button class="btn active" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>
-      <button class="btn" onclick="closeHardDeleteModal()">Cancel</button>
+      <button class="btn active" type="button" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>
+      <button class="btn" type="button" onclick="closeHardDeleteModal()">Cancel</button>
     </div>
   </div>
 </div>

@@ -14,6 +14,7 @@ var _pendingSetlistId = 0;
 var _pendingSongId    = '';
 var _newPanelEscapeHandler = null;
 var SONGS_BULK_EDIT_KEY = 'songs_bulk_edit';
+var _viewMode = false;
 
 function isMobile() { return window.innerWidth <= 1024; }
 function isBulkEdit() { return !isMobile() && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
@@ -57,13 +58,14 @@ async function init() {
       }
     } catch {}
   }
-  requireLogin();
-  await loadAndRender();
+  var _vm = isViewMode();
+  if (_vm) document.body.classList.add('view-mode');
+  await loadAndRender(_vm);
 }
 
 // --- Data ---
 
-async function loadAndRender() {
+async function loadAndRender(viewMode) {
   try {
     if (!artistSlug) {
       const cfg = await getConfig();
@@ -76,6 +78,15 @@ async function loadAndRender() {
     _pendingSongId    = String(_qp.get('id') || '');
     renderTable();
     loadLogs();
+    _viewMode = viewMode || false;
+    if (viewMode) {
+      applyViewMode();
+      var notice = document.createElement('div');
+      notice.className = 'view-mode-notice';
+      notice.innerHTML = 'View mode — <a href="/">Login</a> for full access.';
+      var page = document.querySelector('.app-page') || document.body;
+      page.insertBefore(notice, page.firstChild);
+    }
   } catch {
     const el = document.getElementById('page-content');
     if (el) el.innerHTML = '<p style="color:var(--third-color);text-align:center;">Failed to load songs.</p>';
@@ -329,15 +340,21 @@ function _openSongPanelContent(item, panelEl) {
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; Playback</div><audio class="vsp-audio" controls src="' + escHtml(playbackUrl) + '"></audio></div>';
 
   var actions = '';
-  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" onclick="openPlayer(\'' + sidEsc + '\')">&#9654; Listen</button>';
-  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" onclick="openPlayback(\'' + sidEsc + '\')">&#9655; Playback</button>';
-  if (lyricsVal)  actions += '<button class="btn" onclick="openLyrics(\'' + sidEsc + '\')">&#182; Lyrics</button>';
-  if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; Sheet</button>';
-  actions += '<button class="btn icon-btn" data-tooltip="Edit song" onclick="_openSongEditForm(\'' + sidEsc + '\', document.getElementById(\'view-side-panel-inner\'))">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="Edit song" onclick="_openSongEditForm(\'' + sidEsc + '\', document.getElementById(\'view-side-panel-inner\'))">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
-    '</svg>' +
-  '</button>';
+    '</svg></button>';
+  actions += '<a class="btn icon-btn" data-tooltip="Stage view (full-screen)" href="/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>' +
+    '</svg></a>';
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="Lyrics" onclick="openLyrics(\'' + sidEsc + '\')">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/>' +
+    '</svg></button>';
+  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" onclick="openPlayer(\'' + sidEsc + '\')">&#9654; Listen</button>';
+  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" onclick="openPlayback(\'' + sidEsc + '\')">&#9655; Playback</button>';
+  if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; Sheet</button>';
 
   var key     = getVal(song, 'key');
   var tempo   = getVal(song, 'tempo');
@@ -531,7 +548,7 @@ function _openSongEditForm(sid, panelEl) {
       '</details>' +
       '<div class="status-msg" id="song-panel-edit-error"></div>' +
       '<div class="modal-actions">' +
-        '<button class="btn active" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? 'Add' : 'Save') + '</button>' +
+        '<button class="btn active auth-action" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? 'Add' : 'Save') + '</button>' +
         (!isNew ? '<button class="btn" onclick="_songsView && _songsView.select(\'' + sid + '\')">Cancel</button>' : '') +
       '</div>' +
     '</div>';
@@ -542,7 +559,7 @@ function _openSongEditForm(sid, panelEl) {
 
 async function _savePanelSong(formId, isNew, realSid) {
   var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) { requireLogin(); return; }
+  if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   var btn = document.getElementById('song-panel-save-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -569,7 +586,7 @@ async function _savePanelSong(formId, isNew, realSid) {
       });
     }
 
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) throw new Error('save failed');
 
     var newSong = isNew ? await r.json() : null;
@@ -650,13 +667,13 @@ function _renderBulkEditTable() {
 
   document.getElementById('page-content').innerHTML = `
     <div class="toolbar">
-      <button class="btn active" id="save-btn" disabled>Save</button>
-      <button class="btn" id="discard-btn" disabled>Discard</button>
+      <button class="btn active auth-action" id="save-btn" disabled>Save</button>
+      <button class="btn auth-action" id="discard-btn" disabled>Discard</button>
       <button class="btn" id="add-btn">+ Add song</button>
       <span class="status" id="status"></span>
       <span class="filter-count" id="filter-count">${visible.length} / ${songs.length}</span>
       <button class="btn" onclick="toggleBulkEdit()">← List</button>
-      <button class="btn" onclick="exportCsv()">Export CSV</button>
+      <button class="btn auth-action" onclick="exportCsv()">Export CSV</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -739,14 +756,6 @@ function renderListRowHtml(s) {
 }
 
 
-function _csvCell(val) {
-  var s = (val === null || val === undefined) ? '' : String(val);
-  if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
-}
-
 function _editField(label, html) {
   return '<div class="edit-field">' +
     (label ? '<span class="edit-field-label">' + escHtml(label) + '</span>' : '') +
@@ -768,37 +777,21 @@ function _vspSection(heading, cellsHtml) {
 }
 
 function exportCsv() {
-  var visible = getVisibleSongs();
-  var header = COLS.map(function(c) { return _csvCell(c.label); }).join(',');
-  var rows = visible.map(function(song) {
-    return COLS.map(function(c) {
-      var raw = getVal(song, c.key);
-      var val;
-      if (c.type === 'bool') {
-        val = (raw == null) ? '' : (raw ? 'true' : 'false');
-      } else if (c.type === 'time') {
-        val = minsToTime(raw);
-      } else {
-        val = (raw === null || raw === undefined) ? '' : String(raw);
-      }
-      return _csvCell(val);
-    }).join(',');
-  }).join('\r\n');
-
-  var csv = '﻿' + header + '\r\n' + rows;
-  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  var d = new Date();
-  var dateStr = d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
-  a.href = url;
-  a.download = 'songs-' + dateStr + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+  exportTableCsv(
+    getVisibleSongs(),
+    COLS.map(function(c) {
+      return {
+        label: c.label,
+        getValue: function(song) {
+          var raw = getVal(song, c.key);
+          if (c.type === 'bool') return (raw == null) ? '' : (raw ? 'true' : 'false');
+          if (c.type === 'time') return minsToTime(raw);
+          return (raw === null || raw === undefined) ? '' : String(raw);
+        }
+      };
+    }),
+    'songs'
+  );
 }
 
 function initResizableColumns() {
@@ -1050,8 +1043,7 @@ async function deleteRow(sid) {
     songs = songs.filter(s => String(s.id) !== String(sid));
     if (dirty.size === 0) setStatus('', '');
   } else if (r.status === 401) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    requireLogin();
+    if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); }
   } else {
     setStatus('error', 'Could not delete song — try again');
   }
@@ -1067,7 +1059,7 @@ function discardAll() {
 
 async function saveAll() {
   const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) { requireLogin(); return; }
+  if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -1092,7 +1084,7 @@ async function saveAll() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(toUpdate),
       });
-      if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+      if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
       if (!r.ok) throw new Error('patch failed');
     }
 
@@ -1175,7 +1167,7 @@ async function restoreSong(songId) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
   });
-  if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
   if (r.ok) {
     await loadAndRender();
   } else {
@@ -1323,7 +1315,7 @@ async function handleAudioFile(input, sid) {
       },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1346,7 +1338,7 @@ async function handleAudioFile(input, sid) {
       },
       body: JSON.stringify({ publicUrl }),
     });
-    if (confirm.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
 
     // Update local cache and swap ↑ for ▶ in the table cell
@@ -1451,7 +1443,7 @@ async function confirmDeleteAudio() {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Could not remove audio file'); return; }
 
     // Update local cache and swap ▶ back to ↑ in the table cell
@@ -1502,7 +1494,7 @@ async function handleReplaceFile(input) {
       },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closePlayer(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closePlayer(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1599,7 +1591,7 @@ async function handleSheetFile(input, sid) {
       },
       body: JSON.stringify({ filename: file.name, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1617,7 +1609,7 @@ async function handleSheetFile(input, sid) {
       },
       body: JSON.stringify({ publicUrl }),
     });
-    if (confirm.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
 
     if (song) { song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl }; }
@@ -1699,7 +1691,7 @@ async function confirmDeleteSheet() {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Could not remove sheet'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1749,7 +1741,7 @@ async function handleReplaceSheet(input) {
       },
       body: JSON.stringify({ filename: file.name, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closeSheet(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closeSheet(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1840,7 +1832,7 @@ async function handlePlaybackFile(input, sid) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -1855,7 +1847,7 @@ async function handlePlaybackFile(input, sid) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ publicUrl }),
     });
-    if (confirm.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
 
     if (song) { song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl }; }
@@ -1945,7 +1937,7 @@ async function confirmDeletePlayback() {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Could not remove playback file'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1992,7 +1984,7 @@ async function handleReplacePlayback(input) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closePlayback(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closePlayback(); return; }
     if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
 
     const { uploadUrl, publicUrl } = await r.json();
@@ -2189,7 +2181,7 @@ async function saveLyrics() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ lyrics_update_id: sid, lyrics: text }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); closeLyrics(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closeLyrics(); return; }
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       const msg = body.error ?? `Save failed (${r.status})`;
@@ -2257,7 +2249,7 @@ async function confirmDeleteLyrics() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
       body: JSON.stringify({ lyrics_delete_id: sid }),
     });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
+    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Could not delete lyrics'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
