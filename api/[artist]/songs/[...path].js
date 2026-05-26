@@ -402,6 +402,25 @@ module.exports = wrap(async function handler(req, res) {
     return MEDIA[action](req, res);
   }
 
+  // ── GET single song (used by stage view) ─────────────────────────────────
+  if (!action && req.method === 'GET') {
+    const band = await getArtist(slug);
+    if (!band) return res.status(404).json({ error: 'Band not found' });
+    const sql = getDb();
+    const [song] = await sql`
+      SELECT s.*,
+        g.iswc, g.gema_work_number, g.language AS gema_language
+      FROM songs s
+      LEFT JOIN LATERAL (
+        SELECT iswc, gema_work_number, language
+        FROM gema_works WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
+      ) g ON true
+      WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
+    `;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+    return res.json(song);
+  }
+
   // ── DELETE song ───────────────────────────────────────────────────────────
   if (!action) {
     if (req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });

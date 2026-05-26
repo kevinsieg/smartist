@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { getDb, getArtist, insertAuditLog, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
@@ -5,6 +6,7 @@ const { wrap } = require('../_handler');
 const { suggestLyricsWithAI } = require('../_ai');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
+const { createPresignedUrl } = require('../_r2');
 const logger = require('../_logger');
 
 module.exports = wrap(async function handler(req, res) {
@@ -42,7 +44,8 @@ module.exports = wrap(async function handler(req, res) {
     const viewMode = !req.headers.authorization;
     if (viewMode) {
       const { limit: rawLimit, offset } = parsePage(req);
-      const limit = Math.min(rawLimit, 20);
+      const limit = Math.min(rawLimit, 30);
+      const activeOnly = req.query.active !== '0';
       const rows = await sql`
         SELECT s.*,
           COUNT(DISTINCT ss.setlist_id)::int AS play_count,
@@ -60,6 +63,7 @@ module.exports = wrap(async function handler(req, res) {
           LIMIT 1
         ) g ON true
         WHERE s.artist_id = ${band.id} AND s.deleted = false
+          AND (${!activeOnly} OR s.active = true)
         GROUP BY s.id, g.iswc, g.gema_work_number, g.language
         ORDER BY s.title
         LIMIT ${limit} OFFSET ${offset}
@@ -222,6 +226,50 @@ module.exports = wrap(async function handler(req, res) {
 
     await sql`UPDATE songs SET extra = extra - 'lyrics' WHERE id = ${songId} AND artist_id = ${band.id}`;
     return res.json({ ok: true });
+  }
+
+  // ── POST upload presign (workaround: multi-segment POST /songs/:id/:type fails on Vercel) ──
+  if (req.method === 'POST' && req.body?.upload_presign_id != null) {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+
+    const songId = Number(req.body.upload_presign_id);
+    if (!Number.isInteger(songId) || songId <= 0)
+      return res.status(400).json({ error: 'Invalid song id' });
+
+    const MEDIA_CONFIGS = {
+      audio:    { keyPrefix: 'audio/',    maxBytes: 50*1024*1024, allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
+      sheet:    { keyPrefix: 'sheets/',   maxBytes: 20*1024*1024 },
+      playback: { keyPrefix: 'playback/', maxBytes: 50*1024*1024, allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
+    };
+    const config = MEDIA_CONFIGS[req.body.upload_type];
+    if (!config) return res.status(400).json({ error: 'upload_type must be audio, sheet, or playback' });
+
+    const { filename, contentType, size } = req.body;
+    if (!filename || typeof filename !== 'string')
+      return res.status(400).json({ error: 'filename required' });
+
+    const maxMB = config.maxBytes / 1024 / 1024;
+    if (config.allowedExts) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (!config.allowedExts.has(ext))
+        return res.status(400).json({ error: `Unsupported file type. Allowed: ${[...config.allowedExts].join(', ')}` });
+      if (!contentType || !String(contentType).startsWith(config.mimePrefix))
+        return res.status(400).json({ error: `contentType must be ${config.mimePrefix}*` });
+    } else {
+      if (!filename.toLowerCase().endsWith('.pdf'))
+        return res.status(400).json({ error: 'Only PDF files are allowed' });
+    }
+
+    if (!size || Number(size) > config.maxBytes)
+      return res.status(400).json({ error: `size required, max ${maxMB} MB` });
+
+    const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
+    const key = `${config.keyPrefix}${crypto.randomUUID()}-${safeName}`;
+    return res.json(await createPresignedUrl(key, config.allowedExts ? contentType : 'application/pdf'));
   }
 
   if (req.method === 'POST') {
