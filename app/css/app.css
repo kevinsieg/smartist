@@ -1517,9 +1517,30 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
 }
 .list-group-toggle { font-size: 0.65rem; color: var(--third-color); flex-shrink: 0; }
 
-/* Desktop-only action buttons — hidden on mobile via factory's desktopOnly flag */
+/* ── Songs list rows — base layout (all widths) ─────────────────────── */
+.songs-list-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer; transition: background 60ms; user-select: none;
+}
+.songs-list-row--inactive { opacity: 0.68; }
+.songs-list-row:hover { background: rgba(176,106,42,0.06); }
+.songs-list-row.lv-row--selected { background: var(--secondary-color); color: var(--secondary-ink); }
+.songs-list-row.lv-row--selected:hover { background: var(--secondary-color); }
+.songs-list-row-stack { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.songs-list-row-title { font-weight: 600; font-size: 0.9rem; color: #3d3830; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.songs-list-row-title--inactive { font-weight: normal; color: var(--third-color); }
+.songs-list-row-interpret { font-size: 0.76rem; color: var(--third-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.songs-list-row-icons { display: flex; gap: 0.15rem; flex-shrink: 0; }
+
+/* Desktop-only action buttons and secondary row columns */
 @media (max-width: 1024px) {
   .btn-desktop-only { display: none; }
+  .songs-list-row-genre,
+  .songs-list-row-key,
+  .songs-list-row-tempo { display: none; }
+  .filter-bar-row2 { display: none; }
 }
 
 /* ── Desktop: side panel as right drawer + songs list ───────────────── */
@@ -1549,25 +1570,11 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
   .filter-bar-row1 { padding: 0.6rem 1rem 0.5rem; }
   .filter-bar-field { min-width: 150px; }
 
-  .songs-list-row {
-    display: flex; align-items: center; gap: 0.75rem;
-    padding: 0.55rem 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    cursor: pointer; transition: background 60ms; user-select: none;
-  }
-  .songs-list-row--inactive { opacity: 0.68; }
-  .songs-list-row:hover { background: rgba(176,106,42,0.06); }
-  .songs-list-row.lv-row--selected { background: var(--secondary-color); color: var(--secondary-ink); }
-  .songs-list-row.lv-row--selected:hover { background: var(--secondary-color); }
-  .songs-list-row-stack { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-  .songs-list-row-title { font-weight: 600; font-size: 0.9rem; color: #3d3830; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .songs-list-row-title--inactive { font-weight: normal; color: var(--third-color); }
-  .songs-list-row-interpret { font-size: 0.76rem; color: var(--third-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .songs-list-row { gap: 0.75rem; }
   .songs-list-row-genre { font-size: 0.72rem; padding: 0.15rem 0.55rem; border-radius: 10px; background: var(--primary-color); color: var(--third-color); white-space: nowrap; flex-shrink: 0; }
   .songs-list-row-key,
   .songs-list-row-tempo { font-size: 0.76rem; color: var(--third-color); flex-shrink: 0; white-space: nowrap; }
   .songs-list-row-key   { min-width: 28px; }
   .songs-list-row-tempo { min-width: 60px; }
-  .songs-list-row-icons { display: flex; gap: 0.15rem; flex-shrink: 0; }
 }
 
