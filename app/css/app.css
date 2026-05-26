@@ -118,7 +118,10 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
     border-radius: 6px;
     text-decoration: none;
 }
-.nav-auth { display: flex; align-items: center; gap: 0.4rem; margin-left: auto; }
+.nav-auth {
+    display: flex; align-items: center; gap: 0.4rem;
+    margin-left: auto; flex-shrink: 0; position: relative; z-index: 2;
+}
 /* auth badge hidden on mobile to save space; shown on sm+ */
 .nav-auth-badge {
     display: none;

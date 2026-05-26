@@ -1,5 +1,27 @@
 // Shared utilities for all app pages
 
+const AUTH_TOKEN_KEY = 'smartist_token';
+
+function isLoginPage() {
+  var p = window.location.pathname.replace(/\/+$/, '') || '/';
+  return p === '/' || p === '/login';
+}
+
+function loginPageUrl() {
+  var next = window.location.pathname + window.location.search;
+  if (isLoginPage()) next = '/dashboard';
+  return '/login?next=' + encodeURIComponent(next);
+}
+
+function goToLogin(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem('setlist_token');
+  var url = loginPageUrl();
+  window.location.assign(url);
+}
+window.goToLogin = goToLogin;
+
 function getInitials(name) {
   if (!name) return '?';
   const words = name.trim().split(/\s+/);
@@ -262,8 +284,7 @@ function formatLength(mins) {
 // Fetch /api/config with stale-while-revalidate via sessionStorage.
 // First call waits for the network; subsequent calls within the same tab
 // return the cached response immediately and refresh the cache in the background.
-const _CONFIG_KEY    = 'artist_config_cache';
-const AUTH_TOKEN_KEY = 'smartist_token';
+const _CONFIG_KEY = 'artist_config_cache';
 
 function isViewMode() {
   return !sessionStorage.getItem(AUTH_TOKEN_KEY);
@@ -351,28 +372,20 @@ function applyNav(bandName, bandConfig) {
   updateAuthIndicator();
 }
 
-function loginPageUrl() {
-  var next = window.location.pathname + window.location.search;
-  return '/?next=' + encodeURIComponent(next);
-}
-
-function goToLogin() {
-  sessionStorage.removeItem(AUTH_TOKEN_KEY);
-  window.location.assign(loginPageUrl());
-}
-
 function updateAuthIndicator() {
   var el = document.getElementById('nav-auth');
   if (!el) return;
   var authed = !!sessionStorage.getItem(AUTH_TOKEN_KEY);
   var header = document.querySelector('.app-header');
   if (header) header.classList.toggle('app-header--authed', authed);
+  document.querySelectorAll('.app-logo').forEach(function(a) {
+    a.href = authed ? '/dashboard' : loginPageUrl();
+  });
   if (authed) {
     el.innerHTML = '<span class="nav-auth-badge">&#10004; logged in</span>' +
       '<button class="nav-auth-logout" onclick="doLogout()">logout</button>';
   } else {
-    var onLanding = window.location.pathname === '/' || window.location.pathname === '';
-    if (onLanding) {
+    if (isLoginPage()) {
       el.innerHTML = '';
     } else {
       el.innerHTML = '<a class="nav-auth-login nav-auth-login--vm go-login" href="' +
@@ -695,7 +708,7 @@ async function warmPage(href) {
 
 async function navigate(href) {
   var path = new URL(href, location.origin).pathname.replace(/\/+$/, '') || '/';
-  if (path === '/') {
+  if (path === '/' || path === '/login') {
     goToLogin();
     return;
   }
@@ -762,6 +775,7 @@ async function navigate(href) {
     document.querySelectorAll('.nav-links a').forEach(function(a) {
       a.classList.toggle('current', a.getAttribute('href').replace(/\/+$/, '') === path);
     });
+    if (typeof updateAuthIndicator === 'function') updateAuthIndicator();
 
   } catch {
     if (_navVersion === version) window.location.href = href;
