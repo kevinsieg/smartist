@@ -315,7 +315,7 @@ async function quickCreateOrganizer() {
 async function openAddModal() {
   editingId = null;
   document.getElementById('gig-modal-title').textContent = 'Add gig';
-  ['title', 'date', 'time-start', 'time-end', 'link', 'comment'].forEach(f => {
+  ['title', 'date', 'location', 'time-start', 'time-end', 'link', 'comment'].forEach(f => {
     const el = document.getElementById(`gm-${f}`); if (el) el.value = '';
   });
   document.getElementById('gm-type').value = '';
@@ -339,6 +339,7 @@ async function openEditModal(id) {
   document.getElementById('gm-title').value      = g.title || '';
   document.getElementById('gm-date').value       = g.date ? String(g.date).slice(0, 10) : '';
   document.getElementById('gm-type').value       = g.type || '';
+  document.getElementById('gm-location').value   = g.location || '';
   document.getElementById('gm-time-start').value = g.time_start || '';
   document.getElementById('gm-time-end').value   = g.time_end || '';
   document.getElementById('gm-link').value       = g.additional_link || '';
@@ -360,6 +361,7 @@ function closeGigModal() { closeModal('gig-modal'); }
 function expandGig(g) {
   var rows = [];
   if (g.venue_name)      rows.push(['Venue',     escHtml(g.venue_name)]);
+  if (!g.venue_name && g.location) rows.push(['Location', escHtml(g.location)]);
   if (g.organizer_name)  rows.push(['Organizer', escHtml(g.organizer_name)]);
   if (g.type)            rows.push(['Type',      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
   if (g.time_start)      rows.push(['Time',      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
@@ -424,8 +426,9 @@ async function saveGig() {
     organizer_id:    orgVal   ? Number(orgVal)   : null,
     time_start:      document.getElementById('gm-time-start').value || null,
     time_end:        document.getElementById('gm-time-end').value   || null,
-    additional_link: document.getElementById('gm-link').value.trim()    || null,
-    comment:         document.getElementById('gm-comment').value.trim() || null,
+    location:        document.getElementById('gm-location').value.trim()  || null,
+    additional_link: document.getElementById('gm-link').value.trim()      || null,
+    comment:         document.getElementById('gm-comment').value.trim()   || null,
   };
   setStatus('gm-status', 'Saving…');
   const url = editingId ? `/api/${artistSlug}/gigs/${editingId}` : `/api/${artistSlug}/gigs`;

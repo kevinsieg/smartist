@@ -40,6 +40,10 @@ module.exports = wrap(async function handler(req, res) {
     const name     = validateStr(body.name, 200);
     if (name     === false) return res.status(400).json({ error: 'name too long' });
     if (!name)              return res.status(400).json({ error: 'name is required' });
+    const street_number = validateStr(body.street_number, 20);
+    if (street_number === false) return res.status(400).json({ error: 'street_number too long' });
+    const street   = validateStr(body.street, 300);
+    if (street   === false) return res.status(400).json({ error: 'street too long' });
     const city     = validateStr(body.city, 200);
     if (city     === false) return res.status(400).json({ error: 'city too long' });
     const country  = validateStr(body.country, 100);
@@ -53,6 +57,8 @@ module.exports = wrap(async function handler(req, res) {
     const [updated] = await sql`
       UPDATE venues SET
         name = ${name},
+        street_number = ${street_number ?? venue.street_number},
+        street = ${street ?? venue.street},
         alive = ${body.alive ?? venue.alive},
         activated = ${body.activated ?? venue.activated},
         declined = ${body.declined ?? venue.declined},
@@ -100,7 +106,14 @@ module.exports = wrap(async function handler(req, res) {
     if (cascade?.includes('gigs')) {
       await sql`DELETE FROM gigs WHERE venue_id = ${id} AND artist_id = ${artist.id}`;
     }
-    await sql`DELETE FROM venues WHERE id = ${id} AND artist_id = ${artist.id}`;
+    try {
+      await sql`DELETE FROM venues WHERE id = ${id} AND artist_id = ${artist.id}`;
+    } catch (e) {
+      if (e.code === '23503') {
+        return res.status(409).json({ error: 'This venue is still linked to one or more gigs. Remove the venue from those gigs first, then delete.' });
+      }
+      throw e;
+    }
     return res.json({ deleted: true, hard: true });
   }
 

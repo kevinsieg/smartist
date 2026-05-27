@@ -52,7 +52,7 @@ Inserts:
 
 ## import_gigs.js — past gig importer
 
-Inserts historical gig data (sourced from salmons.fr/#live). Safe to re-run — skips gigs that already exist (matched by date + title). For each named venue a `venues` row is created (or reused if it already exists); private events store the city in `additional_text` instead.
+Inserts historical gig data (sourced from salmons.fr/#live — edit the hardcoded data array to adapt for another artist). Safe to re-run — skips gigs that already exist (matched by date + title). For each named venue a `venues` row is created (or reused if it already exists); private events store the city in `additional_text` instead.
 
 ```bash
 node scripts/import_gigs.js
@@ -60,10 +60,20 @@ node scripts/import_gigs.js
 
 ---
 
+## import_venues.js — bulk venue import
+
+Imports venues from a CSV file. Columns: `NOM LIEU, ADRESSE, CP, MAIL, TEL, REMARQUES`. Fuzzy duplicate detection prompts `[s]kip / [i]nsert / [m]erge` for each potential match.
+
+```bash
+node scripts/import_venues.js --artist <slug> venues.csv
+```
+
+---
+
 ## import_songs.js — bulk import
 
 ```bash
-node scripts/import_songs.js --band <slug> songs.json
+node scripts/import_songs.js --artist <slug> songs.json
 ```
 
 The JSON file must be an array of song objects. Only `title` is required; all other fields are optional:
