@@ -1295,6 +1295,30 @@ thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0
 }
 .sl-del-btn  { font-size: 0.75rem; padding: 0.2rem 0.5rem; color: #e55; border-color: #e55; }
 .sl-sets-btn { font-size: 0.75rem; padding: 0.2rem 0.4rem; display: inline-flex; align-items: center; justify-content: center; }
+.sl-row--expanded { background: #f0f4ff; border-color: var(--secondary-color); }
+.sl-edit-btn { font-size: 0.75rem; padding: 0.2rem 0.5rem; }
+.sl-expansion {
+    background: #fafafa;
+    border-left: 3px solid var(--secondary-color);
+    padding: 0.55rem 0.85rem;
+    font-size: 0.82rem;
+    margin-bottom: 2px;
+}
+.expansion-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--third-color);
+    margin-bottom: 0.35rem;
+}
+.expansion-songs { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.35rem; }
+.expansion-song-chip {
+    background: #efefef;
+    border-radius: 3px;
+    padding: 0.12rem 0.45rem;
+    font-size: 0.78rem;
+}
+.expansion-more-link { display: inline-block; margin-top: 0.4rem; font-size: 0.8rem; }
 
 /* ── Animations ──────────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
