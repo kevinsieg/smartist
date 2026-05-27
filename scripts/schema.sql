@@ -291,3 +291,10 @@ CREATE TABLE IF NOT EXISTS subscribers (
 -- Example:
 --   -- 2026-06-01: add public share token to setlists
 --   ALTER TABLE setlists ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE;
+
+-- 2026-05-27: add street address fields to venues
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS street_number TEXT;
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS street        TEXT;
+
+-- 2026-05-27: add free-text location to gigs for private/no-venue gigs
+ALTER TABLE gigs ADD COLUMN IF NOT EXISTS location TEXT;

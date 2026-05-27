@@ -5,10 +5,6 @@
     { "source": "/api/:artist/song-logs",      "destination": "/api/:artist/songs" },
     { "source": "/api/:artist/gema/import",    "destination": "/api/:artist/songs/gema-import" },
     { "source": "/api/:artist/export",         "destination": "/api/:artist/setlists/export" },
-    { "source": "/",            "has": [{ "type": "host", "value": "smartist.studio" }],     "destination": "/app/landing.html" },
-    { "source": "/",            "has": [{ "type": "host", "value": "www.smartist.studio" }], "destination": "/app/landing.html" },
-    { "source": "/robots.txt",  "has": [{ "type": "host", "value": "smartist.studio" }],     "destination": "/app/robots-studio.txt" },
-    { "source": "/sitemap.xml", "has": [{ "type": "host", "value": "smartist.studio" }],     "destination": "/app/sitemap-studio.xml" },
     { "source": "/login",             "destination": "/app/index.html" },
     { "source": "/",                "destination": "/app/index.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
@@ -40,10 +36,6 @@
     },
     {
       "source": "/(.*)",
-      "missing": [
-        { "type": "host", "value": "smartist.studio" },
-        { "type": "host", "value": "www.smartist.studio" }
-      ],
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]

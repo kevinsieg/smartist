@@ -36,20 +36,9 @@
       <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…">
       <select id="filter-status" class="filter-select">
         <option value="">All statuses</option>
-        <option value="Active">Active</option>
-        <option value="Prospect">Prospect</option>
-        <option value="Contacted">Contacted</option>
-        <option value="Confirmed">Confirmed</option>
-        <option value="Declined">Declined</option>
       </select>
       <select id="filter-category" class="filter-select">
         <option value="">All categories</option>
-        <option value="club">Club</option>
-        <option value="restaurant">Restaurant</option>
-        <option value="festival">Festival</option>
-        <option value="pub">Pub</option>
-        <option value="private">Private</option>
-        <option value="street">Street</option>
       </select>
     </div>
     <button class="btn active auth-action" id="venue-add-btn" onclick="openAddModal()">+ Add venue</button>
@@ -72,7 +61,18 @@
     <h2 id="venue-modal-title">Add venue</h2>
     <div class="modal-field">
       <label>Name *</label>
-      <input type="text" id="vm-name" placeholder="Venue name">
+      <input type="text" id="vm-name" placeholder="Venue name" oninput="checkVenueDuplicate()">
+      <div id="vm-dup-warning" style="display:none;font-size:0.8rem;color:#c80;margin-top:0.3rem;"></div>
+    </div>
+    <div class="modal-field" style="display:flex;gap:0.6rem;">
+      <div style="flex:0 0 80px;">
+        <label>No.</label>
+        <input type="text" id="vm-street-number" placeholder="63" style="width:100%;">
+      </div>
+      <div style="flex:1 1 auto;">
+        <label>Street</label>
+        <input type="text" id="vm-street" placeholder="Rue Grande" style="width:100%;">
+      </div>
     </div>
     <div class="modal-field" style="display:flex;gap:0.6rem;">
       <div style="flex:0 0 90px;">
@@ -92,22 +92,12 @@
       <label>Status</label>
       <select id="vm-status">
         <option value="">—</option>
-        <option value="prospect">Prospect</option>
-        <option value="contacted">Contacted</option>
-        <option value="confirmed">Confirmed</option>
-        <option value="declined">Declined</option>
       </select>
     </div>
     <div class="modal-field">
       <label>Category</label>
       <select id="vm-category">
         <option value="">—</option>
-        <option value="club">Club</option>
-        <option value="restaurant">Restaurant</option>
-        <option value="festival">Festival</option>
-        <option value="pub">Pub</option>
-        <option value="private">Private</option>
-        <option value="street">Street</option>
       </select>
     </div>
     <div class="modal-field">
