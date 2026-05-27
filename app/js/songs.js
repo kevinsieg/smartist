@@ -749,6 +749,12 @@ function _renderBulkEditTable() {
   document.getElementById('save-btn').addEventListener('click', saveAll);
   document.getElementById('discard-btn').addEventListener('click', discardAll);
   document.getElementById('add-btn').addEventListener('click', addRow);
+  document.getElementById('tbody').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    if (e.target.tagName === 'TEXTAREA') return; // let textarea handle Enter normally
+    e.preventDefault();
+    if (dirty.size > 0) saveAll();
+  });
   document.getElementById('filter-text').addEventListener('input', e => {
     filters.text = e.target.value.toLowerCase();
     applyFilter();
@@ -1398,6 +1404,7 @@ async function _panelUploadHandler(input, sid, mediaType) {
 
     setStatus('saved', 'File uploaded');
     setTimeout(function() { setStatus('', ''); }, 3000);
+    if (dirty.size > 0) saveAll();
   } catch {
     setStatus('error', 'Upload failed — check your connection');
   } finally {
@@ -1478,6 +1485,7 @@ async function handleAudioFile(input, sid) {
     }
     setStatus('saved', 'Audio uploaded');
     setTimeout(() => setStatus('', ''), 3000);
+    if (dirty.size > 0) saveAll();
   } catch {
     setStatus('error', 'Upload failed — check your connection');
   } finally {
@@ -1749,6 +1757,7 @@ async function handleSheetFile(input, sid) {
     }
     setStatus('saved', 'Sheet uploaded');
     setTimeout(() => setStatus('', ''), 3000);
+    if (dirty.size > 0) saveAll();
   } catch {
     setStatus('error', 'Upload failed — check your connection');
   } finally {
@@ -1988,6 +1997,7 @@ async function handlePlaybackFile(input, sid) {
     }
     setStatus('saved', 'Playback uploaded');
     setTimeout(() => setStatus('', ''), 3000);
+    if (dirty.size > 0) saveAll();
   } catch {
     setStatus('error', 'Upload failed — check your connection');
   } finally {
