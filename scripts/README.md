@@ -50,6 +50,16 @@ Inserts:
 
 ---
 
+## import_gigs.js — past gig importer
+
+Inserts historical gig data (sourced from salmons.fr/#live). Safe to re-run — skips gigs that already exist (matched by date + title). For each named venue a `venues` row is created (or reused if it already exists); private events store the city in `additional_text` instead.
+
+```bash
+node scripts/import_gigs.js
+```
+
+---
+
 ## import_songs.js — bulk import
 
 ```bash
