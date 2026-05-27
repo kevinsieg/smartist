@@ -469,10 +469,11 @@ module.exports = wrap(async function handler(req, res) {
     } else {
       const d = log.song_data;
       [song] = await sql`
-        INSERT INTO songs (artist_id, title, active, key, genre, tempo, length_min,
-                           interpret, reference_interpret, comment, extra)
-        VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.key ?? null},
-                ${d.genre ?? null}, ${d.tempo ?? null}, ${d.length_min ?? null},
+        INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
+                           length_min, interpret, reference_interpret, comment, extra)
+        VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.heart ?? false}, ${d.key ?? null},
+                ${d.genre ?? null}, ${d.energy ?? d.tempo ?? null}, ${d.time_signature ?? null},
+                ${d.length_min ?? null},
                 ${d.interpret ?? null}, ${d.reference_interpret ?? null},
                 ${d.comment ?? null}, ${d.extra ?? {}})
         RETURNING *

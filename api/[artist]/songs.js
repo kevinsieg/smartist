@@ -377,8 +377,9 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
     const band = await requireAuth(req, res, slug);
     if (!band) return;
-    const { title: rawTitle, active, key: rawKey, genre: rawCat, tempo: rawTempo,
-            bpm: rawBpm, length_min: rawLen, interpret: rawInterp, reference_interpret: rawRef,
+    const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
+            time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
+            interpret: rawInterp, reference_interpret: rawRef,
             comment: rawComment, extra } = req.body ?? {};
 
     const title = validateStr(rawTitle, 200);
@@ -388,8 +389,10 @@ module.exports = wrap(async function handler(req, res) {
     if (key === false) return res.status(400).json({ error: 'key too long' });
     const genre = validateStr(rawCat, 100);
     if (genre === false) return res.status(400).json({ error: 'genre too long' });
-    const tempo = validateStr(rawTempo, 50);
-    if (tempo === false) return res.status(400).json({ error: 'tempo too long' });
+    const energy = validateStr(rawEnergy, 50);
+    if (energy === false) return res.status(400).json({ error: 'energy too long' });
+    const time_signature = validateStr(rawTimeSig, 20);
+    if (time_signature === false) return res.status(400).json({ error: 'time_signature too long' });
     const bpm = validateNum(rawBpm);
     if (bpm === false) return res.status(400).json({ error: 'bpm must be a number' });
     const length_min = validateNum(rawLen);
@@ -402,10 +405,10 @@ module.exports = wrap(async function handler(req, res) {
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
 
     const [song] = await sql`
-      INSERT INTO songs (artist_id, title, active, key, genre, tempo, bpm, length_min,
-                         interpret, reference_interpret, comment, extra)
-      VALUES (${band.id}, ${title}, ${active ?? true}, ${key},
-              ${genre}, ${tempo}, ${bpm}, ${length_min},
+      INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
+                         bpm, length_min, interpret, reference_interpret, comment, extra)
+      VALUES (${band.id}, ${title}, ${active ?? true}, ${heart ?? false}, ${key},
+              ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
               ${interpret}, ${reference_interpret},
               ${comment}, ${extra ?? {}})
       RETURNING *
@@ -436,8 +439,10 @@ module.exports = wrap(async function handler(req, res) {
       if (key === false) continue;
       const genre = validateStr(update.genre, 100);
       if (genre === false) continue;
-      const tempo = validateStr(update.tempo, 50);
-      if (tempo === false) continue;
+      const energy = validateStr(update.energy, 50);
+      if (energy === false) continue;
+      const time_signature = validateStr(update.time_signature, 20);
+      if (time_signature === false) continue;
       const bpm = validateNum(update.bpm);
       if (bpm === false) continue;
       const length_min = validateNum(update.length_min);
@@ -453,9 +458,11 @@ module.exports = wrap(async function handler(req, res) {
         UPDATE songs SET
           title               = ${title},
           active              = ${update.active ?? true},
+          heart               = ${update.heart ?? false},
           key                 = ${key},
-          genre            = ${genre},
-          tempo               = ${tempo},
+          genre               = ${genre},
+          energy              = ${energy},
+          time_signature      = ${time_signature},
           bpm                 = ${bpm},
           length_min          = ${length_min},
           interpret           = ${interpret},

@@ -95,17 +95,18 @@ var activeFilters = new Map(); // field -> Set<value>
 
 function getFilteredSongs() {
   const activeOnly = document.getElementById('active-only')?.checked ?? true;
-  const tempoSet = getTempoSet();
+  const energySet = getEnergySet();
   return allSongs.filter(song => {
     if (activeOnly && !song.active) return false;
+    if (song.heart) return true;  // heart songs bypass all filters
     for (const [field, values] of activeFilters) {
       if (values.size === 0) continue;
       const v = getFieldValue(song, field);
       if (!values.has(v)) return false;
     }
-    if (tempoSet) {
-      const t = (song.tempo || '').toLowerCase();
-      if (t && !tempoSet.has(t)) return false;
+    if (energySet) {
+      const t = (song.energy || '').toLowerCase();
+      if (t && !energySet.has(t)) return false;
     }
     return true;
   });
@@ -131,11 +132,13 @@ function shuffleArray(arr) {
 }
 
 function generateSet(songs, targetMin) {
+  const heartSongs = songs.filter(s => s.heart);
+  const rest       = songs.filter(s => !s.heart);
   if (!targetMin || targetMin <= 0)
-    return [...songs].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  const shuffled = shuffleArray(songs);
-  const set = [];
-  let total = 0;
+    return [...heartSongs, ...rest].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  const shuffled = shuffleArray(rest);
+  const set = [...heartSongs];
+  let total = heartSongs.reduce((sum, s) => sum + (s.length_min || 4), 0);
   for (const song of shuffled) {
     if (total >= targetMin) break;
     set.push(song);
@@ -230,7 +233,7 @@ function getBaseSongs() {
   return activeOnly ? allSongs.filter(s => s.active) : allSongs;
 }
 
-var EXCLUDED_FILTER_FIELDS = new Set(['tempo', 'interpret', 'reference_interpret', 'comment', 'length_min']);
+var EXCLUDED_FILTER_FIELDS = new Set(['energy', 'interpret', 'reference_interpret', 'comment', 'length_min']);
 
 function refreshFilterOptions() {
   const base = getBaseSongs();
@@ -310,7 +313,7 @@ function renderControls() {
   refreshFilterOptions();
 }
 
-function getTempoSet() {
+function getEnergySet() {
   const v = Number(document.getElementById('tempo-slider')?.value ?? 50);
   if (v <= 15) return new Set(['slow']);
   if (v <= 35) return new Set(['slow', 'medium']);
@@ -361,7 +364,7 @@ function renderResult(songs) {
       s(song.extra?.lead || '',  'extra.lead',   'Lead vocalist / instrument'),
       s(song.key ? formatKey(song.key) : '',  'key',           'Key'),
       capoSpan,
-      s(song.tempo       || '',  'tempo',         'Tempo'),
+      s(song.energy       || '',  'energy',        'Energy'),
       s(song.genre       || '',  'genre',         'Genre'),
       song.extra?.harp ? s('harmonica', 'extra.harp', 'Harmonica needed') : '',
       song.extra?.git2 ? s('guitar 2',  'extra.git2', 'Second guitar') : '',
@@ -460,8 +463,8 @@ function onOptimize() {
 }
 
 function optimizeSetlist(songs) {
-  const tempoRank = { slow: 1, medium: 2, fast: 3 };
-  const rank = s => tempoRank[(s.tempo || '').toLowerCase()] ?? 2;
+  const energyRank = { slow: 1, medium: 2, fast: 3 };
+  const rank = s => energyRank[(s.energy || '').toLowerCase()] ?? 2;
 
   const buckets = {
     1: shuffleArray(songs.filter(s => rank(s) === 1)),
@@ -1318,7 +1321,7 @@ function _openSongPanel(setlistSid, songId) {
     return song[field];
   }
 
-  var defaultFields = ['key', 'genre', 'tempo', 'length_min', 'extra.lead', 'extra.banjoCapo', 'extra.gitCapo'];
+  var defaultFields = ['key', 'genre', 'energy', 'length_min', 'extra.lead', 'extra.banjoCapo', 'extra.gitCapo'];
   var shownFields = displayFields.length ? displayFields.map(function(f) { return f.field; }) : defaultFields;
   if (shownFields.indexOf('length_min') === -1) shownFields = shownFields.concat(['length_min']);
 
