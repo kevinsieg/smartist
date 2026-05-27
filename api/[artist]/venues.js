@@ -22,8 +22,10 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const { limit, offset } = parsePage(req);
-    const q = (req.query.q || '').trim();
-    const pattern = q ? `%${q}%` : null;
+    const q        = (req.query.q        || '').trim();
+    const status   = (req.query.status   || '').trim() || null;
+    const category = (req.query.category || '').trim() || null;
+    const pattern  = q ? `%${q}%` : null;
     const rows = await sql`
       SELECT *, COUNT(*) OVER() AS total
       FROM venues
@@ -33,6 +35,8 @@ module.exports = wrap(async function handler(req, res) {
           OR city     ILIKE ${pattern}
           OR country  ILIKE ${pattern}
           OR postcode ILIKE ${pattern})
+        AND (${status}::text   IS NULL OR status   ILIKE ${status})
+        AND (${category}::text IS NULL OR category ILIKE ${category})
       ORDER BY category = 'placeholder' DESC, deleted ASC, name ASC
       LIMIT ${limit} OFFSET ${offset}
     `;

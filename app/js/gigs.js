@@ -26,14 +26,15 @@ var GIG_COLUMNS = [
   { field: 'organizer_name', label: 'Organizer', width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
     if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>';
-    var setsBtn = '<button class="btn sl-sets-btn" title="View setlists"' +
-      ' onclick="event.stopPropagation();navigate(\'/setlist?view=history&gig=' + encodeURIComponent(g.title).replace(/'/g, '%27') + '\')">' +
+    var setsBtn = '<button class="btn sl-sets-btn" title="View setlists" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
       '</svg></button>';
     if (_viewMode) return setsBtn;
-    return '<button class="btn sl-edit-btn" onclick="event.stopPropagation();openEditModal(' + g.id + ')">Edit</button>' + setsBtn;
+    return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>' + setsBtn;
   }},
 ];
 
@@ -356,30 +357,54 @@ async function openEditModal(id) {
 
 function closeGigModal() { closeModal('gig-modal'); }
 
-async function expandGig(g) {
-  if (!_gigRefsCache[g.id]) {
+function expandGig(g) {
+  var rows = [];
+  if (g.venue_name)      rows.push(['Venue',     escHtml(g.venue_name)]);
+  if (g.organizer_name)  rows.push(['Organizer', escHtml(g.organizer_name)]);
+  if (g.type)            rows.push(['Type',      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
+  if (g.time_start)      rows.push(['Time',      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
+  if (g.additional_link) rows.push(['Link',      '<a href="' + escHtml(g.additional_link) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
+  if (g.comment)         rows.push(['Notes',     escHtml(g.comment)]);
+  if (g.additional_text) rows.push(['Info',      escHtml(g.additional_text)]);
+  if (!rows.length) return '<span style="color:var(--third-color);font-size:0.82rem;">No details on record.</span>';
+  return rows.map(function(r) {
+    return '<div class="expansion-row"><span class="expansion-label expansion-key">' + r[0] + '</span><span>' + r[1] + '</span></div>';
+  }).join('');
+}
+
+async function openGigSetlists(gigId) {
+  var titleEl = document.getElementById('sd-title');
+  var body    = document.getElementById('sd-body');
+  titleEl.textContent = 'Setlists';
+  body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">Loading…</span>';
+  openModal('setlist-detail-modal');
+  if (!_gigRefsCache[gigId]) {
     try {
-      const r = await fetch('/api/' + artistSlug + '/gigs/' + g.id + '?refs=1');
+      const r = await fetch('/api/' + artistSlug + '/gigs/' + gigId + '?refs=1');
       if (!r.ok) throw new Error(r.status);
-      _gigRefsCache[g.id] = await r.json();
+      _gigRefsCache[gigId] = await r.json();
     } catch {
-      return '<span style="color:#e55;font-size:0.82rem;">Could not load setlists.</span>';
+      body.innerHTML = '<span style="color:#e55;font-size:0.85rem;">Could not load setlists.</span>';
+      return;
     }
   }
-  const refs = _gigRefsCache[g.id].refs;
+  const refs = _gigRefsCache[gigId].refs;
   if (!refs.setlists.length) {
-    return '<span style="color:var(--third-color);font-size:0.82rem;">No setlists yet.</span>';
+    body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">No setlists yet.</span>';
+    return;
   }
-  return refs.setlists.map(function(s) {
+  var single = refs.setlists.length === 1;
+  if (single) titleEl.textContent = refs.setlists[0].title || 'Setlist';
+  body.innerHTML = refs.setlists.map(function(s) {
     var songs = (refs.setlistSongs || []).filter(function(ss) { return ss.setlist_id === s.id; });
-    var label = '<div class="expansion-label">' + escHtml(s.title || 'Setlist') + '</div>';
-    var chips = songs.length
-      ? '<div class="expansion-songs">' +
-          songs.map(function(ss) { return '<span class="expansion-song-chip">' + escHtml(ss.title) + '</span>'; }).join('') +
-          '</div>'
-      : '<span style="color:var(--third-color);font-size:0.82rem;">Empty setlist</span>';
-    return label + chips;
-  }).join('<div style="margin-top:0.5rem"></div>');
+    var hdr  = single ? '' : '<div class="expansion-label" style="margin:0.6rem 0 0.3rem;">' + escHtml(s.title || 'Setlist') + '</div>';
+    var list = songs.length
+      ? '<ol style="margin:0 0 0.5rem;padding-left:1.4rem;line-height:1.9;font-size:0.9rem;">' +
+          songs.map(function(ss) { return '<li>' + escHtml(ss.title) + '</li>'; }).join('') +
+          '</ol>'
+      : '<p style="color:var(--third-color);font-size:0.85rem;margin-bottom:0.5rem;">Empty setlist</p>';
+    return hdr + list;
+  }).join('');
 }
 
 function deleteGigFromPopup() {
@@ -450,14 +475,23 @@ async function renderGigRelated(gigId) {
 
 async function promptHardDelete(id) {
   hardDeleteId = id;
-  const r = await fetch(`/api/${artistSlug}/gigs/${id}?refs=1`);
-  const { refs } = await r.json();
-  const setlistCount = refs.setlists.length;
-  document.getElementById('hd-refs-msg').textContent = setlistCount > 0
-    ? `This gig has ${setlistCount} linked setlist(s).`
-    : 'This gig has no linked setlists.';
-  document.getElementById('hd-cascade-opts').innerHTML = setlistCount > 0
-    ? `<label><input type="checkbox" id="hd-cascade-setlists"> Also delete ${setlistCount} linked setlist(s)</label>`
+  if (!_gigRefsCache[id]) {
+    const r = await fetch(`/api/${artistSlug}/gigs/${id}?refs=1`);
+    _gigRefsCache[id] = await r.json();
+  }
+  const { refs } = _gigRefsCache[id];
+  const setlists = refs.setlists;
+  var msgEl = document.getElementById('hd-refs-msg');
+  if (setlists.length) {
+    msgEl.innerHTML = 'Linked setlists:' +
+      '<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
+      setlists.map(function(s) { return '<li>' + escHtml(s.title || 'Untitled setlist') + '</li>'; }).join('') +
+      '</ul>';
+  } else {
+    msgEl.textContent = 'No linked setlists.';
+  }
+  document.getElementById('hd-cascade-opts').innerHTML = setlists.length
+    ? '<label><input type="checkbox" id="hd-cascade-setlists"> Also delete ' + setlists.length + ' linked setlist(s)</label>'
     : '';
   setStatus('hd-status', '');
   openModal('hard-delete-modal');

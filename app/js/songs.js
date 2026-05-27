@@ -153,6 +153,7 @@ async function loadAndRender(viewMode) {
 var COLS = [
   { key: 'title',               label: 'title',              type: 'text',   cls: 'col-title',   width: 180 },
   { key: 'active',              label: 'active',             type: 'bool',   cls: 'col-active',  width: 48  },
+  { key: 'heart',               label: '♥',                  type: 'bool',   cls: 'col-heart',   width: 40, title: 'Favourite — always included in auto-generation' },
   { key: 'extra.listenUrl',    label: '▶',                  type: 'listen',   cls: 'col-listen',   width: 52, title: 'Listen — reference recording'  },
   { key: 'extra.sheetUrl',     label: '≡',                  type: 'sheet',    cls: 'col-sheet',    width: 52, title: 'Sheet — chords & lyrics PDF'   },
   { key: 'extra.playbackUrl',  label: '▷',                  type: 'playback', cls: 'col-playback', width: 52, title: 'Playback — backing track'       },
@@ -170,7 +171,8 @@ var COLS = [
   { key: 'extra.gitCapo',       label: 'gitCapo',            type: 'number', cls: 'col-kcapo',   width: 58  },
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
   { key: 'genre',            label: 'genre',           type: 'text',   cls: 'col-cat',     width: 100 },
-  { key: 'tempo',               label: 'tempo',              type: 'text',   cls: 'col-tempo',   width: 70  },
+  { key: 'energy',              label: 'energy',             type: 'text',   cls: 'col-energy',  width: 70  },
+  { key: 'time_signature',      label: 'time sig',           type: 'select', cls: 'col-timesig', width: 68, options: ['4/4', '3/4', '6/8', '5/4', '12/8'] },
   { key: 'bpm',                 label: 'bpm',                type: 'number', cls: 'col-bpm',     width: 55  },
   { key: 'length_min',          label: 'length',             type: 'time',   cls: 'col-len',     width: 68  },
   { key: 'extra.author',        label: 'author',             type: 'text',   cls: 'col-author',  width: 130 },
@@ -213,7 +215,7 @@ function getSavedWidths() {
   try { return JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || '{}'); } catch { return {}; }
 }
 
-var filters = { text: '', active: true, lead: '', genre: '', interpret: '', setlist: '' };
+var filters = { text: '', active: true, heart: false, lead: '', genre: '', interpret: '', setlist: '' };
 
 var _setlistFilterIds   = null;   // null = no filter; Set<songId>
 var _setlistFilterOrder = [];     // song IDs in setlist position order
@@ -224,6 +226,7 @@ var _songsView          = null;
 function getVisibleSongs() {
   var result = songs.filter(function(s) {
     if (filters.active    && !s.active) return false;
+    if (filters.heart     && !s.heart)  return false;
     if (filters.text      && !(s.title || '').toLowerCase().includes(filters.text)) return false;
     if (filters.lead      && !(s.extra?.lead || '').toLowerCase().includes(filters.lead)) return false;
     if (filters.genre     && !(s.genre || '').toLowerCase().includes(filters.genre)) return false;
@@ -285,6 +288,7 @@ function applyFilter() {
 var FILTER_COLS = {
   'title':      () => `<input type="text" id="filter-text" class="col-filter" placeholder="Search…" value="${escHtml(filters.text)}" autocomplete="off">`,
   'active':     () => `<input type="checkbox" id="filter-active" class="col-filter-check" title="Active only" ${filters.active ? 'checked' : ''}>`,
+  'heart':      () => `<input type="checkbox" id="filter-heart"  class="col-filter-check" title="Favourites only" ${filters.heart ? 'checked' : ''}>`,
   'extra.lead': () => `<input type="text" id="filter-lead" class="col-filter" placeholder="…" value="${escHtml(filters.lead)}" autocomplete="off">`,
   'genre':   () => `<input type="text" id="filter-cat" class="col-filter" placeholder="…" value="${escHtml(filters.genre)}" autocomplete="off">`,
 };
@@ -420,7 +424,8 @@ function _openSongPanelContent(item, panelEl) {
   if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; Sheet</button>';
 
   var key     = getVal(song, 'key');
-  var tempo   = getVal(song, 'tempo');
+  var energy  = getVal(song, 'energy');
+  var timeSig = getVal(song, 'time_signature');
   var bpm     = getVal(song, 'bpm');
   var len     = minsToTime(getVal(song, 'length_min'));
   var lead    = getVal(song, 'extra.lead');
@@ -430,7 +435,8 @@ function _openSongPanelContent(item, panelEl) {
   var harp    = getVal(song, 'extra.harp');
   var perfCells =
     (key     ? _vspCell('Key',        escHtml(String(key)))     : '') +
-    (tempo   ? _vspCell('Tempo',      escHtml(String(tempo)))   : '') +
+    (energy  ? _vspCell('Energy',     escHtml(String(energy)))  : '') +
+    (timeSig ? _vspCell('Time sig',   escHtml(String(timeSig))) : '') +
     (bpm     ? _vspCell('BPM',        escHtml(String(bpm)))     : '') +
     (len     ? _vspCell('Length',     escHtml(len))             : '') +
     (lead    ? _vspCell('Lead',       escHtml(String(lead)))    : '') +
@@ -517,8 +523,10 @@ function _openSongEditForm(sid, panelEl) {
 
   var title    = escHtml(getVal(song, 'title') || '');
   var active   = song.active ? ' checked' : '';
+  var heart    = song.heart  ? ' checked' : '';
   var genre    = escHtml(getVal(song, 'genre') || '');
-  var tempo    = escHtml(getVal(song, 'tempo') || '');
+  var energy   = escHtml(getVal(song, 'energy') || '');
+  var timeSig  = escHtml(getVal(song, 'time_signature') || '');
   var bpm      = escHtml(String(getVal(song, 'bpm') || ''));
   var length   = escHtml(minsToTime(getVal(song, 'length_min')));
   var key      = escHtml(getVal(song, 'key') || '');
@@ -567,8 +575,10 @@ function _openSongEditForm(sid, panelEl) {
         '<div class="edit-section-body">' +
           _editField('Title', '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="Song title">') +
           _editField('', '<div class="edit-toggle-row"><span>Active</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
+          _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; Favourite (always in auto-generation)</span></div>') +
           _editField('Genre', inp('genre', genre)) +
-          _editField('Tempo', inp('tempo', tempo)) +
+          _editField('Energy', inp('energy', energy)) +
+          _editField('Time signature', '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + ['4/4','3/4','6/8','5/4','12/8'].map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
           _editField('BPM', num('bpm', bpm)) +
           _editField('Length (MM:SS)', '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
         '</div>' +
@@ -763,6 +773,10 @@ function _renderBulkEditTable() {
     filters.active = e.target.checked;
     applyFilter();
   });
+  document.getElementById('filter-heart').addEventListener('change', e => {
+    filters.heart = e.target.checked;
+    applyFilter();
+  });
   document.getElementById('filter-lead').addEventListener('input', e => {
     filters.lead = e.target.value.toLowerCase();
     applyFilter();
@@ -801,7 +815,7 @@ function renderListRowHtml(s) {
   var interp    = escHtml(s.interpret || '');
   var genre     = escHtml(s.genre || '');
   var key       = escHtml(String(getVal(s, 'key') || ''));
-  var tempo     = escHtml(String(getVal(s, 'tempo') || ''));
+  var tempo     = escHtml(String(getVal(s, 'energy') || ''));
   var hasListen = !!getVal(s, 'extra.listenUrl');
   var hasLyrics = !!(String(getVal(s, 'extra.lyrics') || '').trim());
 

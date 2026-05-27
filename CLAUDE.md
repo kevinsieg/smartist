@@ -40,7 +40,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/setlist` | `app/js/setlist.js` |
 | `/setlist-history` | `app/js/setlist-history.js` |
 | `/songs` | `app/js/songs.js` |
-| `/gema-import` | `app/js/gema-import.js` |
+| `/pro-import` | `app/js/pro-import.js` |
 | `/gigs` | `app/js/gigs.js` |
 | `/venues` | `app/js/venues.js` |
 | `/organizers` | `app/js/organizers.js` |
@@ -69,7 +69,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `api/[artist]/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
 | `api/[artist]/setlists/[...path].js` | `GET/PUT /api/:artist/setlists/:id`; `GET /api/:artist/setlists/export` (via rewrite) |
 | `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite) |
-| `api/[artist]/songs/[...path].js` | `DELETE` / `restore` / `setlists` / `gema` / `lyrics` / `lyrics-suggest` / `audio` / `sheet` / `playback` / `gema-import` (via rewrite) |
+| `api/[artist]/songs/[...path].js` | `DELETE` / `restore` / `setlists` / `gema` / `lyrics` / `lyrics-suggest` / `audio` / `sheet` / `playback` / `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite) |
 | `api/[artist]/venues.js` | `GET/POST /api/:artist/venues` |
 | `api/[artist]/venues/[...path].js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
 

@@ -137,9 +137,11 @@ CREATE TABLE IF NOT EXISTS songs (
   artist_id           INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
   title               TEXT NOT NULL,
   active              BOOLEAN NOT NULL DEFAULT true,
+  heart               BOOLEAN NOT NULL DEFAULT false,  -- favourite; always included in auto-generation
   key                 TEXT,             -- musical key, e.g. "G", "Am"
   genre               TEXT,             -- genre or style grouping
-  tempo               TEXT,             -- descriptive tempo, e.g. "Slow", "Medium"
+  energy              TEXT,             -- descriptive energy level, e.g. "Slow", "Medium", "Fast"
+  time_signature      TEXT,             -- e.g. "4/4", "3/4", "6/8"
   bpm                 INTEGER,          -- beats per minute
   length_min          REAL,             -- duration in decimal minutes, e.g. 3.5 = 3:30
   interpret           TEXT,             -- main performer or band known for this song

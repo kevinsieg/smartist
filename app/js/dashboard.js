@@ -37,7 +37,7 @@ function renderDashboard(cfg, viewMode) {
         '<span class="dash-card-label">Organizers</span>' +
         '<span class="dash-card-count" id="dc-organizers">—</span>' +
       '</a>' +
-      '<a href="/gema-import" class="dash-card">' +
+      '<a href="/pro-import" class="dash-card">' +
         '<span class="dash-card-label">PRO</span>' +
         '<span class="dash-card-count--muted">GEMA · Suisa · …</span>' +
       '</a>' +
