@@ -20,8 +20,8 @@ var ORGANIZER_COLUMNS = [
   { field: 'email',   label: 'Email',   width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(o) {
     if (o.deleted) return '<span class="sl-deleted-badge">deleted</span>';
-    if (_viewMode) return '';
-    return '<button class="btn sl-del-btn" onclick="promptHardDelete(' + o.id + ')">Delete</button>';
+    if (_viewMode)  return '';
+    return '<button class="btn sl-edit-btn" onclick="event.stopPropagation();openEditModal(' + o.id + ')">Edit</button>';
   }},
 ];
 
@@ -35,7 +35,7 @@ initPage(async function(cfg, viewMode) {
     columns:       ORGANIZER_COLUMNS,
     defaultSort:   'name',
     rowClass:      o => o.deleted ? 'deleted' : '',
-    onRowClick:    function(o) { return !_viewMode && openEditModal(o.id); },
+    onExpand:      o => expandOrganizer(o),
     emptyHint:     'No organizers yet. Add one above.',
   });
 
@@ -134,6 +134,41 @@ var _orgRefsCache = {};
 
 function closeOrgModal() { delete _orgRefsCache[editingId]; closeModal('organizer-modal'); }
 
+async function expandOrganizer(o) {
+  if (!_orgRefsCache[o.id]) {
+    try {
+      const r = await fetch('/api/' + artistSlug + '/organizers/' + o.id + '?refs=1');
+      if (!r.ok) throw new Error(r.status);
+      _orgRefsCache[o.id] = await r.json();
+    } catch {
+      return '<span style="color:#e55;font-size:0.82rem;">Could not load gigs.</span>';
+    }
+  }
+  const refs = _orgRefsCache[o.id].refs;
+  if (!refs.gigs.length) {
+    return '<div class="expansion-label">Gigs organised</div>' +
+      '<span style="color:var(--third-color);font-size:0.82rem;">No gigs yet.</span>';
+  }
+  var n = refs.gigs.length;
+  var rows = refs.gigs.slice(0, 10).map(function(g) {
+    var venue = g.venue_name
+      ? ' <span style="color:var(--third-color)">@ ' + escHtml(g.venue_name) + (g.venue_city ? ', ' + escHtml(g.venue_city) : '') + '</span>'
+      : '';
+    return '<div style="padding:0.1rem 0;font-size:0.82rem;">' +
+      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      escHtml(g.title) + venue + '</div>';
+  }).join('');
+  var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?organizer=' +
+    encodeURIComponent(o.name) + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' by this organizer</a>';
+  return '<div class="expansion-label">Gigs organised</div>' + rows + link;
+}
+
+function deleteOrgFromPopup() {
+  var id = editingId;
+  closeOrgModal();
+  promptHardDelete(id);
+}
+
 async function renderOrganizerGigs(orgId, orgName) {
   const section = document.getElementById('om-gigs-section');
   const list    = document.getElementById('om-gigs-list');
@@ -190,12 +225,6 @@ async function saveOrganizer() {
   closeOrgModal();
   _orgsOffset = 0;
   await loadOrganizers();
-}
-
-async function softDeleteOrganizer() {
-  if (!editingId) return;
-  const r = await apiFetch(`/api/${artistSlug}/organizers/${editingId}`, 'DELETE', {});
-  if (r.ok) { closeOrgModal(); _orgsOffset = 0; await loadOrganizers(); }
 }
 
 async function promptHardDelete(id) {
