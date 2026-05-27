@@ -27,7 +27,7 @@ var GIG_COLUMNS = [
   { width: 'auto', actions: true, render: function(g) {
     if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>';
     var setsBtn = '<button class="btn sl-sets-btn" title="View setlists"' +
-      ' onclick="event.stopPropagation();navigate(\'/setlist?view=history&gig=' + encodeURIComponent(g.title) + '\')">' +
+      ' onclick="event.stopPropagation();navigate(\'/setlist?view=history&gig=' + encodeURIComponent(g.title).replace(/'/g, '%27') + '\')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
