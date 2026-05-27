@@ -3,6 +3,9 @@
 var _shareSlug      = null;
 var _shareSetlistId = null;
 
+var _SUN_ICON  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+var _MOON_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
 function escHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -16,13 +19,54 @@ function formatLength(min) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function _shareHtml() {
-  return `<button class="stage-share-btn" id="stage-share-btn" onclick="toggleStageShareMenu(event)" title="Share"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+function _shareHtml(navHtml) {
+  var light = document.body.classList.contains('stage-light');
+  return `<div class="stage-header-btns">
+    ${navHtml || ''}
+    <button class="stage-invert-btn" id="stage-invert-btn" onclick="toggleStageInvert()" title="${light ? 'Switch to dark mode' : 'Switch to light mode'}">${light ? _MOON_ICON : _SUN_ICON}</button>
+    <button class="stage-share-btn" id="stage-share-btn" onclick="toggleStageShareMenu(event)" title="Share"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
     <div class="stage-share-menu" id="stage-share-menu" style="display:none">
       <button class="stage-share-item" onclick="stageSharePrint()"><span class="stage-share-icon">⎙</span>Print / Export PDF</button>
       <button class="stage-share-item" onclick="stageShareCopyLink()"><span class="stage-share-icon">⧉</span><span id="stage-copy-label">Copy link</span></button>
       <button class="stage-share-item" onclick="stageShareEmail()"><span class="stage-share-icon">✉</span>Share via email</button>
-    </div>`;
+    </div>
+  </div>`;
+}
+
+function _navHtml(setlistId, songs, idx) {
+  var prevSong = idx > 0 ? songs[idx - 1] : null;
+  var nextSong = idx < songs.length - 1 ? songs[idx + 1] : null;
+  var listIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+  var prevIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="15 18 9 12 15 6"/></svg>';
+  var nextIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="9 18 15 12 9 6"/></svg>';
+  var backBtn = `<a class="stage-share-btn" href="/stage?id=${setlistId}" title="Back to setlist">${listIcon}</a>`;
+  var prevBtn = prevSong
+    ? `<a class="stage-share-btn" href="/stage?song=${prevSong.id}&from=${setlistId}" title="${escHtml(prevSong.title)}">${prevIcon}</a>`
+    : `<button class="stage-share-btn" disabled title="No previous song">${prevIcon}</button>`;
+  var nextBtn = nextSong
+    ? `<a class="stage-share-btn" href="/stage?song=${nextSong.id}&from=${setlistId}" title="${escHtml(nextSong.title)}">${nextIcon}</a>`
+    : `<button class="stage-share-btn" disabled title="No next song">${nextIcon}</button>`;
+  return `${backBtn}${prevBtn}${nextBtn}<span class="stage-nav-sep"></span>`;
+}
+
+function applyStageTheme(light) {
+  if (light) {
+    document.body.classList.add('stage-light');
+    localStorage.setItem('stage_light_mode', '1');
+  } else {
+    document.body.classList.remove('stage-light');
+    localStorage.removeItem('stage_light_mode');
+  }
+}
+
+function toggleStageInvert() {
+  var light = !document.body.classList.contains('stage-light');
+  applyStageTheme(light);
+  var btn = document.getElementById('stage-invert-btn');
+  if (btn) {
+    btn.title = light ? 'Switch to dark mode' : 'Switch to light mode';
+    btn.innerHTML = light ? _MOON_ICON : _SUN_ICON;
+  }
 }
 
 async function init() {
@@ -30,7 +74,16 @@ async function init() {
   const el     = document.getElementById('stage-content');
 
   try {
-    const cfg = await fetch('/api/config').then(r => { if (!r.ok) throw new Error(); return r.json(); });
+    // Start network fetch immediately, but use cached config if available so
+    // the slug is known synchronously and data fetches don't have to wait.
+    const cfgFetch = fetch('/api/config').then(r => { if (!r.ok) throw new Error(); return r.json(); });
+    var cfg;
+    try { cfg = JSON.parse(sessionStorage.getItem('artist_config_cache')) || await cfgFetch; }
+    catch { cfg = await cfgFetch; }
+    cfgFetch.then(function(fresh) {
+      try { sessionStorage.setItem('artist_config_cache', JSON.stringify(fresh)); } catch {}
+    }).catch(function() {});
+
     _shareSlug = cfg.slug;
 
     if (params.get('song')) {
@@ -55,6 +108,7 @@ async function initSetlist(params, el, cfg) {
     if (!r.ok) throw new Error('not found');
     return r.json();
   });
+  try { sessionStorage.setItem('stage_sl_' + setlistId, JSON.stringify(data)); } catch {}
 
   const songs = data.songs ?? [];
   const gigParts = [data.gig_name, data.gig_date ? String(data.gig_date).slice(0, 10) : null, data.gig_venue]
@@ -72,7 +126,7 @@ async function initSetlist(params, el, cfg) {
     const bjCapo  = song.extra && song.extra.banjoCapo != null ? song.extra.banjoCapo : null;
     return `<li class="stage-song">
       <span class="stage-num">${i + 1}.</span>
-      <span class="stage-song-title">${escHtml(song.title)}</span>
+      <a class="stage-song-title stage-song-link" href="/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
       ${song.key     ? `<span class="stage-key">${escHtml(song.key)}</span>`    : ''}
       ${gitCapo !== null ? `<span class="stage-capo">Git: ${gitCapo}</span>` : ''}
       ${bjCapo  !== null ? `<span class="stage-capo">Bj: ${bjCapo}</span>`   : ''}
@@ -95,15 +149,32 @@ async function initSetlist(params, el, cfg) {
 
 async function initSong(params, el, cfg) {
   const songId = Number(params.get('song'));
+  const fromId = Number(params.get('from'));
   if (!songId) {
     el.innerHTML = '<p class="stage-message">No song ID provided.</p>';
     return;
   }
 
-  const song = await fetch(`/api/${cfg.slug}/songs/${songId}`).then(r => {
-    if (!r.ok) throw new Error('not found');
-    return r.json();
-  });
+  var cachedSl = null;
+  if (fromId) {
+    try { cachedSl = JSON.parse(sessionStorage.getItem('stage_sl_' + fromId)); } catch {}
+  }
+  const [song, setlistData] = await Promise.all([
+    fetch(`/api/${cfg.slug}/songs/${songId}`).then(r => {
+      if (!r.ok) throw new Error('not found');
+      return r.json();
+    }),
+    cachedSl         ? Promise.resolve(cachedSl)
+      : fromId       ? fetch(`/api/${cfg.slug}/setlists/${fromId}`).then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
+  var navHtml = '';
+  if (setlistData) {
+    const navSongs = setlistData.songs ?? [];
+    const navIdx   = navSongs.findIndex(s => s.id === songId);
+    if (navIdx >= 0) navHtml = _navHtml(fromId, navSongs, navIdx);
+  }
 
   document.title = `${song.title} — ${cfg.name}`;
 
@@ -154,11 +225,11 @@ async function initSong(params, el, cfg) {
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
   el.innerHTML = `
-    <div class="stage-header">
+    <div class="stage-header"${navHtml ? ' style="padding-right:13rem"' : ''}>
       <div class="stage-band">${escHtml(cfg.name)}</div>
       <h1 class="stage-title">${escHtml(song.title)}</h1>
       ${subtitle}
-      ${_shareHtml()}
+      ${_shareHtml(navHtml)}
     </div>
     ${metaBadges ? `<div class="song-stage-meta">${metaBadges}</div>` : ''}
     ${recHtml}
@@ -172,6 +243,7 @@ async function initSong(params, el, cfg) {
   if (params.get('print') === '1') setTimeout(function() { window.print(); }, 400);
 }
 
+applyStageTheme(localStorage.getItem('stage_light_mode') === '1');
 init();
 
 // Scale root font-size before printing so all songs fit on one page.
