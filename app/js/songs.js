@@ -500,7 +500,7 @@ function _openSongPanelContent(item, panelEl) {
       if (!linkEl) return;
       if (!ids || !ids.length) { linkEl.textContent = 'Not in any setlist'; return; }
       var songTitle = song.title || '';
-      linkEl.innerHTML = '<a href="#" onclick="event.preventDefault();navigate(\'/setlist?view=history&song=' + encodeURIComponent(songTitle) + '\')" style="color:var(--secondary-ink)">&#8594; ' + ids.length + ' setlist' + (ids.length !== 1 ? 's' : '') + ' with this song</a>';
+      linkEl.innerHTML = '<a href="#" onclick="event.preventDefault();openAppearances(' + Number(sid) + ')" style="color:var(--secondary-ink)">&#8594; ' + ids.length + ' setlist' + (ids.length !== 1 ? 's' : '') + ' with this song</a>';
     })
     .catch(function() {
       var linkEl = document.getElementById('vsp-setlist-link');
@@ -1522,7 +1522,7 @@ function openPlayer(sid) {
 
   // Reset delete confirm state
   document.getElementById('player-delete-confirm').style.display = 'none';
-  document.getElementById('player-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('player-delete-btn').style.display = '';
   document.getElementById('player-history').innerHTML = '';
 
   // Fetch audio history for this song
@@ -1539,7 +1539,7 @@ function closePlayer() {
   document.getElementById('player-content').innerHTML = ''; // stops playback
   document.getElementById('player-history').innerHTML = '';
   document.getElementById('player-delete-confirm').style.display = 'none';
-  document.getElementById('player-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('player-delete-btn').style.display = '';
   currentPlayerSid = null;
 }
 
@@ -1550,7 +1550,7 @@ function showDeleteConfirm() {
 
 function cancelDeleteAudio() {
   document.getElementById('player-delete-confirm').style.display = 'none';
-  document.getElementById('player-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('player-delete-btn').style.display = '';
 }
 
 async function confirmDeleteAudio() {
@@ -1771,7 +1771,7 @@ function openSheet(sid) {
     `<div class="sheet-embed"><iframe src="${escHtml(url)}" title="Sheet"></iframe></div>`;
 
   document.getElementById('sheet-delete-confirm').style.display = 'none';
-  document.getElementById('sheet-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('sheet-delete-btn').style.display = '';
   document.getElementById('sheet-history').innerHTML = '';
 
   fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
@@ -1787,7 +1787,7 @@ function closeSheet() {
   document.getElementById('sheet-content').innerHTML = ''; // unload iframe
   document.getElementById('sheet-history').innerHTML = '';
   document.getElementById('sheet-delete-confirm').style.display = 'none';
-  document.getElementById('sheet-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('sheet-delete-btn').style.display = '';
   currentSheetSid = null;
 }
 
@@ -1798,7 +1798,7 @@ function showSheetDeleteConfirm() {
 
 function cancelDeleteSheet() {
   document.getElementById('sheet-delete-confirm').style.display = 'none';
-  document.getElementById('sheet-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('sheet-delete-btn').style.display = '';
 }
 
 async function confirmDeleteSheet() {
@@ -2017,7 +2017,7 @@ function openPlayback(sid) {
   }
 
   document.getElementById('playback-delete-confirm').style.display = 'none';
-  document.getElementById('playback-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('playback-delete-btn').style.display = '';
   document.getElementById('playback-history').innerHTML = '';
 
   fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
@@ -2033,7 +2033,7 @@ function closePlayback() {
   document.getElementById('playback-content').innerHTML = ''; // stops playback
   document.getElementById('playback-history').innerHTML = '';
   document.getElementById('playback-delete-confirm').style.display = 'none';
-  document.getElementById('playback-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('playback-delete-btn').style.display = '';
   currentPlaybackSid = null;
 }
 
@@ -2044,7 +2044,7 @@ function showPlaybackDeleteConfirm() {
 
 function cancelDeletePlayback() {
   document.getElementById('playback-delete-confirm').style.display = 'none';
-  document.getElementById('playback-delete-btn').style.display = '';
+  if (getToken()) document.getElementById('playback-delete-btn').style.display = '';
 }
 
 async function confirmDeletePlayback() {
