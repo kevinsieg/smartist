@@ -714,7 +714,9 @@ async function navigate(href) {
   }
 
   const version = ++_navVersion;
-  document.documentElement.style.opacity = '0';
+  // Fade out only the page content — nav and footer stay visible.
+  var _navFadeEl = document.querySelector('main') || document.documentElement;
+  _navFadeEl.style.opacity = '0';
 
   try {
     // Use cached HTML if available (populated by warmPage on hover/pointerdown),
@@ -748,9 +750,13 @@ async function navigate(href) {
       return !(el.tagName === 'SCRIPT' && (el.getAttribute('src') || '').includes('common.js'));
     });
 
-    // Insert content nodes
+    // Insert content nodes (new <main> starts invisible so we can fade it in)
     newNodes.forEach(function(el) {
-      if (el.tagName !== 'SCRIPT') document.body.insertBefore(el.cloneNode(true), footer);
+      if (el.tagName !== 'SCRIPT') {
+        var clone = el.cloneNode(true);
+        if (clone.tagName === 'MAIN') clone.style.opacity = '0';
+        document.body.insertBefore(clone, footer);
+      }
     });
 
     // Execute scripts sequentially (geo.js must run before page.js)
@@ -784,7 +790,8 @@ async function navigate(href) {
 
   if (_navVersion !== version) return;
   requestAnimationFrame(function() { requestAnimationFrame(function() {
-    document.documentElement.style.opacity = '1';
+    var fadeIn = document.querySelector('main') || document.documentElement;
+    fadeIn.style.opacity = '1';
   }); });
 }
 
