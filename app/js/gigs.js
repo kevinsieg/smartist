@@ -26,14 +26,14 @@ var GIG_COLUMNS = [
   { field: 'organizer_name', label: 'Organizer', width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
     if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>';
-    var setsBtn = '<button class="btn sl-sets-btn" title="View setlists" style="margin-left:0.35rem"' +
-      ' onclick="navigate(\'/setlist?view=history&gig=' + encodeURIComponent(g.title) + '\')">' +
+    var setsBtn = '<button class="btn sl-sets-btn" title="View setlists"' +
+      ' onclick="event.stopPropagation();navigate(\'/setlist?view=history&gig=' + encodeURIComponent(g.title) + '\')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
       '</svg></button>';
     if (_viewMode) return setsBtn;
-    return '<button class="btn sl-del-btn" onclick="promptHardDelete(' + g.id + ')">Delete</button>' + setsBtn;
+    return '<button class="btn sl-edit-btn" onclick="event.stopPropagation();openEditModal(' + g.id + ')">Edit</button>' + setsBtn;
   }},
 ];
 
@@ -49,7 +49,7 @@ initPage(async function(config, viewMode) {
     defaultSort:    'date',
     defaultSortDir: -1,
     rowClass:       function(g) { return g.deleted ? 'deleted' : ''; },
-    onRowClick:     function(g) { return !_viewMode && !g.deleted && openEditModal(g.id); },
+    onExpand:       function(g) { return expandGig(g); },
     emptyHint:      'No upcoming gigs.',
   });
 
@@ -61,7 +61,7 @@ initPage(async function(config, viewMode) {
     defaultSortDir:  -1,
     separateDeleted: true,
     rowClass:        function(g) { return g.deleted ? 'deleted' : ''; },
-    onRowClick:      function(g) { return !_viewMode && !g.deleted && openEditModal(g.id); },
+    onExpand:        function(g) { return expandGig(g); },
     emptyHint:       'No past gigs.',
   });
 
@@ -356,6 +356,38 @@ async function openEditModal(id) {
 
 function closeGigModal() { closeModal('gig-modal'); }
 
+async function expandGig(g) {
+  if (!_gigRefsCache[g.id]) {
+    try {
+      const r = await fetch('/api/' + artistSlug + '/gigs/' + g.id + '?refs=1');
+      if (!r.ok) throw new Error(r.status);
+      _gigRefsCache[g.id] = await r.json();
+    } catch {
+      return '<span style="color:#e55;font-size:0.82rem;">Could not load setlists.</span>';
+    }
+  }
+  const refs = _gigRefsCache[g.id].refs;
+  if (!refs.setlists.length) {
+    return '<span style="color:var(--third-color);font-size:0.82rem;">No setlists yet.</span>';
+  }
+  return refs.setlists.map(function(s) {
+    var songs = (refs.setlistSongs || []).filter(function(ss) { return ss.setlist_id === s.id; });
+    var label = '<div class="expansion-label">' + escHtml(s.title || 'Setlist') + '</div>';
+    var chips = songs.length
+      ? '<div class="expansion-songs">' +
+          songs.map(function(ss) { return '<span class="expansion-song-chip">' + escHtml(ss.title) + '</span>'; }).join('') +
+          '</div>'
+      : '<span style="color:var(--third-color);font-size:0.82rem;">Empty setlist</span>';
+    return label + chips;
+  }).join('<div style="margin-top:0.5rem"></div>');
+}
+
+function deleteGigFromPopup() {
+  var id = editingId;
+  closeGigModal();
+  promptHardDelete(id);
+}
+
 async function saveGig() {
   const venueVal = document.getElementById('gm-venue-id').value;
   const orgVal = document.getElementById('gm-organizer-id').value;
@@ -414,12 +446,6 @@ async function renderGigRelated(gigId) {
 
   content.innerHTML = venuePart + orgPart + setlistPart
     || '<span style="color:var(--third-color);font-size:0.82rem;">No related records.</span>';
-}
-
-async function softDeleteGig() {
-  if (!editingId) return;
-  const r = await apiFetch(`/api/${artistSlug}/gigs/${editingId}`, 'DELETE', {});
-  if (r.ok) { closeGigModal(); await loadGigs(); }
 }
 
 async function promptHardDelete(id) {
