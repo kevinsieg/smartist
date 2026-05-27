@@ -29,13 +29,23 @@ module.exports = wrap(async function handler(req, res) {
         WHERE gig_id = ${gigId} AND artist_id = ${artist.id}
         ORDER BY id DESC
       `;
-      const venue     = gig.venue_id
+      const venue = gig.venue_id
         ? (await sql`SELECT id, name, city FROM venues WHERE id = ${gig.venue_id} AND artist_id = ${artist.id}`)[0] ?? null
         : null;
       const organizer = gig.organizer_id
         ? (await sql`SELECT id, name, city FROM organizers WHERE id = ${gig.organizer_id} AND artist_id = ${artist.id}`)[0] ?? null
         : null;
-      return res.json({ gig, refs: { setlists, venue, organizer } });
+      const setlistIds = setlists.map(s => s.id);
+      const setlistSongs = setlistIds.length
+        ? await sql`
+            SELECT ss.setlist_id, ss.position, s.title
+            FROM setlist_songs ss
+            JOIN songs s ON s.id = ss.song_id
+            WHERE ss.setlist_id = ANY(${setlistIds}::int[])
+            ORDER BY ss.setlist_id, ss.position
+          `
+        : [];
+      return res.json({ gig, refs: { setlists, setlistSongs, venue, organizer } });
     }
     return res.json(gig);
   }
