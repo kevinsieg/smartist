@@ -1381,10 +1381,10 @@ async function _panelUploadHandler(input, sid, mediaType) {
     var put = await fetch(json.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
     if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
 
-    var confirm = await fetch('/api/' + artistSlug + '/songs/' + sid + '/' + mediaType, {
-      method: 'PUT',
+    var confirm = await fetch('/api/' + artistSlug + '/songs', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ publicUrl: json.publicUrl }),
+      body: JSON.stringify({ media_confirm_id: sid, media_type: mediaType, publicUrl: json.publicUrl }),
     });
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
 
@@ -1450,13 +1450,13 @@ async function handleAudioFile(input, sid) {
     // Confirm upload: save publicUrl to DB, delete previous file from R2 if any
     const song = songs.find(s => String(s.id) === String(sid));
 
-    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
-      method: 'PUT',
+    const confirm = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ publicUrl }),
+      body: JSON.stringify({ media_confirm_id: sid, media_type: 'audio', publicUrl }),
     });
     if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
@@ -1559,9 +1559,10 @@ async function confirmDeleteAudio() {
   closePlayer();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+    const r = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      body: JSON.stringify({ media_delete_id: sid, media_type: 'audio' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Could not remove audio file'); return; }
@@ -1624,13 +1625,13 @@ async function handleReplaceFile(input) {
 
     const song = songs.find(s => String(s.id) === String(sid));
 
-    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
-      method: 'PUT',
+    const confirm = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ publicUrl }),
+      body: JSON.stringify({ media_confirm_id: sid, media_type: 'audio', publicUrl }),
     });
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
 
@@ -1721,13 +1722,13 @@ async function handleSheetFile(input, sid) {
 
     const song = songs.find(s => String(s.id) === String(sid));
 
-    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
-      method: 'PUT',
+    const confirm = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ publicUrl }),
+      body: JSON.stringify({ media_confirm_id: sid, media_type: 'sheet', publicUrl }),
     });
     if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
@@ -1807,9 +1808,10 @@ async function confirmDeleteSheet() {
   closeSheet();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+    const r = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      body: JSON.stringify({ media_delete_id: sid, media_type: 'sheet' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Could not remove sheet'); return; }
@@ -1871,13 +1873,13 @@ async function handleReplaceSheet(input) {
 
     const song = songs.find(s => String(s.id) === String(sid));
 
-    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
-      method: 'PUT',
+    const confirm = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
       },
-      body: JSON.stringify({ publicUrl }),
+      body: JSON.stringify({ media_confirm_id: sid, media_type: 'sheet', publicUrl }),
     });
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
 
@@ -1962,10 +1964,10 @@ async function handlePlaybackFile(input, sid) {
 
     const song = songs.find(s => String(s.id) === String(sid));
 
-    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
-      method: 'PUT',
+    const confirm = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ publicUrl }),
+      body: JSON.stringify({ media_confirm_id: sid, media_type: 'playback', publicUrl }),
     });
     if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
@@ -2053,9 +2055,10 @@ async function confirmDeletePlayback() {
   closePlayback();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+    const r = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      body: JSON.stringify({ media_delete_id: sid, media_type: 'playback' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { setStatus('error', 'Could not remove playback file'); return; }
@@ -2114,10 +2117,10 @@ async function handleReplacePlayback(input) {
 
     const song = songs.find(s => String(s.id) === String(sid));
 
-    const confirm = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
-      method: 'PUT',
+    const confirm = await fetch(`/api/${artistSlug}/songs`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ publicUrl }),
+      body: JSON.stringify({ media_confirm_id: sid, media_type: 'playback', publicUrl }),
     });
     if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
 
