@@ -24,6 +24,7 @@
 /* ── Reset ──────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { transition: opacity 0.15s ease; }
+main { transition: opacity 0.15s ease; }
 html, body { height: 100%; }
 body {
     font-family: "Courier New", Courier, monospace;
