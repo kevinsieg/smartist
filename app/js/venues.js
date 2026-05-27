@@ -21,10 +21,10 @@ var VENUE_COLUMNS = [
   { field: 'status',  label: 'Status',   width: '90px',
     render: v => v.status ? `<span class="sl-badge">${escHtml(v.status)}</span>` : '' },
   { width: 'auto', actions: true, render: function(v) {
-    if (v.deleted)                          return '<span class="sl-deleted-badge">deleted</span>';
-    if (v.category === 'placeholder')       return '';
-    if (_viewMode)                          return '';
-    return '<button class="btn sl-del-btn" onclick="promptHardDelete(' + v.id + ')">Delete</button>';
+    if (v.deleted)                    return '<span class="sl-deleted-badge">deleted</span>';
+    if (v.category === 'placeholder') return '';
+    if (_viewMode)                    return '';
+    return '<button class="btn sl-edit-btn" onclick="event.stopPropagation();openEditModal(' + v.id + ')">Edit</button>';
   }},
 ];
 
@@ -38,7 +38,7 @@ initPage(async function(cfg, viewMode) {
     columns:        VENUE_COLUMNS,
     defaultSort:    'name',
     rowClass:       v => v.deleted ? 'deleted' : '',
-    onRowClick:     function(v) { return !_viewMode && openEditModal(v.id); },
+    onExpand:       v => expandVenue(v),
     emptyHint:      'No venues yet. Add one above.',
   });
 
@@ -47,7 +47,7 @@ initPage(async function(cfg, viewMode) {
     columns:     VENUE_COLUMNS,
     defaultSort: 'name',
     rowClass:    v => v.deleted ? 'deleted' : '',
-    onRowClick:  function(v) { return !_viewMode && openEditModal(v.id); },
+    onExpand:    v => expandVenue(v),
     emptyHint:   'None.',
   });
 
@@ -150,6 +150,38 @@ function closeVenueModal() { delete _venueRefsCache[editingId]; closeModal('venu
 
 var _venueRefsCache = {};
 
+async function expandVenue(v) {
+  if (!_venueRefsCache[v.id]) {
+    try {
+      const r = await fetch('/api/' + artistSlug + '/venues/' + v.id + '?refs=1');
+      if (!r.ok) throw new Error(r.status);
+      _venueRefsCache[v.id] = await r.json();
+    } catch {
+      return '<span style="color:#e55;font-size:0.82rem;">Could not load gigs.</span>';
+    }
+  }
+  const refs = _venueRefsCache[v.id].refs;
+  if (!refs.gigs.length) {
+    return '<div class="expansion-label">Gigs at this venue</div>' +
+      '<span style="color:var(--third-color);font-size:0.82rem;">No gigs yet.</span>';
+  }
+  var n = refs.gigs.length;
+  var rows = refs.gigs.slice(0, 10).map(function(g) {
+    return '<div style="padding:0.1rem 0;font-size:0.82rem;">' +
+      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      escHtml(g.title) + '</div>';
+  }).join('');
+  var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?venue=' +
+    encodeURIComponent(v.name) + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue</a>';
+  return '<div class="expansion-label">Gigs at this venue</div>' + rows + link;
+}
+
+function deleteVenueFromPopup() {
+  var id = editingId;
+  closeVenueModal();
+  promptHardDelete(id);
+}
+
 async function saveVenue() {
   const body = {
     name:          document.getElementById('vm-name').value.trim(),
@@ -208,12 +240,6 @@ async function renderVenueGigs(venueId, venueName) {
     'onclick="event.preventDefault();closeVenueModal();navigate(\'/gigs?venue=' + encodeURIComponent(venueName) + '\')">' +
     '→ All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue' +
   '</a>';
-}
-
-async function softDeleteVenue() {
-  if (!editingId) return;
-  const r = await apiFetch(`/api/${artistSlug}/venues/${editingId}`, 'DELETE', {});
-  if (r.ok) { closeVenueModal(); _venuesOffset = 0; await loadVenues(); }
 }
 
 async function promptHardDelete(id) {
