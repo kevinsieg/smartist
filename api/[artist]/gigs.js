@@ -34,15 +34,17 @@ module.exports = wrap(async function handler(req, res) {
     const title = validateStr(body.title, 200);
     if (title === false) return res.status(400).json({ error: 'title too long' });
     if (!title) return res.status(400).json({ error: 'title is required' });
-    const comment = validateStr(body.comment, 2000);
-    if (comment === false) return res.status(400).json({ error: 'comment too long' });
+    const comment  = validateStr(body.comment, 2000);
+    if (comment  === false) return res.status(400).json({ error: 'comment too long' });
+    const location = validateStr(body.location, 200);
+    if (location === false) return res.status(400).json({ error: 'location too long' });
     const [gig] = await sql`
-      INSERT INTO gigs (artist_id, title, date, venue_id, organizer_id, type, time_start, time_end, additional_link, additional_text, comment)
+      INSERT INTO gigs (artist_id, title, date, venue_id, organizer_id, type, time_start, time_end, additional_link, additional_text, comment, location)
       VALUES (
         ${artist.id}, ${title}, ${body.date ?? null},
         ${body.venue_id ?? null}, ${body.organizer_id ?? null},
         ${body.type ?? null}, ${body.time_start ?? null}, ${body.time_end ?? null},
-        ${body.additional_link ?? null}, ${body.additional_text ?? null}, ${comment ?? null}
+        ${body.additional_link ?? null}, ${body.additional_text ?? null}, ${comment ?? null}, ${location ?? null}
       )
       RETURNING *
     `;

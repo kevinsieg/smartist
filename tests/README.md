@@ -34,7 +34,7 @@ node tests/history-client.js
 | `tests/unit/r2.js` | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 | `tests/unit/lyrics.js` | `api/_lyrics.js` | `LYRICS_SOURCES`, `plainFromSynced` |
 | `tests/unit/ratelimit.js` | `api/_ratelimit.js` | `clientIp`, `isMissingRateLimitTable` |
-| `tests/unit/gema.js` | `api/[artist]/gema/import.js` | CSV parsers, GEMA normalizers |
+| `tests/unit/gema.js` | `api/[artist]/songs/[...path].js` | CSV parsers, GEMA normalizers (gema import is merged into the songs catch-all) |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
 | `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
