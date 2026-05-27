@@ -20,9 +20,11 @@ module.exports = wrap(async function handler(req, res) {
     if (!org) return res.status(404).json({ error: 'Organizer not found' });
     if (req.query.refs) {
       const gigs = await sql`
-        SELECT id, title, date FROM gigs
-        WHERE organizer_id = ${id} AND artist_id = ${artist.id} AND deleted = false
-        ORDER BY date DESC NULLS LAST
+        SELECT g.id, g.title, g.date, v.name AS venue_name, v.city AS venue_city
+        FROM gigs g
+        LEFT JOIN venues v ON v.id = g.venue_id
+        WHERE g.organizer_id = ${id} AND g.artist_id = ${artist.id} AND g.deleted = false
+        ORDER BY g.date DESC NULLS LAST
       `;
       return res.json({ organizer: org, refs: { gigs } });
     }
