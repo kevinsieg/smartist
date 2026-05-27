@@ -50,7 +50,7 @@
         .stage-header {
             margin-bottom: 2.5rem;
             padding-bottom: 1.25rem;
-            padding-right: 3rem;
+            padding-right: 5rem;
             border-bottom: 1px solid rgba(249,191,143,0.18);
             position: relative;
         }
@@ -75,6 +75,15 @@
             font-size: clamp(1.4rem, 4.5vw, 2rem);
             font-weight: 300;
             line-height: 1.2;
+        }
+        a.stage-song-link {
+            color: inherit;
+            text-decoration: none;
+        }
+        a.stage-song-link:hover {
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 4px;
         }
         .stage-key {
             font-size: 0.88rem;
@@ -112,8 +121,32 @@
             .stage-song { gap: 0.75rem; }
         }
         @page { margin: 1.5cm; }
+        /* Light mode */
+        body.stage-light {
+            --s-bg:     #f5f2ee;
+            --s-text:   #1c1714;
+            --s-muted:  #7a6e64;
+            --s-accent: #8a5820;
+        }
+        body.stage-light .stage-song { border-bottom-color: rgba(0,0,0,0.08); }
+        body.stage-light .stage-header { border-bottom-color: rgba(138,88,32,0.2); }
+        body.stage-light .stage-key { background: rgba(138,88,32,0.1); border-color: rgba(138,88,32,0.28); }
+        body.stage-light .stage-capo { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); }
+        body.stage-light .song-stage-section { border-top-color: rgba(138,88,32,0.14); }
+        body.stage-light .song-stage-link { border-bottom-color: rgba(138,88,32,0.32); }
+        body.stage-light .stage-share-btn,
+        body.stage-light .stage-invert-btn { border-color: rgba(28,23,20,0.35); }
+        body.stage-light .stage-nav-sep { background: rgba(28,23,20,0.18); }
+        body.stage-light .stage-share-menu { background: #e8e2d9; border-color: rgba(0,0,0,0.1); box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+        body.stage-light .stage-share-item { border-bottom-color: rgba(0,0,0,0.07); }
+        body.stage-light .stage-share-item:hover { background: rgba(0,0,0,0.05); }
+        body.stage-light .stage-modal-overlay { background: rgba(0,0,0,0.45); }
+        body.stage-light .stage-modal { background: #e8e2d9; border-color: rgba(0,0,0,0.1); }
+        body.stage-light .stage-modal-input { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.14); }
+        body.stage-light .stage-modal-action-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); }
+
         @media print {
-            .stage-share-btn, .stage-share-menu, .stage-modal-overlay { display: none !important; }
+            .stage-header-btns, .stage-share-menu, .stage-modal-overlay { display: none !important; }
             html, body { background: #fff !important; color: #111 !important; }
             .stage-wrap { padding: 1rem 1.5rem !important; max-width: none !important; }
             .stage-band { color: #666 !important; opacity: 1 !important; margin-bottom: 0.3rem !important; }
@@ -123,7 +156,7 @@
                 border-bottom-color: #bbb !important;
                 margin-bottom: 1rem !important;
                 padding-bottom: 0.6rem !important;
-                padding-right: 0 !important;
+                padding-right: 0 !important; /* .stage-header-btns hidden */
             }
             .stage-song { padding: 0.35rem 0 !important; border-bottom-color: #e0e0e0 !important; }
             .stage-num { color: #999 !important; opacity: 1 !important; font-size: 0.75rem !important; min-width: 1.8rem !important; }
@@ -133,10 +166,16 @@
             .stage-total { color: #888 !important; margin-top: 0.5rem !important; font-size: 0.75rem !important; }
         }
 
-        /* Share button — sits inside .stage-header (position:relative) */
-        .stage-share-btn {
+        /* Header buttons — sits inside .stage-header (position:relative) */
+        .stage-header-btns {
             position: absolute;
             top: 0; right: 0;
+            display: flex;
+            gap: 0.4rem;
+            align-items: flex-start;
+        }
+        .stage-share-btn,
+        .stage-invert-btn {
             background: transparent;
             border: 1.5px solid rgba(240,237,232,0.4);
             color: var(--s-text);
@@ -149,11 +188,22 @@
             align-items: center;
             justify-content: center;
             transition: border-color 0.1s, background 0.06s;
+            text-decoration: none;
         }
-        .stage-share-btn:hover { background: var(--s-text); color: var(--s-bg); border-color: var(--s-text); }
+        .stage-share-btn:hover,
+        .stage-invert-btn:hover { background: var(--s-text); color: var(--s-bg); border-color: var(--s-text); }
+        .stage-share-btn[disabled] { opacity: 0.28; cursor: default; pointer-events: none; }
+        .stage-nav-sep {
+            display: inline-block;
+            width: 1px;
+            height: 1.4rem;
+            background: rgba(240,237,232,0.2);
+            align-self: center;
+            margin: 0 0.1rem;
+        }
         .stage-share-menu {
             position: absolute;
-            top: 2.1rem; right: 0;
+            top: 2.5rem; right: 0;
             background: #1e1e1e;
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 8px;
