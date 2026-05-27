@@ -20,7 +20,7 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug);
     if (!band) return;
     const sql = getDb();
-    const [songs, gigs, setlists, setlist_songs] = await Promise.all([
+    const [songs, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs] = await Promise.all([
       sql`SELECT * FROM songs WHERE artist_id = ${band.id} ORDER BY id`,
       sql`SELECT * FROM gigs WHERE artist_id = ${band.id} ORDER BY id`,
       sql`SELECT * FROM setlists WHERE artist_id = ${band.id} ORDER BY id`,
@@ -30,12 +30,22 @@ module.exports = wrap(async function handler(req, res) {
         WHERE s.artist_id = ${band.id}
         ORDER BY ss.setlist_id, ss.position
       `,
+      sql`SELECT * FROM venues WHERE artist_id = ${band.id} ORDER BY id`,
+      sql`SELECT * FROM organizers WHERE artist_id = ${band.id} ORDER BY id`,
+      sql`SELECT * FROM gema_works WHERE artist_id = ${band.id} ORDER BY id`,
+      sql`
+        SELECT r.* FROM gema_rightholders r
+        JOIN gema_works gw ON gw.id = r.gema_work_id
+        WHERE gw.artist_id = ${band.id}
+        ORDER BY r.gema_work_id, r.id
+      `,
+      sql`SELECT * FROM song_logs WHERE artist_id = ${band.id} ORDER BY id`,
     ]);
     const date = new Date().toISOString().slice(0, 10);
     const safeSlug = String(slug ?? 'artist').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'artist';
     res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}-export-${date}.json"`);
     res.setHeader('Content-Type', 'application/json');
-    return res.json({ artist: { slug: band.slug, name: band.name }, songs, gigs, setlists, setlist_songs });
+    return res.json({ artist: { slug: band.slug, name: band.name }, songs, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs });
   }
 
   const setlistId = Number(rawId);
@@ -58,7 +68,7 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const [setlist] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
       LEFT JOIN venues v ON v.id = g.venue_id
@@ -107,7 +117,7 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const [updated] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue,
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
              COUNT(ss.song_id)::int AS song_count
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
@@ -154,7 +164,7 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const [created] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue,
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
              COUNT(ss.song_id)::int AS song_count
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
@@ -174,7 +184,7 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
 
     const [setlist] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
+      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
       FROM setlists s
       LEFT JOIN gigs g ON s.gig_id = g.id
       LEFT JOIN venues v ON v.id = g.venue_id

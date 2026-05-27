@@ -51,6 +51,10 @@ module.exports = wrap(async function handler(req, res) {
     const name     = validateStr(b.name, 200);
     if (name === false) return res.status(400).json({ error: 'name too long' });
     if (!name)          return res.status(400).json({ error: 'name is required' });
+    const street_number = validateStr(b.street_number, 20);
+    if (street_number === false) return res.status(400).json({ error: 'street_number too long' });
+    const street   = validateStr(b.street, 300);
+    if (street   === false) return res.status(400).json({ error: 'street too long' });
     const city     = validateStr(b.city, 200);
     if (city     === false) return res.status(400).json({ error: 'city too long' });
     const country  = validateStr(b.country, 100);
@@ -62,8 +66,8 @@ module.exports = wrap(async function handler(req, res) {
     const comment  = validateStr(b.comment, 2000);
     if (comment  === false) return res.status(400).json({ error: 'comment too long' });
     const [venue] = await sql`
-      INSERT INTO venues (artist_id, name, city, country, category, status, comment)
-      VALUES (${artist.id}, ${name}, ${city}, ${country}, ${category}, ${status}, ${comment})
+      INSERT INTO venues (artist_id, name, street_number, street, city, country, category, status, comment)
+      VALUES (${artist.id}, ${name}, ${street_number}, ${street}, ${city}, ${country}, ${category}, ${status}, ${comment})
       RETURNING *
     `;
     return res.status(201).json(venue);

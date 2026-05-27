@@ -44,10 +44,6 @@ Song catalogue, setlist, gigs and venues management for musicians. Runs as a Ver
 | Cloudflare R2 | one bucket (production) | Production file storage |
 | Cloudflare R2 | one bucket (development) | Development file storage |
 
-### TODO
-
-- [ ] Create a [Resend](https://resend.com) account and add `RESEND_API_KEY` to Vercel env vars — needed to forward impressum contact form submissions and send demo access confirmations. Wire up `api/_email.js` (already implemented, just needs the key and a verified sending domain `@smartist.studio`).
-
 ---
 
 ## Environments
@@ -144,7 +140,7 @@ Vercel will deploy the Preview environment. Copy the stable preview URL (`smarti
 ### 6. Run locally
 
 ```bash
-vercel env pull .env.local   # pulls Preview vars into .env.local (used directly by scripts)
+vercel env pull .env.local   # pulls Preview vars — copy values into .env (vercel dev reads .env, not .env.local)
 vercel dev                   # starts local server on port 3000
 ```
 
@@ -197,7 +193,9 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 |-------|---------|
 | `artists` | Slug, name, bcrypt password hash, UI config (JSONB) |
 | `songs` | Catalogue — standard fields + `extra` JSONB; soft-delete via `deleted` flag |
-| `gigs` | Performance events (name, date, venue) |
+| `venues` | CRM venue directory — soft-delete, linked to gigs via FK |
+| `organizers` | CRM organizer/promoter directory — soft-delete, linked to gigs via FK |
+| `gigs` | Performance events linked to venues and organizers |
 | `setlists` | Saved setlists, optionally linked to a gig |
 | `setlist_songs` | Junction: setlist ↔ songs with position ordering |
 | `song_logs` | Append-only audit log — full JSON snapshot per change |
@@ -216,17 +214,33 @@ All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <toke
 | POST | `/api/:artist/auth` | — | Verify password, get token |
 | POST | `/api/:artist/request-reset` | — | Send magic login link by email |
 | GET | `/api/:artist/songs` | — | Songs with play stats and GEMA data |
-| POST | `/api/:artist/songs` | ✓ | Create song |
+| POST | `/api/:artist/songs` | ✓ | Create song; also handles lyrics save/delete and media upload via body fields |
 | PATCH | `/api/:artist/songs` | ✓ | Batch update songs |
+| GET | `/api/:artist/songs/:id` | — | Single song (used by stage view) |
 | DELETE | `/api/:artist/songs/:id` | ✓ | Soft-delete song |
 | POST | `/api/:artist/songs/:id/restore` | ✓ | Restore from audit log |
+| GET | `/api/:artist/songs/:id/setlists` | — | Setlists that include this song |
+| GET | `/api/:artist/songs/:id/gema` | — | GEMA works + rightholders for this song |
 | GET | `/api/:artist/setlists` | — | List setlists with song count |
-| POST | `/api/:artist/setlists` | ✓ | Create setlist (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
+| POST | `/api/:artist/setlists` | ✓ | Create (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
 | GET | `/api/:artist/setlists/:id` | — | Setlist detail with ordered songs |
 | PUT | `/api/:artist/setlists/:id` | ✓ | Update metadata + song list |
-| GET | `/api/:artist/gigs` | — | List gigs |
+| GET | `/api/:artist/gigs` | — | List gigs with venue and organizer names |
 | POST | `/api/:artist/gigs` | ✓ | Create gig |
-| GET | `/api/:artist/export` | ✓ | Full data export as JSON |
+| GET | `/api/:artist/gigs/:id` | — | Single gig; add `?refs` for linked setlists, venue, organizer |
+| PUT | `/api/:artist/gigs/:id` | ✓ | Update gig |
+| DELETE | `/api/:artist/gigs/:id` | ✓ | Soft-delete or hard-delete gig |
+| GET | `/api/:artist/venues` | — | List venues (paginated, filterable) |
+| POST | `/api/:artist/venues` | ✓ | Create venue |
+| GET | `/api/:artist/venues/:id` | — | Single venue; add `?refs` for linked gigs |
+| PUT | `/api/:artist/venues/:id` | ✓ | Update venue |
+| DELETE | `/api/:artist/venues/:id` | ✓ | Soft-delete or hard-delete venue |
+| GET | `/api/:artist/organizers` | — | List organizers (paginated, filterable) |
+| POST | `/api/:artist/organizers` | ✓ | Create organizer |
+| GET | `/api/:artist/organizers/:id` | — | Single organizer; add `?refs` for linked gigs |
+| PUT | `/api/:artist/organizers/:id` | ✓ | Update organizer |
+| DELETE | `/api/:artist/organizers/:id` | ✓ | Soft-delete or hard-delete organizer |
+| GET | `/api/:artist/export` | ✓ | Full data export as JSON (all 9 artist-scoped tables) |
 
 ---
 
@@ -236,8 +250,10 @@ See [scripts/README.md](scripts/README.md) for usage details.
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/setup.js` | Interactive wizard: schema + band creation + field config |
+| `scripts/setup.js` | Interactive wizard: schema + artist creation + field config |
 | `scripts/seed.js` | Populate the dev database with test data (wipe + reseed with `--force`) |
-| `scripts/import_songs.js` | Bulk-import songs from a JSON file |
+| `scripts/import_songs.js` | Bulk-import songs from a JSON file (`--artist <slug>`) |
+| `scripts/import_venues.js` | Bulk-import venues from a CSV file (`--artist <slug>`) |
+| `scripts/import_gigs.js` | Import historical gig data (band-one.example source — adapt for other artists) |
 | `scripts/import_gema.js` | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/schema.sql` | Raw schema — apply directly with `psql` if preferred |

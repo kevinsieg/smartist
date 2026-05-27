@@ -61,8 +61,10 @@ module.exports = wrap(async function handler(req, res) {
     const title = validateStr(body.title, 200);
     if (title === false) return res.status(400).json({ error: 'title too long' });
     if (!title) return res.status(400).json({ error: 'title required' });
-    const comment = validateStr(body.comment, 2000);
-    if (comment === false) return res.status(400).json({ error: 'comment too long' });
+    const comment  = validateStr(body.comment, 2000);
+    if (comment  === false) return res.status(400).json({ error: 'comment too long' });
+    const location = validateStr(body.location, 200);
+    if (location === false) return res.status(400).json({ error: 'location too long' });
     const [updated] = await sql`
       UPDATE gigs SET
         title = ${title}, date = ${body.date || null},
@@ -74,6 +76,7 @@ module.exports = wrap(async function handler(req, res) {
         additional_link = ${body.additional_link ?? gig.additional_link},
         additional_text = ${body.additional_text ?? gig.additional_text},
         comment = ${comment ?? gig.comment},
+        location = ${location ?? gig.location},
         last_updated = NOW()
       WHERE id = ${gigId} AND artist_id = ${artist.id}
       RETURNING *
@@ -91,7 +94,7 @@ module.exports = wrap(async function handler(req, res) {
       return res.json(updated);
     }
     if (cascade?.includes('setlists')) {
-      await sql`DELETE FROM setlists WHERE gig_id = ${gigId}`;
+      await sql`DELETE FROM setlists WHERE gig_id = ${gigId} AND artist_id = ${artist.id}`;
     }
     await sql`DELETE FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
     return res.json({ deleted: true, hard: true });

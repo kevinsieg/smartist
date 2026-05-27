@@ -1,3 +1,173 @@
+var VENUE_STATUSES = [
+  { value: 'prospect',  label: 'Prospect' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'active',    label: 'Active' },
+  { value: 'declined',  label: 'Declined' },
+];
+
+var VENUE_CATEGORIES = [
+  { value: 'club',        label: 'Club' },
+  { value: 'restaurant',  label: 'Restaurant' },
+  { value: 'festival',    label: 'Festival' },
+  { value: 'pub',         label: 'Pub' },
+  { value: 'private',     label: 'Private' },
+  { value: 'street',      label: 'Street' },
+  { value: 'placeholder', label: 'Placeholder' },
+];
+
+function populateSelects() {
+  function fill(id, items) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    items.forEach(function(c) {
+      el.insertAdjacentHTML('beforeend', '<option value="' + c.value + '">' + c.label + '</option>');
+    });
+  }
+  fill('filter-status',   VENUE_STATUSES);
+  fill('filter-category', VENUE_CATEGORIES);
+  fill('vm-status',       VENUE_STATUSES);
+  fill('vm-category',     VENUE_CATEGORIES);
+}
+
+// ── Duplicate detection ────────────────────────────────────────────────────
+
+function _venueNormName(s) {
+  return s.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function _sortWords(s) {
+  return s.split(' ').filter(Boolean).sort().join(' ');
+}
+
+function _levenshtein(a, b) {
+  var m = a.length, n = b.length;
+  var dp = [];
+  for (var i = 0; i <= m; i++) { dp[i] = [i]; }
+  for (var j = 0; j <= n; j++) { dp[0][j] = j; }
+  for (var i = 1; i <= m; i++)
+    for (var j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+// Soundex: English/French phonetic encoding. "Smith"/"Smyth"→S530, "Jon"/"John"→J500.
+function _soundex(word) {
+  var TABLE = {b:1,f:1,p:1,v:1, c:2,g:2,j:2,k:2,q:2,s:2,x:2,z:2, d:3,t:3, l:4, m:5,n:5, r:6};
+  var s = word.replace(/[^a-z]/g, '');
+  if (!s) return '';
+  var code = s[0].toUpperCase(), prev = TABLE[s[0]] || 0;
+  for (var i = 1; i < s.length && code.length < 4; i++) {
+    var c = TABLE[s[i]];
+    if (c && c !== prev) code += c;
+    if (s[i] !== 'h' && s[i] !== 'w') prev = c || 0;
+  }
+  while (code.length < 4) code += '0';
+  return code;
+}
+
+// Cologne Phonetics (Kölner Phonetik): designed for German.
+// "Meyer"/"Meier"→07, "Schmidt"/"Schmitt"→863, "Müller"/"Mueller"→657.
+function _cologne(word) {
+  var s = word.toUpperCase()
+    .replace(/Ä/g,'A').replace(/Ö/g,'O').replace(/Ü/g,'U')
+    .replace(/ß/g,'SS').replace(/[^A-Z]/g,'');
+  if (!s) return '';
+  var raw = [];
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i], prev = s[i-1] || '', next = s[i+1] || '', c;
+    switch (ch) {
+      case 'A': case 'E': case 'I': case 'J': case 'O': case 'U': case 'Y': c = '0'; break;
+      case 'H':  c = '';  break;
+      case 'B':  c = '1'; break;
+      case 'P':  c = next === 'H' ? '3' : '1'; break;
+      case 'D': case 'T': c = 'CSZ'.indexOf(next) >= 0 ? '8' : '2'; break;
+      case 'F': case 'V': case 'W': c = '3'; break;
+      case 'G': case 'K': case 'Q': c = '4'; break;
+      case 'C':
+        if (i === 0) c = 'AHKLOQRUX'.indexOf(next) >= 0 ? '4' : '8';
+        else if ('SZ'.indexOf(prev) >= 0) c = '8';
+        else c = 'AHKOQUX'.indexOf(next) >= 0 ? '4' : '8';
+        break;
+      case 'X':  c = 'CKQ'.indexOf(prev) >= 0 ? '8' : '48'; break;
+      case 'L':  c = '5'; break;
+      case 'M': case 'N': c = '6'; break;
+      case 'R':  c = '7'; break;
+      case 'S': case 'Z': c = '8'; break;
+      default:   c = '';
+    }
+    if (c) { for (var k = 0; k < c.length; k++) raw.push(c[k]); }
+  }
+  return raw
+    .filter(function(c, i) { return c !== raw[i - 1]; })
+    .filter(function(c, i) { return i === 0 || c !== '0'; })
+    .join('');
+}
+
+// Articles/prepositions that carry no disambiguation value.
+var _STOP = {
+  le:1,la:1,les:1,de:1,du:1,des:1,au:1,aux:1,l:1,d:1,et:1,en:1,a:1,  // French
+  the:1,at:1,of:1,                                                       // English
+  der:1,die:1,das:1,dem:1,den:1,am:1,an:1,im:1,in:1,von:1,vor:1,       // German
+  zu:1,zum:1,zur:1,bei:1,
+};
+
+// Returns Soundex key (EN/FR) and Cologne key (DE). Matching on either counts.
+function _phoneticKeys(normed) {
+  var words = normed.split(' ').filter(function(w) { return w.length > 1 && !_STOP[w]; });
+  if (!words.length) return { sdx: '', col: '' };
+  return {
+    sdx: words.map(_soundex).sort().join(' '),
+    col: words.map(_cologne).sort().join(' '),
+  };
+}
+
+function _venuesSimilar(na, nb) {
+  if (!na || !nb) return false;
+  var maxLen = Math.max(na.length, nb.length);
+  var sa = _sortWords(na), sb = _sortWords(nb);
+  var ka = _phoneticKeys(na), kb = _phoneticKeys(nb);
+  return na === nb
+    || sa === sb                               // same words, different order
+    || (ka.sdx && ka.sdx === kb.sdx)           // Soundex match (EN/FR)
+    || (ka.col && ka.col === kb.col)           // Cologne match (DE)
+    || na.includes(nb) || nb.includes(na)
+    || _levenshtein(na, nb) / maxLen < 0.25
+    || _levenshtein(sa, sb) / maxLen < 0.25;
+}
+
+function findVenueDuplicate(name, excludeId) {
+  var na = _venueNormName(name);
+  if (!na) return null;
+  return allVenues.find(function(v) {
+    if (v.deleted || v.id === excludeId) return false;
+    return _venuesSimilar(na, _venueNormName(v.name));
+  }) || null;
+}
+
+var _dupCheckTimer = null;
+
+function checkVenueDuplicate() {
+  clearTimeout(_dupCheckTimer);
+  _dupCheckTimer = setTimeout(function() {
+    var name  = document.getElementById('vm-name').value.trim();
+    var msgEl = document.getElementById('vm-dup-warning');
+    if (!msgEl) return;
+    var match = name.length > 1 ? findVenueDuplicate(name, editingId) : null;
+    if (match) {
+      msgEl.innerHTML = 'Possible duplicate: <strong>' + escHtml(match.name) + '</strong>'
+        + (match.city ? ' (' + escHtml(match.city) + ')' : '')
+        + ' — <a href="#" onclick="event.preventDefault();closeVenueModal();openEditModal(' + match.id + ')">open</a>';
+      msgEl.style.display = '';
+    } else {
+      msgEl.style.display = 'none';
+    }
+  }, 300);
+}
+
 var artistSlug = '';
 var allVenues = [];
 var editingId = null;
@@ -33,6 +203,7 @@ var VENUE_COLUMNS = [
 ];
 
 initPage(async function(cfg, viewMode) {
+  populateSelects();
   _viewMode = viewMode;
   artistSlug = cfg.slug;
 
@@ -139,13 +310,14 @@ function updateVenuesFooter() {
 function openAddModal() {
   editingId = null;
   document.getElementById('venue-modal-title').textContent = 'Add venue';
-  ['name','postcode','city','country','category','email','website','comment'].forEach(f => {
+  ['name','street-number','street','postcode','city','country','category','email','website','comment'].forEach(f => {
     const el = document.getElementById(`vm-${f}`); if (el) el.value = '';
   });
   document.getElementById('vm-status').value = '';
   document.getElementById('vm-size').value   = '';
   document.getElementById('vm-delete-btn').style.display = 'none';
   document.getElementById('vm-gigs-section').style.display = 'none';
+  document.getElementById('vm-dup-warning').style.display = 'none';
   setStatus('vm-status-msg', '');
   openModal('venue-modal');
 }
@@ -155,10 +327,12 @@ function openEditModal(id) {
   if (!v) return;
   editingId = id;
   document.getElementById('venue-modal-title').textContent = 'Edit venue';
-  document.getElementById('vm-name').value     = v.name          || '';
-  document.getElementById('vm-postcode').value = v.postcode      || '';
-  document.getElementById('vm-city').value     = v.city          || '';
-  document.getElementById('vm-country').value  = v.country       || '';
+  document.getElementById('vm-name').value          = v.name          || '';
+  document.getElementById('vm-street-number').value = v.street_number || '';
+  document.getElementById('vm-street').value         = v.street        || '';
+  document.getElementById('vm-postcode').value       = v.postcode      || '';
+  document.getElementById('vm-city').value           = v.city          || '';
+  document.getElementById('vm-country').value        = v.country       || '';
   document.getElementById('vm-status').value   = v.status        || '';
   document.getElementById('vm-category').value = v.category      || '';
   document.getElementById('vm-email').value    = v.generic_email || '';
@@ -166,6 +340,7 @@ function openEditModal(id) {
   document.getElementById('vm-size').value     = v.size          || '';
   document.getElementById('vm-comment').value  = v.comment       || '';
   document.getElementById('vm-delete-btn').style.display = v.deleted ? 'none' : '';
+  document.getElementById('vm-dup-warning').style.display = 'none';
   setStatus('vm-status-msg', '');
   renderVenueGigs(id, v.name);
   openModal('venue-modal');
@@ -210,9 +385,11 @@ function deleteVenueFromPopup() {
 async function saveVenue() {
   const body = {
     name:          document.getElementById('vm-name').value.trim(),
-    postcode:      document.getElementById('vm-postcode').value.trim() || null,
-    city:          document.getElementById('vm-city').value.trim()     || null,
-    country:       document.getElementById('vm-country').value.trim()  || null,
+    street_number: document.getElementById('vm-street-number').value.trim() || null,
+    street:        document.getElementById('vm-street').value.trim()         || null,
+    postcode:      document.getElementById('vm-postcode').value.trim()       || null,
+    city:          document.getElementById('vm-city').value.trim()           || null,
+    country:       document.getElementById('vm-country').value.trim()        || null,
     status:        document.getElementById('vm-status').value          || null,
     category:      document.getElementById('vm-category').value.trim() || null,
     generic_email: document.getElementById('vm-email').value.trim()    || null,

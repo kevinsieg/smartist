@@ -47,13 +47,13 @@ function getInitials(name) {
         '<span class="band-name"></span>' +
       '</a>' +
       '<div class="nav-links">' +
+        '<a href="/songs">Songs</a>' +
         '<a href="/setlist">Setlists</a>' +
         '<a href="/gigs">Gigs</a>' +
         '<a href="/venues">Venues</a>' +
         '<a href="/organizers">Organizers</a>' +
-        '<a href="/songs">Songs</a>' +
-        '<a href="/pro-import">PRO</a>' +
         '<a href="/hub">Hub</a>' +
+        '<a href="/pro-import">PRO</a>' +
         '<a href="/profile">Profile</a>' +
       '</div>' +
       '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">' +

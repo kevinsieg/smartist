@@ -383,6 +383,61 @@ Full `artists.config` shape:
 
 ---
 
+## Tenant lifecycle
+
+### Export all data for one artist
+
+`GET /api/:artist/setlists/export` (requires auth) returns a single JSON file containing every artist-scoped table:
+
+```
+{
+  artist:            { slug, name }
+  songs:             [ …all rows including deleted ]
+  gigs:              [ … ]
+  setlists:          [ … ]
+  setlist_songs:     [ … ]
+  venues:            [ …all rows including deleted ]
+  organizers:        [ …all rows including deleted ]
+  gema_works:        [ … ]
+  gema_rightholders: [ … ]
+  song_logs:         [ … ]
+}
+```
+
+`subscribers` and `rate_limits` are global (not artist-scoped) and are excluded.
+
+R2 file assets (audio, sheet PDFs, playback) are referenced by URL in `songs.extra` fields (`listenUrl`, `sheetUrl`, `playbackUrl`) but are not included in the download. To export files, download each URL separately or use the Cloudflare R2 dashboard to download the bucket.
+
+---
+
+### Delete all data for one artist
+
+All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. However, `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order.
+
+**Safe deletion sequence — always use this pattern:**
+
+```sql
+BEGIN;
+
+-- Nullify the RESTRICT FKs on gigs first so venues/organizers can cascade freely.
+UPDATE gigs
+SET venue_id = NULL, organizer_id = NULL
+WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
+
+-- Single delete cascades to all nine artist-scoped tables automatically:
+--   venues, organizers, gigs, songs, setlists, song_logs,
+--   gema_works → gema_rightholders, setlist_songs (via setlists)
+DELETE FROM artists WHERE slug = 'yourslug';
+
+COMMIT;
+```
+
+Run this against the correct DB branch (main for production, dev for preview). After the transaction completes, remove any R2 files manually using the Cloudflare dashboard or `wrangler r2 object delete`.
+
+In a shared-DB multi-tenant setup, this leaves all other artists' data completely untouched.
+
+---
+
 ## Common query patterns
 
 **Songs with GEMA data** — used by `GET /api/config` (public config response):
