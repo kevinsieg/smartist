@@ -6,7 +6,7 @@ const { wrap } = require('../_handler');
 const { suggestLyricsWithAI } = require('../_ai');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
-const { createPresignedUrl } = require('../_r2');
+const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
 const logger = require('../_logger');
 
 module.exports = wrap(async function handler(req, res) {
@@ -248,7 +248,95 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true });
   }
 
-  // ── POST upload presign (workaround: multi-segment POST /songs/:id/:type fails on Vercel) ──
+  // ── POST upload presign / confirm / delete (workaround: multi-segment PUT/DELETE to
+  //    /songs/:id/:type fails on Vercel catch-alls in dynamic dirs) ────────────────────────
+  // Shared config for all three media handlers below.
+  // eslint-disable-next-line no-inner-declarations
+  const MEDIA_CONFIGS = {
+    audio:    { keyPrefix: 'audio/',    extraKey: 'listenUrl',   maxBytes: 50*1024*1024, actionPrefix: 'audio',    allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
+    sheet:    { keyPrefix: 'sheets/',   extraKey: 'sheetUrl',    maxBytes: 20*1024*1024, actionPrefix: 'sheet',    mimePrefix: 'application/pdf' },
+    playback: { keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50*1024*1024, actionPrefix: 'playback', allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
+  };
+
+  // Confirm upload: save publicUrl to DB, verify file exists in R2, delete previous file.
+  if (req.method === 'POST' && req.body?.media_confirm_id != null) {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+
+    const songId = Number(req.body.media_confirm_id);
+    if (!Number.isInteger(songId) || songId <= 0)
+      return res.status(400).json({ error: 'Invalid song id' });
+
+    const config = MEDIA_CONFIGS[req.body.media_type];
+    if (!config) return res.status(400).json({ error: 'media_type must be audio, sheet, or playback' });
+
+    const { publicUrl } = req.body;
+    if (!publicUrl || typeof publicUrl !== 'string')
+      return res.status(400).json({ error: 'publicUrl required' });
+
+    const base = process.env.R2_PUBLIC_URL;
+    if (!base || !publicUrl.startsWith(`${base}/${config.keyPrefix}`))
+      return res.status(400).json({ error: 'Invalid publicUrl' });
+
+    const head = await verifyUpload(keyFromUrl(publicUrl));
+    if (!head) return res.status(400).json({ error: 'Uploaded file not found in storage' });
+    if (!head.contentType.startsWith(config.mimePrefix)) {
+      await deleteFromR2(publicUrl);
+      return res.status(400).json({ error: `Uploaded file content type does not match ${config.mimePrefix}` });
+    }
+    if (head.size > config.maxBytes) {
+      await deleteFromR2(publicUrl);
+      return res.status(400).json({ error: `Uploaded file exceeds ${config.maxBytes / 1024 / 1024} MB` });
+    }
+
+    const [song] = await sql`SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+
+    const previousUrl = song.extra?.[config.extraKey] ?? null;
+    const newExtra = { ...(song.extra ?? {}), [config.extraKey]: publicUrl };
+    const [updated] = await sql`UPDATE songs SET extra = ${newExtra} WHERE id = ${songId} AND artist_id = ${band.id} RETURNING *`;
+
+    if (previousUrl && previousUrl !== publicUrl) {
+      await deleteFromR2(previousUrl);
+      await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_replace`, {
+        previousFilename: filenameFromUrl(previousUrl),
+        newFilename:      filenameFromUrl(publicUrl),
+        replacedAt:       new Date().toISOString(),
+      });
+    } else {
+      await insertAuditLog(sql, band.id, songId, 'update', updated);
+    }
+    return res.json({ ok: true, publicUrl });
+  }
+
+  // Delete media file from R2 and clear the DB field.
+  if (req.method === 'POST' && req.body?.media_delete_id != null) {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+
+    const songId = Number(req.body.media_delete_id);
+    if (!Number.isInteger(songId) || songId <= 0)
+      return res.status(400).json({ error: 'Invalid song id' });
+
+    const config = MEDIA_CONFIGS[req.body.media_type];
+    if (!config) return res.status(400).json({ error: 'media_type must be audio, sheet, or playback' });
+
+    const [song] = await sql`SELECT extra FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+
+    const url = song.extra?.[config.extraKey];
+    if (url) {
+      await deleteFromR2(url);
+      await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
+        filename:  filenameFromUrl(url),
+        deletedAt: new Date().toISOString(),
+      });
+    }
+
+    await sql`UPDATE songs SET extra = extra - ${config.extraKey} WHERE id = ${songId} AND artist_id = ${band.id}`;
+    return res.json({ ok: true });
+  }
+
   if (req.method === 'POST' && req.body?.upload_presign_id != null) {
     const band = await requireAuth(req, res, slug);
     if (!band) return;
@@ -256,12 +344,6 @@ module.exports = wrap(async function handler(req, res) {
     const songId = Number(req.body.upload_presign_id);
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });
-
-    const MEDIA_CONFIGS = {
-      audio:    { keyPrefix: 'audio/',    maxBytes: 50*1024*1024, allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
-      sheet:    { keyPrefix: 'sheets/',   maxBytes: 20*1024*1024 },
-      playback: { keyPrefix: 'playback/', maxBytes: 50*1024*1024, allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
-    };
     const config = MEDIA_CONFIGS[req.body.upload_type];
     if (!config) return res.status(400).json({ error: 'upload_type must be audio, sheet, or playback' });
 
