@@ -1,6 +1,6 @@
-# Smartist — Band Tools
+# Smartist — DIY Artist Tools
 
-Setlist management and song catalogue for bands. Runs as a Vercel serverless application backed by a PostgreSQL database.
+Song catalogue, setlist, gigs and venues management for musicians. Runs as a Vercel serverless application backed by a PostgreSQL database.
 
 ---
 
