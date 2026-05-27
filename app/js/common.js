@@ -565,6 +565,7 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     expEl.innerHTML = '<div class="sl-expansion-inner"><span style="color:var(--third-color);font-size:0.82rem">Loading…</span></div>';
     rowEl.after(expEl);
     const html = await onExpand(row);
+    if (!rowEl.isConnected) { return; }
     const inner = expEl.querySelector('.sl-expansion-inner');
     if (inner) inner.innerHTML = html;
   }
@@ -639,14 +640,14 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
         rowEl.addEventListener('click', function(e) {
           if (e.target.closest('.sl-cell--actions')) return;
           var row = _data.find(function(r) { return r.id === Number(rowEl.dataset.id); });
-          if (row) _toggleRow(rowEl, row);
+          if (row) _toggleRow(rowEl, row).catch(function(err) { console.error('accordion expand failed', err); });
         });
       });
       if (_openId !== null) {
         var openRowEl = el.querySelector('.sl-row[data-id="' + _openId + '"]');
         if (openRowEl) {
-          var openRow = _data.find(function(r) { return r.id === _openId; });
-          if (openRow) _loadExpansion(openRowEl, openRow);
+          var openRow = _data.find(function(r) { return Number(r.id) === Number(_openId); });
+          if (openRow) _loadExpansion(openRowEl, openRow).catch(function(err) { console.error('accordion expand failed', err); });
         } else {
           _openId = null;
         }
