@@ -21,7 +21,9 @@ var ORGANIZER_COLUMNS = [
   { width: 'auto', actions: true, render: function(o) {
     if (o.deleted) return '<span class="sl-deleted-badge">deleted</span>';
     if (_viewMode)  return '';
-    return '<button class="btn sl-edit-btn" onclick="event.stopPropagation();openEditModal(' + o.id + ')">Edit</button>';
+    return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + o.id + ')">' +
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
 ];
 

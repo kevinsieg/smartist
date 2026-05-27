@@ -52,10 +52,14 @@ function getInitials(name) {
         '<a href="/venues">Venues</a>' +
         '<a href="/organizers">Organizers</a>' +
         '<a href="/songs">Songs</a>' +
-        '<a href="/gema-import">PRO</a>' +
+        '<a href="/pro-import">PRO</a>' +
         '<a href="/hub">Hub</a>' +
         '<a href="/profile">Profile</a>' +
       '</div>' +
+      '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">' +
+        '<svg class="nav-burger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>' +
+        '<svg class="nav-close-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+      '</button>' +
     '</nav>';
   document.body.insertBefore(header, document.body.firstChild);
 
@@ -109,10 +113,33 @@ function getInitials(name) {
       goToLogin();
       return;
     }
+    // Burger toggle
+    if (e.target.closest('#nav-burger')) {
+      var appHdr = document.querySelector('.app-header');
+      var isOpen = appHdr.classList.toggle('nav-open');
+      var bgr = document.getElementById('nav-burger');
+      if (bgr) bgr.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      return;
+    }
+    // Close menu on outside click
+    if (!e.target.closest('.app-header')) {
+      var openHdr = document.querySelector('.app-header.nav-open');
+      if (openHdr) {
+        openHdr.classList.remove('nav-open');
+        var bgr2 = document.getElementById('nav-burger');
+        if (bgr2) bgr2.setAttribute('aria-expanded', 'false');
+      }
+    }
+    // SPA nav link
     var a = e.target.closest('.nav-links a');
     if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (a.href === window.location.href) return;
     e.preventDefault();
+    // Close burger menu before navigating
+    var navHdr = document.querySelector('.app-header');
+    if (navHdr) navHdr.classList.remove('nav-open');
+    var bgr3 = document.getElementById('nav-burger');
+    if (bgr3) bgr3.setAttribute('aria-expanded', 'false');
     navigate(a.href);
   });
 

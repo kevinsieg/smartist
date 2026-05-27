@@ -10,12 +10,16 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=4">
+  <link rel="stylesheet" href="/app/css/app.css?v=6">
   <style>
     .venues-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
-    .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
-    .toolbar input[type="text"] { flex: 1 1 220px; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.88rem; font-family: inherit; outline: none; }
-    .toolbar input[type="text"]:focus { border-color: var(--secondary-color); }
+    .toolbar { display: flex; gap: 0.75rem; flex-wrap: nowrap; align-items: flex-start; margin-bottom: 0.75rem; }
+    .venue-filter-fields { display: flex; flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: center; min-width: 0; }
+    .venue-filter-fields input[type="text"] { flex: 1 1 180px; min-width: 0; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.88rem; font-family: inherit; outline: none; }
+    .venue-filter-fields input[type="text"]:focus { border-color: var(--secondary-color); }
+    .filter-select { flex: 1 1 110px; min-width: 80px; padding: 0.5rem 0.6rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.88rem; font-family: inherit; background: var(--bg-color); color: inherit; cursor: pointer; }
+    .filter-select:focus { border-color: var(--secondary-color); outline: none; }
+    .toolbar > .btn { flex-shrink: 0; }
     .placeholder-section { margin-bottom: 1.5rem; }
     .placeholder-section h2 { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.75rem; }
     .empty-hint { text-align: center; padding: 3rem 1rem; color: var(--third-color); font-size: 0.88rem; }
@@ -28,7 +32,26 @@
 <div class="app-wrap venues-wrap">
   <h1>Venues</h1>
   <div class="toolbar">
-    <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…">
+    <div class="venue-filter-fields">
+      <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…">
+      <select id="filter-status" class="filter-select">
+        <option value="">All statuses</option>
+        <option value="Active">Active</option>
+        <option value="Prospect">Prospect</option>
+        <option value="Contacted">Contacted</option>
+        <option value="Confirmed">Confirmed</option>
+        <option value="Declined">Declined</option>
+      </select>
+      <select id="filter-category" class="filter-select">
+        <option value="">All categories</option>
+        <option value="club">Club</option>
+        <option value="restaurant">Restaurant</option>
+        <option value="festival">Festival</option>
+        <option value="pub">Pub</option>
+        <option value="private">Private</option>
+        <option value="street">Street</option>
+      </select>
+    </div>
     <button class="btn active auth-action" id="venue-add-btn" onclick="openAddModal()">+ Add venue</button>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
@@ -77,7 +100,15 @@
     </div>
     <div class="modal-field">
       <label>Category</label>
-      <input type="text" id="vm-category" placeholder="bar, club, festival…">
+      <select id="vm-category">
+        <option value="">—</option>
+        <option value="club">Club</option>
+        <option value="restaurant">Restaurant</option>
+        <option value="festival">Festival</option>
+        <option value="pub">Pub</option>
+        <option value="private">Private</option>
+        <option value="street">Street</option>
+      </select>
     </div>
     <div class="modal-field">
       <label>Email</label>

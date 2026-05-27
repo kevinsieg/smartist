@@ -14,7 +14,7 @@ Song catalogue, setlist, gigs and venues management for musicians. Runs as a Ver
 
 **Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. No auth required.
 
-**PRO / GEMA** (`/gema-import`) — import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) with dry-run preview and auto-matching against songs. UI label is “PRO”; URL unchanged.
+**PRO** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. `/gema-import` redirects to `/pro-import`.
 
 ---
 

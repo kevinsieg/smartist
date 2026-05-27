@@ -9,6 +9,8 @@ var placeholderTable;
 var _venuesTotal = 0;
 var _venuesOffset = 0;
 var _venuesQ = '';
+var _venuesStatus = '';
+var _venuesCategory = '';
 var _venuesTimer = null;
 var _viewMode = false;
 
@@ -24,7 +26,9 @@ var VENUE_COLUMNS = [
     if (v.deleted)                    return '<span class="sl-deleted-badge">deleted</span>';
     if (v.category === 'placeholder') return '';
     if (_viewMode)                    return '';
-    return '<button class="btn sl-edit-btn" onclick="event.stopPropagation();openEditModal(' + v.id + ')">Edit</button>';
+    return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + v.id + ')">' +
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
 ];
 
@@ -51,7 +55,10 @@ initPage(async function(cfg, viewMode) {
     emptyHint:   'None.',
   });
 
-  const filterEl = document.getElementById('filter-input');
+  const filterEl   = document.getElementById('filter-input');
+  const statusEl   = document.getElementById('filter-status');
+  const categoryEl = document.getElementById('filter-category');
+
   if (filterEl) {
     filterEl.addEventListener('input', function() {
       clearTimeout(_venuesTimer);
@@ -60,6 +67,22 @@ initPage(async function(cfg, viewMode) {
         _venuesOffset = 0;
         await loadVenues();
       }, 300);
+    });
+  }
+
+  if (statusEl) {
+    statusEl.addEventListener('change', async function() {
+      _venuesStatus = statusEl.value;
+      _venuesOffset = 0;
+      await loadVenues();
+    });
+  }
+
+  if (categoryEl) {
+    categoryEl.addEventListener('change', async function() {
+      _venuesCategory = categoryEl.value;
+      _venuesOffset = 0;
+      await loadVenues();
     });
   }
 
@@ -82,7 +105,9 @@ initPage(async function(cfg, viewMode) {
 
 async function loadVenues() {
   const params = new URLSearchParams({ limit: 50, offset: _venuesOffset });
-  if (_venuesQ) params.set('q', _venuesQ);
+  if (_venuesQ)        params.set('q',        _venuesQ);
+  if (_venuesStatus)   params.set('status',   _venuesStatus);
+  if (_venuesCategory) params.set('category', _venuesCategory);
   const r = await fetch(`/api/${artistSlug}/venues?${params}`);
   const { rows, total } = await r.json();
   _venuesTotal = total;
