@@ -484,11 +484,12 @@ function invalidateConfigCache() {
 const _slFilterRegistry = {};
 
 function createSortableList({ containerId, sortBarId, filterInputId, columns, defaultSort,
-    defaultSortDir = 1, rowClass, onRowClick, emptyHint, separateDeleted = false }) {
+    defaultSortDir = 1, rowClass, onRowClick, onExpand, emptyHint, separateDeleted = false }) {
 
   let _data = [];
   let _sortField = defaultSort ?? null;
   let _sortDir = defaultSortDir;
+  let _openId = null;
 
   const colWidths    = columns.map(c => c.width || '1fr').join(' ');
   const filterFields = columns.filter(c => c.filterable).map(c => c.field);
@@ -556,6 +557,36 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     });
   }
 
+  async function _loadExpansion(rowEl, row) {
+    rowEl.classList.add('sl-row--expanded');
+    const expEl = document.createElement('div');
+    expEl.className = 'sl-expansion';
+    expEl.setAttribute('data-for', String(row.id));
+    expEl.innerHTML = '<div class="sl-expansion-inner"><span style="color:var(--third-color);font-size:0.82rem">Loading…</span></div>';
+    rowEl.after(expEl);
+    const html = await onExpand(row);
+    const inner = expEl.querySelector('.sl-expansion-inner');
+    if (inner) inner.innerHTML = html;
+  }
+
+  async function _toggleRow(rowEl, row) {
+    const isOpen = _openId === row.id;
+    if (_openId !== null) {
+      const containerEl = document.getElementById(containerId);
+      const prevRowEl = containerEl ? containerEl.querySelector('.sl-row[data-id="' + _openId + '"]') : null;
+      if (prevRowEl) {
+        prevRowEl.classList.remove('sl-row--expanded');
+        const prevExp = prevRowEl.nextElementSibling;
+        if (prevExp && prevExp.classList.contains('sl-expansion')) prevExp.remove();
+      }
+      _openId = null;
+    }
+    if (!isOpen) {
+      _openId = row.id;
+      await _loadExpansion(rowEl, row);
+    }
+  }
+
   function _cellHtml(col, row) {
     if (col.render) {
       const cls = col.actions ? 'sl-cell sl-cell--actions' : 'sl-cell';
@@ -601,6 +632,25 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
           if (row) onRowClick(row);
         });
       });
+    }
+
+    if (onExpand) {
+      el.querySelectorAll('.sl-row').forEach(function(rowEl) {
+        rowEl.addEventListener('click', function(e) {
+          if (e.target.closest('.sl-cell--actions')) return;
+          var row = _data.find(function(r) { return r.id === Number(rowEl.dataset.id); });
+          if (row) _toggleRow(rowEl, row);
+        });
+      });
+      if (_openId !== null) {
+        var openRowEl = el.querySelector('.sl-row[data-id="' + _openId + '"]');
+        if (openRowEl) {
+          var openRow = _data.find(function(r) { return r.id === _openId; });
+          if (openRow) _loadExpansion(openRowEl, openRow);
+        } else {
+          _openId = null;
+        }
+      }
     }
   }
 
