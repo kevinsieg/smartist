@@ -159,7 +159,7 @@ async function expandOrganizer(o) {
       escHtml(g.title) + venue + '</div>';
   }).join('');
   var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?organizer=' +
-    encodeURIComponent(o.name) + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' by this organizer</a>';
+    encodeURIComponent(o.name).replace(/'/g, '%27') + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' by this organizer</a>';
   return '<div class="expansion-label">Gigs organised</div>' + rows + link;
 }
 
@@ -200,7 +200,7 @@ async function renderOrganizerGigs(orgId, orgName) {
     '</div>';
   }).join('') +
   '<a class="related-link" href="#" style="display:block;margin-top:0.5rem;font-size:0.82rem" ' +
-    'onclick="event.preventDefault();closeOrgModal();navigate(\'/gigs?organizer=' + encodeURIComponent(orgName) + '\')">' +
+    'onclick="event.preventDefault();closeOrgModal();navigate(\'/gigs?organizer=' + encodeURIComponent(orgName).replace(/'/g, '%27') + '\')">' +
     '→ All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' by this organizer' +
   '</a>';
 }

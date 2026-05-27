@@ -172,7 +172,7 @@ async function expandVenue(v) {
       escHtml(g.title) + '</div>';
   }).join('');
   var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?venue=' +
-    encodeURIComponent(v.name) + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue</a>';
+    encodeURIComponent(v.name).replace(/'/g, '%27') + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue</a>';
   return '<div class="expansion-label">Gigs at this venue</div>' + rows + link;
 }
 
@@ -237,7 +237,7 @@ async function renderVenueGigs(venueId, venueName) {
     '</div>';
   }).join('') +
   '<a class="related-link" href="#" style="display:block;margin-top:0.5rem;font-size:0.82rem" ' +
-    'onclick="event.preventDefault();closeVenueModal();navigate(\'/gigs?venue=' + encodeURIComponent(venueName) + '\')">' +
+    'onclick="event.preventDefault();closeVenueModal();navigate(\'/gigs?venue=' + encodeURIComponent(venueName).replace(/'/g, '%27') + '\')">' +
     '→ All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue' +
   '</a>';
 }
