@@ -460,6 +460,12 @@ function setStatus(elementId, msg, isError = false) {
 function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('modal-overlay') && e.target.classList.contains('open')) {
+    closeModal(e.target.id);
+  }
+});
+
 // Force the next loadConfig() call to fetch fresh data from the network.
 function invalidateConfigCache() {
   try { sessionStorage.removeItem(_CONFIG_KEY); } catch {}
