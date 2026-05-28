@@ -1674,3 +1674,34 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
   .songs-list-row-tempo { min-width: 60px; }
 }
 
+/* ── Page tab bars (venues, setlist) ─────────────────────────────────────── */
+.page-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border-color);
+  background: var(--primary-color);
+  padding: 0 1rem;
+  position: sticky;
+  z-index: 9;
+}
+.setlist-tab {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+  color: var(--third-color);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font-family: inherit;
+  transition: color 60ms;
+}
+.setlist-tab:hover { color: var(--secondary-ink); }
+.setlist-tab--active {
+  color: var(--secondary-ink);
+  font-weight: 700;
+  border-bottom-color: var(--secondary-ink);
+  background: #fff;
+}
+

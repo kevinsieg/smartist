@@ -13,7 +13,8 @@ var _histLoaded  = false;
 var _histLoadedSongs = {}; // setlistId → song array (lazy cache)
 var _histPendingOpenId = null; // set after save → opened once history tab loads
 var _viewMode = false;
-var _editSongs = null;
+var _editSongs   = null;
+var _editingSid  = null;
 
 // --- Demo personalisation ---
 
@@ -62,6 +63,10 @@ async function init() {
     requestAnimationFrame(function() {
       var hdr = document.querySelector('.app-header');
       if (hdr) document.documentElement.style.setProperty('--setlist-tabs-top', hdr.getBoundingClientRect().height + 'px');
+    });
+
+    onEnterSave(document.getElementById('view-side-panel-inner'), function() {
+      if (_editingSid) _saveHistEdit(_editingSid);
     });
 
     if (_activeView === 'history') {
@@ -1022,7 +1027,8 @@ async function _loadAndRenderHistSongs(sid) {
 }
 
 function _histCancelEdit(sid) {
-  _editSongs = null;
+  _editSongs  = null;
+  _editingSid = null;
   if (_histView) _histView.select(String(sid));
 }
 
@@ -1184,12 +1190,14 @@ async function _histEdit(sid) {
         '</div>' +
       '</div>' +
       '<div class="status-msg" id="hist-edit-error"></div>' +
-      '<div class="modal-actions">' +
+      '<div class="modal-actions" id="hist-edit-actions">' +
         '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + sid + '\')">Save</button>' +
         '<button class="btn" onclick="_histCancelEdit(\'' + sid + '\')">Cancel</button>' +
+        '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + sid + '\')">Delete</button>' +
       '</div>' +
     '</div>';
 
+  _editingSid = sid;
   _renderEditSongsList(sid);
   _initEditSongsDnd(sid);
   document.getElementById('hist-edit-title').focus();
@@ -1271,6 +1279,64 @@ async function _saveHistEdit(sid) {
     var errEl5 = document.getElementById('hist-edit-error');
     if (errEl5) { errEl5.textContent = 'Network error. Please try again.'; errEl5.className = 'status-msg error'; }
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+  }
+}
+
+function _promptDeleteSetlist(sid) {
+  sid = String(sid);
+  var s = _histSets.find(function(x) { return String(x.id) === sid; });
+  if (!s) return;
+
+  var gigNote = '';
+  if (s.gig_id && s.gig_name) {
+    var gigLabel = escHtml(s.gig_name) + (s.gig_date ? ' (' + String(s.gig_date).slice(0, 10) + ')' : '');
+    if (s.gig_venue) gigLabel += ' — ' + escHtml(s.gig_venue);
+    gigNote = '<p style="font-size:0.82rem;color:var(--third-color);margin:0.5rem 0 0;">Linked gig: ' + gigLabel + ' — the gig will not be deleted.</p>';
+  }
+
+  var actionsEl = document.getElementById('hist-edit-actions');
+  if (!actionsEl) return;
+  actionsEl.innerHTML =
+    '<p style="font-size:0.85rem;margin:0;">Delete <strong>' + escHtml(s.title || 'this setlist') + '</strong>? This cannot be undone.</p>' +
+    gigNote +
+    '<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">' +
+      '<button class="btn active" style="background:#e55;border-color:#e55;" onclick="_confirmDeleteSetlist(\'' + sid + '\')">Yes, delete</button>' +
+      '<button class="btn" onclick="_cancelDeleteSetlist(\'' + sid + '\')">Cancel</button>' +
+    '</div>';
+}
+
+function _cancelDeleteSetlist(sid) {
+  sid = String(sid);
+  var actionsEl = document.getElementById('hist-edit-actions');
+  if (!actionsEl) return;
+  actionsEl.innerHTML =
+    '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + sid + '\')">Save</button>' +
+    '<button class="btn" onclick="_histCancelEdit(\'' + sid + '\')">Cancel</button>' +
+    '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + sid + '\')">Delete</button>';
+}
+
+async function _confirmDeleteSetlist(sid) {
+  sid = String(sid);
+  var s = _histSets.find(function(x) { return String(x.id) === sid; });
+  if (!s) return;
+
+  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var actionsEl = document.getElementById('hist-edit-actions');
+  if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:var(--third-color);margin:0;">Deleting…</p>';
+
+  try {
+    var r = await fetch('/api/' + artistSlug + '/setlists/' + sid, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (!r.ok) throw new Error('Failed');
+    _histSets = _histSets.filter(function(x) { return String(x.id) !== sid; });
+    delete _histLoadedSongs[sid];
+    if (_histView) _histView.setData(_histSets);
+    _histCancelEdit(sid);
+  } catch {
+    if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:#e55;margin:0;">Delete failed. Try again.</p>' +
+      '<button class="btn" style="margin-top:0.5rem;" onclick="_cancelDeleteSetlist(\'' + sid + '\')">Back</button>';
   }
 }
 

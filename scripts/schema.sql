@@ -298,3 +298,7 @@ ALTER TABLE venues ADD COLUMN IF NOT EXISTS street        TEXT;
 
 -- 2026-05-27: add free-text location to gigs for private/no-venue gigs
 ALTER TABLE gigs ADD COLUMN IF NOT EXISTS location TEXT;
+
+-- 2026-05-28: geocoded coordinates for venue map
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
