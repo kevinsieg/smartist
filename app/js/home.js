@@ -101,6 +101,7 @@ function renderLogin(errorMsg, cfg) {
         '</div>' +
         '<div class="auth-error" id="reset-msg"></div>' +
       '</div>' +
+      '<div class="auth-view-hint">No password? <a href="/songs">Browse in view mode →</a></div>' +
     '</div>';
 
   if (showGoogle)   document.getElementById('google-btn').addEventListener('click',   () => startOAuth('google'));
