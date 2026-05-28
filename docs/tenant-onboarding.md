@@ -11,13 +11,29 @@ Both models use one Vercel project per artist, one GitHub repo (same code), and 
 
 ---
 
+## Shell note
+
+All commands below use bash/zsh syntax (`VAR=value node script.js`). If you use **fish shell**, prefix with `env` or switch to zsh first:
+
+```fish
+# Option 1 — env prefix
+env DATABASE_URL="postgresql://..." ARTIST_SLUG=demo node scripts/seed.js --force
+
+# Option 2 — switch to zsh for the session
+zsh
+DATABASE_URL="postgresql://..." node scripts/setup.js
+exit
+```
+
+---
+
 ## External services — what you need and where to get it
 
 ### Neon (PostgreSQL) — required
 
 `dash.neon.tech` → create a project → copy the **pooled connection string** (`?sslmode=require` URL).
 
-For the branch model (dev/prod isolation), Neon projects have a built-in `main` branch. Create a `dev` branch under the same project for the preview environment. Each branch has its own connection string.
+For dev/prod isolation, Neon projects have a built-in `main` branch. Create a `dev` branch under the same project for the preview environment. Each branch has its own connection string.
 
 | Env var | Value |
 |---|---|
@@ -37,7 +53,7 @@ Then: Account Home → Manage R2 API Tokens → Create token with **Object Read 
 | `R2_BUCKET_NAME` | Bucket name, e.g. `smartist-bandtwo` |
 | `R2_PUBLIC_URL` | Public bucket URL, e.g. `https://pub-xxxx.r2.dev` |
 
-**Per-environment:** use a separate bucket for preview/dev (`smartist-bandtwo-dev`) to keep dev uploads isolated.
+**Per-environment:** ideally use a separate bucket for preview/dev (`smartist-bandtwo-dev`) to keep dev uploads isolated. For demos or internal deployments a single bucket shared across all environments is fine — set the same R2 vars as "All Environments" in Vercel.
 
 ### Resend (transactional email) — required
 
@@ -49,7 +65,7 @@ Then: Account Home → Manage R2 API Tokens → Create token with **Object Read 
 | `RESEND_FROM` | Verified sender address, e.g. `noreply@band-two.example` |
 | `CONTACT_EMAIL` | Where contact form submissions go (defaults to `ARTIST_ADMIN_EMAIL`) |
 
-These are the same across all environments — set them as "All Environments" in Vercel.
+Set as "All Environments" in Vercel.
 
 ### Google Gemini (AI lyrics suggest) — required if using lyrics feature
 
@@ -90,107 +106,112 @@ Only needed if you want Google or Facebook login buttons on the login page.
 
 ## Model A — Shared database (multi-tenant)
 
-One Neon project, one R2 bucket (or two buckets for dev/prod). Each artist gets a row in the `artists` table. All artist data is scoped by `artist_id` in every query.
+One Neon project, one R2 bucket (or two for dev/prod). Each artist gets a row in the `artists` table. All data is scoped by `artist_id` in every query.
 
 **Use this for:** internal projects, personal deployments, low-cost multi-artist setups.
 
-### Step 1 — Create the Vercel project
+### Step 1 — Create the artist row in the shared DB
 
-1. Vercel dashboard → **New Project** → import the `smartist` GitHub repo
-2. Name it, e.g. `smartist-bandtwo`
-3. Do not change framework or build settings (no build step)
-4. Deploy (will fail — env vars not set yet, that is OK)
-
-### Step 2 — Set environment variables
-
-In the new Vercel project → Settings → Environment Variables, add:
-
-| Variable | Production | Preview | Development |
-|---|---|---|---|
-| `DATABASE_URL` | Neon `main` branch URL | Neon `dev` branch URL | Neon `dev` branch URL |
-| `ARTIST_SLUG` | `bandtwo` | `bandtwo` | `bandtwo` |
-| `ARTIST_ADMIN_EMAIL` | admin email | dev alias, e.g. `you+bandtwo-dev@domain.com` | — |
-| `APP_ORIGIN` | `https://smartist.band-two.example` | your stable preview URL or `https://smartist-bandtwo.vercel.app` | `http://localhost:3000` |
-| `R2_ACCOUNT_ID` | same for all | same for all | same |
-| `R2_ACCESS_KEY_ID` | same for all | same for all | same |
-| `R2_SECRET_ACCESS_KEY` | same for all | same for all | same |
-| `R2_BUCKET_NAME` | `smartist-bandtwo` | `smartist-bandtwo-dev` | `smartist-bandtwo-dev` |
-| `R2_PUBLIC_URL` | prod bucket public URL | dev bucket public URL | dev bucket public URL |
-| `RESEND_API_KEY` | all environments | all environments | all environments |
-| `RESEND_FROM` | all environments | all environments | all environments |
-| `GEMINI_API_KEY` | all environments | all environments | all environments |
-| `BETTERSTACK_TOKEN` | Production only | — | — |
-
-### Step 3 — Create the artist row in the shared DB
-
-Point `DATABASE_URL` at the **Neon main branch** (the same DB the existing artist uses):
+Run the setup wizard against the existing Neon main branch (schema is already applied — the wizard will skip it):
 
 ```bash
 DATABASE_URL=<neon-main-url> node scripts/setup.js
 ```
 
 The wizard will:
-1. Detect the schema is already applied — skip
+1. Detect schema exists — skip
 2. Show existing artists — choose **new**
-3. Prompt for slug (`bandtwo`), display name, and password
+3. Prompt for slug (e.g. `bandtwo`), display name, and password (**minimum 6 characters**)
 4. Configure song display/filter fields and logo URL
-5. Write the `artists` row and seed placeholder venues
+5. Write the `artists` row
 
-The slug you enter here must match `ARTIST_SLUG` in the Vercel env vars exactly.
+The slug must match `ARTIST_SLUG` in the Vercel env vars exactly.
 
-Repeat with the **Neon dev branch URL** to create the same artist row on the dev DB:
+Repeat for the dev branch:
 
 ```bash
 DATABASE_URL=<neon-dev-url> node scripts/setup.js
 ```
 
-### Step 4 — Add the production domain
+**Troubleshooting:**
+- *"syntax error at end of input"* when applying schema → run `psql $DATABASE_URL < scripts/schema.sql` then re-run setup.js
+- *"Password must be at least 6 characters"* → use a longer password; re-run the wizard
+- Wrong slug entered → fix with `psql $DATABASE_URL -c "UPDATE artists SET slug = 'correct' WHERE slug = 'wrong';"`
 
-Vercel project → Settings → Domains → Add `smartist.band-two.example` → assign to `main` branch.
+### Step 2 — Create the Vercel project
 
-Configure your DNS provider: add a CNAME record pointing `smartist.band-two.example` → `cname.vercel-dns.com`.
+1. Vercel dashboard → **New Project** → import `kevinsieg/smartist`
+2. Name it, e.g. `smartist-bandtwo`
+3. Framework: **Other** (no build step), production branch: **main**
+4. Deploy (will fail — env vars not set yet, that is fine)
+
+### Step 3 — Set environment variables
+
+Vercel project → Settings → Environment Variables:
+
+| Variable | Production | Preview + Development |
+|---|---|---|
+| `DATABASE_URL` | Neon `main` branch URL | Neon `dev` branch URL |
+| `APP_ORIGIN` | `https://smartist.band-two.example` | leave blank (uses auto preview URL) |
+| `ARTIST_ADMIN_EMAIL` | your email | your email |
+| `R2_BUCKET_NAME` | `smartist-bandtwo` | `smartist-bandtwo-dev` |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | prod R2 token | dev R2 token |
+| `R2_PUBLIC_URL` | prod bucket public URL | dev bucket public URL |
+
+Set as "All Environments": `ARTIST_SLUG`, `R2_ACCOUNT_ID`, `RESEND_API_KEY`, `RESEND_FROM`, `GEMINI_API_KEY`.
+
+Set as "Production" only: `BETTERSTACK_TOKEN`.
+
+### Step 4 — Add the domain
+
+Vercel project → Settings → Domains → add `smartist.band-two.example` → assign to `main`.
+
+See the DNS section below for the CNAME record to add in Cloudflare.
 
 ### Step 5 — Redeploy
 
-Trigger a redeploy (push any commit or click Redeploy in Vercel). The production deployment will now serve artist `bandtwo` at `smartist.band-two.example`.
-
-The `dev` branch automatically gets a preview deployment at the auto-generated `.vercel.app` URL.
+Click Redeploy in Vercel (or push any commit). Once DNS propagates, `smartist.band-two.example` serves the artist.
 
 ---
 
 ## Model B — Dedicated database (single-tenant)
 
-Each artist gets their own Neon project entirely. Complete data isolation: the `DATABASE_URL` in one Vercel project never shares a DB with any other project.
+Each artist gets their own Neon project. Complete data isolation.
 
-**Use this for:** paying clients, contractual data separation requirements, situations where one client must be able to export/delete all their data without touching others.
+**Use this for:** paying clients, contractual data separation, demo environments.
 
 ### Step 1 — Create a new Neon project
 
-`dash.neon.tech` → New Project → name it, e.g. `smartist-bandtwo`.
+`dash.neon.tech` → New Project → name it, e.g. `smartist-demo`. Create a `dev` branch under it. Copy both pooled connection strings.
 
-The project comes with a `main` branch. Create a `dev` branch under it for the preview environment.
+### Step 2 — Apply schema and create artist
 
-Copy both connection strings (pooled).
-
-### Step 2 — Apply the schema
-
-The new DB is empty. Run the setup wizard against the new DB's main branch — it will detect no schema and offer to apply it:
+The new DB is empty. The wizard will detect this and offer to apply the schema:
 
 ```bash
-DATABASE_URL=<new-neon-main-url> node scripts/setup.js
+DATABASE_URL=<neon-main-url> node scripts/setup.js
+# → apply schema when prompted, then create artist (slug: demo, password: 6+ chars)
+
+DATABASE_URL=<neon-dev-url> node scripts/setup.js
+# → same
 ```
 
-Then for the dev branch:
+**If schema apply fails** ("syntax error at end of input"):
+```bash
+psql <neon-main-url> < scripts/schema.sql
+DATABASE_URL=<neon-main-url> node scripts/setup.js   # re-run, will skip schema
+```
+
+### Step 3 — Seed demo data (for demo deployments)
 
 ```bash
-DATABASE_URL=<new-neon-dev-url> node scripts/setup.js
+DATABASE_URL=<neon-main-url> ARTIST_SLUG=demo node scripts/seed.js --force
+DATABASE_URL=<neon-dev-url>  ARTIST_SLUG=demo node scripts/seed.js --force
 ```
 
-### Steps 3–5
+### Steps 4–6
 
-Follow Model A steps 1–5 exactly, substituting the new Neon project's connection strings for `DATABASE_URL`. Everything else is identical.
-
-**Only difference from Model A:** `DATABASE_URL` points to a Neon project that contains only this artist's data.
+Follow Model A steps 2–5 exactly, using the new Neon project's connection strings for `DATABASE_URL`.
 
 ---
 
@@ -200,7 +221,7 @@ Follow Model A steps 1–5 exactly, substituting the new Neon project's connecti
 GitHub branch    →    Vercel environment    →    Neon branch    →    Domain
 ─────────────────────────────────────────────────────────────────────────────
 main             →    Production            →    main           →    custom domain
-dev              →    Preview               →    dev            →    *.vercel.app or custom preview domain
+dev              →    Preview               →    dev            →    auto *.vercel.app
 (any PR branch)  →    Preview               →    dev            →    auto *.vercel.app
 ```
 
@@ -211,71 +232,94 @@ Push to `dev` freely. Merge to `main` via PR only.
 ## Local development
 
 ```bash
-# In the project root — reads .env (not .env.local, CLI 52.x quirk)
+# Reads .env (not .env.local — vercel dev CLI quirk; keep all vars in .env)
 vercel dev
 ```
 
-Pull env vars from the linked project:
+Pull env vars from the linked Vercel project:
 
 ```bash
-vercel env pull .env.local   # wraps values in quotes — loadEnv() strips them
+vercel env pull .env.local   # wraps values in quotes — loadEnv() in scripts strips them
 ```
 
-Copy `.env.local` to `.env` (the CLI reads `.env`). Set `DATABASE_URL` to the Neon `dev` branch URL. Do not set `BETTERSTACK_TOKEN` locally.
+Copy values from `.env.local` into `.env`. Set `DATABASE_URL` to the Neon `dev` branch URL. Do not set `BETTERSTACK_TOKEN` locally.
 
 ---
 
 ## DNS configuration
 
-Vercel needs a DNS record per custom domain. The record type depends on whether it is an apex domain (no subdomain) or a subdomain.
+### Prerequisite: point your nameservers to Cloudflare
 
-| Domain type | Record type | Value |
+**You must use Cloudflare as your DNS provider** — not your registrar's default DNS — for two reasons:
+1. Cloudflare is required to connect a custom domain to an R2 bucket with public access
+2. Cloudflare gives full control over DNS records (DMARC, SPF, DKIM, CNAME flattening for apex domains)
+
+At your registrar (OVH, Dogado, Namecheap, etc.): change the nameservers to the two Cloudflare nameservers shown in your Cloudflare dashboard (Websites → your domain → DNS → Nameservers). This is a one-time step per domain. Propagation takes up to 24 hours but is usually under an hour.
+
+Once Cloudflare is active, **all DNS records are managed in Cloudflare** — not at your registrar.
+
+### Adding Vercel records
+
+Add one record per custom domain in Cloudflare → DNS → Records. Set proxy status to **DNS only** (grey cloud) — proxying through Cloudflare breaks Vercel's SSL.
+
+| Domain type | Record type | Name | Value |
+|---|---|---|---|
+| Apex (`smartist.studio`) | A | `@` | `76.76.21.21` |
+| Subdomain (`smartist.band-two.example`) | CNAME | `smartist` | `cname.vercel-dns.com` |
+| Subdomain on same domain (`demo.smartist.studio`) | CNAME | `demo` | `cname.vercel-dns.com` |
+| www redirect | CNAME | `www` | `cname.vercel-dns.com` |
+
+Then in Vercel: project → Settings → Domains → add the domain → assign to `main`. Vercel will show a banner until DNS propagates (usually under 5 minutes on Cloudflare). SSL is provisioned automatically.
+
+For www: Vercel will offer to set up an automatic redirect from `www` to the apex — accept it.
+
+### DMARC — block email spoofing
+
+Add for every domain you own, even if you are not sending email from it yet. Prevents anyone from spoofing `@yourdomain.com` addresses.
+
+In Cloudflare → DNS → add:
+
+| Type | Name | Content |
 |---|---|---|
-| Apex (`smartist.studio`, `band-one.example`) | **A** | `76.76.21.21` |
-| Subdomain (`smartist.band-two.example`, `demo.smartist.studio`) | **CNAME** | `cname.vercel-dns.com` |
+| TXT | `_dmarc` | `v=DMARC1; p=reject;` |
 
-Add these at your DNS provider (Cloudflare, OVH, Namecheap, etc.). TTL 300–3600 is fine.
+When you set up Resend for that domain later, Resend will add SPF and DKIM alongside it. The DMARC record stays.
 
-**How to add a domain in Vercel:** Vercel project → Settings → Domains → Add domain → assign to a branch (`main` for production, `dev` for a stable preview domain).
+### Email domain verification (Resend)
 
-Vercel will show an error banner until the DNS record propagates (usually under 5 minutes on Cloudflare, up to an hour elsewhere). SSL is provisioned automatically once the record resolves.
-
-### Deployment-to-domain map
-
-| Vercel project | Repo | Branch | Domain | DNS |
-|---|---|---|---|---|
-| `smartist-bandone` | `smartist` | `main` | `smartist.band-one.example` | A → `76.76.21.21` |
-| `smartist-bandone` | `smartist` | `dev` | *(auto preview URL)* | — |
-| `smartist-bandtwo` | `smartist` | `main` | `smartist.band-two.example` | CNAME → `cname.vercel-dns.com` |
-| `smartist-bandtwo` | `smartist` | `dev` | *(auto preview URL)* | — |
-| `smartist-demo` | `smartist` | `main` | `demo.smartist.studio` | CNAME → `cname.vercel-dns.com` |
-| `smartist-studio` | `smartist-studio` | `main` | `smartist.studio` | A → `76.76.21.21` |
-| `smartist-studio` | `smartist-studio` | `dev` | *(auto preview URL)* | — |
-
-### Email domain (Resend)
-
-Resend requires DNS records to verify your sending domain before it will deliver email. In the Resend dashboard: Domains → Add domain → copy the three records it provides:
+When ready to send email from a domain: Resend dashboard → Domains → Add domain → copy the three records it provides and add them in Cloudflare:
 
 | Type | Purpose |
 |---|---|
 | TXT | SPF — authorises Resend to send on your behalf |
-| TXT (DKIM) | Signs outgoing mail to prove authenticity |
-| TXT (DMARC) | Tells receivers what to do with unauthenticated mail |
+| TXT (DKIM) | Signs outgoing mail |
+| TXT (DMARC) | Replaces the `p=reject` placeholder above — Resend provides a more complete value |
 
-Resend shows exact record values per domain. Add them all — delivery will be blocked until all three verify (green in Resend dashboard).
+Delivery is blocked until all three show green in the Resend dashboard. Each sending domain needs its own set.
 
-Each sending domain needs its own set of records. If you send from `noreply@band-one.example` and `noreply@band-two.example`, both domains need verification.
+### Deployment-to-domain map
+
+| Vercel project | Repo | Branch | Domain | Status |
+|---|---|---|---|---|
+| `smartist-bandone` | `smartist` | `main` | `smartist.band-one.example` | live |
+| `smartist-demo` | `smartist` | `main` | `demo.smartist.studio` | live |
+| `smartist-studio` | `smartist-studio` | `main` | `smartist.studio` | live |
+| `smartist-bandtwo` | `smartist` | `main` | `smartist.band-two.example` | ⚠ DNS pending — move band-two.example to Cloudflare, then add CNAME + DMARC |
 
 ---
 
 ## Checklist
 
-- [ ] Neon DB exists, schema applied to both `main` and `dev` branches
-- [ ] Artist row created in both `main` and `dev` DBs — slug matches `ARTIST_SLUG` exactly
-- [ ] R2 bucket (prod) and dev bucket created — both with public access enabled
+- [ ] Nameservers for the domain updated to Cloudflare at the registrar
+- [ ] Cloudflare shows the domain as active
+- [ ] Neon DB exists — `main` and `dev` branches — schema applied to both
+- [ ] Artist row created in both DBs — slug matches `ARTIST_SLUG` exactly — password 6+ chars
+- [ ] R2 bucket created with public access enabled — API token generated
 - [ ] Vercel project created, all env vars set per environment
-- [ ] Custom domain added in Vercel (Settings → Domains → assign to `main` branch)
-- [ ] DNS A or CNAME record added at your DNS provider — record resolves, Vercel shows green
-- [ ] Resend sending domain verified — SPF, DKIM, DMARC all green in Resend dashboard
-- [ ] At least one successful production deploy completed
+- [ ] Domain added in Vercel (Settings → Domains → assign to `main`)
+- [ ] A or CNAME record added in Cloudflare (DNS only — grey cloud)
+- [ ] www CNAME added + Vercel redirect configured (optional but recommended)
+- [ ] DMARC TXT record added (`_dmarc` → `v=DMARC1; p=reject;`)
+- [ ] At least one successful production deploy — Vercel shows green
 - [ ] Login works at the custom domain with the password set during `setup.js`
+- [ ] (When ready) Resend domain verified — SPF, DKIM, DMARC all green
