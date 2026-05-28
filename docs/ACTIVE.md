@@ -2,7 +2,7 @@
 
 ## Current focus
 
-All changes below are on `dev`, tested with seed data. Ready to push to Vercel Preview + merge to main.
+`dev` branch is ahead of `main`. All features below are tested on the dev DB. Ready to merge to main.
 
 ---
 
@@ -13,56 +13,51 @@ All changes below are on `dev`, tested with seed data. Ready to push to Vercel P
 - `/songs` shows a sortable/filterable table on desktop (≥1025 px) or a card grid on mobile
 - **Card view** (mobile): tap any card → bottom sheet panel with details + action buttons
 - **View mode** (desktop): click any row → side panel slides in from the right with all song details
-  - Side panel shows: inline audio players (`.mp3/.m4a/ogg/wav/flac`) for `listenUrl`/`playbackUrl`; streaming links as buttons; performance data (key, tempo, BPM, capo, length, lead); about data (genre, interpret, reference, author, comment, URLs); stats; rights (lang, GEMA, ISWC, ISRC); inline lyrics (fills remaining panel height)
+  - Inline audio players for `listenUrl`/`playbackUrl`; streaming links as buttons; performance data; stats; rights; inline lyrics
   - Keyboard: `Esc` closes the panel
-  - Selecting a different card closes the previous panel and opens the new one
 - **Edit screen** (mobile + desktop): full-screen slide-in form for editing all song fields
-- **Export CSV**: downloads all visible songs (respects active filter) as a CSV file
+- **Export CSV**: downloads all visible songs (respects active filter)
 - **Active toggle**: click the active dot on any card to toggle `active` without opening the edit screen
 
 Key implementation notes:
 - `var` required in `songs.js` (not `let`/`const`) — `navigate()` in `common.js` re-executes page scripts in shared global scope
 - `getVal(song, 'extra.foo')` safe nested accessor for JSONB `extra` field
-- Edit screen CSS (`position: fixed`) lives in base styles — not inside a media query
-
-### Artist logo — initials fallback
-
-- If no `logoUrl` is set (or the image fails to load), the nav shows a coloured circle with the artist's initials
-- `getInitials(name)` in `common.js`: 2 words → first letters; single word → first 2 chars
-- Implemented via `img.onerror` + `.app-logo-initials--show` class toggle
 
 ### Venues / Organizers / Gigs — CRM expansion
 
-- New pages: `/gigs`, `/venues`, `/organizers` — full CRUD with modal forms and sortable/filterable tables
-- DB: `venues`, `organizers` tables; `gigs` extended with `venue_id`, `organizer_id`, `type`, `time_start`, `time_end`, `deleted`, `last_updated`
+- New pages: `/gigs`, `/venues`, `/organizers` — full CRUD with accordion edit UX and sortable/filterable tables
+- Gig `location` field added (free-text, separate from `venues`)
+- DB: `venues`, `organizers` tables; `gigs` extended with `venue_id`, `organizer_id`, `type`, `time_start`, `time_end`, `location`, `deleted`, `last_updated`
 - Typeahead / inline-create for venue and organizer on gig form
 - Soft-delete on venues and organizers (FK `ON DELETE RESTRICT` prevents deletion of referenced rows)
-- Schema migration scripts run on dev DB (rename `bands→artists`, `gigs.name→title`, `gigs.notes→comment`; drop `gigs.venue` text column; add FK columns and new tables)
+- Bug fix: cascade setlist delete on gig delete was missing `AND artist_id` filter
+
+### Export — all tables
+
+`GET /api/:artist/export` now returns all 9 artist-scoped tables: `songs`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
 
 ### Reusable table component (`createSortableList`)
 
-`common.js` exports `createSortableList(options)`:
-- Column-driven — define columns with `{ field, label, width, sortable, filterable, muted, type, render, actions }`
-- Sort buttons per column, shared filter input across multiple instances (`filterInputId` / `_slFilterRegistry`)
-- Multiple instances on one page share a single filter input
-- Returns `{ setData(rows), refresh() }`
-- Used by: `venues.js`, `organizers.js`, `gigs.js`
+`common.js` exports `createSortableList(options)` — column-driven sortable/filterable table. Used by `venues.js`, `organizers.js`, `gigs.js`.
 
 ### Artist Hub (`/hub`)
 
-- Platform connection management
-- Predefined: Spotify, Apple Music, Deezer, Tidal, Qobuz, Amazon Music, YouTube Music, SoundCloud, Bandcamp, Audiomack, Boomplay, Instagram, Facebook, TikTok, X, YouTube, LinkedIn
-- Custom platforms stored as `custom_<timestamp>` keys in `artists.config.platforms`
-- Connect / edit / disconnect via single shared modal; saved via `PATCH /api/config`
-- "Reach & tools" panels (analytics, smart link, EPK) are placeholders — not yet implemented
+Platform connection management (Spotify, Apple Music, Instagram, etc.). Custom platforms stored in `artists.config.platforms`. Connect / edit / disconnect via shared modal.
+
+### Artist logo — initials fallback
+
+If no `logoUrl` is set or image fails to load, nav shows a coloured circle with the artist's initials.
 
 ### OAuth login (Google + Facebook)
 
-- `api/config.js` — `?action=google-url`, `?action=facebook-url`, `?action=oauth-callback`
-- `vercel.json` — rewrite `/auth/callback` → `/api/config?action=oauth-callback`
-- State signed with provider's own client secret (HMAC, 15-min expiry, base64url JSON)
-- On success: generates magic token, redirects to `/?magic=<token>` — reuses home.js flow
-- `app/js/home.js` — OAuth buttons rendered when `cfg.googleLogin`/`cfg.facebookLogin` true
+Google/Facebook login buttons on the login page when `cfg.googleLogin`/`cfg.facebookLogin` are true. Reuses magic-link flow on success.
+
+### Multi-tenant infrastructure
+
+- `smartist-salmons` → `smartist.salmons.fr` (live, production)
+- `smartist-studio` → `smartist.studio` (live — static landing page, separate repo)
+- `smartist-demo` → `demo.smartist.studio` (live — seeded demo artist, dedicated Neon DB)
+- `smartist-klang` → `smartist.kevinklang.de` (Vercel ready — ⚠ DNS pending, kevinklang.de nameservers not yet on Cloudflare)
 
 ---
 
@@ -70,16 +65,16 @@ Key implementation notes:
 
 - Hub "Reach & tools" panels (analytics, smart link, EPK) are placeholders — not implemented
 - `/profile`, `/dashboard`, `/touring` pages are stubs — not yet implemented
+- `smartist-klang` DNS: move `kevinklang.de` nameservers to Cloudflare (currently on Dogado), then add CNAME `smartist → cname.vercel-dns.com` and DMARC `_dmarc → v=DMARC1; p=reject;`
 
 ---
 
 ## Local dev
 
 ```bash
-vercel dev   # port 3000
+vercel dev   # port 3000 — reads .env, not .env.local
 ```
 
-- Landing page: `http://localhost:3000/app/landing.html`
 - Main app: `http://localhost:3000`
 - Run tests: `node tests/unit.js` (unit); `cd tests && ARTIST_PASSWORD=… npm test` (integration)
 
@@ -87,5 +82,5 @@ vercel dev   # port 3000
 
 | Branch | Vercel env | DB |
 |--------|------------|----|
-| `dev` | Preview | Neon dev |
-| `main` | Production | Neon main |
+| `dev` | Preview (smartist-salmons) | Neon dev |
+| `main` | Production (smartist-salmons) | Neon main |
