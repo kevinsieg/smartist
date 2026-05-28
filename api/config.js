@@ -195,6 +195,17 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ uploadUrl, publicUrl });
   }
 
+  // ── GET ?action=favicon-url — presigned upload URL for favicon ────────────
+  if (req.query.action === 'favicon-url') {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+    const contentType = req.query.type || 'image/png';
+    if (!contentType.startsWith('image/')) return res.status(400).json({ error: 'Image files only' });
+    const key = `bands/${band.slug}/favicon`;
+    const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType);
+    return res.json({ uploadUrl, publicUrl });
+  }
+
   // ── GET ?action=google-url — start Google OAuth flow ─────────────────────
   if (req.query.action === 'google-url') {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)

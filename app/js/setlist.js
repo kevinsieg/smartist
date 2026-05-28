@@ -47,6 +47,7 @@ async function init() {
     if (_viewMode) {
       document.body.classList.add('view-mode');
       applyViewMode();
+      injectViewModeNotice();
     }
     if (cfg.config?.logoUrl) {
       const printLogo = document.querySelector('#print-header .app-logo-img');
@@ -76,6 +77,7 @@ async function init() {
       renderControls();
       applyDemoFilters();
     }
+    injectModalCloseButtons();
   } catch {
     document.getElementById('setlist-content').innerHTML =
       '<p style="text-align:center;color:var(--third-color);">Could not load songs.</p>';
@@ -745,7 +747,7 @@ function _getSetYear(s) {
   var gig = _histGigMap[s.gig_id];
   return (gig && gig.date)
     ? String(gig.date).slice(0, 4)
-    : (s.gig_date ? String(s.gig_date).slice(0, 4) : '—');
+    : (s.gig_date ? String(s.gig_date).slice(0, 4) : 'Templates');
 }
 
 function _getVisibleSets(state) {
@@ -860,7 +862,7 @@ function _openHistPanelContent(item, panelEl) {
     body.hidden = false;
     var toggle = document.querySelector('[data-id="' + sid + '"] .hist-toggle');
     if (toggle) toggle.innerHTML = '&#9660;';
-    if (!_histLoadedSongs[sid]) body.innerHTML = '<p style="color:var(--third-color);font-size:0.82rem;padding:0.5rem 0.25rem">Loading songs…</p>';
+    if (!_histLoadedSongs[sid]) body.innerHTML = skeletonHtml(3);
   }
   _loadAndRenderHistSongs(sid);
 }
@@ -868,7 +870,7 @@ function _openHistPanelContent(item, panelEl) {
 async function _renderHistoryTab() {
   var content = document.getElementById('setlist-content');
   if (!content) return;
-  content.innerHTML = '<p style="text-align:center;color:var(--third-color);">Loading…</p>';
+  content.innerHTML = skeletonHtml(4);
 
   if (!_histLoaded) {
     try {
@@ -890,11 +892,10 @@ async function _renderHistoryTab() {
   _histView = createListView({
     container:  content,
     filters: [
-      { id: 'setlist',   label: 'Setlist',   type: FILTER_TYPES.TEXT,       field: 'title' },
-      { id: 'gig',       label: 'Gig',       type: FILTER_TYPES.TEXT,       field: 'gig.title' },
-      { id: 'venue',     label: 'Venue',     type: FILTER_TYPES.TEXT,       field: 'gig.venue_name' },
-      { id: 'organizer', label: 'Organizer', type: FILTER_TYPES.TEXT,       field: 'gig.organizer_name' },
-      { id: 'song',      label: 'Song',      type: FILTER_TYPES.ASYNC_TEXT,
+      { id: 'setlist', label: 'Setlist', type: FILTER_TYPES.TEXT,       field: 'title' },
+      { id: 'gig',     label: 'Gig',     type: FILTER_TYPES.TEXT,       field: 'gig.title' },
+      { id: 'venue',   label: 'Venue',   type: FILTER_TYPES.TEXT,       field: 'gig.venue_name' },
+      { id: 'song',    label: 'Song',    type: FILTER_TYPES.ASYNC_TEXT,
         resolve: _resolveHistSongFilter },
     ],
     getData:   _getVisibleSets,
@@ -907,7 +908,7 @@ async function _renderHistoryTab() {
   });
 
   var qp = new URLSearchParams(location.search);
-  ['setlist', 'gig', 'venue', 'organizer', 'song'].forEach(function(k) {
+  ['setlist', 'gig', 'venue', 'song'].forEach(function(k) {
     if (qp.get(k)) _histView.setFilterValue(k, qp.get(k));
   });
 
@@ -975,7 +976,7 @@ function _toggleHistItemBody(sid) {
   if (body.hidden) {
     body.hidden = false;
     if (toggle) toggle.innerHTML = '&#9660;';
-    if (!_histLoadedSongs[sid]) body.innerHTML = '<p style="color:var(--third-color);font-size:0.82rem;padding:0.5rem 0.25rem">Loading songs…</p>';
+    if (!_histLoadedSongs[sid]) body.innerHTML = skeletonHtml(3);
     _loadAndRenderHistSongs(sid);
   } else {
     body.hidden = true;
@@ -1150,7 +1151,7 @@ async function _histEdit(sid) {
       '<div class="vsp-header-text"><h2 class="vsp-title">Edit Setlist</h2></div>' +
       '<button class="vsp-close" onclick="_histCancelEdit(\'' + sid + '\')" aria-label="Cancel">×</button>' +
     '</div>' +
-    '<p style="padding:1rem;color:var(--third-color);">Loading…</p>';
+    skeletonHtml(3);
 
   await _loadHistSongs(sid);
   _editSongs = (_histLoadedSongs[sid] || []).slice();

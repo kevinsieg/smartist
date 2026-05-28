@@ -1,5 +1,8 @@
 // Songs management page
 
+var TIME_SIGNATURES = ['4/4', '3/4', '6/8', '5/4', '12/8'];
+var GEMA_LANGUAGES  = ['EN', 'FR', 'DE'];
+
 var artistSlug = '';
 var songs = [];
 var dirty = new Set();
@@ -62,8 +65,12 @@ async function init() {
     } catch {}
   }
   var _vm = isViewMode();
-  if (_vm) document.body.classList.add('view-mode');
+  if (_vm) {
+    document.body.classList.add('view-mode');
+    injectViewModeNotice();
+  }
   await loadAndRender(_vm);
+  injectModalCloseButtons();
 }
 
 // --- Data ---
@@ -162,7 +169,7 @@ var COLS = [
   { key: 'last_played_at',      label: 'last live',          type: 'stat',   cls: 'col-last',    width: 86  },
   { key: 'iswc',                label: 'ISWC',               type: 'stat',   cls: 'col-iswc',    width: 110, title: 'ISWC (GEMA/SACEM)' },
   { key: 'gema_work_number',    label: 'GEMA-Nr',            type: 'stat',   cls: 'col-gema',    width: 116, title: 'GEMA Werknummer' },
-  { key: 'gema_language',       label: 'lang',               type: 'select', cls: 'col-glang',   width: 56,  title: 'Language (GEMA)', options: ['EN', 'FR', 'DE'], default: 'EN' },
+  { key: 'gema_language',       label: 'lang',               type: 'select', cls: 'col-glang',   width: 56,  title: 'Language (GEMA)', options: GEMA_LANGUAGES, default: 'EN' },
   { key: 'extra.isrc',          label: 'ISRC',               type: 'stat',   cls: 'col-isrc',    width: 120, title: 'ISRC (recording)' },
   { key: 'key',                 label: 'key',                type: 'text',   cls: 'col-key',     width: 52  },
   { key: 'extra.lead',          label: 'lead',               type: 'text',   cls: 'col-lead',    width: 80  },
@@ -172,7 +179,7 @@ var COLS = [
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
   { key: 'genre',            label: 'genre',           type: 'text',   cls: 'col-cat',     width: 100 },
   { key: 'energy',              label: 'energy',             type: 'text',   cls: 'col-energy',  width: 70  },
-  { key: 'time_signature',      label: 'time sig',           type: 'select', cls: 'col-timesig', width: 68, options: ['4/4', '3/4', '6/8', '5/4', '12/8'] },
+  { key: 'time_signature',      label: 'time sig',           type: 'select', cls: 'col-timesig', width: 68, options: TIME_SIGNATURES },
   { key: 'bpm',                 label: 'bpm',                type: 'number', cls: 'col-bpm',     width: 55  },
   { key: 'length_min',          label: 'length',             type: 'time',   cls: 'col-len',     width: 68  },
   { key: 'extra.author',        label: 'author',             type: 'text',   cls: 'col-author',  width: 130 },
@@ -336,7 +343,10 @@ function _getSongsForFactory(state) {
 function _renderSongsListView() {
   _songsView = createListView({
     container: document.getElementById('page-content'),
-    filters: [
+    filters: isViewMode() ? [
+      { id: 'title',     label: 'Title',     type: FILTER_TYPES.TEXT, field: 'title'     },
+      { id: 'interpret', label: 'Interpret', type: FILTER_TYPES.TEXT, field: 'interpret' },
+    ] : [
       { id: 'title',     label: 'Title',       type: FILTER_TYPES.TEXT,       field: 'title'     },
       { id: 'interpret', label: 'Interpret',    type: FILTER_TYPES.TEXT,       field: 'interpret' },
       { id: 'setlist',   label: 'Setlist',      type: FILTER_TYPES.ASYNC_TEXT,
@@ -347,16 +357,15 @@ function _renderSongsListView() {
           return Array.from(new Set(songs.map(function(s) { return s.genre; }).filter(Boolean))).sort();
         }},
     ],
-    actions: (isViewMode() ? [] : [
+    actions: isViewMode() ? [] : [
       { label: '+ Add song', onClick: _openNewSongPanel },
       { label: 'Bulk Edit',
         icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg>',
         title: 'Bulk Edit',
         onClick: toggleBulkEdit,
         desktopOnly: true },
-    ]).concat([
       { label: 'Export CSV', onClick: exportCsv },
-    ]),
+    ],
     getData:   _getSongsForFactory,
     getTotal:  function() { return getToken() ? songs.length : _songsTotal; },
     getItemId: function(s) { return s.id; },
@@ -494,7 +503,7 @@ function _openSongPanelContent(item, panelEl) {
     '</div>' +
     (audioHtml || actions ? audioHtml + '<div class="vsp-actions">' + actions + '</div>' : '') +
     perfHtml + aboutHtml + statsHtml + rightsHtml +
-    '<div class="vsp-cell vsp-cell--full" id="vsp-setlist-link" style="color:var(--third-color);font-size:0.82rem;">Loading setlists…</div>' +
+    '<div class="vsp-cell vsp-cell--full" id="vsp-setlist-link"><span class="skeleton-line" style="width:7rem;height:0.65rem;display:inline-block;"></span></div>' +
     lyricsHtml;
 
   // Async: setlist count
@@ -561,7 +570,7 @@ function _openSongEditForm(sid, panelEl) {
     return '<input type="checkbox" data-id="' + id + '" data-key="' + key + '"' + checked + ' onchange="markPanelEditDirty()">';
   };
 
-  var langOpts = ['EN', 'FR', 'DE'].map(function(o) {
+  var langOpts = GEMA_LANGUAGES.map(function(o) {
     return '<option value="' + o + '"' + (o === lang ? ' selected' : '') + '>' + o + '</option>';
   }).join('');
 
@@ -578,7 +587,7 @@ function _openSongEditForm(sid, panelEl) {
           _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; Favourite (always in auto-generation)</span></div>') +
           _editField('Genre', inp('genre', genre)) +
           _editField('Energy', inp('energy', energy)) +
-          _editField('Time signature', '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + ['4/4','3/4','6/8','5/4','12/8'].map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
+          _editField('Time signature', '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
           _editField('BPM', num('bpm', bpm)) +
           _editField('Length (MM:SS)', '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
         '</div>' +
@@ -984,7 +993,7 @@ function renderRow(song) {
       const hasLyrics = !!(val && String(val).trim());
       const actionBtn = hasLyrics
         ? `<button class="lyrics-open-btn" onclick="openLyrics('${sid}')" title="View lyrics">¶</button>`
-        : `<button class="lyrics-add-btn"  onclick="openLyricsEdit('${sid}')" title="Add lyrics">+</button>`;
+        : (_viewMode ? '' : `<button class="lyrics-add-btn"  onclick="openLyricsEdit('${sid}')" title="Add lyrics">+</button>`);
       return `<td class="${c.cls}${sticky} lyrics-cell">
         <textarea data-id="${sid}" data-key="${c.key}" style="display:none">${escHtml(String(val ?? ''))}</textarea>
         ${actionBtn}
@@ -2211,7 +2220,7 @@ function openLyrics(sid) {
   document.getElementById('lyrics-view').textContent  = text;
   document.getElementById('lyrics-edit').value        = text;
   document.getElementById('lyrics-delete-confirm').style.display = 'none';
-  document.getElementById('lyrics-delete-btn').style.display     = '';
+  document.getElementById('lyrics-delete-btn').style.display     = _viewMode ? 'none' : '';
   _lyricsSetMode('view');
   document.getElementById('lyrics-modal').classList.add('open');
 }

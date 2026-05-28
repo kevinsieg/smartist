@@ -10,9 +10,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=6">
+  <link rel="stylesheet" href="/app/css/app.css?v=12">
   <style>
-    .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+    .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
     .gigs-section-title { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin: 1.75rem 0 0.75rem; }
     .empty-hint { text-align: center; padding: 2rem 1rem; color: var(--third-color); font-size: 0.88rem; }
@@ -22,10 +22,32 @@
     #gigs-filter-bar .filter-bar-row1 { flex-wrap: nowrap; align-items: flex-start; }
     #gigs-filter-bar .filter-bar-fields { display: flex; flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; min-width: 0; }
     #gigs-filter-bar .filter-bar-row1 > .btn { margin-top: 0.9rem; flex-shrink: 0; }
+    /* Year divider in past gigs list */
+    .gigs-year-divider {
+      font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--third-color); padding: 1.25rem 0 0.4rem;
+      border-bottom: 1px solid var(--border-color); margin-bottom: 0.3rem;
+    }
+    /* Mobile: compact row (date + title + actions only) */
+    @media (max-width: 639px) {
+      #upcoming-list .sl-row, #past-list .sl-row { grid-template-columns: 100px 1fr auto !important; }
+      #upcoming-list .sl-row > div:nth-child(3),
+      #upcoming-list .sl-row > div:nth-child(4),
+      #upcoming-list .sl-row > div:nth-child(5),
+      #past-list .sl-row > div:nth-child(3),
+      #past-list .sl-row > div:nth-child(4),
+      #past-list .sl-row > div:nth-child(5) { display: none; }
+      /* Sort: only date and title */
+      #sort-bar .sort-btn:not([data-field="date"]):not([data-field="title"]) { display: none; }
+      /* Filter: hide venue and organizer */
+      .gig-filter-desktop { display: none; }
+      /* Add button below filter fields */
+      #gigs-filter-bar .filter-bar-row1 { flex-wrap: wrap; }
+      #gigs-filter-bar .filter-bar-row1 > .btn { width: 100%; margin-top: 0.5rem; }
+    }
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=9"></script>
 <div class="app-wrap gigs-wrap">
   <h1>Gigs</h1>
   <div class="filter-bar" id="gigs-filter-bar">
@@ -35,15 +57,11 @@
           <span class="filter-bar-label">Gig</span>
           <input type="text" id="gig-f-gig" class="filter-bar-input" placeholder="Search…" autocomplete="off">
         </label>
-        <label class="filter-bar-field">
+        <label class="filter-bar-field gig-filter-desktop">
           <span class="filter-bar-label">Venue</span>
           <input type="text" id="gig-f-venue" class="filter-bar-input" placeholder="Search…" autocomplete="off">
         </label>
-        <label class="filter-bar-field">
-          <span class="filter-bar-label">Organizer</span>
-          <input type="text" id="gig-f-organizer" class="filter-bar-input" placeholder="Search…" autocomplete="off">
-        </label>
-        <label class="filter-bar-field">
+        <label class="filter-bar-field auth-only">
           <span class="filter-bar-label">Setlist</span>
           <input type="text" id="gig-f-setlist" class="filter-bar-input" placeholder="Search…" autocomplete="off">
         </label>
@@ -184,6 +202,7 @@
   </div>
 </div>
 
+<script src="/app/js/common.js?v=9"></script>
 <script src="/app/js/gigs.js"></script>
 </body>
 </html>

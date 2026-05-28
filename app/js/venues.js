@@ -249,6 +249,7 @@ var _venuesOffset = 0;
 var _venuesQ = '';
 var _venuesStatus = '';
 var _venuesCategory = '';
+var _venuesCountry = '';
 var _venuesTimer = null;
 var _viewMode = false;
 var _pendingLat = null;
@@ -302,9 +303,9 @@ function switchVenueTab(view) {
 
 var VENUE_COLUMNS = [
   { field: 'name',    label: 'Name',     width: '1.5fr', sortable: true, filterable: true },
+  { field: 'postcode',label: 'Postcode', width: '90px',  sortable: true, filterable: true, muted: true },
   { field: 'city',    label: 'City',     width: '1fr',   sortable: true, filterable: true, muted: true },
   { field: 'country', label: 'Country',  width: '1fr',   sortable: true, filterable: true, muted: true },
-  { field: 'postcode',label: 'Postcode', width: '90px',  sortable: true, filterable: true, muted: true },
   { field: 'size',    label: 'Capacity', width: '70px',  sortable: true, type: 'number',   muted: true },
   { field: 'status',  label: 'Status',   width: '90px',
     render: v => v.status ? `<span class="sl-badge">${escHtml(v.status)}</span>` : '' },
@@ -345,22 +346,24 @@ initPage(async function(cfg, viewMode) {
     }
   }
 
+  var visibleColumns = viewMode ? VENUE_COLUMNS.filter(c => c.field !== 'size' && c.field !== 'status') : VENUE_COLUMNS;
+
   venueTable = createSortableList({
     containerId:    'venues-list',
     sortBarId:      'sort-bar',
-    columns:        VENUE_COLUMNS,
+    columns:        visibleColumns,
     defaultSort:    'name',
     rowClass:       v => v.deleted ? 'deleted' : '',
-    onExpand:       v => expandVenue(v),
+    onRowClick:     v => { if (!v.deleted) openVenueGigsModal(v); },
     emptyHint:      'No venues yet. Add one above.',
   });
 
   placeholderTable = createSortableList({
     containerId: 'placeholder-list',
-    columns:     VENUE_COLUMNS,
+    columns:     visibleColumns,
     defaultSort: 'name',
     rowClass:    v => v.deleted ? 'deleted' : '',
-    onExpand:    v => expandVenue(v),
+    onRowClick:  v => { if (!v.deleted) openVenueGigsModal(v); },
     emptyHint:   'None.',
   });
 
@@ -395,15 +398,19 @@ initPage(async function(cfg, viewMode) {
     });
   }
 
+  var countryEl = document.getElementById('filter-country');
+  if (countryEl) {
+    countryEl.addEventListener('change', async function() {
+      _venuesCountry = countryEl.value;
+      _venuesOffset = 0;
+      await loadVenues();
+    });
+  }
+
   await loadVenues();
 
   if (_viewMode) {
     applyViewMode();
-    var notice = document.createElement('div');
-    notice.className = 'view-mode-notice';
-    notice.innerHTML = 'View mode — <a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.';
-    var page = document.querySelector('.app-page') || document.body;
-    page.insertBefore(notice, page.firstChild);
   }
 
   initGeoFields('vm-city', 'vm-country', 'vm-postcode');
@@ -438,6 +445,8 @@ async function loadVenues() {
   if (_venuesQ)        params.set('q',        _venuesQ);
   if (_venuesStatus)   params.set('status',   _venuesStatus);
   if (_venuesCategory) params.set('category', _venuesCategory);
+  if (_venuesCountry)  params.set('country',  _venuesCountry);
+  if (_viewMode)       params.set('has_gigs', '1');
   const r = await fetch(`/api/${artistSlug}/venues?${params}`);
   const { rows, total } = await r.json();
   _venuesTotal = total;
@@ -449,6 +458,18 @@ async function loadVenues() {
   placeholderTable.setData(allVenues.filter(v => v.category === 'placeholder'));
   venueTable.setData(allVenues.filter(v => v.category !== 'placeholder'));
   updateVenuesFooter();
+  _populateCountryFilter();
+}
+
+function _populateCountryFilter() {
+  var el = document.getElementById('filter-country');
+  if (!el) return;
+  var selected = el.value;
+  var countries = [...new Set(allVenues.map(function(v) { return v.country; }).filter(Boolean))].sort();
+  el.innerHTML = '<option value="">All countries</option>' +
+    countries.map(function(c) {
+      return '<option value="' + escHtml(c) + '"' + (c === selected ? ' selected' : '') + '>' + escHtml(c) + '</option>';
+    }).join('');
 }
 
 async function loadMoreVenues() {
@@ -473,7 +494,6 @@ function openAddModal() {
     const el = document.getElementById(`vm-${f}`); if (el) el.value = '';
   });
   document.getElementById('vm-status').value = '';
-  document.getElementById('vm-size').value   = '';
   document.getElementById('vm-delete-btn').style.display = 'none';
   document.getElementById('vm-gigs-section').style.display = 'none';
   document.getElementById('vm-dup-warning').style.display = 'none';
@@ -497,7 +517,6 @@ function openEditModal(id) {
   document.getElementById('vm-category').value = v.category      || '';
   document.getElementById('vm-email').value    = v.generic_email || '';
   document.getElementById('vm-website').value  = v.website       || '';
-  document.getElementById('vm-size').value     = v.size          || '';
   document.getElementById('vm-comment').value  = v.comment       || '';
   document.getElementById('vm-delete-btn').style.display = v.deleted ? 'none' : '';
   document.getElementById('vm-dup-warning').style.display = 'none';
@@ -557,7 +576,6 @@ async function saveVenue() {
     category:      document.getElementById('vm-category').value.trim() || null,
     generic_email: document.getElementById('vm-email').value.trim()    || null,
     website:       document.getElementById('vm-website').value.trim()  || null,
-    size:          Number(document.getElementById('vm-size').value)    || null,
     comment:       document.getElementById('vm-comment').value.trim()  || null,
     lat:  _geocodeAccepted ? _pendingLat : null,
     lng:  _geocodeAccepted ? _pendingLng : null,
@@ -577,7 +595,7 @@ async function renderVenueGigs(venueId, venueName) {
   const section = document.getElementById('vm-gigs-section');
   const list    = document.getElementById('vm-gigs-list');
   section.style.display = '';
-  list.innerHTML = '<span style="color:var(--third-color);font-size:0.82rem;">Loading…</span>';
+  list.innerHTML = skeletonHtml(2);
 
   if (!_venueRefsCache[venueId]) {
     try {
@@ -607,6 +625,38 @@ async function renderVenueGigs(venueId, venueName) {
     'onclick="event.preventDefault();closeVenueModal();navigate(\'/gigs?venue=' + encodeURIComponent(venueName).replace(/'/g, '%27') + '\')">' +
     '→ All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue' +
   '</a>';
+}
+
+async function openVenueGigsModal(v) {
+  var titleEl = document.getElementById('vgm-title');
+  var body    = document.getElementById('vgm-body');
+  if (!titleEl || !body) return;
+  titleEl.textContent = v.name || 'Gigs at this venue';
+  body.innerHTML = skeletonHtml(3);
+  openModal('venue-gigs-modal');
+  if (!_venueRefsCache[v.id]) {
+    try {
+      const r = await fetch('/api/' + artistSlug + '/venues/' + v.id + '?refs=1');
+      if (!r.ok) throw new Error(r.status);
+      _venueRefsCache[v.id] = await r.json();
+    } catch {
+      body.innerHTML = '<span style="color:#e55;font-size:0.85rem;">Could not load gigs.</span>';
+      return;
+    }
+  }
+  const refs = _venueRefsCache[v.id].refs;
+  if (!refs.gigs.length) {
+    body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">No gigs yet.</span>';
+    return;
+  }
+  body.innerHTML = refs.gigs.map(function(g) {
+    return '<div class="expansion-row">' +
+      '<span style="color:var(--third-color);font-size:0.82rem;min-width:6.5rem;flex-shrink:0;">' +
+        (g.date ? escHtml(String(g.date).slice(0, 10)) : '—') +
+      '</span>' +
+      '<span>' + escHtml(g.title) + '</span>' +
+    '</div>';
+  }).join('');
 }
 
 async function promptHardDelete(id) {

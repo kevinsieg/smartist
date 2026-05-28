@@ -5,6 +5,7 @@ const { checkRateLimit, clientIp } = require('../../_ratelimit');
 const { suggestLyricsWithAI } = require('../../_ai');
 const { makeMediaFn } = require('../../_media');
 const { LYRICS_SOURCES, plainFromSynced } = require('../../_lyrics');
+const { GEMA_ROLE_TYPES } = require('../../_constants');
 const logger = require('../../_logger');
 
 // ── GEMA import helpers (merged from gema/import.js) ─────────────────────────
@@ -171,7 +172,7 @@ module.exports = wrap(async function handler(req, res) {
           JOIN gema_works gw ON gw.id = gr.gema_work_id
           WHERE gw.artist_id = ${band.id}
             AND gr.ip_name_number = ${String(ownerIpNr)}
-            AND gr.role IN ('composer', 'lyricist', 'author')
+            AND gr.role = ANY(${GEMA_ROLE_TYPES})
         `;
         // Index by both exact and base number (strip -NNN version suffix) for robustness
         for (const { gema_work_number: wn } of owned) {

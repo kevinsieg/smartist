@@ -15,11 +15,8 @@ initPage(async function(cfg, viewMode) {
   document.getElementById('import-area').style.display = '';
   if (_viewMode) {
     applyViewMode();
-    var notice = document.createElement('div');
-    notice.className = 'view-mode-notice';
-    notice.innerHTML = 'View mode — <a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.';
-    var page = document.querySelector('.app-page') || document.body;
-    page.insertBefore(notice, page.firstChild);
+    var gemaCard = document.getElementById('pro-card-gema');
+    if (gemaCard) { gemaCard.disabled = true; gemaCard.style.opacity = '0.45'; }
     var dropZone = document.getElementById('drop-zone');
     if (dropZone) {
       dropZone.style.pointerEvents = 'none';
