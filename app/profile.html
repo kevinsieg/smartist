@@ -125,10 +125,29 @@
       font-size: 0.88rem;
     }
     .auth-notice a { color: var(--secondary-ink); text-decoration: underline; }
+
+    .config-section-header { display: flex; align-items: baseline; gap: 0.75rem; }
+    .config-section-header label { flex: 1; }
+    .config-edit-btn { background: none; border: none; font-size: 0.72rem; color: var(--secondary-ink); cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit; }
+    .config-edit-btn:hover { color: var(--black); }
+    .config-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.3rem; }
+    .config-tag { font-size: 0.72rem; font-family: 'Courier New', monospace; background: var(--primary-color); border: 1px solid var(--border-color); border-radius: 3px; padding: 0.2rem 0.5rem; color: var(--black); }
+    .config-hint { font-size: 0.65rem; color: var(--third-color); margin-top: 0.5rem; }
+    .config-hint code { font-family: 'Courier New', monospace; }
+    .config-editor { margin-top: 0.75rem; }
+    .config-check-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem; }
+    .config-check-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
+    .config-check-row.required { opacity: 0.5; }
+    .config-custom-row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.35rem; }
+    .config-custom-row input { padding: 0.3rem 0.5rem; border: 1px solid #ddd; border-radius: 3px; font-size: 0.78rem; font-family: 'Courier New', monospace; }
+    .config-custom-row .lbl-input { font-family: inherit; }
+    .config-remove-btn { background: none; border: none; color: #e55; cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 0.2rem; }
+    .config-add-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
+    .config-editor-actions { display: flex; gap: 0.5rem; margin-top: 0.85rem; }
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=6"></script>
+<script src="/app/js/common.js?v=9"></script>
 
 <div class="app-wrap profile-wrap">
   <h1>Profile</h1>
@@ -166,6 +185,28 @@
     <div class="profile-section">
       <label>Slug (URL identifier)</label>
       <div class="slug-value" id="slug-value"></div>
+    </div>
+
+    <!-- Song table fields -->
+    <div class="profile-section" id="display-fields-section" style="display:none;">
+      <div class="config-section-header">
+        <label>Song table columns</label>
+        <button class="config-edit-btn auth-action" disabled onclick="openDisplayFieldsEditor()">Edit</button>
+      </div>
+      <div class="config-tags" id="display-fields-tags"></div>
+      <div id="display-fields-editor" style="display:none;"></div>
+      <div class="config-hint">Controls which columns appear in the songs table — <code>displayFields</code></div>
+    </div>
+
+    <!-- Setlist filter fields -->
+    <div class="profile-section" id="filter-fields-section" style="display:none;">
+      <div class="config-section-header">
+        <label>Setlist filter buttons</label>
+        <button class="config-edit-btn auth-action" disabled onclick="openFilterFieldsEditor()">Edit</button>
+      </div>
+      <div class="config-tags" id="filter-fields-tags"></div>
+      <div id="filter-fields-editor" style="display:none;"></div>
+      <div class="config-hint">Controls which filter buttons appear in the setlist generator — <code>filterFields</code></div>
     </div>
 
   </div>
@@ -206,7 +247,9 @@
   }
 
   function renderProfile(cfg) {
+    _profileCfg = cfg;
     document.getElementById('profile-content').style.display = '';
+    document.querySelectorAll('button.auth-action').forEach(function(el) { el.disabled = false; });
 
     // Photo / monogram
     document.getElementById('photo-monogram').textContent = initials(cfg.name);
@@ -222,6 +265,9 @@
 
     // Slug
     document.getElementById('slug-value').textContent = cfg.slug;
+
+    renderFieldTags('display-fields', cfg.config && cfg.config.displayFields);
+    renderFieldTags('filter-fields',  cfg.config && cfg.config.filterFields);
 
     // Name input hint
     nameInput.addEventListener('input', function () {
@@ -327,7 +373,8 @@
       .then(function (r) {
         if (!r.ok) throw new Error(r.data.error || 'Failed to save');
         showPhoto(r.publicUrl);
-        sessionStorage.removeItem('artist_config_cache');
+        invalidateConfigCache();
+        applyNav(document.getElementById('band-name-input').value || '', { logoUrl: r.publicUrl });
         progress.textContent = 'Photo updated.';
         setTimeout(function () { progress.textContent = ''; }, 2500);
       })
@@ -335,6 +382,232 @@
         progress.textContent = err.message || 'Upload failed.';
       });
   }
+
+  var STANDARD_FIELDS = [
+    { field: 'title',               label: 'Song',           required: true },
+    { field: 'key',                 label: 'Key' },
+    { field: 'genre',               label: 'Genre' },
+    { field: 'tempo',               label: 'Tempo' },
+    { field: 'length_min',          label: 'Length' },
+    { field: 'interpret',           label: 'Interpret' },
+    { field: 'reference_interpret', label: 'Ref. interpret' },
+    { field: 'comment',             label: 'Comment' },
+  ];
+
+  // Stored so editors can read current config without re-fetching
+  var _profileCfg = null;
+
+  function renderFieldTags(id, fields) {
+    var sec = document.getElementById(id + '-section');
+    var tags = document.getElementById(id + '-tags');
+    sec.style.display = '';
+    tags.innerHTML = (fields && fields.length)
+      ? fields.map(function (f) { return '<span class="config-tag">' + escHtml(f.label || f.field) + '</span>'; }).join('')
+      : '<span style="font-size:0.78rem;color:var(--third-color);">None configured</span>';
+  }
+
+  function openDisplayFieldsEditor() {
+    var cfg = _profileCfg;
+    var current = (cfg && cfg.config && cfg.config.displayFields) || [];
+    var currentMap = {};
+    current.forEach(function (f) { currentMap[f.field] = f.label; });
+    var customFields = current.filter(function (f) { return f.field.startsWith('extra.'); });
+
+    var rows = STANDARD_FIELDS.map(function (f) {
+      var checked = f.required || (f.field in currentMap) ? 'checked' : '';
+      var disabled = f.required ? 'disabled' : '';
+      var cls = f.required ? ' required' : '';
+      return '<div class="config-check-row' + cls + '">' +
+        '<input type="checkbox" id="df-' + f.field + '" value="' + f.field + '" ' + checked + ' ' + disabled + '>' +
+        '<label for="df-' + f.field + '">' + escHtml(f.label) + '</label>' +
+        '</div>';
+    }).join('');
+
+    var customRows = customFields.map(function (f, i) {
+      return '<div class="config-custom-row" id="df-custom-' + i + '">' +
+        '<input type="text" value="' + escHtml(f.field) + '" placeholder="extra.field" style="width:120px;" readonly>' +
+        '<input class="lbl-input" type="text" value="' + escHtml(f.label) + '" placeholder="Label" style="width:80px;" data-field="' + escHtml(f.field) + '">' +
+        _typeSelect(f.type || 'text') +
+        '<button class="config-remove-btn" onclick="removeCustomDisplayField(\'' + escHtml(f.field) + '\')">×</button>' +
+        '</div>';
+    }).join('');
+
+    document.getElementById('display-fields-tags').style.display = 'none';
+    document.getElementById('display-fields-editor').style.display = '';
+    document.getElementById('display-fields-editor').innerHTML =
+      '<div style="margin-bottom:0.5rem;font-size:0.78rem;color:var(--third-color);">Standard fields</div>' +
+      rows +
+      '<div style="margin:0.75rem 0 0.4rem;font-size:0.78rem;color:var(--third-color);">Custom extra fields</div>' +
+      '<div id="df-custom-list">' + customRows + '</div>' +
+      '<div class="config-add-row">' +
+        '<input type="text" id="df-new-field" placeholder="extra.myfield" style="width:130px;">' +
+        '<input type="text" id="df-new-label" placeholder="Label" style="width:80px;">' +
+        _typeSelect('text', 'df-new-type') +
+        '<button class="btn" onclick="addCustomDisplayField()">Add</button>' +
+      '</div>' +
+      '<div class="config-editor-actions">' +
+        '<button class="btn active" onclick="saveDisplayFields()">Save</button>' +
+        '<button class="btn" onclick="closeDisplayFieldsEditor()">Cancel</button>' +
+      '</div>' +
+      '<div class="save-msg" id="df-msg"></div>';
+  }
+
+  function removeCustomDisplayField(field) {
+    var list = document.getElementById('df-custom-list');
+    var rows = list.querySelectorAll('.config-custom-row');
+    rows.forEach(function (row) {
+      var inp = row.querySelector('input[readonly]');
+      if (inp && inp.value === field) row.remove();
+    });
+  }
+
+  function _typeSelect(selected, id) {
+    var idAttr = id ? ' id="' + id + '"' : '';
+    return '<select class="type-select"' + idAttr + ' style="font-size:0.78rem;padding:0.25rem 0.3rem;border:1px solid #ddd;border-radius:3px;background:var(--bg-color);">' +
+      ['text', 'integer', 'boolean'].map(function(t) {
+        return '<option value="' + t + '"' + (t === selected ? ' selected' : '') + '>' + t + '</option>';
+      }).join('') +
+      '</select>';
+  }
+
+  function addCustomDisplayField() {
+    var fieldInp = document.getElementById('df-new-field');
+    var labelInp = document.getElementById('df-new-label');
+    var typeEl   = document.getElementById('df-new-type');
+    var field = fieldInp.value.trim();
+    var label = labelInp.value.trim();
+    var type  = typeEl ? typeEl.value : 'text';
+    if (!field || !field.startsWith('extra.')) {
+      fieldInp.style.borderColor = '#e55';
+      setTimeout(function () { fieldInp.style.borderColor = ''; }, 1500);
+      return;
+    }
+    var list = document.getElementById('df-custom-list');
+    var div = document.createElement('div');
+    div.className = 'config-custom-row';
+    div.innerHTML =
+      '<input type="text" value="' + escHtml(field) + '" style="width:120px;" readonly>' +
+      '<input class="lbl-input" type="text" value="' + escHtml(label || field) + '" placeholder="Label" style="width:80px;" data-field="' + escHtml(field) + '">' +
+      _typeSelect(type) +
+      '<button class="config-remove-btn" onclick="removeCustomDisplayField(\'' + escHtml(field) + '\')">×</button>';
+    list.appendChild(div);
+    fieldInp.value = '';
+    labelInp.value = '';
+    if (typeEl) typeEl.value = 'text';
+    fieldInp.focus();
+  }
+
+  function closeDisplayFieldsEditor() {
+    document.getElementById('display-fields-tags').style.display = '';
+    document.getElementById('display-fields-editor').style.display = 'none';
+  }
+
+  async function saveDisplayFields() {
+    var fields = [];
+    STANDARD_FIELDS.forEach(function (f) {
+      var cb = document.getElementById('df-' + f.field);
+      if (cb && cb.checked) fields.push({ field: f.field, label: f.label });
+    });
+    document.getElementById('df-custom-list').querySelectorAll('.config-custom-row').forEach(function (row) {
+      var fieldVal = row.querySelector('input[readonly]').value.trim();
+      var labelInp = row.querySelector('.lbl-input');
+      var typeEl   = row.querySelector('.type-select');
+      var labelVal = (labelInp ? labelInp.value.trim() : '') || fieldVal;
+      var typeVal  = typeEl ? typeEl.value : 'text';
+      if (fieldVal) fields.push({ field: fieldVal, label: labelVal, type: typeVal });
+    });
+
+    var msg = document.getElementById('df-msg');
+    msg.textContent = 'Saving…'; msg.className = 'save-msg';
+    var ok = await patchConfig({ displayFields: fields });
+    if (ok) {
+      if (_profileCfg) _profileCfg.config.displayFields = fields;
+      renderFieldTags('display-fields', fields);
+      closeDisplayFieldsEditor();
+    } else {
+      msg.textContent = 'Save failed.'; msg.className = 'save-msg err';
+    }
+  }
+
+  function openFilterFieldsEditor() {
+    var cfg = _profileCfg;
+    var displayFields = (cfg && cfg.config && cfg.config.displayFields) || [];
+    var currentFilter = (cfg && cfg.config && cfg.config.filterFields) || [];
+    var currentMap = {};
+    currentFilter.forEach(function (f) { currentMap[f.field] = true; });
+
+    var available = displayFields.filter(function (f) { return f.field !== 'title'; });
+    if (!available.length) {
+      alert('No fields configured yet. Set up song table columns first.');
+      return;
+    }
+
+    var rows = available.map(function (f) {
+      var checked = (f.field in currentMap) ? 'checked' : '';
+      return '<div class="config-check-row">' +
+        '<input type="checkbox" id="ff-' + f.field.replace('.', '-') + '" value="' + f.field + '" data-label="' + escHtml(f.label) + '" ' + checked + '>' +
+        '<label for="ff-' + f.field.replace('.', '-') + '">' + escHtml(f.label) + '</label>' +
+        '</div>';
+    }).join('');
+
+    document.getElementById('filter-fields-tags').style.display = 'none';
+    document.getElementById('filter-fields-editor').style.display = '';
+    document.getElementById('filter-fields-editor').innerHTML =
+      rows +
+      '<div class="config-editor-actions">' +
+        '<button class="btn active" onclick="saveFilterFields()">Save</button>' +
+        '<button class="btn" onclick="closeFilterFieldsEditor()">Cancel</button>' +
+      '</div>' +
+      '<div class="save-msg" id="ff-msg"></div>';
+  }
+
+  function closeFilterFieldsEditor() {
+    document.getElementById('filter-fields-tags').style.display = '';
+    document.getElementById('filter-fields-editor').style.display = 'none';
+  }
+
+  async function saveFilterFields() {
+    var fields = [];
+    document.getElementById('filter-fields-editor').querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+      if (cb.checked) fields.push({ field: cb.value, label: cb.dataset.label });
+    });
+
+    var msg = document.getElementById('ff-msg');
+    msg.textContent = 'Saving…'; msg.className = 'save-msg';
+    var ok = await patchConfig({ filterFields: fields });
+    if (ok) {
+      if (_profileCfg) _profileCfg.config.filterFields = fields;
+      renderFieldTags('filter-fields', fields);
+      closeFilterFieldsEditor();
+    } else {
+      msg.textContent = 'Save failed.'; msg.className = 'save-msg err';
+    }
+  }
+
+  async function patchConfig(configUpdate) {
+    try {
+      var r = await fetch('/api/config', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+        },
+        body: JSON.stringify({ config: configUpdate }),
+      });
+      if (r.ok) invalidateConfigCache();
+      return r.ok;
+    } catch { return false; }
+  }
+
+  // Expose editor functions called from onclick attributes
+  window.openDisplayFieldsEditor  = openDisplayFieldsEditor;
+  window.closeDisplayFieldsEditor = closeDisplayFieldsEditor;
+  window.addCustomDisplayField    = addCustomDisplayField;
+  window.removeCustomDisplayField = removeCustomDisplayField;
+  window.saveDisplayFields        = saveDisplayFields;
+  window.openFilterFieldsEditor   = openFilterFieldsEditor;
+  window.closeFilterFieldsEditor  = closeFilterFieldsEditor;
+  window.saveFilterFields         = saveFilterFields;
 
   init();
 }());

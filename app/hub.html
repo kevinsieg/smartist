@@ -67,7 +67,7 @@
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=6"></script>
+<script src="/app/js/common.js?v=9"></script>
 
 <div class="app-wrap hub-wrap">
   <h1>Artist Hub</h1>
@@ -141,9 +141,9 @@
     </div>
     <div class="status-msg" id="pm-status"></div>
     <div class="modal-actions">
-      <button class="btn active auth-action" onclick="savePlatform()">Save</button>
+      <button class="btn active auth-action" disabled onclick="savePlatform()">Save</button>
       <button class="btn" onclick="closePlatformModal()">Cancel</button>
-      <button class="btn auth-action" id="pm-disconnect" style="margin-left:auto;color:#e55;" onclick="disconnectPlatform()">Disconnect</button>
+      <button class="btn auth-action" disabled id="pm-disconnect" style="margin-left:auto;color:#e55;" onclick="disconnectPlatform()">Disconnect</button>
     </div>
   </div>
 </div>

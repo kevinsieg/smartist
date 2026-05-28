@@ -56,10 +56,10 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── GET/PUT setlist ───────────────────────────────────────────────────────
   if (!action) {
-    if (!['GET', 'PUT'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+    if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
 
     let band;
-    if (req.method === 'PUT') {
+    if (req.method === 'PUT' || req.method === 'DELETE') {
       band = await requireAuth(req, res, slug);
       if (!band) return;
     } else {
@@ -75,6 +75,11 @@ module.exports = wrap(async function handler(req, res) {
       WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
     `;
     if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
+
+    if (req.method === 'DELETE') {
+      await sql`DELETE FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}`;
+      return res.json({ deleted: true });
+    }
 
     if (req.method === 'GET') {
       const songs = await sql`
@@ -124,7 +129,7 @@ module.exports = wrap(async function handler(req, res) {
       LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
       WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
-      GROUP BY s.id, g.title, g.date, v.name
+      GROUP BY s.id, g.title, g.date, g.location, v.name
     `;
     return res.json(updated);
   }
@@ -171,7 +176,7 @@ module.exports = wrap(async function handler(req, res) {
       LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
       WHERE s.id = ${copy.id}
-      GROUP BY s.id, g.title, g.date, v.name
+      GROUP BY s.id, g.title, g.date, g.location, v.name
     `;
     return res.status(201).json(created);
   }

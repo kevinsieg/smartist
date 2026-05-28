@@ -65,6 +65,7 @@ initPage(async function(cfg, viewMode) {
   }
 
   initGeoFields('om-city', 'om-country');
+  onEnterSave(document.getElementById('organizer-modal'), saveOrganizer);
 
   var _orgDeepId = Number(new URLSearchParams(location.search).get('id'));
   if (_orgDeepId) openEditModal(_orgDeepId);

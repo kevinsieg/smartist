@@ -93,7 +93,8 @@ initPage(async function(config, viewMode) {
       _applyGigsFilter();
     });
   });
-  document.getElementById('gig-f-song').addEventListener('input', function(e) {
+  var songEl = document.getElementById('gig-f-song');
+  if (songEl) songEl.addEventListener('input', function(e) {
     _gigFilters.song = e.target.value;
     _runGigSongFilter(e.target.value.trim().toLowerCase());
   });
@@ -106,6 +107,8 @@ initPage(async function(config, viewMode) {
   if (qp.get('song'))      { document.getElementById('gig-f-song').value      = qp.get('song');      _runGigSongFilter(qp.get('song').toLowerCase()); }
   if (qp.get('id'))        { openEditModal(Number(qp.get('id'))); }
   _applyGigsFilter();
+
+  onEnterSave(document.getElementById('gig-modal'), saveGig);
 
   // Set sticky offset
   requestAnimationFrame(function() {
