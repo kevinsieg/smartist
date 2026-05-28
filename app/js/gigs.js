@@ -10,7 +10,7 @@ var pastTable;
 var _gigsTotal = 0;
 var _gigsOffset = 0;
 
-var _gigFilters = { gig: '', venue: '', organizer: '', setlist: '', song: '' };
+var _gigFilters = { gig: '', venue: '', setlist: '', song: '' };
 var _gigAllSetlists = [];
 var _gigSongTimer = null;
 var _gigSongMatchGigIds = null;  // null = no filter; Set<gigId>
@@ -18,25 +18,43 @@ var cfg = null;
 var _viewMode = false;
 
 var GIG_COLUMNS = [
-  { field: 'date',           label: 'Date',      width: '100px', sortable: true, type: 'date' },
+  { field: 'date', label: 'Date', width: '75px', sortable: true, type: 'date',
+    render: g => { if (!g.date) return '—'; var d = String(g.date); return d.slice(8, 10) + '/' + d.slice(5, 7); } },
   { field: 'title',          label: 'Title',     width: '1fr',   sortable: true, filterable: true },
   { field: 'type',           label: 'Type',      width: '80px',
     render: g => g.type ? `<span class="sl-badge">${escHtml(g.type)}</span>` : '' },
   { field: 'venue_name',     label: 'Venue',     width: '1fr',   sortable: true, filterable: true, muted: true },
-  { field: 'organizer_name', label: 'Organizer', width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
     if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>';
-    var setsBtn = '<button class="btn sl-sets-btn" title="View setlists" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
+    var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
+    var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="View setlists" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
-      '</svg></button>';
+      '</svg></button>' : '';
     if (_viewMode) return setsBtn;
     return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>' + setsBtn;
   }},
 ];
+
+function _insertYearDividers(containerId) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var rows = el.querySelectorAll('.sl-row:not(.deleted)');
+  var lastYear = null;
+  rows.forEach(function(row) {
+    var gig = allGigs.find(function(g) { return g.id === Number(row.dataset.id); });
+    var year = (gig && gig.date) ? String(gig.date).slice(0, 4) : null;
+    if (!year || year === lastYear) return;
+    var divider = document.createElement('div');
+    divider.className = 'gigs-year-divider';
+    divider.textContent = year;
+    el.insertBefore(divider, row);
+    lastYear = year;
+  });
+}
 
 initPage(async function(config, viewMode) {
   cfg = config;
@@ -68,24 +86,27 @@ initPage(async function(config, viewMode) {
 
   await loadGigs();
 
+  // Re-insert year dividers after sort bar re-renders the past list
+  var _sortBarEl = document.getElementById('sort-bar');
+  if (_sortBarEl) {
+    _sortBarEl.addEventListener('click', function(e) {
+      if (e.target.closest('.sort-btn')) setTimeout(function() { _insertYearDividers('past-list'); }, 0);
+    });
+  }
+
   if (_viewMode) {
     applyViewMode();
-    var notice = document.createElement('div');
-    notice.className = 'view-mode-notice';
-    notice.innerHTML = 'View mode — <a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.';
-    var page = document.querySelector('.app-page') || document.body;
-    page.insertBefore(notice, page.firstChild);
   }
 
   // Fetch setlists for cross-entity filter
   try {
-    var setsRes = await fetch('/api/' + artistSlug + '/setlists');
+    var setsRes = await apiFetch('/api/' + artistSlug + '/setlists');
     _gigAllSetlists = await setsRes.json();
     if (!Array.isArray(_gigAllSetlists)) _gigAllSetlists = [];
   } catch { _gigAllSetlists = []; }
 
   // Wire filter inputs
-  ['gig', 'venue', 'organizer', 'setlist'].forEach(function(field) {
+  ['gig', 'venue', 'setlist'].forEach(function(field) {
     var el = document.getElementById('gig-f-' + field);
     if (!el) return;
     el.addEventListener('input', function(e) {
@@ -102,8 +123,7 @@ initPage(async function(config, viewMode) {
   // Deep-link: pre-fill filters from URL params
   var qp = new URLSearchParams(location.search);
   if (qp.get('venue'))     { document.getElementById('gig-f-venue').value     = qp.get('venue');     _gigFilters.venue     = qp.get('venue').toLowerCase(); }
-  if (qp.get('organizer')) { document.getElementById('gig-f-organizer').value = qp.get('organizer'); _gigFilters.organizer = qp.get('organizer').toLowerCase(); }
-  if (qp.get('setlist'))   { document.getElementById('gig-f-setlist').value   = qp.get('setlist');   _gigFilters.setlist   = qp.get('setlist').toLowerCase(); }
+if (qp.get('setlist'))   { document.getElementById('gig-f-setlist').value   = qp.get('setlist');   _gigFilters.setlist   = qp.get('setlist').toLowerCase(); }
   if (qp.get('song'))      { document.getElementById('gig-f-song').value      = qp.get('song');      _runGigSongFilter(qp.get('song').toLowerCase()); }
   if (qp.get('id'))        { openEditModal(Number(qp.get('id'))); }
   _applyGigsFilter();
@@ -136,8 +156,7 @@ function _applyGigsFilter() {
   var visible = allGigs.filter(function(g) {
     if (f.gig      && !(g.title          || '').toLowerCase().includes(f.gig))      return false;
     if (f.venue    && !(g.venue_name     || '').toLowerCase().includes(f.venue))    return false;
-    if (f.organizer && !(g.organizer_name || '').toLowerCase().includes(f.organizer)) return false;
-    if (f.setlist) {
+if (f.setlist) {
       var hasSet = _gigAllSetlists.some(function(s) {
         return s.gig_id === g.id && (s.name || '').toLowerCase().includes(f.setlist);
       });
@@ -149,6 +168,7 @@ function _applyGigsFilter() {
   var today = new Date().toISOString().slice(0, 10);
   upcomingTable.setData(visible.filter(function(g) { return !g.deleted && g.date >= today; }));
   pastTable.setData(visible.filter(function(g) { return g.deleted || !g.date || g.date < today; }));
+  _insertYearDividers('past-list');
   var countEl = document.getElementById('gig-filter-count');
   if (countEl) countEl.textContent = visible.length + ' / ' + allGigs.length;
 }
@@ -365,7 +385,7 @@ function expandGig(g) {
   var rows = [];
   if (g.venue_name)      rows.push(['Venue',     escHtml(g.venue_name)]);
   if (!g.venue_name && g.location) rows.push(['Location', escHtml(g.location)]);
-  if (g.organizer_name)  rows.push(['Organizer', escHtml(g.organizer_name)]);
+  if (g.organizer_name && !_viewMode) rows.push(['Organizer', escHtml(g.organizer_name)]);
   if (g.type)            rows.push(['Type',      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
   if (g.time_start)      rows.push(['Time',      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
   if (g.additional_link) rows.push(['Link',      '<a href="' + escHtml(g.additional_link) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
@@ -381,7 +401,7 @@ async function openGigSetlists(gigId) {
   var titleEl = document.getElementById('sd-title');
   var body    = document.getElementById('sd-body');
   titleEl.textContent = 'Setlists';
-  body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">Loading…</span>';
+  body.innerHTML = skeletonHtml(2);
   openModal('setlist-detail-modal');
   if (!_gigRefsCache[gigId]) {
     try {
@@ -449,7 +469,7 @@ async function renderGigRelated(gigId) {
   const section = document.getElementById('gm-related');
   const content = document.getElementById('gm-related-content');
   section.style.display = '';
-  content.innerHTML = '<span style="color:var(--third-color);font-size:0.82rem;">Loading…</span>';
+  content.innerHTML = skeletonHtml(2);
 
   if (!_gigRefsCache[gigId]) {
     try {

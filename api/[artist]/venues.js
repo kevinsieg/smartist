@@ -2,6 +2,7 @@ const { getDb, getArtist, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr, validateNum } = require('../_validate');
+const { VENUE_PUBLIC_STATUSES } = require('../_constants');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -36,21 +37,50 @@ module.exports = wrap(async function handler(req, res) {
     const q        = (req.query.q        || '').trim();
     const status   = (req.query.status   || '').trim() || null;
     const category = (req.query.category || '').trim() || null;
+    const country  = (req.query.country  || '').trim() || null;
+    const has_gigs = req.query.has_gigs === '1';
     const pattern  = q ? `%${q}%` : null;
-    const rows = await sql`
-      SELECT *, COUNT(*) OVER() AS total
-      FROM venues
-      WHERE artist_id = ${artist.id}
-        AND (${pattern}::text IS NULL
-          OR name     ILIKE ${pattern}
-          OR city     ILIKE ${pattern}
-          OR country  ILIKE ${pattern}
-          OR postcode ILIKE ${pattern})
-        AND (${status}::text   IS NULL OR status   ILIKE ${status})
-        AND (${category}::text IS NULL OR category ILIKE ${category})
-      ORDER BY category = 'placeholder' DESC, deleted ASC, name ASC
-      LIMIT ${limit} OFFSET ${offset}
-    `;
+    const viewOnly = !req.headers.authorization;
+    let rows;
+    if (has_gigs) {
+      rows = await sql`
+        SELECT *, COUNT(*) OVER() AS total
+        FROM venues
+        WHERE artist_id = ${artist.id}
+          AND (${pattern}::text IS NULL
+            OR name     ILIKE ${pattern}
+            OR city     ILIKE ${pattern}
+            OR country  ILIKE ${pattern}
+            OR postcode ILIKE ${pattern})
+          AND (${status}::text   IS NULL OR status   ILIKE ${status})
+          AND (${category}::text IS NULL OR category ILIKE ${category})
+          AND (${country}::text  IS NULL OR country  ILIKE ${country})
+          AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
+          AND EXISTS (
+            SELECT 1 FROM gigs g
+            WHERE g.venue_id = venues.id AND g.deleted = false
+          )
+        ORDER BY category = 'placeholder' DESC, deleted ASC, name ASC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+    } else {
+      rows = await sql`
+        SELECT *, COUNT(*) OVER() AS total
+        FROM venues
+        WHERE artist_id = ${artist.id}
+          AND (${pattern}::text IS NULL
+            OR name     ILIKE ${pattern}
+            OR city     ILIKE ${pattern}
+            OR country  ILIKE ${pattern}
+            OR postcode ILIKE ${pattern})
+          AND (${status}::text   IS NULL OR status   ILIKE ${status})
+          AND (${category}::text IS NULL OR category ILIKE ${category})
+          AND (${country}::text  IS NULL OR country  ILIKE ${country})
+          AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
+        ORDER BY category = 'placeholder' DESC, deleted ASC, name ASC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+    }
     const total = Number(rows[0]?.total ?? 0);
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }

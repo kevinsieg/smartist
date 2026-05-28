@@ -51,7 +51,7 @@ function getInitials(name) {
         '<a href="/setlist">Setlists</a>' +
         '<a href="/gigs">Gigs</a>' +
         '<a href="/venues">Venues</a>' +
-        '<a href="/organizers">Organizers</a>' +
+        '<a href="/organizers" class="auth-only">Organizers</a>' +
         '<a href="/hub">Hub</a>' +
         '<a href="/pro-import">PRO</a>' +
         '<a href="/profile">Profile</a>' +
@@ -317,6 +317,38 @@ function isViewMode() {
   return !sessionStorage.getItem(AUTH_TOKEN_KEY);
 }
 
+function injectViewModeNotice() {
+  var target = document.querySelector('.app-page, .gigs-wrap, .venues-wrap, .hub-wrap, .profile-wrap, main') || document.body;
+  var notice = document.createElement('div');
+  notice.className = 'view-mode-notice';
+  notice.innerHTML = 'View only<span class="vmn-sep">·</span><a class="go-login" href="' + loginPageUrl() + '">Log in →</a>';
+  var h1 = target.querySelector('h1');
+  target.insertBefore(notice, h1 ? h1.nextSibling : target.firstChild);
+}
+
+function injectModalCloseButtons() {
+  document.querySelectorAll('.modal-overlay[id] > .modal').forEach(function(modal) {
+    if (modal.querySelector('.modal-x-btn')) return;
+    var id = modal.closest('.modal-overlay').id;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'modal-x-btn';
+    btn.setAttribute('aria-label', 'Close');
+    btn.innerHTML = '&#215;';
+    btn.onclick = function() { closeModal(id); };
+    modal.insertBefore(btn, modal.firstChild);
+  });
+}
+
+function skeletonHtml(lines) {
+  var widths = [75, 55, 65, 45, 80];
+  var html = '<div class="skeleton-block">';
+  for (var i = 0; i < (lines || 3); i++) {
+    html += '<div class="skeleton-line" style="width:' + widths[i % widths.length] + '%"></div>';
+  }
+  return html + '</div>';
+}
+
 // Disable all write-action buttons currently in the DOM.
 // Pages that render buttons dynamically should also check isViewMode()
 // in their render functions and add the disabled attribute there.
@@ -378,6 +410,13 @@ function applyNav(bandName, bandConfig) {
     el.setAttribute('aria-label', bandName || '');
   });
 
+  const faviconUrl = bandConfig?.faviconUrl;
+  if (faviconUrl) {
+    document.querySelectorAll('link[rel="icon"]').forEach(function(el) {
+      el.href = faviconUrl;
+    });
+  }
+
   if (bandName && document.title && !document.title.includes(bandName)) {
     document.title = `${document.title} — ${bandName}`;
   }
@@ -425,6 +464,7 @@ function updateAuthIndicator() {
 function doLogout() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   updateAuthIndicator();
+  applyViewMode();
   if (typeof refreshAllActionBtns === 'function') refreshAllActionBtns();
 }
 
@@ -472,12 +512,14 @@ async function initPage(onReady) {
     var viewMode = isViewMode();
     if (viewMode) {
       document.body.classList.add('view-mode');
+      injectViewModeNotice();
     } else {
       document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
         el.disabled = false;
       });
     }
     await onReady(cfg, viewMode);
+    injectModalCloseButtons();
   } catch (e) { console.error(e); }
 }
 
@@ -607,7 +649,7 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     const expEl = document.createElement('div');
     expEl.className = 'sl-expansion';
     expEl.setAttribute('data-for', String(row.id));
-    expEl.innerHTML = '<div class="sl-expansion-inner"><span style="color:var(--third-color);font-size:0.82rem">Loading…</span></div>';
+    expEl.innerHTML = '<div class="sl-expansion-inner">' + skeletonHtml(2) + '</div>';
     rowEl.after(expEl);
     const html = await onExpand(row);
     if (!rowEl.isConnected) { return; }

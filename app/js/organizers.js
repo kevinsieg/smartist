@@ -29,6 +29,7 @@ var ORGANIZER_COLUMNS = [
 
 initPage(async function(cfg, viewMode) {
   _viewMode = viewMode;
+  if (_viewMode) { goToLogin(); return; }
   artistSlug = cfg.slug;
 
   organizerTable = createSortableList({
@@ -54,15 +55,6 @@ initPage(async function(cfg, viewMode) {
   }
 
   await loadOrganizers();
-
-  if (_viewMode) {
-    applyViewMode();
-    var notice = document.createElement('div');
-    notice.className = 'view-mode-notice';
-    notice.innerHTML = 'View mode — <a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.';
-    var page = document.querySelector('.app-page') || document.body;
-    page.insertBefore(notice, page.firstChild);
-  }
 
   initGeoFields('om-city', 'om-country');
   onEnterSave(document.getElementById('organizer-modal'), saveOrganizer);
@@ -176,7 +168,7 @@ async function renderOrganizerGigs(orgId, orgName) {
   const section = document.getElementById('om-gigs-section');
   const list    = document.getElementById('om-gigs-list');
   section.style.display = '';
-  list.innerHTML = '<span style="color:var(--third-color);font-size:0.82rem;">Loading…</span>';
+  list.innerHTML = skeletonHtml(2);
 
   if (!_orgRefsCache[orgId]) {
     try {
