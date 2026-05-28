@@ -11,22 +11,6 @@ Both models use one Vercel project per artist, one GitHub repo (same code), and 
 
 ---
 
-## Shell note
-
-All commands below use bash/zsh syntax (`VAR=value node script.js`). If you use **fish shell**, prefix with `env` or switch to zsh first:
-
-```fish
-# Option 1 — env prefix
-env DATABASE_URL="postgresql://..." ARTIST_SLUG=demo node scripts/seed.js --force
-
-# Option 2 — switch to zsh for the session
-zsh
-DATABASE_URL="postgresql://..." node scripts/setup.js
-exit
-```
-
----
-
 ## External services — what you need and where to get it
 
 ### Neon (PostgreSQL) — required
