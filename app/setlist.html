@@ -54,36 +54,9 @@
   .share-menu-item:hover { background:var(--secondary-color); }
   .share-menu-icon { font-size:1rem; flex-shrink:0; }
 
-  /* Tab bar — all screen sizes */
+  /* Tab bar — id-specific positioning */
   #setlist-tabs {
-    display: flex;
-    border-bottom: 2px solid var(--border-color);
-    background: var(--primary-color);
-    padding: 0 1rem;
-    position: sticky;
     top: var(--setlist-tabs-top, 60px);
-    z-index: 9;
-  }
-  .setlist-tab {
-    padding: 0.6rem 1.25rem;
-    font-size: 0.88rem;
-    cursor: pointer;
-    color: var(--third-color);
-    border-bottom: 3px solid transparent;
-    margin-bottom: -2px;
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    font-family: inherit;
-    transition: color 60ms;
-  }
-  .setlist-tab:hover { color: var(--secondary-ink); }
-  .setlist-tab--active {
-    color: var(--secondary-ink);
-    font-weight: 700;
-    border-bottom-color: var(--secondary-ink);
-    background: #fff;
   }
 
   @media (min-width: 1025px) {
@@ -104,7 +77,7 @@
 
 <main>
     <section class="app-page setlist-page-wrap">
-        <div id="setlist-tabs" style="display:none">
+        <div id="setlist-tabs" class="page-tabs" style="display:none">
             <button class="setlist-tab setlist-tab--active" data-tab="generator" onclick="switchTab('generator')">Generator</button>
             <button class="setlist-tab" data-tab="history" onclick="switchTab('history')">History</button>
         </div>
@@ -180,7 +153,7 @@
     </div>
 </div>
 
-<script src="/app/js/common.js?v=6"></script>
+<script src="/app/js/common.js?v=9"></script>
 <script src="/app/js/list-view.js"></script>
 <script src="/app/js/setlist.js"></script>
 </body>

@@ -1,4 +1,4 @@
-var VENUE_STATUSES = [
+window.VENUE_STATUSES = [
   { value: 'prospect',  label: 'Prospect' },
   { value: 'contacted', label: 'Contacted' },
   { value: 'confirmed', label: 'Confirmed' },
@@ -6,7 +6,7 @@ var VENUE_STATUSES = [
   { value: 'declined',  label: 'Declined' },
 ];
 
-var VENUE_CATEGORIES = [
+window.VENUE_CATEGORIES = [
   { value: 'club',        label: 'Club' },
   { value: 'restaurant',  label: 'Restaurant' },
   { value: 'festival',    label: 'Festival' },
@@ -15,6 +15,9 @@ var VENUE_CATEGORIES = [
   { value: 'street',      label: 'Street' },
   { value: 'placeholder', label: 'Placeholder' },
 ];
+
+var VENUE_STATUSES   = window.VENUE_STATUSES;
+var VENUE_CATEGORIES = window.VENUE_CATEGORIES;
 
 function populateSelects() {
   function fill(id, items) {
@@ -168,6 +171,71 @@ function checkVenueDuplicate() {
   }, 300);
 }
 
+function _buildGeoQuery() {
+  var parts = [
+    document.getElementById('vm-street-number')?.value.trim(),
+    document.getElementById('vm-street')?.value.trim(),
+    document.getElementById('vm-city')?.value.trim(),
+    document.getElementById('vm-postcode')?.value.trim(),
+    document.getElementById('vm-country')?.value.trim(),
+  ].filter(Boolean);
+  return parts.join(' ');
+}
+
+function _showGeoPreview(lat, lng) {
+  _pendingLat = lat;
+  _pendingLng = lng;
+  _geocodeAccepted = true;
+  var previewEl = document.getElementById('vm-geocode-preview');
+  if (!previewEl) return;
+  previewEl.style.display = '';
+  window.loadLeaflet(function() {
+    var mapEl = document.getElementById('vm-geocode-map');
+    if (!mapEl) return;
+    if (_previewMap) {
+      _previewMap.setView([lat, lng], 13);
+      if (_previewMarker) _previewMarker.setLatLng([lat, lng]);
+      return;
+    }
+    _previewMap = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([lat, lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(_previewMap);
+    _previewMarker = L.circleMarker([lat, lng], { radius: 7, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.9 }).addTo(_previewMap);
+    setTimeout(function() { _previewMap.invalidateSize(); }, 50);
+  });
+}
+
+function _hideGeoPreview() {
+  var previewEl = document.getElementById('vm-geocode-preview');
+  if (previewEl) previewEl.style.display = 'none';
+  if (_previewMap) { _previewMap.remove(); _previewMap = null; _previewMarker = null; }
+}
+
+function _triggerGeocode() {
+  clearTimeout(_geocodeTimer);
+  var query = _buildGeoQuery();
+  if (!query) return;
+  _geocodeTimer = setTimeout(function() {
+    window.geocodeAddress(query).then(function(result) {
+      if (result) {
+        _showGeoPreview(result.lat, result.lng);
+      }
+    });
+  }, 600);
+}
+
+function reGeocodeVenue() {
+  _geocodeAccepted = false;
+  _hideGeoPreview();
+  _triggerGeocode();
+}
+
+function discardGeocode() {
+  _pendingLat = null;
+  _pendingLng = null;
+  _geocodeAccepted = false;
+  _hideGeoPreview();
+}
+
 var artistSlug = '';
 var allVenues = [];
 var editingId = null;
@@ -183,6 +251,54 @@ var _venuesStatus = '';
 var _venuesCategory = '';
 var _venuesTimer = null;
 var _viewMode = false;
+var _pendingLat = null;
+var _pendingLng = null;
+var _geocodeAccepted = false;
+var _previewMap = null;
+var _previewMarker = null;
+var _geocodeTimer = null;
+var _venueActiveTab = 'list';
+var _mapReady = false;
+
+function _showMapContainers() {
+  window.scrollTo(0, 0); // reset scroll so getBoundingClientRect gives correct top
+  var searchEl = document.getElementById('map-search-bar');
+  var mapEl    = document.getElementById('map-view');
+  if (searchEl) searchEl.style.display = '';
+  if (mapEl) {
+    mapEl.style.display = 'flex';
+    var top = mapEl.getBoundingClientRect().top;
+    mapEl.style.height = Math.max(300, window.innerHeight - top) + 'px';
+  }
+}
+
+function _hideMapContainers() {
+  var searchEl = document.getElementById('map-search-bar');
+  var mapEl    = document.getElementById('map-view');
+  if (searchEl) searchEl.style.display = 'none';
+  if (mapEl)    mapEl.style.display    = 'none';
+}
+
+function switchVenueTab(view) {
+  _venueActiveTab = view;
+  history.pushState(null, '', view === 'map' ? '/venues?view=map' : '/venues');
+  document.querySelectorAll('#venues-tabs .setlist-tab').forEach(function(t) {
+    t.classList.toggle('setlist-tab--active', t.dataset.tab === view);
+  });
+  var listEl = document.getElementById('venues-list-view');
+  if (listEl) listEl.style.display = view === 'map' ? 'none' : '';
+  if (view === 'map') {
+    _showMapContainers();
+    if (!_mapReady) {
+      _mapReady = true;
+      if (window.initMap) window.initMap(artistSlug);
+    } else if (window.showMap) {
+      window.showMap();
+    }
+  } else {
+    _hideMapContainers();
+  }
+}
 
 var VENUE_COLUMNS = [
   { field: 'name',    label: 'Name',     width: '1.5fr', sortable: true, filterable: true },
@@ -205,7 +321,29 @@ var VENUE_COLUMNS = [
 initPage(async function(cfg, viewMode) {
   populateSelects();
   _viewMode = viewMode;
+  window._venueViewMode = viewMode;
   artistSlug = cfg.slug;
+
+  if (!viewMode) {
+    var tabsEl = document.getElementById('venues-tabs');
+    if (tabsEl) {
+      tabsEl.style.display = '';
+      var hdr = document.querySelector('.app-header');
+      if (hdr) document.documentElement.style.setProperty('--venues-tabs-top', hdr.getBoundingClientRect().height + 'px');
+    }
+    var initView = new URLSearchParams(location.search).get('view') || 'list';
+    if (initView === 'map') {
+      var listEl = document.getElementById('venues-list-view');
+      if (listEl) listEl.style.display = 'none';
+      _venueActiveTab = 'map';
+      document.querySelectorAll('#venues-tabs .setlist-tab').forEach(function(t) {
+        t.classList.toggle('setlist-tab--active', t.dataset.tab === 'map');
+      });
+      _showMapContainers();
+      _mapReady = true;
+      if (window.initMap) window.initMap(artistSlug);
+    }
+  }
 
   venueTable = createSortableList({
     containerId:    'venues-list',
@@ -269,10 +407,31 @@ initPage(async function(cfg, viewMode) {
   }
 
   initGeoFields('vm-city', 'vm-country', 'vm-postcode');
+  ['vm-city', 'vm-country', 'vm-street', 'vm-postcode'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('blur', _triggerGeocode);
+  });
+  onEnterSave(document.getElementById('venue-modal'), saveVenue);
 
   var _venueDeepId = Number(new URLSearchParams(location.search).get('id'));
   if (_venueDeepId) openEditModal(_venueDeepId);
 });
+
+async function openVenueFromMap(id) {
+  switchVenueTab('list');
+  if (allVenues.find(function(v) { return v.id === id; })) {
+    setTimeout(function() { openEditModal(id); }, 100);
+    return;
+  }
+  // Venue not in current paginated load — fetch it directly
+  try {
+    const r = await fetch('/api/' + artistSlug + '/venues/' + id + '?refs=1');
+    if (!r.ok) return;
+    const data = await r.json();
+    allVenues.push(data.venue);
+    setTimeout(function() { openEditModal(id); }, 100);
+  } catch {}
+}
 
 async function loadVenues() {
   const params = new URLSearchParams({ limit: 50, offset: _venuesOffset });
@@ -319,6 +478,7 @@ function openAddModal() {
   document.getElementById('vm-gigs-section').style.display = 'none';
   document.getElementById('vm-dup-warning').style.display = 'none';
   setStatus('vm-status-msg', '');
+  _pendingLat = null; _pendingLng = null; _geocodeAccepted = false; _hideGeoPreview();
   openModal('venue-modal');
 }
 
@@ -342,6 +502,9 @@ function openEditModal(id) {
   document.getElementById('vm-delete-btn').style.display = v.deleted ? 'none' : '';
   document.getElementById('vm-dup-warning').style.display = 'none';
   setStatus('vm-status-msg', '');
+  _pendingLat = v.lat || null; _pendingLng = v.lng || null; _geocodeAccepted = !!(v.lat && v.lng);
+  _hideGeoPreview();
+  if (_geocodeAccepted) _showGeoPreview(v.lat, v.lng);
   renderVenueGigs(id, v.name);
   openModal('venue-modal');
 }
@@ -396,6 +559,8 @@ async function saveVenue() {
     website:       document.getElementById('vm-website').value.trim()  || null,
     size:          Number(document.getElementById('vm-size').value)    || null,
     comment:       document.getElementById('vm-comment').value.trim()  || null,
+    lat:  _geocodeAccepted ? _pendingLat : null,
+    lng:  _geocodeAccepted ? _pendingLng : null,
   };
   setStatus('vm-status-msg', 'Saving…');
   const url = editingId ? `/api/${artistSlug}/venues/${editingId}` : `/api/${artistSlug}/venues`;

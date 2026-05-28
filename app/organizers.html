@@ -22,18 +22,18 @@
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=6"></script>
+<script src="/app/js/common.js?v=9"></script>
 <div class="app-wrap organizers-wrap">
   <h1>Organizers</h1>
   <div class="toolbar">
     <input type="text" id="filter-input" placeholder="Search name, city, country, email…">
-    <button class="btn active auth-action" id="organizer-add-btn" onclick="openAddModal()">+ Add organizer</button>
+    <button class="btn active auth-action" disabled id="organizer-add-btn" onclick="openAddModal()">+ Add organizer</button>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
   <div id="organizers-list"><p class="empty-hint">Loading…</p></div>
   <div id="organizers-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="organizers-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="organizers-load-more-btn" class="btn auth-action" onclick="loadMoreOrganizers()">Load more</button>
+    <button id="organizers-load-more-btn" class="btn auth-action" disabled onclick="loadMoreOrganizers()">Load more</button>
   </div>
 </div>
 
