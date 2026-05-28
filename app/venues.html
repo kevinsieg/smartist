@@ -10,18 +10,26 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=6">
+  <link rel="stylesheet" href="/app/css/app.css?v=12">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" as="script" crossorigin="">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <style>
-    .venues-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+    .venues-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: nowrap; align-items: flex-start; margin-bottom: 0.75rem; }
     .venue-filter-fields { display: flex; flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: center; min-width: 0; }
-    .venue-filter-fields input[type="text"] { flex: 1 1 180px; min-width: 0; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.88rem; font-family: inherit; outline: none; }
+    .venue-filter-fields input[type="text"] { flex: 1 1 180px; min-width: 0; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; font-family: inherit; outline: none; }
     .venue-filter-fields input[type="text"]:focus { border-color: var(--secondary-color); }
-    .filter-select { flex: 1 1 110px; min-width: 80px; padding: 0.5rem 0.6rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.88rem; font-family: inherit; background: var(--bg-color); color: inherit; cursor: pointer; }
+    .filter-select { flex: 1 1 110px; min-width: 80px; padding: 0.5rem 0.6rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; font-family: inherit; background: var(--bg-color); color: inherit; cursor: pointer; }
     .filter-select:focus { border-color: var(--secondary-color); outline: none; }
     .toolbar > .btn { flex-shrink: 0; }
+    /* Mobile: compact row (name + city + actions only) */
+    @media (max-width: 639px) {
+      #venues-list .sl-row, #placeholder-list .sl-row { grid-template-columns: 1.5fr 1fr auto !important; }
+      #venues-list .sl-row > div:nth-child(n+3):not(:last-child),
+      #placeholder-list .sl-row > div:nth-child(n+3):not(:last-child) { display: none; }
+      .toolbar { flex-wrap: wrap; }
+      .toolbar > .btn { width: 100%; margin-top: 0.5rem; }
+    }
     .placeholder-section { margin-bottom: 1.5rem; }
     .placeholder-section h2 { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.75rem; }
     .empty-hint { text-align: center; padding: 3rem 1rem; color: var(--third-color); font-size: 0.88rem; }
@@ -99,7 +107,6 @@
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=9"></script>
 <div id="venues-tabs" class="page-tabs" style="display:none">
   <button class="setlist-tab setlist-tab--active" data-tab="list" onclick="switchVenueTab('list')">List</button>
   <button class="setlist-tab" data-tab="map" onclick="switchVenueTab('map')">Map</button>
@@ -109,11 +116,14 @@
   <div class="toolbar">
     <div class="venue-filter-fields">
       <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…">
-      <select id="filter-status" class="filter-select">
+      <select id="filter-status" class="filter-select venue-filter-desktop">
         <option value="">All statuses</option>
       </select>
-      <select id="filter-category" class="filter-select">
+      <select id="filter-category" class="filter-select venue-filter-desktop">
         <option value="">All categories</option>
+      </select>
+      <select id="filter-country" class="filter-select venue-filter-desktop">
+        <option value="">All countries</option>
       </select>
     </div>
     <button class="btn active auth-action" disabled id="venue-add-btn" onclick="openAddModal()">+ Add venue</button>
@@ -192,10 +202,6 @@
       <label>Website</label>
       <input type="url" id="vm-website" placeholder="https://…">
     </div>
-    <div class="modal-field">
-      <label>Capacity</label>
-      <input type="number" id="vm-size" placeholder="500">
-    </div>
     <div id="vm-geocode-preview" style="display:none">
       <div id="vm-geocode-map"></div>
       <div class="vm-geocode-actions">
@@ -234,6 +240,18 @@
   </div>
 </div>
 
+<!-- Venue gigs popup -->
+<div class="modal-overlay" id="venue-gigs-modal">
+  <div class="modal" style="max-width:400px;">
+    <h2 id="vgm-title">Gigs at this venue</h2>
+    <div id="vgm-body" style="margin:0.75rem 0 0.5rem;max-height:60vh;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn" type="button" onclick="closeModal('venue-gigs-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app/js/common.js?v=9"></script>
 <script src="/app/js/geo.js"></script>
 <script src="/app/js/venues.js"></script>
 <script src="/app/js/map.js"></script>
