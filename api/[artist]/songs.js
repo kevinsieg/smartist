@@ -6,6 +6,7 @@ const { wrap } = require('../_handler');
 const { suggestLyricsWithAI } = require('../_ai');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
+const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
 const logger = require('../_logger');
 
@@ -26,7 +27,7 @@ module.exports = wrap(async function handler(req, res) {
       logs = await sql`
         SELECT * FROM song_logs
         WHERE artist_id = ${band.id} AND song_id = ${sid}
-          AND action IN ('audio_replace','audio_delete','sheet_replace','sheet_delete','playback_replace','playback_delete')
+          AND action = ANY(${MEDIA_LOG_ACTIONS})
         ORDER BY changed_at DESC LIMIT 20
       `;
     } else {

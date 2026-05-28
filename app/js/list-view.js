@@ -383,7 +383,7 @@ function createListView(opts) {
     if (!panel || !inner) return;
 
     // Loading placeholder while onOpen runs
-    inner.innerHTML = '<p style="text-align:center;color:var(--third-color);padding:2rem;">Loading…</p>';
+    inner.innerHTML = skeletonHtml(4);
     panel.classList.add('open');
     opts.container.classList.add('side-panel-open');
     if (window.innerWidth <= 1024) document.body.style.overflow = 'hidden';

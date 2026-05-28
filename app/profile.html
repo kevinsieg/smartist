@@ -10,12 +10,12 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=4">
+  <link rel="stylesheet" href="/app/css/app.css?v=12">
   <style>
     .profile-wrap {
       max-width: 520px;
-      margin: 2.5rem auto;
-      padding: 0 1.25rem 4rem;
+      margin: 0 auto;
+      padding: 4.5rem 1.25rem 4rem;
     }
 
     /* Photo / monogram */
@@ -80,6 +80,50 @@
       color: var(--third-color);
       letter-spacing: 0.06em;
       min-height: 1.2em;
+    }
+
+    /* Favicon */
+    .favicon-block {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    .favicon-preview {
+      width: 32px;
+      height: 32px;
+      border-radius: 3px;
+      border: 1px solid var(--border-color);
+      background: var(--surface-color);
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .favicon-preview--empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      color: var(--third-color);
+      letter-spacing: 0.04em;
+    }
+    .favicon-meta { display: flex; flex-direction: column; gap: 0.25rem; }
+    .favicon-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--third-color);
+    }
+    .favicon-hint {
+      font-size: 0.75rem;
+      color: var(--secondary-ink);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .favicon-hint:hover { opacity: 0.75; }
+    .favicon-progress {
+      font-size: 0.68rem;
+      color: var(--third-color);
+      min-height: 1.1em;
     }
 
     /* Fields */
@@ -171,11 +215,25 @@
       <input type="file" id="photo-input" accept="image/*" style="display:none;">
     </div>
 
+    <!-- Favicon -->
+    <div class="favicon-block auth-only">
+      <div class="favicon-preview favicon-preview--empty" id="favicon-preview-wrap">
+        <img id="favicon-img" src="" alt="" style="display:none;width:32px;height:32px;object-fit:contain;">
+        <span id="favicon-empty-label">ICO</span>
+      </div>
+      <div class="favicon-meta">
+        <span class="favicon-label">Favicon</span>
+        <span class="favicon-hint" id="favicon-hint">Upload favicon (PNG, 32×32)</span>
+        <div class="favicon-progress" id="favicon-progress"></div>
+      </div>
+      <input type="file" id="favicon-input" accept="image/png,image/x-icon,image/svg+xml" style="display:none;">
+    </div>
+
     <!-- Band name -->
     <div class="profile-section">
       <label for="band-name-input">Band / Artist name</label>
-      <input type="text" id="band-name-input" maxlength="200" disabled>
-      <div class="save-row">
+      <input type="text" id="band-name-input" class="auth-action" maxlength="200" disabled>
+      <div class="save-row auth-only">
         <button class="btn auth-action" id="save-name-btn" disabled>Save</button>
         <span class="save-msg" id="save-name-msg"></span>
       </div>
@@ -227,11 +285,7 @@
       renderProfile(cfg);
       if (viewMode) {
         applyViewMode();
-        var notice = document.createElement('div');
-        notice.className = 'view-mode-notice';
-        notice.innerHTML = 'View mode — <a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.';
-        var page = document.querySelector('.profile-wrap') || document.querySelector('.app-page') || document.body;
-        page.insertBefore(notice, page.firstChild);
+        injectViewModeNotice();
         var frame = document.getElementById('photo-frame');
         var hint = document.getElementById('photo-hint');
         if (frame) { frame.style.pointerEvents = 'none'; frame.style.cursor = 'default'; }
@@ -330,6 +384,71 @@
       }
       uploadPhoto(file);
     });
+
+    // Favicon upload
+    if (cfg.config && cfg.config.faviconUrl) showFavicon(cfg.config.faviconUrl);
+    var faviconInput = document.getElementById('favicon-input');
+    document.getElementById('favicon-hint').addEventListener('click', function () { faviconInput.click(); });
+    faviconInput.addEventListener('change', function () {
+      var file = faviconInput.files[0];
+      if (!file) return;
+      if (file.size > 512 * 1024) {
+        document.getElementById('favicon-progress').textContent = 'Max file size is 512 KB.';
+        return;
+      }
+      uploadFavicon(file);
+    });
+  }
+
+  function showFavicon(url) {
+    var img = document.getElementById('favicon-img');
+    var empty = document.getElementById('favicon-empty-label');
+    img.src = url;
+    img.style.display = 'block';
+    empty.style.display = 'none';
+  }
+
+  function uploadFavicon(file) {
+    var progress = document.getElementById('favicon-progress');
+    progress.textContent = 'Getting upload URL…';
+    fetch('/api/config?action=favicon-url&type=' + encodeURIComponent(file.type), {
+      headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.uploadUrl) throw new Error(d.error || 'Failed to get upload URL');
+        progress.textContent = 'Uploading…';
+        return fetch(d.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        }).then(function (r) {
+          if (!r.ok) throw new Error('Upload failed');
+          return d.publicUrl;
+        });
+      })
+      .then(function (publicUrl) {
+        progress.textContent = 'Saving…';
+        return fetch('/api/config', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+          },
+          body: JSON.stringify({ config: { faviconUrl: publicUrl } }),
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: publicUrl, data: d }; }); });
+      })
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.data.error || 'Failed to save');
+        showFavicon(r.publicUrl);
+        invalidateConfigCache();
+        document.querySelectorAll('link[rel="icon"]').forEach(function(el) { el.href = r.publicUrl; });
+        progress.textContent = 'Favicon updated.';
+        setTimeout(function () { progress.textContent = ''; }, 2500);
+      })
+      .catch(function (err) {
+        progress.textContent = err.message || 'Upload failed.';
+      });
   }
 
   function showPhoto(url) {

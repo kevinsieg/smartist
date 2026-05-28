@@ -40,11 +40,6 @@ initPage(async function(cfg, viewMode) {
   renderHub();
   if (_viewMode) {
     applyViewMode();
-    var notice = document.createElement('div');
-    notice.className = 'view-mode-notice';
-    notice.innerHTML = 'View mode — <a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.';
-    var page = document.querySelector('.app-page') || document.body;
-    page.insertBefore(notice, page.firstChild);
   }
 });
 
