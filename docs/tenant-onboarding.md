@@ -39,6 +39,21 @@ Then: Account Home → Manage R2 API Tokens → Create token with **Object Read 
 
 **Per-environment:** ideally use a separate bucket for preview/dev (`smartist-bandtwo-dev`) to keep dev uploads isolated. For demos or internal deployments a single bucket shared across all environments is fine — set the same R2 vars as "All Environments" in Vercel.
 
+**CORS policy (required for photo uploads):** R2 blocks browser presigned PUT requests unless a CORS policy is set. In Cloudflare → R2 → your bucket → Settings → CORS Policy, add:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://your-artist-domain.com", "http://localhost:3000"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+List only the origins that use this bucket. Each bucket gets its own CORS policy — do not include domains from other artists' buckets.
+
 ### Resend (transactional email) — required
 
 `resend.com` → API Keys → Create key. Verify your sending domain first (DNS records).
