@@ -1,7 +1,7 @@
 const { getDb, getArtist, getSlug } = require('../../_db');
 const { requireAuth } = require('../../_auth');
 const { wrap } = require('../../_handler');
-const { validateStr } = require('../../_validate');
+const { validateStr, validateNum } = require('../../_validate');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -54,6 +54,10 @@ module.exports = wrap(async function handler(req, res) {
     if (status   === false) return res.status(400).json({ error: 'status too long' });
     const comment  = validateStr(body.comment, 2000);
     if (comment  === false) return res.status(400).json({ error: 'comment too long' });
+    const lat = validateNum(body.lat);
+    if (lat === false) return res.status(400).json({ error: 'lat must be a number' });
+    const lng = validateNum(body.lng);
+    if (lng === false) return res.status(400).json({ error: 'lng must be a number' });
     const [updated] = await sql`
       UPDATE venues SET
         name = ${name},
@@ -84,6 +88,8 @@ module.exports = wrap(async function handler(req, res) {
         main_genre = ${body.main_genre ?? venue.main_genre},
         size = ${body.size ?? venue.size},
         language = ${body.language ?? venue.language},
+        lat = ${'lat' in body ? lat : venue.lat},
+        lng = ${'lng' in body ? lng : venue.lng},
         last_updated = NOW()
       WHERE id = ${id} AND artist_id = ${artist.id}
       RETURNING *

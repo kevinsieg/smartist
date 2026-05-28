@@ -11,6 +11,8 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=6">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" as="script" crossorigin="">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <style>
     .venues-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: nowrap; align-items: flex-start; margin-bottom: 0.75rem; }
@@ -25,11 +27,84 @@
     .empty-hint { text-align: center; padding: 3rem 1rem; color: var(--third-color); font-size: 0.88rem; }
     .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
     .status-msg.error { color: #e55; }
+    #venues-tabs { top: var(--venues-tabs-top, 60px); }
+    #map-search-bar {
+      display: none;
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    #map-search-bar input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border-color);
+      border-radius: 3px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      background: var(--bg-color);
+      color: inherit;
+    }
+    #map-view {
+      display: none;
+      /* height set by JS to fill remaining viewport */
+    }
+    #map-sidebar {
+      width: 190px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      padding: 1rem 0.75rem;
+      border-right: 1px solid var(--border-color);
+      font-size: 0.82rem;
+    }
+    #map-canvas { flex: 1; }
+    .map-filter-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--third-color);
+      margin: 0.75rem 0 0.3rem;
+    }
+    .map-filter-label:first-child { margin-top: 0; }
+    .map-filter-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; cursor: pointer; }
+    .map-filter-row input { margin: 0; cursor: pointer; }
+    .map-size-btns { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+    .map-size-btn {
+      padding: 0.2rem 0.5rem;
+      border: 1px solid var(--border-color);
+      border-radius: 3px;
+      background: var(--bg-color);
+      font-size: 0.78rem;
+      font-family: inherit;
+      cursor: pointer;
+      color: var(--secondary-ink);
+    }
+    .map-size-btn.active {
+      background: var(--secondary-color);
+      border-color: var(--secondary-color);
+      color: #fff;
+    }
+    .map-legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    #map-geocode-btn { width: 100%; margin-top: 0.5rem; font-size: 0.78rem; padding: 0.35rem 0.5rem; }
+    #map-unmapped-msg { font-size: 0.75rem; color: var(--third-color); margin-top: 0.4rem; line-height: 1.4; }
+    #vm-geocode-preview { margin-top: 0.75rem; }
+    #vm-geocode-map { height: 180px; border-radius: 4px; border: 1px solid var(--border-color); }
+    .vm-geocode-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
+    .vm-geocode-actions .btn { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=6"></script>
-<div class="app-wrap venues-wrap">
+<script src="/app/js/common.js?v=9"></script>
+<div id="venues-tabs" class="page-tabs" style="display:none">
+  <button class="setlist-tab setlist-tab--active" data-tab="list" onclick="switchVenueTab('list')">List</button>
+  <button class="setlist-tab" data-tab="map" onclick="switchVenueTab('map')">Map</button>
+</div>
+<div id="venues-list-view" class="app-wrap venues-wrap">
   <h1>Venues</h1>
   <div class="toolbar">
     <div class="venue-filter-fields">
@@ -41,7 +116,7 @@
         <option value="">All categories</option>
       </select>
     </div>
-    <button class="btn active auth-action" id="venue-add-btn" onclick="openAddModal()">+ Add venue</button>
+    <button class="btn active auth-action" disabled id="venue-add-btn" onclick="openAddModal()">+ Add venue</button>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
   <div class="placeholder-section">
@@ -51,8 +126,17 @@
   <div id="venues-list"><p class="empty-hint">Loading…</p></div>
   <div id="venues-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="venues-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="venues-load-more-btn" class="btn auth-action" onclick="loadMoreVenues()">Load more</button>
+    <button id="venues-load-more-btn" class="btn auth-action" disabled onclick="loadMoreVenues()">Load more</button>
   </div>
+</div>
+
+<div id="map-search-bar">
+  <input type="text" id="map-search-top" placeholder="Search name, city, postcode…"
+    oninput="window._mapFilterText(this.value)">
+</div>
+<div id="map-view" style="display:none;flex-shrink:0;">
+  <div id="map-sidebar"></div>
+  <div id="map-canvas"></div>
 </div>
 
 <!-- Add/Edit modal -->
@@ -112,6 +196,13 @@
       <label>Capacity</label>
       <input type="number" id="vm-size" placeholder="500">
     </div>
+    <div id="vm-geocode-preview" style="display:none">
+      <div id="vm-geocode-map"></div>
+      <div class="vm-geocode-actions">
+        <button type="button" class="btn" onclick="reGeocodeVenue()">Re-geocode</button>
+        <button type="button" class="btn" onclick="discardGeocode()">Don't use these coordinates</button>
+      </div>
+    </div>
     <div class="modal-field">
       <label>Comment</label>
       <textarea id="vm-comment" placeholder="Notes…" rows="2"></textarea>
@@ -145,5 +236,6 @@
 
 <script src="/app/js/geo.js"></script>
 <script src="/app/js/venues.js"></script>
+<script src="/app/js/map.js"></script>
 </body>
 </html>

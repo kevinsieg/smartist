@@ -1,7 +1,7 @@
 const { getDb, getArtist, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
-const { validateStr } = require('../_validate');
+const { validateStr, validateNum } = require('../_validate');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -16,6 +16,17 @@ module.exports = wrap(async function handler(req, res) {
       const venues = await sql`
         SELECT id, name, city FROM venues
         WHERE artist_id = ${artist.id} AND deleted = false
+        ORDER BY name ASC
+      `;
+      return res.json(venues);
+    }
+
+    if (req.query.all) {
+      const statusFilter = req.query.status ? req.query.status.toLowerCase() : null;
+      const venues = await sql`
+        SELECT * FROM venues
+        WHERE artist_id = ${artist.id} AND deleted = false
+          AND (${statusFilter}::text IS NULL OR LOWER(status) = ${statusFilter})
         ORDER BY name ASC
       `;
       return res.json(venues);
@@ -65,9 +76,13 @@ module.exports = wrap(async function handler(req, res) {
     if (status   === false) return res.status(400).json({ error: 'status too long' });
     const comment  = validateStr(b.comment, 2000);
     if (comment  === false) return res.status(400).json({ error: 'comment too long' });
+    const lat = validateNum(b.lat);
+    if (lat === false) return res.status(400).json({ error: 'lat must be a number' });
+    const lng = validateNum(b.lng);
+    if (lng === false) return res.status(400).json({ error: 'lng must be a number' });
     const [venue] = await sql`
-      INSERT INTO venues (artist_id, name, street_number, street, city, country, category, status, comment)
-      VALUES (${artist.id}, ${name}, ${street_number}, ${street}, ${city}, ${country}, ${category}, ${status}, ${comment})
+      INSERT INTO venues (artist_id, name, street_number, street, city, country, category, status, comment, lat, lng)
+      VALUES (${artist.id}, ${name}, ${street_number}, ${street}, ${city}, ${country}, ${category}, ${status}, ${comment}, ${lat}, ${lng})
       RETURNING *
     `;
     return res.status(201).json(venue);

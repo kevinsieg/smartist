@@ -470,7 +470,13 @@ async function initPage(onReady) {
     var cfg = await loadConfig();
     applyNav(cfg.name, cfg.config);
     var viewMode = isViewMode();
-    if (viewMode) document.body.classList.add('view-mode');
+    if (viewMode) {
+      document.body.classList.add('view-mode');
+    } else {
+      document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
+        el.disabled = false;
+      });
+    }
     await onReady(cfg, viewMode);
   } catch (e) { console.error(e); }
 }
@@ -486,6 +492,18 @@ function setStatus(elementId, msg, isError = false) {
 // Generic modal open/close by element ID.
 function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
+
+// Wire Enter-to-save on a modal or panel container.
+// Enter on any <input> triggers saveFn(); textarea and select are left alone.
+function onEnterSave(containerEl, saveFn) {
+  if (!containerEl) return;
+  containerEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+      e.preventDefault();
+      saveFn();
+    }
+  });
+}
 
 document.addEventListener('click', function(e) {
   if (e.target.classList.contains('modal-overlay') && e.target.classList.contains('open')) {
@@ -797,10 +815,14 @@ async function navigate(href) {
     return;
   }
 
+  // Clear any opacity left stuck by a previously interrupted navigation.
+  document.documentElement.style.opacity = '';
+
   const version = ++_navVersion;
   // Fade out only the page content — nav and footer stay visible.
-  var _navFadeEl = document.querySelector('main') || document.documentElement;
-  _navFadeEl.style.opacity = '0';
+  // Never fade documentElement: if interrupted, opacity stays 0 causing a white screen.
+  var _navFadeEl = document.querySelector('main');
+  if (_navFadeEl) _navFadeEl.style.opacity = '0';
 
   try {
     // Use cached HTML if available (populated by warmPage on hover/pointerdown),
@@ -874,8 +896,8 @@ async function navigate(href) {
 
   if (_navVersion !== version) return;
   requestAnimationFrame(function() { requestAnimationFrame(function() {
-    var fadeIn = document.querySelector('main') || document.documentElement;
-    fadeIn.style.opacity = '1';
+    var fadeIn = document.querySelector('main');
+    if (fadeIn) fadeIn.style.opacity = '1';
   }); });
 }
 

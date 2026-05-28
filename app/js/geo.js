@@ -112,6 +112,22 @@
       .catch(function () { callback({}, ''); });
   }
 
+  // Geocode an address string → Promise<{lat, lng}|null>
+  // Returns null on failure, no result, or network error.
+  window.geocodeAddress = function (query) {
+    if (!query || !query.trim()) return Promise.resolve(null);
+    var qs = new URLSearchParams({ q: query.trim(), format: 'json', limit: '1', addressdetails: '0' });
+    return fetch('https://nominatim.openstreetmap.org/search?' + qs, {
+      headers: { 'Accept-Language': 'en' },
+    })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (results) {
+        if (!results.length) return null;
+        return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+      })
+      .catch(function () { return null; });
+  };
+
   // Attach country datalist + city autocomplete (BAN for France, Nominatim otherwise).
   // postcodeId is optional — when provided, BAN results auto-fill the postcode field.
   window.initGeoFields = function (cityId, countryId, postcodeId) {
