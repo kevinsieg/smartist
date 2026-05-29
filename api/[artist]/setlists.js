@@ -11,8 +11,6 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const band = await getArtist(slug);
-    if (!band) return res.status(404).json({ error: 'Artist not found' });
     const viewMode = !req.headers.authorization;
     const setlists = await sql`
       SELECT
@@ -25,10 +23,11 @@ module.exports = wrap(async function handler(req, res) {
       LEFT JOIN gigs g ON s.gig_id = g.id
       LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
-      WHERE s.artist_id = ${band.id}
+      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
       GROUP BY s.id, g.title, g.date, v.name
       ORDER BY s.created_at DESC
     `;
+    if (viewMode) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json(viewMode ? setlists.slice(0, 20) : setlists);
   }
 

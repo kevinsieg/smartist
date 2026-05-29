@@ -60,8 +60,6 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const band = await getArtist(slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
     const viewMode = !req.headers.authorization;
     if (viewMode) {
       const { limit: rawLimit, offset } = parsePage(req);
@@ -83,13 +81,19 @@ module.exports = wrap(async function handler(req, res) {
           ORDER BY gema_work_number
           LIMIT 1
         ) g ON true
-        WHERE s.artist_id = ${band.id} AND s.deleted = false
+        WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+          AND s.deleted = false
           AND (${!activeOnly} OR s.active = true)
         GROUP BY s.id, g.iswc, g.gema_work_number, g.language
         ORDER BY s.title
         LIMIT ${limit} OFFSET ${offset}
       `;
+      if (!rows.length) {
+        const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
+        if (!exists) return res.status(404).json({ error: 'Band not found' });
+      }
       const total = Number(rows[0]?.total ?? 0);
+      res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
       return res.json({
         rows: rows.map(({ total: _, ...row }) => row),
         total,
@@ -112,10 +116,15 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY gema_work_number
         LIMIT 1
       ) g ON true
-      WHERE s.artist_id = ${band.id} AND s.deleted = false
+      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+        AND s.deleted = false
       GROUP BY s.id, g.iswc, g.gema_work_number, g.language
       ORDER BY s.title
     `;
+    if (!songs.length) {
+      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
+      if (!exists) return res.status(404).json({ error: 'Band not found' });
+    }
     return res.json(songs);
   }
 
