@@ -81,6 +81,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── PUT ?action=poster — confirm upload, save to DB ──────────────────────
   if (req.method === 'PUT' && req.query.action === 'poster') {
+    if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
     const { posterUrl, thumbUrl } = req.body ?? {};
     if (!posterUrl || !thumbUrl)
       return res.status(400).json({ error: 'posterUrl and thumbUrl are required' });

@@ -84,10 +84,11 @@ async function uploadPoster(gigId, file) {
       throw new Error(e1.error || 'Could not get upload URL');
     }
     var urls = await r1.json();
-    await Promise.all([
+    var [pr, tr] = await Promise.all([
       fetch(urls.posterUploadUrl, { method: 'PUT', body: posterBlob, headers: { 'Content-Type': 'image/jpeg' } }),
       fetch(urls.thumbUploadUrl,  { method: 'PUT', body: thumbBlob,  headers: { 'Content-Type': 'image/jpeg' } }),
     ]);
+    if (!pr.ok || !tr.ok) throw new Error('Upload to storage failed (' + (!pr.ok ? pr.status : tr.status) + ')');
     var r2 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster', 'PUT', {
       posterUrl: urls.posterPublicUrl,
       thumbUrl:  urls.thumbPublicUrl,
