@@ -8,14 +8,10 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const artist = await getArtist(slug);
-    if (!artist) return res.status(404).json({ error: 'Artist not found' });
-
     if (req.query.slim) {
-      // Excludes deleted — suitable for dropdowns.
       const orgs = await sql`
         SELECT id, name, city FROM organizers
-        WHERE artist_id = ${artist.id} AND deleted = false
+        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND deleted = false
         ORDER BY name ASC
       `;
       return res.json(orgs);
@@ -27,7 +23,7 @@ module.exports = wrap(async function handler(req, res) {
     const rows = await sql`
       SELECT *, COUNT(*) OVER() AS total
       FROM organizers
-      WHERE artist_id = ${artist.id}
+      WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug})
         AND (${pattern}::text IS NULL
           OR name    ILIKE ${pattern}
           OR type    ILIKE ${pattern}
@@ -37,6 +33,10 @@ module.exports = wrap(async function handler(req, res) {
       ORDER BY deleted ASC, name ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
+    if (!rows.length) {
+      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
+      if (!exists) return res.status(404).json({ error: 'Artist not found' });
+    }
     const total = Number(rows[0]?.total ?? 0);
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }

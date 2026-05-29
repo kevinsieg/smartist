@@ -281,11 +281,11 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   // ── GET — public config (songs, counts, feature flags) ───────────────────
-  const band = await getArtist(slug);
-  if (!band) return res.status(404).json({ error: 'Band not found in database' });
-
+  // Run all three queries in parallel — artist lookup is embedded as a subquery
+  // so we avoid the sequential getArtist() → data queries pattern.
   const sql = getDb();
-  const [songs, [counts]] = await Promise.all([
+  const [[band], songs, [counts]] = await Promise.all([
+    sql`SELECT id, slug, name, config FROM artists WHERE slug = ${slug} LIMIT 1`,
     sql`
       SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language
       FROM songs s
@@ -296,18 +296,20 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY gema_work_number
         LIMIT 1
       ) g ON true
-      WHERE s.artist_id = ${band.id} AND s.deleted = false
+      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND s.deleted = false
       ORDER BY s.title
     `,
     sql`
       SELECT
-        (SELECT COUNT(*)::int FROM gigs       WHERE artist_id = ${band.id} AND NOT deleted) AS gigs,
-        (SELECT COUNT(*)::int FROM venues     WHERE artist_id = ${band.id} AND NOT deleted) AS venues,
-        (SELECT COUNT(*)::int FROM organizers WHERE artist_id = ${band.id} AND NOT deleted) AS organizers,
-        (SELECT COUNT(*)::int FROM setlists   WHERE artist_id = ${band.id})                 AS setlists
+        (SELECT COUNT(*)::int FROM gigs       WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND NOT deleted) AS gigs,
+        (SELECT COUNT(*)::int FROM venues     WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND NOT deleted) AS venues,
+        (SELECT COUNT(*)::int FROM organizers WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND NOT deleted) AS organizers,
+        (SELECT COUNT(*)::int FROM setlists   WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}))                 AS setlists
     `,
   ]);
+  if (!band) return res.status(404).json({ error: 'Band not found in database' });
 
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
   res.json({
     slug:          band.slug,
     name:          band.name,

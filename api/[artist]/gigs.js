@@ -8,8 +8,6 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const artist = await getArtist(slug);
-    if (!artist) return res.status(404).json({ error: 'Artist not found' });
     const { limit, offset } = parsePage(req);
     const rows = await sql`
       SELECT g.*,
@@ -19,11 +17,16 @@ module.exports = wrap(async function handler(req, res) {
       FROM gigs g
       LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN organizers o ON o.id = g.organizer_id
-      WHERE g.artist_id = ${artist.id}
+      WHERE g.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
       ORDER BY g.date DESC NULLS LAST, g.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
+    if (!rows.length) {
+      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
+      if (!exists) return res.status(404).json({ error: 'Artist not found' });
+    }
     const total = Number(rows[0]?.total ?? 0);
+    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }
 

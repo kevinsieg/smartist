@@ -11,21 +11,21 @@
   };
 
   var _map        = null;
+  var _renderer   = null;
+  var _layerGroup = null;
   var _slug       = '';
   var _allVenues  = [];
-  var _markers    = [];
+  var _markerData = []; // [{ venue, marker }] — built once, filtered by show/hide
   var _leafletReady  = false;
   var _dataReady     = false;
-  var _confirmedOnly = true; // load only confirmed venues by default
+  var _confirmedOnly = true;
 
-  // Filter state — all enabled by default
   var _statusFilter   = {};
   var _categoryFilter = {};
   var _sizeFilter     = 'any';
   var _textFilter     = '';
 
   // Lazy-load Leaflet JS once; CSS is already in <head>.
-  // Queues concurrent callers so only one <script> tag is ever injected.
   var _leafletCallbacks = null;
   window.loadLeaflet = function (cb) {
     if (window.L) { cb(); return; }
@@ -42,16 +42,16 @@
     document.head.appendChild(s);
   };
 
-  function _markerIcon(status) {
+  function _markerOptions(status) {
     var color = STATUS_COLORS[(status || '').toLowerCase()] || STATUS_COLORS[''];
-    return L.divIcon({
-      className: '',
-      html: '<div style="width:12px;height:12px;border-radius:50%;background:' + color +
-            ';border:2px solid rgba(0,0,0,0.25);box-shadow:0 1px 3px rgba(0,0,0,0.35)"></div>',
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
-      popupAnchor: [0, -8],
-    });
+    return {
+      renderer:    _renderer,
+      radius:      6,
+      color:       'rgba(0,0,0,0.3)',
+      weight:      1.5,
+      fillColor:   color,
+      fillOpacity: 0.9,
+    };
   }
 
   function _passes(v) {
@@ -65,16 +65,16 @@
     var anyCatUnchecked = window.VENUE_CATEGORIES.some(function(c) { return !_categoryFilter[c.value]; });
     if (anyCatUnchecked && !_categoryFilter[(v.category || '').toLowerCase()]) return false;
     if (_sizeFilter !== 'any') {
-      if (_sizeFilter === 'small'  && (v.size == null || v.size >= 100))           return false;
+      if (_sizeFilter === 'small'  && (v.size == null || v.size >= 100))                return false;
       if (_sizeFilter === 'medium' && (v.size == null || v.size < 100 || v.size > 500)) return false;
-      if (_sizeFilter === 'large'  && (v.size == null || v.size <= 500))           return false;
+      if (_sizeFilter === 'large'  && (v.size == null || v.size <= 500))                return false;
     }
     return true;
   }
 
   window._mapFilterText = function(val) {
     _textFilter = val.trim();
-    _renderMarkers();
+    _applyFilter();
   };
 
   function _escHtml(s) {
@@ -99,21 +99,31 @@
       '</div>';
   }
 
-  function _renderMarkers() {
-    _markers.forEach(function(m) { m.remove(); });
-    _markers = [];
-    var visible = _allVenues.filter(function(v) { return v.lat && v.lng && _passes(v); });
-    visible.forEach(function(v) {
-      var m = L.marker([v.lat, v.lng], { icon: _markerIcon(v.status || '') });
+  // Build circleMarker objects once from _allVenues (canvas — no DOM elements).
+  function _buildMarkers() {
+    _markerData = [];
+    if (_layerGroup) _layerGroup.clearLayers();
+    _allVenues.forEach(function(v) {
+      if (!v.lat || !v.lng) return;
+      var m = L.circleMarker([v.lat, v.lng], _markerOptions(v.status || ''));
       m.bindPopup(_popup(v));
-      m.addTo(_map);
-      _markers.push(m);
+      _markerData.push({ venue: v, marker: m });
+    });
+    _applyFilter();
+  }
+
+  // Toggle marker visibility without recreating DOM elements.
+  function _applyFilter() {
+    if (!_layerGroup) return;
+    _layerGroup.clearLayers();
+    _markerData.forEach(function(d) {
+      if (_passes(d.venue)) _layerGroup.addLayer(d.marker);
     });
     _updateUnmappedCount();
   }
 
   function _updateUnmappedCount() {
-    if (!!(window._venueViewMode)) return; // geocode section hidden in view mode
+    if (!!(window._venueViewMode)) return;
     var noCoords = _allVenues.filter(function(v) { return !v.lat || !v.lng; }).length;
     var msgEl = document.getElementById('map-unmapped-msg');
     var secEl = document.getElementById('map-geocode-section');
@@ -128,7 +138,6 @@
     if (!sb) return;
     var viewMode = !!(window._venueViewMode);
 
-    // In view mode only the legend is shown (text search is above the map)
     if (viewMode) {
       var legendHtmlOnly = '<div class="map-filter-label">Legend</div>';
       Object.keys(STATUS_COLORS).forEach(function(k) {
@@ -169,8 +178,6 @@
       '<button class="map-size-btn"        data-size="large"  onclick="window._mapFilterSize(\'large\')">&gt;500</button>' +
       '</div>';
 
-    // No separate legend needed — the status checkboxes already show colored dots
-
     var geocodeHtml =
       '<div id="map-geocode-section" style="display:none;margin-top:0.75rem">' +
       '<button id="map-geocode-btn" class="btn active" onclick="window.runBulkGeocode()">Get coordinates</button>' +
@@ -207,11 +214,9 @@
         _allVenues = venues;
         _dataReady = true;
         _buildSidebar();
-        _renderMarkers();
-        if (_markers.length > 0) {
-          var group = L.featureGroup(_markers);
-          _map.fitBounds(group.getBounds().pad(0.2));
-        }
+        _buildMarkers();
+        var bounds = _layerGroup.getBounds();
+        if (bounds.isValid()) _map.fitBounds(bounds.pad(0.2));
       })
       .catch(function() {
         if (btn) { btn.disabled = false; btn.textContent = 'Load'; }
@@ -220,39 +225,41 @@
 
   window._mapFilterStatus = function(val, checked) {
     _statusFilter[val] = checked;
-    _renderMarkers();
+    _applyFilter();
   };
   window._mapFilterCategory = function(val, checked) {
     _categoryFilter[val] = checked;
-    _renderMarkers();
+    _applyFilter();
   };
   window._mapFilterSize = function(val) {
     _sizeFilter = val;
     document.querySelectorAll('.map-size-btn').forEach(function(b) {
       b.classList.toggle('active', b.dataset.size === val);
     });
-    _renderMarkers();
+    _applyFilter();
   };
 
   function _initLeafletMap() {
     var canvas = document.getElementById('map-canvas');
     if (!canvas || _map) return;
-    _map = L.map(canvas, { zoomControl: true }).setView([48.5, 9.0], 5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 18,
+    _renderer   = L.canvas({ padding: 0.5 });
+    _layerGroup = L.layerGroup();
+    _map = L.map(canvas, { zoomControl: true, preferCanvas: true }).setView([48.5, 9.0], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 19,
+      subdomains: 'abcd',
     }).addTo(_map);
+    _layerGroup.addTo(_map);
   }
 
   function _tryRender() {
     if (!_leafletReady || !_dataReady) return;
     _initLeafletMap();
     _buildSidebar();
-    _renderMarkers();
-    if (_markers.length > 0) {
-      var group = L.featureGroup(_markers);
-      _map.fitBounds(group.getBounds().pad(0.2));
-    }
+    _buildMarkers();
+    var bounds = _layerGroup.getBounds();
+    if (bounds.isValid()) _map.fitBounds(bounds.pad(0.2));
     setTimeout(function() { if (_map) _map.invalidateSize(); }, 50);
   }
 
@@ -284,8 +291,6 @@
   function _resize() {
     var mapEl = document.getElementById('map-view');
     if (!mapEl || mapEl.style.display === 'none') return;
-    var top = mapEl.getBoundingClientRect().top;
-    mapEl.style.height = Math.max(300, window.innerHeight - top) + 'px';
     if (_map) _map.invalidateSize();
   }
 
@@ -324,7 +329,7 @@
           if (failed) summary += ', ' + failed + ' failed';
           progress.textContent = 'Done: ' + summary + '.';
         }
-        _renderMarkers();
+        _buildMarkers();
         return;
       }
       var v = ungeocoded[done];
