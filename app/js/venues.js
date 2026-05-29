@@ -7,13 +7,14 @@ window.VENUE_STATUSES = [
 ];
 
 window.VENUE_CATEGORIES = [
-  { value: 'club',        label: 'Club' },
-  { value: 'restaurant',  label: 'Restaurant' },
-  { value: 'festival',    label: 'Festival' },
-  { value: 'pub',         label: 'Pub' },
-  { value: 'private',     label: 'Private' },
-  { value: 'street',      label: 'Street' },
-  { value: 'placeholder', label: 'Placeholder' },
+  { value: 'association',  label: 'Association' },
+  { value: 'club',         label: 'Club' },
+  { value: 'festival',     label: 'Festival' },
+  { value: 'placeholder',  label: 'Placeholder' },
+  { value: 'private',      label: 'Private' },
+  { value: 'pub',          label: 'Pub' },
+  { value: 'restaurant',   label: 'Restaurant' },
+  { value: 'street',       label: 'Street' },
 ];
 
 var VENUE_STATUSES   = window.VENUE_STATUSES;
@@ -317,6 +318,34 @@ function switchVenueTab(view) {
   }
 }
 
+var _COUNTRY_CODES = {
+  'afghanistan':'AF','albania':'AL','algeria':'DZ','argentina':'AR','armenia':'AM',
+  'australia':'AU','austria':'AT','azerbaijan':'AZ','belarus':'BY','belgium':'BE',
+  'bolivia':'BO','bosnia and herzegovina':'BA','brazil':'BR','bulgaria':'BG',
+  'canada':'CA','chile':'CL','china':'CN','colombia':'CO','croatia':'HR',
+  'cyprus':'CY','czech republic':'CZ','czechia':'CZ','denmark':'DK','ecuador':'EC',
+  'egypt':'EG','estonia':'EE','finland':'FI','france':'FR','georgia':'GE',
+  'germany':'DE','ghana':'GH','greece':'GR','hungary':'HU','iceland':'IS',
+  'india':'IN','indonesia':'ID','ireland':'IE','israel':'IL','italy':'IT',
+  'japan':'JP','jordan':'JO','kazakhstan':'KZ','kenya':'KE','latvia':'LV',
+  'lebanon':'LB','liechtenstein':'LI','lithuania':'LT','luxembourg':'LU',
+  'malaysia':'MY','malta':'MT','mexico':'MX','moldova':'MD','monaco':'MC',
+  'montenegro':'ME','morocco':'MA','netherlands':'NL','new zealand':'NZ',
+  'nigeria':'NG','north macedonia':'MK','norway':'NO','pakistan':'PK','peru':'PE',
+  'philippines':'PH','poland':'PL','portugal':'PT','romania':'RO','russia':'RU',
+  'san marino':'SM','saudi arabia':'SA','serbia':'RS','singapore':'SG',
+  'slovakia':'SK','slovenia':'SI','south africa':'ZA','south korea':'KR',
+  'spain':'ES','sweden':'SE','switzerland':'CH','taiwan':'TW','thailand':'TH',
+  'tunisia':'TN','turkey':'TR','ukraine':'UA','united arab emirates':'AE',
+  'united kingdom':'GB','great britain':'GB','uk':'GB','united states':'US',
+  'usa':'US','uruguay':'UY','venezuela':'VE','vietnam':'VN',
+};
+function _countryCode(name) {
+  if (!name) return '';
+  if (name.length <= 3) return name.toUpperCase();
+  return (_COUNTRY_CODES[name.toLowerCase()] || name.slice(0, 2).toUpperCase());
+}
+
 var VENUE_COLUMNS = [
   { field: 'name',    label: 'Name',     width: '1.5fr', sortable: true, filterable: true },
   { field: 'postcode',label: 'Postcode', width: '90px',  sortable: true, filterable: true, muted: true },
@@ -364,10 +393,26 @@ initPage(async function(cfg, viewMode) {
 
   var visibleColumns = viewMode ? VENUE_COLUMNS.filter(c => c.field !== 'size' && c.field !== 'status') : VENUE_COLUMNS;
 
+  if (viewMode) {
+    var filterEl2 = document.getElementById('filter-input');
+    if (filterEl2) filterEl2.placeholder = 'Search name, city…';
+  }
+
   venueTable = createSortableList({
     containerId:    'venues-list',
     sortBarId:      'sort-bar',
-    columns:        visibleColumns,
+    columns:        viewMode ? [
+      { field: '_nameCity', label: 'Venue', width: '1fr', sortable: false, filterable: true,
+        render: function(v) {
+          var cc = _countryCode(v.country);
+          var loc = [v.city, cc ? '(' + cc + ')' : ''].filter(Boolean).join(' ');
+          return '<span style="white-space:normal;line-height:1.4">' + escHtml(v.name || '') +
+            (loc ? '<span style="color:var(--third-color);font-size:0.82rem"> ' + escHtml(loc) + '</span>' : '') +
+            '</span>';
+        }
+      },
+    ] : visibleColumns,
+    filterInputId:  viewMode ? 'filter-input' : undefined,
     defaultSort:    'name',
     rowClass:       v => v.deleted ? 'deleted' : '',
     onRowClick:     v => { if (!v.deleted) openVenueGigsModal(v); },
@@ -387,7 +432,7 @@ initPage(async function(cfg, viewMode) {
   const statusEl   = document.getElementById('filter-status');
   const categoryEl = document.getElementById('filter-category');
 
-  if (filterEl) {
+  if (filterEl && !_viewMode) {
     filterEl.addEventListener('input', function() {
       clearTimeout(_venuesTimer);
       _venuesTimer = setTimeout(async function() {
@@ -437,7 +482,7 @@ initPage(async function(cfg, viewMode) {
   onEnterSave(document.getElementById('venue-modal'), saveVenue);
 
   var _venueDeepId = Number(new URLSearchParams(location.search).get('id'));
-  if (_venueDeepId) openEditModal(_venueDeepId);
+  if (_venueDeepId && !_viewMode) openEditModal(_venueDeepId);
 });
 
 async function openVenueFromMap(id) {
@@ -457,7 +502,7 @@ async function openVenueFromMap(id) {
 }
 
 async function loadVenues() {
-  const params = new URLSearchParams({ limit: 50, offset: _venuesOffset });
+  const params = new URLSearchParams({ limit: _viewMode ? 500 : 50, offset: _venuesOffset });
   if (_venuesQ)        params.set('q',        _venuesQ);
   if (_venuesStatus)   params.set('status',   _venuesStatus);
   if (_venuesCategory) params.set('category', _venuesCategory);
@@ -466,10 +511,13 @@ async function loadVenues() {
   const r = await fetch(`/api/${artistSlug}/venues?${params}`);
   const { rows, total } = await r.json();
   _venuesTotal = total;
+  var processedRows = _viewMode
+    ? rows.map(function(v) { return Object.assign({}, v, { _nameCity: (v.name || '') + ' ' + (v.city || '') }); })
+    : rows;
   if (_venuesOffset === 0) {
-    allVenues = rows;
+    allVenues = processedRows;
   } else {
-    allVenues = [...allVenues, ...rows];
+    allVenues = [...allVenues, ...processedRows];
   }
   placeholderTable.setData(allVenues.filter(v => v.category === 'placeholder'));
   venueTable.setData(allVenues.filter(v => v.category !== 'placeholder'));

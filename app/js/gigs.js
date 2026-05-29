@@ -249,10 +249,14 @@ initPage(async function(config, viewMode) {
   _viewMode = viewMode;
   artistSlug = cfg.slug;
 
+  var _gigCols = window.innerWidth < 640
+    ? GIG_COLUMNS.filter(function(c) { return c.field !== 'venue_name' && c.field !== 'type'; })
+    : GIG_COLUMNS;
+
   upcomingTable = createSortableList({
     containerId:    'upcoming-list',
     sortBarId:      'sort-bar',
-    columns:        GIG_COLUMNS,
+    columns:        _gigCols,
     defaultSort:    'date',
     defaultSortDir: -1,
     rowClass:       function(g) { return g.deleted ? 'deleted' : ''; },
@@ -263,7 +267,7 @@ initPage(async function(config, viewMode) {
   pastTable = createSortableList({
     containerId:     'past-list',
     sortBarId:       'sort-bar',
-    columns:         GIG_COLUMNS,
+    columns:         _gigCols,
     defaultSort:     'date',
     defaultSortDir:  -1,
     separateDeleted: true,
@@ -313,7 +317,7 @@ initPage(async function(config, viewMode) {
   if (qp.get('venue'))     { document.getElementById('gig-f-venue').value     = qp.get('venue');     _gigFilters.venue     = qp.get('venue').toLowerCase(); }
 if (qp.get('setlist'))   { document.getElementById('gig-f-setlist').value   = qp.get('setlist');   _gigFilters.setlist   = qp.get('setlist').toLowerCase(); }
   if (qp.get('song'))      { document.getElementById('gig-f-song').value      = qp.get('song');      _runGigSongFilter(qp.get('song').toLowerCase()); }
-  if (qp.get('id'))        { openEditModal(Number(qp.get('id'))); }
+  if (qp.get('id') && !_viewMode) { openEditModal(Number(qp.get('id'))); }
   _applyGigsFilter();
 
   onEnterSave(document.getElementById('gig-modal'), saveGig);
@@ -585,7 +589,7 @@ function expandGig(g) {
   if (g.type)            rows.push(['Type',      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
   if (g.time_start)      rows.push(['Time',      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
   if (g.additional_link) rows.push(['Link',      '<a href="' + escHtml(g.additional_link) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
-  if (g.comment)         rows.push(['Notes',     escHtml(g.comment)]);
+  if (g.comment && !_viewMode) rows.push(['Notes', escHtml(g.comment)]);
   if (g.additional_text) rows.push(['Info',      escHtml(g.additional_text)]);
   if (!rows.length) return '<span style="color:var(--third-color);font-size:0.82rem;">No details on record.</span>';
   return rows.map(function(r) {

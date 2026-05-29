@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=14">
+  <link rel="stylesheet" href="/app/css/app.css?v=24">
   <style>
     .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
@@ -28,18 +28,10 @@
       color: var(--third-color); padding: 1.25rem 0 0.4rem;
       border-bottom: 1px solid var(--border-color); margin-bottom: 0.3rem;
     }
-    /* Mobile: compact row (date + title + actions only) */
     @media (max-width: 639px) {
-      #upcoming-list .sl-row, #past-list .sl-row { grid-template-columns: 100px 1fr auto !important; }
-      #upcoming-list .sl-row > div:nth-child(3),
-      #upcoming-list .sl-row > div:nth-child(4),
-      #upcoming-list .sl-row > div:nth-child(5),
-      #past-list .sl-row > div:nth-child(3),
-      #past-list .sl-row > div:nth-child(4),
-      #past-list .sl-row > div:nth-child(5) { display: none; }
       /* Sort: only date and title */
       #sort-bar .sort-btn:not([data-field="date"]):not([data-field="title"]) { display: none; }
-      /* Filter: hide venue and organizer */
+      /* Filter: hide venue */
       .gig-filter-desktop { display: none; }
       /* Add button below filter fields */
       #gigs-filter-bar .filter-bar-row1 { flex-wrap: wrap; }
@@ -210,7 +202,7 @@
   </div>
 </div>
 
-<script src="/app/js/common.js?v=9"></script>
-<script src="/app/js/gigs.js"></script>
+<script src="/app/js/common.js?v=11"></script>
+<script src="/app/js/gigs.js?v=3"></script>
 </body>
 </html>
