@@ -17,6 +17,57 @@ var _gigSongMatchGigIds = null;  // null = no filter; Set<gigId>
 var cfg = null;
 var _viewMode = false;
 
+// ── Gig poster image utilities ────────────────────────────────────────────
+
+function _loadImage(file) {
+  return new Promise(function(resolve, reject) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function() { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('Could not load image')); };
+    img.src = url;
+  });
+}
+
+function _canvasToJpegBlob(canvas, quality) {
+  return new Promise(function(resolve) {
+    canvas.toBlob(resolve, 'image/jpeg', quality);
+  });
+}
+
+async function generatePosterBlob(file) {
+  var img = await _loadImage(file);
+  var limits = [0, 2048, 1600, 1200]; // 0 = natural size first
+  for (var i = 0; i < limits.length; i++) {
+    var maxEdge = limits[i] || Math.max(img.naturalWidth, img.naturalHeight);
+    var scale   = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+    var canvas  = document.createElement('canvas');
+    canvas.width  = Math.round(img.naturalWidth  * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    var blob = await _canvasToJpegBlob(canvas, 0.85);
+    if (blob.size <= 5 * 1024 * 1024) return blob;
+  }
+  // Last resort: 1200px max, quality 0.6
+  var canvas2 = document.createElement('canvas');
+  var s2 = Math.min(1, 1200 / Math.max(img.naturalWidth, img.naturalHeight));
+  canvas2.width  = Math.round(img.naturalWidth  * s2);
+  canvas2.height = Math.round(img.naturalHeight * s2);
+  canvas2.getContext('2d').drawImage(img, 0, 0, canvas2.width, canvas2.height);
+  return _canvasToJpegBlob(canvas2, 0.6);
+}
+
+async function generateThumbBlob(file) {
+  var img  = await _loadImage(file);
+  var size = Math.min(img.naturalWidth, img.naturalHeight);
+  var sx   = (img.naturalWidth  - size) / 2;
+  var sy   = (img.naturalHeight - size) / 2;
+  var c    = document.createElement('canvas');
+  c.width  = c.height = 72;
+  c.getContext('2d').drawImage(img, sx, sy, size, size, 0, 0, 72, 72);
+  return _canvasToJpegBlob(c, 0.85);
+}
+
 var GIG_COLUMNS = [
   { field: 'date', label: 'Date', width: '75px', sortable: true, type: 'date',
     render: g => { if (!g.date) return '—'; var d = String(g.date); return d.slice(8, 10) + '/' + d.slice(5, 7); } },
