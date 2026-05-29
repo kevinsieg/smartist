@@ -1818,6 +1818,22 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 }
 .gig-poster-actions { display: flex; flex-direction: column; gap: 0.3rem; }
 
+/* Calendar subscribe bar */
+.gig-cal-bar {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.78rem; color: var(--third-color);
+    margin-bottom: 0.75rem;
+}
+.gig-cal-bar a { color: var(--secondary-ink); text-decoration: underline; }
+.gig-cal-bar a:hover { color: var(--black); }
+.gig-cal-sep { color: var(--border-color); }
+.gig-cal-copy-btn {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-family: inherit; font-size: inherit; color: var(--third-color);
+    text-decoration: underline; text-underline-offset: 2px;
+}
+.gig-cal-copy-btn:hover { color: var(--black); }
+
 /* Mobile: hide type + venue columns so title gets room; allow title to wrap */
 @media (max-width: 639px) {
     #upcoming-list .sl-row,
