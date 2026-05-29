@@ -1,10 +1,13 @@
+const crypto = require('crypto');
 const { getDb, getArtist, getSlug } = require('../../_db');
 const { requireAuth } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { validateStr } = require('../../_validate');
+const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../../_r2');
 
 module.exports = wrap(async function handler(req, res) {
-  if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+  if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method))
+    return res.status(405).json({ error: 'Method not allowed' });
 
   const slug = getSlug(req);
   const gigId = Number(req.query.id);
