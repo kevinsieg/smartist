@@ -173,7 +173,7 @@ var GIG_COLUMNS = [
   { field: 'thumb_url', label: '', width: '44px', sortable: false,
     render: function(g) {
       if (g.thumb_url) {
-        return '<div class="gig-thumb-wrap" onclick="event.stopPropagation();openLightbox(\'' + escHtml(g.poster_url) + '\')">' +
+        return '<div class="gig-thumb-wrap" data-poster="' + escHtml(g.poster_url) + '" onclick="event.stopPropagation();openLightbox(this.dataset.poster)">' +
                '<img class="gig-thumb" src="' + escHtml(g.thumb_url) + '" loading="lazy"></div>';
       }
       if (!_viewMode) {
