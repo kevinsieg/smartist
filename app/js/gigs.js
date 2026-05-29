@@ -320,6 +320,26 @@ if (qp.get('setlist'))   { document.getElementById('gig-f-setlist').value   = qp
   if (qp.get('id') && !_viewMode) { openEditModal(Number(qp.get('id'))); }
   _applyGigsFilter();
 
+  // Calendar subscribe link
+  var _icsPath = '/api/' + artistSlug + '/gigs?format=ics';
+  var _calBar = document.querySelector('.gig-cal-bar');
+  var _calEl = document.getElementById('gig-cal-subscribe');
+  if (_calEl) {
+    _calEl.href = (location.protocol === 'https:' ? 'webcals://' : 'webcal://') + location.host + _icsPath;
+    _calEl.style.display = '';
+    if (_calBar) _calBar.style.display = '';
+    var _copyEl = document.getElementById('gig-cal-copy');
+    if (_copyEl) {
+      _copyEl.dataset.url = location.protocol + '//' + location.host + _icsPath;
+      _copyEl.addEventListener('click', function() {
+        navigator.clipboard.writeText(this.dataset.url).then(function() {
+          _copyEl.textContent = 'copied!';
+          setTimeout(function() { _copyEl.textContent = 'copy link'; }, 2000);
+        });
+      });
+    }
+  }
+
   onEnterSave(document.getElementById('gig-modal'), saveGig);
 
   // Set sticky offset
@@ -581,6 +601,48 @@ async function openEditModal(id) {
 
 function closeGigModal() { closeModal('gig-modal'); }
 
+function _downloadGigIcs(id) {
+  var g = allGigs.find(function(x) { return x.id === id; });
+  if (!g || !g.date) return;
+  var d = String(g.date).slice(0, 10).replace(/-/g, '');
+  var dtstart, dtend;
+  if (g.time_start) {
+    var ts = g.time_start.slice(0, 5).replace(':', '');
+    dtstart = 'DTSTART:' + d + 'T' + ts + '00';
+    if (g.time_end) {
+      dtend = 'DTEND:' + d + 'T' + g.time_end.slice(0, 5).replace(':', '') + '00';
+    } else {
+      var eh = (Number(ts.slice(0, 2)) + 2) % 24;
+      dtend = 'DTEND:' + d + 'T' + String(eh).padStart(2, '0') + ts.slice(2) + '00';
+    }
+  } else {
+    var next = new Date(g.date); next.setDate(next.getDate() + 1);
+    dtstart = 'DTSTART;VALUE=DATE:' + d;
+    dtend   = 'DTEND;VALUE=DATE:' + next.toISOString().slice(0, 10).replace(/-/g, '');
+  }
+  function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n'); }
+  var loc  = [g.venue_name, g.location].filter(Boolean).join(', ');
+  var desc = [
+    g.type            ? 'Type: ' + g.type           : '',
+    g.additional_link ? 'Link: ' + g.additional_link : '',
+    !_viewMode && g.comment ? g.comment              : '',
+  ].filter(Boolean).join('\\n');
+  var now  = new Date().toISOString().replace(/[-:.]/g,'').slice(0,15) + 'Z';
+  var ics  = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Smartist//EN',
+    'CALSCALE:GREGORIAN','METHOD:PUBLISH','BEGIN:VEVENT',
+    'UID:gig-' + g.id + '@smartist', 'DTSTAMP:' + now,
+    dtstart, dtend, 'SUMMARY:' + esc(g.title),
+    loc  ? 'LOCATION:'    + esc(loc)  : '',
+    desc ? 'DESCRIPTION:' + esc(desc) : '',
+    'END:VEVENT','END:VCALENDAR'].filter(Boolean).join('\r\n');
+  var url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = (g.title || 'gig').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.ics';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function expandGig(g) {
   var rows = [];
   if (g.venue_name)      rows.push(['Venue',     escHtml(g.venue_name)]);
@@ -591,10 +653,16 @@ function expandGig(g) {
   if (g.additional_link) rows.push(['Link',      '<a href="' + escHtml(g.additional_link) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
   if (g.comment && !_viewMode) rows.push(['Notes', escHtml(g.comment)]);
   if (g.additional_text) rows.push(['Info',      escHtml(g.additional_text)]);
-  if (!rows.length) return '<span style="color:var(--third-color);font-size:0.82rem;">No details on record.</span>';
-  return rows.map(function(r) {
+  var html = rows.map(function(r) {
     return '<div class="expansion-row"><span class="expansion-label expansion-key">' + r[0] + '</span><span>' + r[1] + '</span></div>';
   }).join('');
+  if (!html) html = '<span style="color:var(--third-color);font-size:0.82rem;">No details on record.</span>';
+  if (g.date) html += '<div style="margin-top:0.6rem">' +
+    '<button class="btn" style="font-size:0.78rem;padding:0.2rem 0.65rem;min-height:0" ' +
+    'onclick="event.stopPropagation();_downloadGigIcs(' + g.id + ')" title="Download .ics">' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+    'Add to calendar</button></div>';
+  return html;
 }
 
 async function openGigSetlists(gigId) {
