@@ -124,6 +124,51 @@ async function removePoster(gigId) {
   }
 }
 
+function renderPosterRow(g) {
+  var row = document.getElementById('gm-poster-row');
+  if (!row) return;
+  if (!g) { row.innerHTML = ''; return; }
+  if (g.thumb_url) {
+    row.innerHTML =
+      '<div class="gig-poster-row">' +
+        '<img class="gig-poster-thumb" src="' + escHtml(g.thumb_url) + '">' +
+        '<div class="gig-poster-actions">' +
+          '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">Replace</button>' +
+          '<button class="btn" type="button" id="gm-poster-remove-btn" onclick="confirmRemovePoster()">Remove</button>' +
+        '</div>' +
+      '</div>';
+  } else {
+    row.innerHTML =
+      '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">Upload poster</button>';
+  }
+}
+
+function confirmRemovePoster() {
+  var btn = document.getElementById('gm-poster-remove-btn');
+  if (!btn) return;
+  if (btn.dataset.confirm === '1') {
+    removePoster(editingId);
+  } else {
+    btn.textContent = 'Confirm remove';
+    btn.dataset.confirm = '1';
+    setTimeout(function() {
+      if (btn.isConnected) { btn.textContent = 'Remove'; delete btn.dataset.confirm; }
+    }, 3000);
+  }
+}
+
+async function handlePosterSelect(file) {
+  if (!file || !editingId) return;
+  var allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  if (!allowed.has(file.type)) {
+    setStatus('gm-poster-status', 'Only JPEG, PNG, or WebP images are accepted', true);
+    document.getElementById('gm-poster-input').value = '';
+    return;
+  }
+  await uploadPoster(editingId, file);
+  document.getElementById('gm-poster-input').value = '';
+}
+
 var GIG_COLUMNS = [
   { field: 'date', label: 'Date', width: '75px', sortable: true, type: 'date',
     render: g => { if (!g.date) return '—'; var d = String(g.date); return d.slice(8, 10) + '/' + d.slice(5, 7); } },
