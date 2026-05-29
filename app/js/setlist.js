@@ -276,10 +276,16 @@ function renderControls() {
   const fields = (bandConfig.filterFields ?? []).filter(f => !EXCLUDED_FILTER_FIELDS.has(f.field));
   for (const f of fields) activeFilters.set(f.field, new Set());
 
+  const sliderHtml = `<div class="tempo-slider-wrap">
+        <span class="tempo-label">Slow</span>
+        <input type="range" id="tempo-slider" min="0" max="100" value="50" class="tempo-slider">
+        <span class="tempo-label">Fast</span>
+      </div>`;
   const filterRows = fields.map(f =>
     `<div class="filter-row">
       <span class="filter-label">${escHtml(f.label)}</span>
       <div class="filter-buttons" data-field="${escHtml(f.field)}"></div>
+      ${f.field === 'tempo' ? sliderHtml : ''}
     </div>`
   ).join('');
 
@@ -296,11 +302,6 @@ function renderControls() {
         ${filterRows}
       </div>
       <div class="gen-options">
-        <div class="tempo-slider-wrap">
-          <span class="tempo-label">Slow</span>
-          <input type="range" id="tempo-slider" min="0" max="100" value="50" class="tempo-slider">
-          <span class="tempo-label">Fast</span>
-        </div>
         <label class="active-toggle">
           <input type="checkbox" id="active-only" checked onchange="refreshFilterOptions()">
           Active only
@@ -310,7 +311,7 @@ function renderControls() {
           Split into 2 sets
         </label>
         <span class="active-toggle">
-          Capo:
+          Minimize capo changes:
           <label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> banjo</label>
           <label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> guitar</label>
         </span>
