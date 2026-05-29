@@ -38,6 +38,10 @@
     #venues-tabs { top: var(--venues-tabs-top, 60px); }
     #map-search-bar {
       display: none;
+      position: fixed;
+      left: 0; right: 0;
+      z-index: 90;
+      background: var(--bg-color);
       padding: 0.4rem 0.6rem;
       border-bottom: 1px solid var(--border-color);
     }
@@ -54,7 +58,10 @@
     }
     #map-view {
       display: none;
-      /* height set by JS to fill remaining viewport */
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      /* top set by JS in _showMapContainers */
+      z-index: 89;
     }
     #map-sidebar {
       width: 190px;
@@ -64,7 +71,7 @@
       border-right: 1px solid var(--border-color);
       font-size: 0.82rem;
     }
-    #map-canvas { flex: 1; }
+    #map-canvas { flex: 1; background: #e8e0d5; }
     .map-filter-label {
       font-size: 0.7rem;
       letter-spacing: 0.1em;
@@ -144,7 +151,7 @@
   <input type="text" id="map-search-top" placeholder="Search name, city, postcode…"
     oninput="window._mapFilterText(this.value)">
 </div>
-<div id="map-view" style="display:none;flex-shrink:0;">
+<div id="map-view" style="display:none;">
   <div id="map-sidebar"></div>
   <div id="map-canvas"></div>
 </div>

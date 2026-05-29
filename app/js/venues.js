@@ -262,14 +262,30 @@ var _venueActiveTab = 'list';
 var _mapReady = false;
 
 function _showMapContainers() {
-  window.scrollTo(0, 0); // reset scroll so getBoundingClientRect gives correct top
+  window.scrollTo(0, 0);
   var searchEl = document.getElementById('map-search-bar');
+  var tabsEl   = document.getElementById('venues-tabs');
   var mapEl    = document.getElementById('map-view');
-  if (searchEl) searchEl.style.display = '';
+
+  // Anchor below the sticky tabs (which visually sit below the fixed nav bar).
+  // getBoundingClientRect().bottom returns the visual viewport position, accounting
+  // for sticky offset — which is what we need for position:fixed children.
+  var anchor = 0;
+  if (tabsEl && tabsEl.offsetHeight > 0) {
+    anchor = tabsEl.getBoundingClientRect().bottom;
+  } else {
+    var hdr = document.querySelector('.app-header');
+    if (hdr) anchor = hdr.getBoundingClientRect().bottom;
+  }
+
+  if (searchEl) {
+    searchEl.style.top = anchor + 'px';
+    searchEl.style.display = '';
+    anchor += searchEl.getBoundingClientRect().height; // force reflow to get actual height
+  }
   if (mapEl) {
+    mapEl.style.top = anchor + 'px';
     mapEl.style.display = 'flex';
-    var top = mapEl.getBoundingClientRect().top;
-    mapEl.style.height = Math.max(300, window.innerHeight - top) + 'px';
   }
 }
 

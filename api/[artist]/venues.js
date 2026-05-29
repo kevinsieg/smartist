@@ -9,14 +9,10 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const artist = await getArtist(slug);
-    if (!artist) return res.status(404).json({ error: 'Artist not found' });
-
     if (req.query.slim) {
-      // Excludes deleted — suitable for dropdowns. Full list intentionally includes deleted for the CRM view.
       const venues = await sql`
         SELECT id, name, city FROM venues
-        WHERE artist_id = ${artist.id} AND deleted = false
+        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND deleted = false
         ORDER BY name ASC
       `;
       return res.json(venues);
@@ -26,7 +22,7 @@ module.exports = wrap(async function handler(req, res) {
       const statusFilter = req.query.status ? req.query.status.toLowerCase() : null;
       const venues = await sql`
         SELECT * FROM venues
-        WHERE artist_id = ${artist.id} AND deleted = false
+        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND deleted = false
           AND (${statusFilter}::text IS NULL OR LOWER(status) = ${statusFilter})
         ORDER BY name ASC
       `;
@@ -46,7 +42,7 @@ module.exports = wrap(async function handler(req, res) {
       rows = await sql`
         SELECT *, COUNT(*) OVER() AS total
         FROM venues
-        WHERE artist_id = ${artist.id}
+        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug})
           AND (${pattern}::text IS NULL
             OR name     ILIKE ${pattern}
             OR city     ILIKE ${pattern}
@@ -67,7 +63,7 @@ module.exports = wrap(async function handler(req, res) {
       rows = await sql`
         SELECT *, COUNT(*) OVER() AS total
         FROM venues
-        WHERE artist_id = ${artist.id}
+        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug})
           AND (${pattern}::text IS NULL
             OR name     ILIKE ${pattern}
             OR city     ILIKE ${pattern}
@@ -81,7 +77,12 @@ module.exports = wrap(async function handler(req, res) {
         LIMIT ${limit} OFFSET ${offset}
       `;
     }
+    if (!rows.length) {
+      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
+      if (!exists) return res.status(404).json({ error: 'Artist not found' });
+    }
     const total = Number(rows[0]?.total ?? 0);
+    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }
 
