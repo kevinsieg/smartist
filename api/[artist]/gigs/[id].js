@@ -58,6 +58,27 @@ module.exports = wrap(async function handler(req, res) {
   const [gig] = await sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
   if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
+  // ── POST ?action=poster-url — get presigned upload URLs ──────────────────
+  if (req.method === 'POST' && req.query.action === 'poster-url') {
+    const { filename, contentType } = req.body ?? {};
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowed.has(contentType))
+      return res.status(400).json({ error: 'Only JPEG, PNG, or WebP images are supported' });
+    const uuid      = crypto.randomUUID();
+    const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
+    const thumbKey  = `gigs/${artist.slug}/${gigId}-${uuid}-thumb.jpg`;
+    const [poster, thumb] = await Promise.all([
+      createPresignedUrl(posterKey, 'image/jpeg'),
+      createPresignedUrl(thumbKey,  'image/jpeg'),
+    ]);
+    return res.json({
+      posterUploadUrl: poster.uploadUrl,
+      posterPublicUrl: poster.publicUrl,
+      thumbUploadUrl:  thumb.uploadUrl,
+      thumbPublicUrl:  thumb.publicUrl,
+    });
+  }
+
   if (req.method === 'PUT') {
     if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
     const body = req.body ?? {};
