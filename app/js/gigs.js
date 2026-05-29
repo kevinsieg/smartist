@@ -68,6 +68,62 @@ async function generateThumbBlob(file) {
   return _canvasToJpegBlob(c, 0.85);
 }
 
+async function uploadPoster(gigId, file) {
+  setStatus('gm-poster-status', 'Processing image…');
+  try {
+    var [posterBlob, thumbBlob] = await Promise.all([
+      generatePosterBlob(file),
+      generateThumbBlob(file),
+    ]);
+    setStatus('gm-poster-status', 'Uploading…');
+    var r1 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster-url', 'POST', {
+      contentType: file.type,
+    });
+    if (!r1.ok) {
+      var e1 = await r1.json();
+      throw new Error(e1.error || 'Could not get upload URL');
+    }
+    var urls = await r1.json();
+    await Promise.all([
+      fetch(urls.posterUploadUrl, { method: 'PUT', body: posterBlob, headers: { 'Content-Type': 'image/jpeg' } }),
+      fetch(urls.thumbUploadUrl,  { method: 'PUT', body: thumbBlob,  headers: { 'Content-Type': 'image/jpeg' } }),
+    ]);
+    var r2 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster', 'PUT', {
+      posterUrl: urls.posterPublicUrl,
+      thumbUrl:  urls.thumbPublicUrl,
+    });
+    if (!r2.ok) {
+      var e2 = await r2.json();
+      throw new Error(e2.error || 'Could not save poster');
+    }
+    var gig = allGigs.find(function(g) { return g.id === gigId; });
+    if (gig) { gig.poster_url = urls.posterPublicUrl; gig.thumb_url = urls.thumbPublicUrl; }
+    renderGigs();
+    renderPosterRow(gig);
+    setStatus('gm-poster-status', '');
+  } catch (err) {
+    setStatus('gm-poster-status', err.message || 'Upload failed', true);
+  }
+}
+
+async function removePoster(gigId) {
+  setStatus('gm-poster-status', 'Removing…');
+  try {
+    var r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster', 'DELETE');
+    if (!r.ok) {
+      var e = await r.json();
+      throw new Error(e.error || 'Could not remove poster');
+    }
+    var gig = allGigs.find(function(g) { return g.id === gigId; });
+    if (gig) { gig.poster_url = null; gig.thumb_url = null; }
+    renderGigs();
+    renderPosterRow(gig);
+    setStatus('gm-poster-status', '');
+  } catch (err) {
+    setStatus('gm-poster-status', err.message || 'Remove failed', true);
+  }
+}
+
 var GIG_COLUMNS = [
   { field: 'date', label: 'Date', width: '75px', sortable: true, type: 'date',
     render: g => { if (!g.date) return '—'; var d = String(g.date); return d.slice(8, 10) + '/' + d.slice(5, 7); } },
