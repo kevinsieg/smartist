@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS songs (
 
 CREATE INDEX IF NOT EXISTS songs_artist_id_idx  ON songs(artist_id);
 CREATE INDEX IF NOT EXISTS songs_band_active_idx ON songs(artist_id, active);
+CREATE INDEX IF NOT EXISTS songs_list_idx        ON songs(artist_id, deleted, title);
 
 -- ── setlists ───────────────────────────────────────────────────────────────
 -- A saved setlist. Songs are stored in setlist_songs (junction table).
@@ -302,3 +303,7 @@ ALTER TABLE gigs ADD COLUMN IF NOT EXISTS location TEXT;
 -- 2026-05-28: geocoded coordinates for venue map
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+
+-- 2026-05-29: gig poster and thumbnail (columns already added manually)
+ALTER TABLE gigs ADD COLUMN IF NOT EXISTS poster_url TEXT;
+ALTER TABLE gigs ADD COLUMN IF NOT EXISTS thumb_url  TEXT;
