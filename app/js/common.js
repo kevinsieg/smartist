@@ -318,12 +318,7 @@ function isViewMode() {
 }
 
 function injectViewModeNotice() {
-  var target = document.querySelector('.app-page, .gigs-wrap, .venues-wrap, .hub-wrap, .profile-wrap, main') || document.body;
-  var notice = document.createElement('div');
-  notice.className = 'view-mode-notice';
-  notice.innerHTML = 'View only<span class="vmn-sep">·</span><a class="go-login" href="' + loginPageUrl() + '">Log in →</a>';
-  var h1 = target.querySelector('h1');
-  target.insertBefore(notice, h1 ? h1.nextSibling : target.firstChild);
+  // badge is now rendered inline by updateAuthIndicator()
 }
 
 function injectModalCloseButtons() {
@@ -454,8 +449,11 @@ function updateAuthIndicator() {
     if (isLoginPage()) {
       el.innerHTML = '';
     } else {
-      el.innerHTML = '<a class="nav-auth-login nav-auth-login--vm go-login" href="' +
-        loginPageUrl() + '">Login &#8594;</a>';
+      el.innerHTML =
+        '<div class="nav-auth-vm">' +
+          '<a class="nav-auth-login nav-auth-login--vm go-login" href="' + loginPageUrl() + '">Login &#8594;</a>' +
+          '<span class="view-mode-badge">view only</span>' +
+        '</div>';
     }
     if (typeof window.onNavAuthEmpty === 'function') window.onNavAuthEmpty(el);
   }
