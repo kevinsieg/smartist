@@ -134,6 +134,18 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(updated);
   }
 
+  // ── DELETE ?action=poster — remove poster files and clear DB ─────────────
+  if (req.method === 'DELETE' && req.query.action === 'poster') {
+    if (gig.poster_url) await deleteFromR2(gig.poster_url).catch(() => {});
+    if (gig.thumb_url)  await deleteFromR2(gig.thumb_url).catch(() => {});
+    await sql`
+      UPDATE gigs
+      SET poster_url = NULL, thumb_url = NULL, last_updated = NOW()
+      WHERE id = ${gigId} AND artist_id = ${artist.id}
+    `;
+    return res.json({ ok: true });
+  }
+
   if (req.method === 'DELETE') {
     const { hard, cascade } = req.body ?? {};
     if (!hard) {
