@@ -503,6 +503,8 @@ async function openAddModal() {
   document.getElementById('gm-soft-delete-btn').style.display = 'none';
   document.getElementById('gm-related').style.display = 'none';
   setStatus('gm-status', '');
+  var ps = document.getElementById('gm-poster-section');
+  if (ps) ps.style.display = 'none';
   openModal('gig-modal');
 }
 
@@ -528,6 +530,12 @@ async function openEditModal(id) {
   document.getElementById('gm-soft-delete-btn').style.display = '';
   setStatus('gm-status', '');
   renderGigRelated(id);
+  var ps = document.getElementById('gm-poster-section');
+  if (ps) {
+    ps.style.display = '';
+    setStatus('gm-poster-status', '');
+    renderPosterRow(g);
+  }
   openModal('gig-modal');
 }
 
