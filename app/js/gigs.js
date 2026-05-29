@@ -170,6 +170,18 @@ async function handlePosterSelect(file) {
 }
 
 var GIG_COLUMNS = [
+  { field: 'thumb_url', label: '', width: '44px', sortable: false,
+    render: function(g) {
+      if (g.thumb_url) {
+        return '<div class="gig-thumb-wrap" onclick="event.stopPropagation();openLightbox(\'' + escHtml(g.poster_url) + '\')">' +
+               '<img class="gig-thumb" src="' + escHtml(g.thumb_url) + '" loading="lazy"></div>';
+      }
+      if (!_viewMode) {
+        return '<div class="gig-thumb-placeholder gig-thumb-add" onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="Upload poster"></div>';
+      }
+      return '<div class="gig-thumb-placeholder"></div>';
+    }
+  },
   { field: 'date', label: 'Date', width: '75px', sortable: true, type: 'date',
     render: g => { if (!g.date) return '—'; var d = String(g.date); return d.slice(8, 10) + '/' + d.slice(5, 7); } },
   { field: 'title',          label: 'Title',     width: '1fr',   sortable: true, filterable: true },
@@ -190,6 +202,29 @@ var GIG_COLUMNS = [
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>' + setsBtn;
   }},
 ];
+
+var _gigLightboxEl = null;
+
+function _ensureLightbox() {
+  if (_gigLightboxEl) return;
+  _gigLightboxEl = document.createElement('div');
+  _gigLightboxEl.className = 'gig-lightbox';
+  _gigLightboxEl.innerHTML = '<img class="gig-lightbox-img" src="" alt="Poster">';
+  _gigLightboxEl.addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+  document.body.appendChild(_gigLightboxEl);
+}
+
+function openLightbox(url) {
+  if (!url) return;
+  _ensureLightbox();
+  _gigLightboxEl.querySelector('.gig-lightbox-img').src = url;
+  _gigLightboxEl.style.display = 'flex';
+}
+
+function closeLightbox() {
+  if (_gigLightboxEl) _gigLightboxEl.style.display = 'none';
+}
 
 function _insertYearDividers(containerId) {
   var el = document.getElementById(containerId);
