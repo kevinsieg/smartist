@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=14">
+  <link rel="stylesheet" href="/app/css/app.css?v=24">
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" as="script" crossorigin="">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <style>
@@ -22,11 +22,14 @@
     .filter-select { flex: 1 1 110px; min-width: 80px; padding: 0.5rem 0.6rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; font-family: inherit; background: var(--bg-color); color: inherit; cursor: pointer; }
     .filter-select:focus { border-color: var(--secondary-color); outline: none; }
     .toolbar > .btn { flex-shrink: 0; }
-    /* Mobile: compact row (name + city + actions only) */
     @media (max-width: 639px) {
-      #venues-list .sl-row, #placeholder-list .sl-row { grid-template-columns: 1.5fr 1fr auto !important; }
-      #venues-list .sl-row > div:nth-child(n+3):not(:last-child),
-      #placeholder-list .sl-row > div:nth-child(n+3):not(:last-child) { display: none; }
+      /* Auth mode: compact row (name + postcode + actions) */
+      body:not(.view-mode) #venues-list .sl-row,
+      body:not(.view-mode) #placeholder-list .sl-row { grid-template-columns: 1.5fr 1fr auto !important; }
+      body:not(.view-mode) #venues-list .sl-row > div:nth-child(n+3):not(:last-child),
+      body:not(.view-mode) #placeholder-list .sl-row > div:nth-child(n+3):not(:last-child) { display: none; }
+      /* View mode: single full-width column */
+      body.view-mode #venues-list .sl-row { grid-template-columns: 1fr !important; }
       .toolbar { flex-wrap: wrap; }
       .toolbar > .btn { width: 100%; margin-top: 0.5rem; }
     }
@@ -258,9 +261,9 @@
   </div>
 </div>
 
-<script src="/app/js/common.js?v=9"></script>
+<script src="/app/js/common.js?v=11"></script>
 <script src="/app/js/geo.js"></script>
-<script src="/app/js/venues.js"></script>
+<script src="/app/js/venues.js?v=4"></script>
 <script src="/app/js/map.js"></script>
 </body>
 </html>
