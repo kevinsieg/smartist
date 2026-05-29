@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=12">
+  <link rel="stylesheet" href="/app/css/app.css?v=13">
   <style>
     .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
@@ -163,6 +163,14 @@
     <div class="modal-field">
       <label>Comment</label>
       <textarea id="gm-comment" rows="2" placeholder="Notes…"></textarea>
+    </div>
+    <input type="file" id="gm-poster-input" accept="image/jpeg,image/png,image/webp"
+           style="display:none" onchange="handlePosterSelect(this.files[0])">
+    <div id="gm-poster-section" style="display:none">
+      <hr style="border:none;border-top:1px solid var(--border-color);margin:0.9rem 0 0.75rem">
+      <label style="display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color);margin-bottom:0.5rem;">Poster / Flyer</label>
+      <div id="gm-poster-row"></div>
+      <div class="status-msg" id="gm-poster-status"></div>
     </div>
     <div class="related-section" id="gm-related" style="display:none;">
       <h4>Related</h4>
