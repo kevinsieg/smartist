@@ -60,7 +60,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── POST ?action=poster-url — get presigned upload URLs ──────────────────
   if (req.method === 'POST' && req.query.action === 'poster-url') {
-    const { filename, contentType } = req.body ?? {};
+    const { contentType } = req.body ?? {};
     const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
     if (!allowed.has(contentType))
       return res.status(400).json({ error: 'Only JPEG, PNG, or WebP images are supported' });
@@ -90,6 +90,15 @@ module.exports = wrap(async function handler(req, res) {
     ]);
     if (!posterOk) return res.status(400).json({ error: 'Poster file not found in storage' });
     if (!thumbOk)  return res.status(400).json({ error: 'Thumbnail file not found in storage' });
+    const expectedPrefix = `gigs/${artist.slug}/${gigId}-`;
+    if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix))
+      return res.status(400).json({ error: 'Invalid poster URL' });
+    if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix))
+      return res.status(400).json({ error: 'Invalid thumb URL' });
+    if (posterOk.contentType !== 'image/jpeg')
+      return res.status(400).json({ error: 'Poster must be a JPEG image' });
+    if (thumbOk.contentType !== 'image/jpeg')
+      return res.status(400).json({ error: 'Thumbnail must be a JPEG image' });
     // Delete old files if replacing
     if (gig.poster_url) {
       await Promise.all([
