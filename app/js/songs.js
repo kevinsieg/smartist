@@ -137,11 +137,23 @@ function _ensureSongsFooter() {
 async function loadAndRender(viewMode) {
   try {
     if (!artistSlug) {
-      const cfg = await getConfig();
-      artistSlug = cfg.slug;
-      applyNav(cfg.name, cfg.config);
+      // Try to read slug synchronously from session cache so songs fetch
+      // can start in parallel with the config network request.
+      try {
+        const _c = JSON.parse(sessionStorage.getItem('artist_config_cache'));
+        if (_c?.slug) artistSlug = _c.slug;
+      } catch {}
     }
-    await fetchSongsList(true);
+    const cfgPromise = getConfig();
+    const songsPromise = artistSlug ? fetchSongsList(true) : null;
+    const cfg = await cfgPromise;
+    applyNav(cfg.name, cfg.config);
+    if (songsPromise) {
+      await songsPromise;
+    } else {
+      artistSlug = cfg.slug;
+      await fetchSongsList(true);
+    }
     var _qp = new URLSearchParams(location.search);
     _pendingSetlistId = Number(_qp.get('setlist_id'));
     _pendingSongId    = String(_qp.get('id') || '');
