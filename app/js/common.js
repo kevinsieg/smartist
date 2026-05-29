@@ -54,7 +54,8 @@ function getInitials(name) {
         '<a href="/organizers" class="auth-only">Organizers</a>' +
         '<a href="/hub">Hub</a>' +
         '<a href="/pro-import">PRO</a>' +
-        '<a href="/profile">Profile</a>' +
+        '<a href="/profile" class="auth-only">Profile</a>' +
+        '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login &#8594;</a>' +
       '</div>' +
       '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">' +
         '<svg class="nav-burger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>' +
@@ -349,8 +350,7 @@ function skeletonHtml(lines) {
 // in their render functions and add the disabled attribute there.
 function applyViewMode() {
   document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
-    el.disabled = true;
-    el.title = 'Login required';
+    el.style.display = 'none';
   });
   document.querySelectorAll('.auth-only').forEach(function(el) {
     el.style.display = 'none';
@@ -452,8 +452,9 @@ function updateAuthIndicator() {
       el.innerHTML =
         '<div class="nav-auth-vm">' +
           '<a class="nav-auth-login nav-auth-login--vm go-login" href="' + loginPageUrl() + '">Login &#8594;</a>' +
-          '<span class="view-mode-badge">view only</span>' +
         '</div>';
+      var _nlLogin = document.getElementById('nav-links-login');
+      if (_nlLogin) _nlLogin.href = loginPageUrl();
     }
     if (typeof window.onNavAuthEmpty === 'function') window.onNavAuthEmpty(el);
   }
@@ -674,15 +675,16 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
   }
 
   function _cellHtml(col, row) {
+    const fieldCls = col.field ? ' sl-cell--' + col.field : '';
     if (col.render) {
-      const cls = col.actions ? 'sl-cell sl-cell--actions' : 'sl-cell';
+      const cls = col.actions ? 'sl-cell sl-cell--actions' : ('sl-cell' + fieldCls);
       return `<div class="${cls}">${col.render(row)}</div>`;
     }
     let val;
     if      (col.type === 'number') val = row[col.field] != null ? Number(row[col.field]).toLocaleString() : '';
     else if (col.type === 'date')   val = row[col.field] ? String(row[col.field]).slice(0, 10) : '—';
     else                            val = escHtml((row[col.field] ?? '').toString());
-    const cls = col.muted ? 'sl-cell sl-cell--muted' : 'sl-cell';
+    const cls = (col.muted ? 'sl-cell sl-cell--muted' : 'sl-cell') + fieldCls;
     return `<div class="${cls}">${val}</div>`;
   }
 

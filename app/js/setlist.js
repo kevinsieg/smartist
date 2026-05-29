@@ -796,7 +796,7 @@ function _openHistPanelContent(item, panelEl) {
           '<strong>' + escHtml(gig.title) + '</strong>' +
           (gig.date ? '<br><span style="color:var(--third-color);font-size:0.8rem">' + escHtml(String(gig.date).slice(0, 10)) + '</span>' : '') +
         '</div>' +
-        '<button class="hist-nav-btn" onclick="navigate(\'/gigs?id=' + gig.id + '\')" title="Open in Gigs">&#8599;</button>' +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/gigs?id=' + gig.id + '\')" title="Open in Gigs">&#8599;</button>') +
       '</div>'
     : '<div class="vsp-section-label">Gig</div>' +
       '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="color:var(--third-color)">No gig linked</div></div>';
@@ -808,7 +808,7 @@ function _openHistPanelContent(item, panelEl) {
           escHtml(gig.venue_name || '') +
           (gig.venue_city ? ', ' + escHtml(gig.venue_city) : '') +
         '</div>' +
-        '<button class="hist-nav-btn" onclick="navigate(\'/venues?id=' + gig.venue_id + '\')" title="Open in Venues">&#8599;</button>' +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/venues?id=' + gig.venue_id + '\')" title="Open in Venues">&#8599;</button>') +
       '</div>'
     : '';
 
@@ -816,7 +816,7 @@ function _openHistPanelContent(item, panelEl) {
     ? '<div class="vsp-section-label">Organizer</div>' +
       '<div class="vsp-cell vsp-cell--full" style="display:flex;align-items:center;gap:0.5rem;">' +
         '<div class="vsp-cell-value" style="flex:1">' + escHtml(gig.organizer_name || '') + '</div>' +
-        '<button class="hist-nav-btn" onclick="navigate(\'/organizers?id=' + gig.organizer_id + '\')" title="Open in Organizers">&#8599;</button>' +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/organizers?id=' + gig.organizer_id + '\')" title="Open in Organizers">&#8599;</button>') +
       '</div>'
     : '';
 

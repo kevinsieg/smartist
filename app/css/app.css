@@ -9,15 +9,15 @@
 
 /* ── Variables ──────────────────────────────────────────────────────────────── */
 :root {
-    --primary-color:   #f5f0ea;
+    --primary-color:   #f8f4ee;
     --secondary-color: #f9bf8f;
     --secondary-ink:   #b06a2a;
-    --third-color:     #575450;
+    --third-color:     #3d3a37;
     --white:           #fff;
-    --black:           #1a1a1a;
+    --black:           #111111;
     --danger-color:    #a03030;
     --border-color:    #ddd5c8;
-    --surface-color:   #f9f5ef;
+    --surface-color:   #fdf9f4;
     --panel-w:         380px;
 }
 
@@ -183,11 +183,16 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
 .nav-auth-logout:hover,
 .nav-auth-login:hover { color: var(--black); }
 
-/* View-mode badge — small label below the login button in the nav */
+/* View-mode login in nav */
 .nav-auth-vm { display: flex; flex-direction: column; align-items: flex-end; gap: 0.05rem; }
-.view-mode-badge {
-    font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--third-color);
+
+/* Mobile-only login link inside the burger dropdown */
+.nav-links-login { display: none; }
+@media (max-width: 767px) {
+    /* Hide the header login button — it lives in the burger dropdown instead */
+    .nav-auth-vm { display: none; }
+    /* Show login link inside the dropdown only when not authed */
+    .app-header:not(.app-header--authed) .nav-links-login { display: block; }
 }
 
 /* Make the login prompt in view mode stand out more */
@@ -224,13 +229,8 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
 }
 .app-header--authed .nav-auth-logout:hover { color: var(--primary-color); }
 
-/* Disabled write-action buttons in view mode */
-body.view-mode button[disabled],
-body.view-mode input[type="submit"][disabled] {
-    opacity: 0.4;
-    cursor: not-allowed !important;
-    pointer-events: none;
-}
+/* Hide write-action buttons in view mode */
+body.view-mode .auth-action { display: none !important; }
 
 /* auth-only elements hidden globally in view mode */
 body.view-mode .auth-only { display: none !important; }
@@ -1415,6 +1415,10 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .sl-row.deleted { opacity: 0.45; cursor: default; }
 .sl-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-cell--muted { color: var(--third-color); font-size: 0.82rem; }
+@media (max-width: 767px) {
+    .sl-row { font-size: 0.95rem; }
+    .sl-cell--muted { font-size: 0.88rem; }
+}
 .sl-cell--actions { display: flex; gap: 0.4rem; justify-content: flex-end; overflow: visible; }
 .sl-badge {
     display: inline-block; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
@@ -1813,4 +1817,21 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
     border-radius: 3px; flex-shrink: 0;
 }
 .gig-poster-actions { display: flex; flex-direction: column; gap: 0.3rem; }
+
+/* Mobile: hide type + venue columns so title gets room; allow title to wrap */
+@media (max-width: 639px) {
+    #upcoming-list .sl-row,
+    #past-list     .sl-row { grid-template-columns: 44px 75px 1fr auto !important; align-items: center; }
+    #upcoming-list .sl-cell--type, #upcoming-list .sl-cell--venue_name,
+    #past-list     .sl-cell--type, #past-list     .sl-cell--venue_name { display: none; }
+    #upcoming-list .sl-cell--title,
+    #past-list     .sl-cell--title { white-space: normal; overflow: visible; text-overflow: clip; padding: 0.15rem 0; }
+}
+
+/* Venue view-mode: combined name+city cell wraps */
+#venues-list .sl-cell--_nameCity { white-space: normal; overflow: visible; text-overflow: clip; }
+@media (max-width: 639px) {
+    #venues-list .sl-row { align-items: center; }
+}
+
 
