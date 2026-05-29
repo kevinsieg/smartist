@@ -79,6 +79,32 @@ module.exports = wrap(async function handler(req, res) {
     });
   }
 
+  // ── PUT ?action=poster — confirm upload, save to DB ──────────────────────
+  if (req.method === 'PUT' && req.query.action === 'poster') {
+    const { posterUrl, thumbUrl } = req.body ?? {};
+    if (!posterUrl || !thumbUrl)
+      return res.status(400).json({ error: 'posterUrl and thumbUrl are required' });
+    const [posterOk, thumbOk] = await Promise.all([
+      verifyUpload(keyFromUrl(posterUrl)),
+      verifyUpload(keyFromUrl(thumbUrl)),
+    ]);
+    if (!posterOk) return res.status(400).json({ error: 'Poster file not found in storage' });
+    if (!thumbOk)  return res.status(400).json({ error: 'Thumbnail file not found in storage' });
+    // Delete old files if replacing
+    if (gig.poster_url) {
+      await Promise.all([
+        deleteFromR2(gig.poster_url).catch(() => {}),
+        gig.thumb_url ? deleteFromR2(gig.thumb_url).catch(() => {}) : Promise.resolve(),
+      ]);
+    }
+    await sql`
+      UPDATE gigs
+      SET poster_url = ${posterUrl}, thumb_url = ${thumbUrl}, last_updated = NOW()
+      WHERE id = ${gigId} AND artist_id = ${artist.id}
+    `;
+    return res.json({ ok: true, posterUrl, thumbUrl });
+  }
+
   if (req.method === 'PUT') {
     if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
     const body = req.body ?? {};
