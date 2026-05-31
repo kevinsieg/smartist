@@ -584,7 +584,7 @@ function openAcceptModal() {
   }, 50);
 }
 
-function closeModal() {
+function _closeAcceptModal() {
   document.getElementById('accept-modal').classList.remove('open');
   document.getElementById('auth-error').className = 'status-msg';
   document.getElementById('save-error').className = 'status-msg';
@@ -593,6 +593,7 @@ function closeModal() {
   document.getElementById('setlist-title').value = '';
   document.getElementById('setlist-comment').value = '';
 }
+registerModal('accept-modal', _closeAcceptModal);
 
 document.getElementById('verify-btn').addEventListener('click', async () => {
   const pw = document.getElementById('password-input').value.trim();
@@ -702,7 +703,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
 
   if (r.ok) {
     const saved = await r.json();
-    closeModal();
+    _closeAcceptModal();
     _histLoaded = false;  // force fresh fetch so the new setlist appears
     _histPendingOpenId = String(saved.id);
     switchTab('history');
@@ -714,7 +715,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
 });
 
 document.getElementById('accept-modal').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeModal();
+  if (e.target === e.currentTarget) _closeAcceptModal();
 });
 
 // --- Tab routing ---
