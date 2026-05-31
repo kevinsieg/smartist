@@ -429,14 +429,15 @@
       })
       .then(function (publicUrl) {
         progress.textContent = 'Saving…';
+        var versionedUrl = publicUrl + '?v=' + Date.now();
         return fetch('/api/config', {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
           },
-          body: JSON.stringify({ config: { faviconUrl: publicUrl } }),
-        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: publicUrl, data: d }; }); });
+          body: JSON.stringify({ config: { faviconUrl: versionedUrl } }),
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: versionedUrl, data: d }; }); });
       })
       .then(function (r) {
         if (!r.ok) throw new Error(r.data.error || 'Failed to save');
