@@ -1409,42 +1409,53 @@ async function _panelUploadHandler(input, sid, mediaType) {
   if (btn) { btn.textContent = '…'; btn.disabled = true; }
 
   try {
-    var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
-    var r = await fetch('/api/' + artistSlug + '/songs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ upload_presign_id: sid, upload_type: mediaType, filename: file.name, contentType: file.type, size: file.size }),
-    });
-    if (r.status === 401) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); return; }
-    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
-
-    var json = await r.json();
-    var put = await fetch(json.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
-
-    var confirm = await fetch('/api/' + artistSlug + '/songs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ media_confirm_id: sid, media_type: mediaType, publicUrl: json.publicUrl }),
-    });
-    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
-
+    var publicUrl = await _uploadSongMedia(sid, mediaType, file);
     var keyMap = { audio: 'extra.listenUrl', sheet: 'extra.sheetUrl', playback: 'extra.playbackUrl' };
     var panelInput = document.querySelector('[data-key="' + keyMap[mediaType] + '"][data-id="' + sid + '"]');
-    if (panelInput) { panelInput.value = json.publicUrl; markPanelEditDirty(); }
-
+    if (panelInput) { panelInput.value = publicUrl; markPanelEditDirty(); }
     var song = songs.find(function(s) { return String(s.id) === String(sid); });
     var extraKeyMap = { audio: 'listenUrl', sheet: 'sheetUrl', playback: 'playbackUrl' };
-    if (song) song.extra = Object.assign({}, song.extra, { [extraKeyMap[mediaType]]: json.publicUrl });
-
+    if (song) song.extra = Object.assign({}, song.extra, { [extraKeyMap[mediaType]]: publicUrl });
     setStatus('saved', 'File uploaded');
     setTimeout(function() { setStatus('', ''); }, 3000);
     if (dirty.size > 0) saveAll();
-  } catch {
-    setStatus('error', 'Upload failed — check your connection');
+  } catch (err) {
+    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
   } finally {
     if (btn) { btn.textContent = origText; btn.disabled = false; }
   }
+}
+
+// Shared presign → PUT → confirm pipeline for all media types.
+// Returns publicUrl on success. Throws on failure; err.message is one of:
+//   'auth'    — session expired (requireLogin already called; caller should bail silently)
+//   'presign' — presign request failed
+//   'storage' — PUT to storage failed
+//   'confirm' — confirm request failed
+async function _uploadSongMedia(sid, type, file) {
+  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var contentType = type === 'sheet' ? 'application/pdf' : file.type;
+  var r = await fetch('/api/' + artistSlug + '/songs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ upload_presign_id: sid, upload_type: type, filename: file.name, contentType: file.type, size: file.size }),
+  });
+  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } throw new Error('auth'); }
+  if (!r.ok) throw new Error('presign');
+
+  var json = await r.json();
+  var put = await fetch(json.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
+  if (!put.ok) throw new Error('storage');
+
+  var confirm = await fetch('/api/' + artistSlug + '/songs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ media_confirm_id: sid, media_type: type, publicUrl: json.publicUrl }),
+  });
+  if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } throw new Error('auth'); }
+  if (!confirm.ok) throw new Error('confirm');
+
+  return json.publicUrl;
 }
 
 // --- Audio upload ---
@@ -1458,62 +1469,23 @@ function triggerAudioUpload(sid) {
 async function handleAudioFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
-  input.value = ''; // reset so same file can be re-selected
-
-  if (file.size > 50 * 1024 * 1024) {
-    setStatus('error', 'File too large — max 50 MB');
-    return;
-  }
+  input.value = '';
+  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .listen-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'audio', filename: file.name, contentType: file.type, size: file.size }),
-    });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
-
-    const { uploadUrl, publicUrl } = await r.json();
-
-    const put = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file,
-    });
-    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
-
-    // Confirm upload: save publicUrl to DB, delete previous file from R2 if any
+    const publicUrl = await _uploadSongMedia(sid, 'audio', file);
     const song = songs.find(s => String(s.id) === String(sid));
-
-    const confirm = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ media_confirm_id: sid, media_type: 'audio', publicUrl }),
-    });
-    if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
-
-    // Update local cache and swap ↑ for ▶ in the table cell
-    if (song) { song.extra = { ...(song.extra ?? {}), listenUrl: publicUrl }; }
+    if (song) song.extra = { ...(song.extra ?? {}), listenUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .listen-cell`);
     if (td) {
       td.querySelector('input[type="text"]').value = publicUrl;
       td.querySelector('.listen-upload-btn')?.remove();
       if (!td.querySelector('.listen-play-btn')) {
         const btn = document.createElement('button');
-        btn.className = 'listen-play-btn';
-        btn.title = 'Play';
-        btn.textContent = '▶';
+        btn.className = 'listen-play-btn'; btn.title = 'Play'; btn.textContent = '▶';
         btn.setAttribute('onclick', `openPlayer('${sid}')`);
         td.prepend(btn);
       }
@@ -1521,8 +1493,8 @@ async function handleAudioFile(input, sid) {
     setStatus('saved', 'Audio uploaded');
     setTimeout(() => setStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
-  } catch {
-    setStatus('error', 'Upload failed — check your connection');
+  } catch (err) {
+    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -1642,67 +1614,32 @@ async function handleReplaceFile(input) {
   input.value = '';
   const sid = currentPlayerSid;
   if (!sid) return;
-
   if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
 
   const replaceBtn = document.getElementById('player-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'audio', filename: file.name, contentType: file.type, size: file.size }),
-    });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closePlayer(); return; }
-    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
-
-    const { uploadUrl, publicUrl } = await r.json();
-
-    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
-
+    const publicUrl = await _uploadSongMedia(sid, 'audio', file);
     const song = songs.find(s => String(s.id) === String(sid));
-
-    const confirm = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ media_confirm_id: sid, media_type: 'audio', publicUrl }),
-    });
-    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
-
-    // Update local cache + table cell hidden input
-    if (song) { song.extra = { ...(song.extra ?? {}), listenUrl: publicUrl }; }
+    if (song) song.extra = { ...(song.extra ?? {}), listenUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .listen-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
-
-    // Swap player content to new file
     const isAudio = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i.test(publicUrl);
     const embedUrl = toEmbedUrl(publicUrl);
-    const content  = document.getElementById('player-content');
+    const content = document.getElementById('player-content');
     if (isAudio) {
       content.innerHTML = `<audio controls src="${escHtml(publicUrl)}" autoplay></audio>`;
     } else if (embedUrl) {
-      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}"
-        allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+    } else {
+      content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
     }
-
-    // Refresh history
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
-      .then(r2 => r2.ok ? r2.json() : [])
-      .then(renderPlayerHistory)
-      .catch(() => {});
-
+    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
     setStatus('saved', 'Audio replaced');
     setTimeout(() => setStatus('', ''), 3000);
-  } catch {
-    setStatus('error', 'Upload failed — check your connection');
+  } catch (err) {
+    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
   } finally {
     if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
@@ -1739,52 +1676,22 @@ async function handleSheetFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-
   if (file.size > 20 * 1024 * 1024) { setStatus('error', 'File too large — max 20 MB'); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .sheet-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'sheet', filename: file.name, size: file.size }),
-    });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
-
-    const { uploadUrl, publicUrl } = await r.json();
-
-    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: file });
-    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
-
+    const publicUrl = await _uploadSongMedia(sid, 'sheet', file);
     const song = songs.find(s => String(s.id) === String(sid));
-
-    const confirm = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ media_confirm_id: sid, media_type: 'sheet', publicUrl }),
-    });
-    if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
-
-    if (song) { song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl }; }
+    if (song) song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .sheet-cell`);
     if (td) {
       td.querySelector('input[type="text"]').value = publicUrl;
       td.querySelector('.sheet-upload-btn')?.remove();
       if (!td.querySelector('.sheet-open-btn')) {
         const btn = document.createElement('button');
-        btn.className = 'sheet-open-btn';
-        btn.title = 'Open sheet';
-        btn.textContent = '≡';
+        btn.className = 'sheet-open-btn'; btn.title = 'Open sheet'; btn.textContent = '≡';
         btn.setAttribute('onclick', `openSheet('${sid}')`);
         td.prepend(btn);
       }
@@ -1792,8 +1699,8 @@ async function handleSheetFile(input, sid) {
     setStatus('saved', 'Sheet uploaded');
     setTimeout(() => setStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
-  } catch {
-    setStatus('error', 'Upload failed — check your connection');
+  } catch (err) {
+    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -1891,58 +1798,23 @@ async function handleReplaceSheet(input) {
   input.value = '';
   const sid = currentSheetSid;
   if (!sid) return;
-
   if (file.size > 20 * 1024 * 1024) { setStatus('error', 'File too large — max 20 MB'); return; }
 
   const replaceBtn = document.getElementById('sheet-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'sheet', filename: file.name, size: file.size }),
-    });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closeSheet(); return; }
-    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
-
-    const { uploadUrl, publicUrl } = await r.json();
-
-    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: file });
-    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
-
+    const publicUrl = await _uploadSongMedia(sid, 'sheet', file);
     const song = songs.find(s => String(s.id) === String(sid));
-
-    const confirm = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
-      },
-      body: JSON.stringify({ media_confirm_id: sid, media_type: 'sheet', publicUrl }),
-    });
-    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
-
-    if (song) { song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl }; }
+    if (song) song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .sheet-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
-
-    document.getElementById('sheet-open-link').href = publicUrl;
-    document.getElementById('sheet-content').innerHTML =
-      `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
-
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
-      .then(r2 => r2.ok ? r2.json() : [])
-      .then(renderSheetHistory)
-      .catch(() => {});
-
+    document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
+    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
     setStatus('saved', 'Sheet replaced');
     setTimeout(() => setStatus('', ''), 3000);
-  } catch {
-    setStatus('error', 'Upload failed — check your connection');
+  } catch (err) {
+    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
   } finally {
     if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
@@ -1985,46 +1857,22 @@ async function handlePlaybackFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-
   if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .playback-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'playback', filename: file.name, contentType: file.type, size: file.size }),
-    });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
-
-    const { uploadUrl, publicUrl } = await r.json();
-
-    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
-
+    const publicUrl = await _uploadSongMedia(sid, 'playback', file);
     const song = songs.find(s => String(s.id) === String(sid));
-
-    const confirm = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ media_confirm_id: sid, media_type: 'playback', publicUrl }),
-    });
-    if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song — reload and try again'); return; }
-
-    if (song) { song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl }; }
+    if (song) song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .playback-cell`);
     if (td) {
       td.querySelector('input[type="text"]').value = publicUrl;
       td.querySelector('.playback-upload-btn')?.remove();
       if (!td.querySelector('.playback-open-btn')) {
         const btn = document.createElement('button');
-        btn.className = 'playback-open-btn';
-        btn.title = 'Play playback';
-        btn.textContent = '▷';
+        btn.className = 'playback-open-btn'; btn.title = 'Play playback'; btn.textContent = '▷';
         btn.setAttribute('onclick', `openPlayback('${sid}')`);
         td.prepend(btn);
       }
@@ -2032,8 +1880,8 @@ async function handlePlaybackFile(input, sid) {
     setStatus('saved', 'Playback uploaded');
     setTimeout(() => setStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
-  } catch {
-    setStatus('error', 'Upload failed — check your connection');
+  } catch (err) {
+    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -2139,51 +1987,24 @@ async function handleReplacePlayback(input) {
   input.value = '';
   const sid = currentPlaybackSid;
   if (!sid) return;
-
   if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
 
   const replaceBtn = document.getElementById('playback-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ upload_presign_id: sid, upload_type: 'playback', filename: file.name, contentType: file.type, size: file.size }),
-    });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closePlayback(); return; }
-    if (!r.ok) { setStatus('error', 'Failed to prepare upload'); return; }
-
-    const { uploadUrl, publicUrl } = await r.json();
-
-    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!put.ok) { setStatus('error', 'Upload to storage failed'); return; }
-
+    const publicUrl = await _uploadSongMedia(sid, 'playback', file);
     const song = songs.find(s => String(s.id) === String(sid));
-
-    const confirm = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
-      body: JSON.stringify({ media_confirm_id: sid, media_type: 'playback', publicUrl }),
-    });
-    if (!confirm.ok) { setStatus('error', 'Saved file but failed to update song'); return; }
-
-    if (song) { song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl }; }
+    if (song) song.extra = { ...(song.extra ?? {}), playbackUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .playback-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
-
     document.getElementById('playback-content').innerHTML =
       `<audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio>`;
-
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
-      .then(r2 => r2.ok ? r2.json() : [])
-      .then(renderPlaybackHistory)
-      .catch(() => {});
-
+    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
     setStatus('saved', 'Playback replaced');
     setTimeout(() => setStatus('', ''), 3000);
-  } catch {
-    setStatus('error', 'Upload failed — check your connection');
+  } catch (err) {
+    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
   } finally {
     if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
