@@ -906,7 +906,13 @@ async function _renderHistoryTab() {
     groupBy:   _getSetYear,
     groupSort: function(a, b) { return b > a ? 1 : -1; },
     onOpen:    _openHistPanelContent,
-    onMobileRowClick: function(id) { _toggleHistItemBody(String(id)); },
+    onRowClick: function(id, panels) {
+      if (window.innerWidth <= 1024) {
+        _toggleHistItemBody(String(id));
+      } else {
+        panels.openPanel(id);
+      }
+    },
   });
 
   var qp = new URLSearchParams(location.search);
