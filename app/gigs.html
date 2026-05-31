@@ -58,8 +58,9 @@
 
     /* Filter panel (collapsible) */
     #gig-filter-panel { margin-bottom: 0.5rem; }
-    #gig-filter-panel .filter-bar { margin-bottom: 0; }
+    #gig-filter-panel .filter-bar { position: static; border-bottom: none; margin-bottom: 0; }
     #gig-filter-panel .filter-bar-fields { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
+    #gig-filter-panel .sort-bar { border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.25rem; margin-bottom: 0; }
 
     /* Year divider in past gigs list */
     .gigs-year-divider {
@@ -121,10 +122,10 @@
         </label>
         <span class="filter-count" id="gig-filter-count"></span>
       </div>
+      <div id="sort-bar" class="sort-bar"></div>
     </div>
   </div>
 
-  <div id="sort-bar" class="sort-bar"></div>
   <div class="gigs-section-title">Upcoming</div>
   <div id="upcoming-list"><p class="empty-hint">Loading…</p></div>
   <div class="gigs-section-title">Past</div>
