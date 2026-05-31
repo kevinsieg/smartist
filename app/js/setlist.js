@@ -622,15 +622,15 @@ document.getElementById('password-input').addEventListener('keydown', e => {
 
 async function loadGigs() {
   try {
-    const r = await fetch(`/api/${artistSlug}/gigs`);
+    const r = await fetch(`/api/${artistSlug}/gigs?limit=500`);
     if (!r.ok) return;
-    const gigs = await r.json();
+    const { rows } = await r.json();
     const sel = document.getElementById('gig-select');
     while (sel.options.length > 1) sel.remove(1);
-    for (const g of gigs) {
+    for (const g of rows) {
       const opt = document.createElement('option');
       opt.value = g.id;
-      opt.textContent = g.name + (g.date ? ' — ' + String(g.date).slice(0, 10) : '');
+      opt.textContent = g.title + (g.date ? ' — ' + String(g.date).slice(0, 10) : '');
       sel.appendChild(opt);
     }
   } catch {}
@@ -1357,8 +1357,7 @@ function _closeSongPanel() {
   document.querySelectorAll('.hist-song-row--active').forEach(function(el) {
     el.classList.remove('hist-song-row--active');
   });
-  var detail = document.getElementById('hist-song-detail');
-  if (detail) detail.innerHTML = '';
+  if (_histView) _histView.deselect();
 }
 
 function _openSongPanel(setlistSid, songId) {
@@ -1381,10 +1380,24 @@ function _openSongPanel(setlistSid, songId) {
   var rowEl = document.querySelector('.hist-song-row[data-song-id="' + songId + '"]');
   if (rowEl) rowEl.classList.add('hist-song-row--active');
 
-  // If panel not open yet, open setlist panel first (synchronously sets up #hist-song-detail)
+  // Open panel with song-only content — no gig/venue/organizer meta
   var panel = document.getElementById('view-side-panel');
-  if (!panel || !panel.classList.contains('open')) {
-    if (_histView) _histView.select(setlistSid);
+  var inner = document.getElementById('view-side-panel-inner');
+  if (!panel || !inner) return;
+
+  var s = _histSets.find(function(x) { return String(x.id) === setlistSid; });
+  inner.innerHTML =
+    '<div class="vsp-header">' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + escHtml((s && s.title) || 'Untitled') + '</h2></div>' +
+      '<button class="vsp-close" onclick="_closeSongPanel()" aria-label="Close">&#215;</button>' +
+    '</div>' +
+    '<div id="hist-song-detail"></div>';
+
+  if (!panel.classList.contains('open')) {
+    panel.classList.add('open');
+    var content = document.getElementById('setlist-content');
+    if (content) content.classList.add('side-panel-open');
+    if (window.innerWidth <= 1024) document.body.style.overflow = 'hidden';
   }
 
   var detail = document.getElementById('hist-song-detail');
@@ -1425,18 +1438,12 @@ function _openSongPanel(setlistSid, songId) {
     : '';
 
   detail.innerHTML =
-    '<hr style="margin:1rem 0;border:none;border-top:1px solid var(--border-color)">' +
-    '<div class="vsp-section-label" style="display:flex;align-items:center;justify-content:space-between;">' +
-      escHtml(song.title || '') +
-      '<button class="hist-nav-btn" onclick="_closeSongPanel()" style="font-size:0.78rem">&#215;</button>' +
-    '</div>' +
+    '<div class="vsp-section-label">' + escHtml(song.title || '') + '</div>' +
     (cells || '') +
     commentBlock + lyricsBlock +
     '<div class="vsp-actions" style="margin-top:0.75rem;">' +
       '<button class="btn" onclick="navigate(\'/songs?id=' + Number(song.id) + '\')">Open in Songs &#8599;</button>' +
     '</div>';
-
-  detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function _histStage(sid) {
