@@ -246,6 +246,8 @@ initPage(async function(config, viewMode) {
   cfg = config;
   _viewMode = viewMode;
   artistSlug = cfg.slug;
+  _gigFilters = { gig: '', venue: '', setlist: '', song: '' };
+  _gigSongMatchGigIds = null;
 
   var _gigCols = window.innerWidth < 640
     ? GIG_COLUMNS.filter(function(c) { return c.field !== 'venue_name' && c.field !== 'type'; })
@@ -342,9 +344,12 @@ initPage(async function(config, viewMode) {
 
   // Deep-link: pre-fill filters from URL params
   var qp = new URLSearchParams(location.search);
-  if (qp.get('venue'))   { document.getElementById('gig-f-venue').value   = qp.get('venue');   _gigFilters.venue   = qp.get('venue').toLowerCase(); }
-  if (qp.get('setlist')) { document.getElementById('gig-f-setlist').value = qp.get('setlist'); _gigFilters.setlist = qp.get('setlist').toLowerCase(); }
-  if (qp.get('song'))    { document.getElementById('gig-f-song').value    = qp.get('song');    _runGigSongFilter(qp.get('song').toLowerCase()); }
+  var _venueEl = document.getElementById('gig-f-venue');
+  var _setlistEl = document.getElementById('gig-f-setlist');
+  var _songDlEl = document.getElementById('gig-f-song');
+  if (qp.get('venue')   && _venueEl)   { _venueEl.value   = qp.get('venue');   _gigFilters.venue   = qp.get('venue').toLowerCase(); }
+  if (qp.get('setlist') && _setlistEl) { _setlistEl.value = qp.get('setlist'); _gigFilters.setlist = qp.get('setlist').toLowerCase(); }
+  if (qp.get('song')    && _songDlEl)  { _songDlEl.value  = qp.get('song');    _runGigSongFilter(qp.get('song').toLowerCase()); }
   if (qp.get('venue') || qp.get('setlist') || qp.get('song')) _openFilterPanel();
   if (qp.get('id') && !_viewMode) { openEditModal(Number(qp.get('id'))); }
   else { openDeepLinkedRow('open'); }
