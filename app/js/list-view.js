@@ -341,6 +341,12 @@ function createListView(opts) {
       var row = e.target.closest('[data-id]');
       if (!row) return;
       var id = row.dataset.id;
+
+      if (opts.onRowClick) {
+        opts.onRowClick(id, { openPanel: _openPanel, closePanel: _closePanel });
+        return;
+      }
+
       if (id === _selectedId) {
         _closePanel();
       } else {
