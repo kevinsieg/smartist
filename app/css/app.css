@@ -166,33 +166,60 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
     display: flex; align-items: center; gap: 0.4rem;
     margin-left: 0; flex-shrink: 0; position: relative; z-index: 2;
 }
-/* auth badge hidden on mobile to save space; shown on sm+ */
-.nav-auth-badge {
-    display: none;
-    font-size: 0.75rem; color: #2d6a2d; letter-spacing: 0.03em;
-    white-space: nowrap;
+/* Authed trigger button — opens Profile / Logout dropdown */
+.nav-auth-btn {
+    background: none; border: none; cursor: pointer;
+    font-family: "Courier New", Courier, monospace; font-size: 0.8rem; font-weight: 700;
+    color: var(--third-color); letter-spacing: 0.03em;
+    padding: 0.2rem 0.45rem; border-radius: 4px;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-.nav-auth-logout,
+.nav-auth-btn:hover { background: rgba(0,0,0,0.06); }
+.app-header--authed .nav-auth-btn { color: var(--primary-color); }
+.app-header--authed .nav-auth-btn:hover { background: rgba(255,255,255,0.12); }
+/* View-mode / unauthed login link */
 .nav-auth-login {
     background: none; border: none; cursor: pointer; padding: 0;
     font-family: "Courier New", Courier, monospace; font-size: 0.75rem;
     color: var(--third-color); text-decoration: underline;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-.nav-auth-logout:hover,
 .nav-auth-login:hover { color: var(--black); }
+/* Auth dropdown menu */
+.nav-auth-menu {
+    position: fixed; background: #fff;
+    border: 1px solid var(--border-color); border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+    min-width: 130px; overflow: hidden; z-index: 200;
+    animation: navAuthMenuIn 60ms ease-out;
+}
+@keyframes navAuthMenuIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+.nav-auth-menu-item {
+    display: flex; align-items: center;
+    padding: 0.55rem 1rem; font-size: 0.8rem; cursor: pointer;
+    color: var(--secondary-ink); border-bottom: 1px solid var(--border-color);
+    font-family: "Courier New", Courier, monospace;
+    -webkit-tap-highlight-color: transparent;
+}
+.nav-auth-menu-item:last-child { border-bottom: none; }
+.nav-auth-menu-item:hover { background: var(--secondary-color); }
 
 /* View-mode login in nav */
 .nav-auth-vm { display: flex; flex-direction: column; align-items: flex-end; gap: 0.05rem; }
 
-/* Mobile-only login link inside the burger dropdown */
-.nav-links-login { display: none; }
+/* Login/logout/profile burger links: hidden everywhere by default.
+   Specificity (0,2,0) beats .nav-links a (0,1,1). */
+.nav-links .nav-links-login,
+.nav-links .nav-links-logout,
+.nav-links .nav-links-profile { display: none; }
 @media (max-width: 767px) {
     /* Hide the header login button — it lives in the burger dropdown instead */
     .nav-auth-vm { display: none; }
-    /* Show login link inside the dropdown only when not authed */
-    .app-header:not(.app-header--authed) .nav-links-login { display: block; }
+    /* Show login when not authed; profile + logout when authed */
+    .app-header:not(.app-header--authed) .nav-links .nav-links-login { display: block; }
+    .app-header--authed .nav-links .nav-links-login                  { display: none; }
+    .app-header--authed .nav-links .nav-links-profile                { display: block; }
+    .app-header--authed .nav-links .nav-links-logout                 { display: block; }
 }
 
 /* Make the login prompt in view mode stand out more */
@@ -221,14 +248,6 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
     background: rgba(255,255,255,0.2);
     color: var(--primary-color);
 }
-.app-header--authed .nav-auth-badge { color: var(--primary-color); font-weight: 700; }
-.app-header--authed .nav-auth-logout {
-    color: var(--primary-color);
-    font-weight: 700;
-    text-decoration-color: rgba(245,240,234,0.5);
-}
-.app-header--authed .nav-auth-logout:hover { color: var(--primary-color); }
-
 /* Hide write-action buttons in view mode */
 body.view-mode .auth-action { display: none !important; }
 
@@ -294,7 +313,6 @@ body.view-mode .venue-filter-desktop { display: none; }
     .nav-links a.current { background: rgba(176,106,42,0.12); border-radius: 6px; }
     .app-header--authed .nav-links a.current { background: var(--primary-color); }
     .nav-auth { margin-left: auto; }
-    .nav-auth-badge { display: inline; }
 }
 
 /* ── Page layout ────────────────────────────────────────────────────────────── */

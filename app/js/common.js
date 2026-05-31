@@ -54,8 +54,9 @@ function getInitials(name) {
         '<a href="/organizers" class="auth-only">Organizers</a>' +
         '<a href="/hub">Hub</a>' +
         '<a href="/pro-import">PRO</a>' +
-        '<a href="/profile" class="auth-only">Profile</a>' +
         '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login &#8594;</a>' +
+        '<a href="/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' +
+        '<a href="#" class="nav-links-logout" id="nav-links-logout">Logout</a>' +
       '</div>' +
       '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">' +
         '<svg class="nav-burger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>' +
@@ -112,6 +113,11 @@ function getInitials(name) {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault();
       goToLogin();
+      return;
+    }
+    if (e.target.closest('#nav-links-logout')) {
+      e.preventDefault();
+      doLogout();
       return;
     }
     // Burger toggle
@@ -443,8 +449,7 @@ function updateAuthIndicator() {
     a.href = authed ? '/dashboard' : loginPageUrl();
   });
   if (authed) {
-    el.innerHTML = '<span class="nav-auth-badge">&#10004; logged in</span>' +
-      '<button class="nav-auth-logout" onclick="doLogout()">logout</button>';
+    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="Account menu">&#10004;</button>';
   } else {
     if (isLoginPage()) {
       el.innerHTML = '';
@@ -462,9 +467,40 @@ function updateAuthIndicator() {
 
 function doLogout() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  var _navH = document.querySelector('.app-header');
+  if (_navH) _navH.classList.remove('nav-open');
+  var _menu = document.getElementById('nav-auth-menu');
+  if (_menu) _menu.remove();
   updateAuthIndicator();
   applyViewMode();
   if (typeof refreshAllActionBtns === 'function') refreshAllActionBtns();
+}
+
+function _openAuthMenu(btn) {
+  var existing = document.getElementById('nav-auth-menu');
+  if (existing) { existing.remove(); return; }
+  var menu = document.createElement('div');
+  menu.id = 'nav-auth-menu';
+  menu.className = 'nav-auth-menu';
+  menu.innerHTML =
+    '<div class="nav-auth-menu-item" onclick="navigate(\'/profile\');document.getElementById(\'nav-auth-menu\')&&document.getElementById(\'nav-auth-menu\').remove()">' +
+      'Profile' +
+    '</div>' +
+    '<div class="nav-auth-menu-item" onclick="doLogout()">' +
+      'Logout' +
+    '</div>';
+  var rect = btn.getBoundingClientRect();
+  menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;right:' + (window.innerWidth - rect.right) + 'px';
+  document.body.appendChild(menu);
+  var overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
+  if (overflow > 0) menu.style.right = '8px';
+  function _closeAuthMenu(e) {
+    if (!menu.contains(e.target) && e.target !== btn) {
+      menu.remove();
+      document.removeEventListener('click', _closeAuthMenu);
+    }
+  }
+  setTimeout(function() { document.addEventListener('click', _closeAuthMenu); }, 0);
 }
 
 // Redirect to the login page if there is no session token. Returns true when a
