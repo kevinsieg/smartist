@@ -1006,4 +1006,71 @@ function initPanelResize() {
     document.addEventListener('mouseup', onUp);
   });
 }
+// ── Shared hard-delete modal ───────────────────────────────────────────────
+var _hardDeleteOpts = null;
+
+function _ensureHardDeleteModal() {
+  if (document.getElementById('hard-delete-modal')) return;
+  var el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.id = 'hard-delete-modal';
+  el.innerHTML =
+    '<div class="modal" style="max-width:380px;">' +
+    '<h2 id="hd-title"></h2>' +
+    '<p id="hd-refs-msg" style="font-size:0.85rem;color:var(--third-color);"></p>' +
+    '<div id="hd-cascade-opts"></div>' +
+    '<div class="status-msg error" id="hd-status"></div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn active" type="button" id="hd-confirm-btn" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>' +
+    '<button class="btn" type="button" onclick="closeModal(\'hard-delete-modal\')">Cancel</button>' +
+    '</div></div>';
+  document.body.appendChild(el);
+}
+
+async function openHardDeleteModal(opts) {
+  _ensureHardDeleteModal();
+  _hardDeleteOpts = opts;
+  document.getElementById('hd-title').textContent = opts.title;
+  document.getElementById('hd-refs-msg').textContent = 'Loading…';
+  document.getElementById('hd-cascade-opts').innerHTML = '';
+  setStatus('hd-status', '');
+  var btn = document.getElementById('hd-confirm-btn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Delete permanently'; }
+  openModal('hard-delete-modal');
+  try {
+    var r = await fetch(opts.refsUrl);
+    var data = await r.json();
+    document.getElementById('hd-refs-msg').innerHTML = opts.buildRefsMsg(data.refs);
+    document.getElementById('hd-cascade-opts').innerHTML = opts.buildCascadeOpts ? opts.buildCascadeOpts(data.refs) : '';
+  } catch {
+    setStatus('hd-status', 'Could not load references.', true);
+  }
+}
+
+async function confirmHardDelete() {
+  if (!_hardDeleteOpts) return;
+  var btn = document.getElementById('hd-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  try {
+    var cascade = _hardDeleteOpts.getCascade ? _hardDeleteOpts.getCascade() : [];
+    var r = await apiFetch(_hardDeleteOpts.deleteUrl, 'DELETE', { hard: true, cascade });
+    if (r.ok) {
+      setStatus('hd-status', 'Deleted.');
+      var opts = _hardDeleteOpts;
+      _hardDeleteOpts = null;
+      setTimeout(async function() {
+        closeModal('hard-delete-modal');
+        if (opts.onSuccess) await opts.onSuccess();
+      }, 700);
+    } else {
+      var j = await r.json();
+      setStatus('hd-status', j.error || 'Error', true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Delete permanently'; }
+    }
+  } catch {
+    setStatus('hd-status', 'Network error. Try again.', true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete permanently'; }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', initPanelResize);

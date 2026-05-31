@@ -1,7 +1,6 @@
 var artistSlug = '';
 var allOrganizers = [];
 var editingId = null;
-var hardDeleteId = null;
 
 var organizerTable;
 
@@ -162,7 +161,28 @@ async function expandOrganizer(o) {
 function deleteOrgFromPopup() {
   var id = editingId;
   closeOrgModal();
-  promptHardDelete(id);
+  openHardDeleteModal({
+    title: 'Permanently delete organizer?',
+    refsUrl: '/api/' + artistSlug + '/organizers/' + id + '?refs=1',
+    deleteUrl: '/api/' + artistSlug + '/organizers/' + id,
+    buildRefsMsg: function(refs) {
+      return refs.gigs.length > 0
+        ? 'This organizer is linked to ' + refs.gigs.length + ' gig(s).'
+        : 'This organizer has no linked gigs.';
+    },
+    buildCascadeOpts: function(refs) {
+      if (!refs.gigs.length) return '';
+      return '<label><input type="checkbox" id="hd-cascade-gigs"> Also delete ' + refs.gigs.length + ' linked gig(s)</label><br>' +
+        '<label><input type="checkbox" id="hd-cascade-setlists"> Also delete setlists linked to those gigs</label>';
+    },
+    getCascade: function() {
+      var c = [];
+      if (document.getElementById('hd-cascade-gigs')?.checked)     c.push('gigs');
+      if (document.getElementById('hd-cascade-setlists')?.checked) c.push('setlists');
+      return c;
+    },
+    onSuccess: async function() { _orgsOffset = 0; await loadOrganizers(); },
+  });
 }
 
 async function renderOrganizerGigs(orgId, orgName) {
@@ -223,31 +243,3 @@ async function saveOrganizer() {
   await loadOrganizers();
 }
 
-async function promptHardDelete(id) {
-  hardDeleteId = id;
-  const r = await fetch(`/api/${artistSlug}/organizers/${id}?refs=1`);
-  const { refs } = await r.json();
-  const gigCount = refs.gigs.length;
-  document.getElementById('hd-refs-msg').textContent = gigCount > 0
-    ? `This organizer is linked to ${gigCount} gig(s).`
-    : 'This organizer has no linked gigs.';
-  const opts = [];
-  if (gigCount > 0) {
-    opts.push(`<label><input type="checkbox" id="hd-cascade-gigs"> Also delete ${gigCount} linked gig(s)</label>`);
-    opts.push(`<label><input type="checkbox" id="hd-cascade-setlists"> Also delete setlists linked to those gigs</label>`);
-  }
-  document.getElementById('hd-cascade-opts').innerHTML = opts.join('<br>');
-  setStatus('hd-status', '');
-  openModal('hard-delete-modal');
-}
-
-function closeHardDeleteModal() { closeModal('hard-delete-modal'); }
-
-async function confirmHardDelete() {
-  const cascade = [];
-  if (document.getElementById('hd-cascade-gigs')?.checked)     cascade.push('gigs');
-  if (document.getElementById('hd-cascade-setlists')?.checked) cascade.push('setlists');
-  const r = await apiFetch(`/api/${artistSlug}/organizers/${hardDeleteId}`, 'DELETE', { hard: true, cascade });
-  if (r.ok) { closeHardDeleteModal(); _orgsOffset = 0; await loadOrganizers(); }
-  else { const j = await r.json(); setStatus('hd-status', j.error || 'Error', true); }
-}
