@@ -387,6 +387,7 @@ initPage(async function(cfg, viewMode) {
       _showMapContainers();
       _mapReady = true;
       if (window.initMap) window.initMap(artistSlug);
+      else window._pendingMapSlug = artistSlug;
     }
   }
 
