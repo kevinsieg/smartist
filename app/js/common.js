@@ -449,7 +449,9 @@ function updateAuthIndicator() {
     a.href = authed ? '/dashboard' : loginPageUrl();
   });
   if (authed) {
-    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="Account menu">&#10004;</button>';
+    var _email = sessionStorage.getItem('smartist_admin_email') || '';
+    var _label = _email ? '&#10004; ' + escHtml(_email) : '&#10004;';
+    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="Account menu">' + _label + '</button>';
   } else {
     if (isLoginPage()) {
       el.innerHTML = '';
@@ -467,6 +469,7 @@ function updateAuthIndicator() {
 
 function doLogout() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem('smartist_admin_email');
   var _navH = document.querySelector('.app-header');
   if (_navH) _navH.classList.remove('nav-open');
   var _menu = document.getElementById('nav-auth-menu');

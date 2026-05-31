@@ -56,5 +56,5 @@ module.exports = wrap(async function handler(req, res) {
   const band = await getArtist(slug);
   if (!band) return res.status(404).json({ error: 'Band not found' });
   if (!await checkCredentials(password, band)) return res.status(401).json({ error: 'Invalid password' });
-  res.json({ ok: true });
+  res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
 });
