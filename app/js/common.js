@@ -325,17 +325,13 @@ function injectViewModeNotice() {
 function injectModalCloseButtons() {
   document.querySelectorAll('.modal-overlay[id] > .modal').forEach(function(modal) {
     if (modal.querySelector('.modal-x-btn')) return;
-    var overlay = modal.closest('.modal-overlay');
-    var id = overlay.id;
-    var closeFn = overlay.dataset.closeFn;
+    var id = modal.closest('.modal-overlay').id;
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'modal-x-btn';
     btn.setAttribute('aria-label', 'Close');
     btn.innerHTML = '&#215;';
-    btn.onclick = closeFn && typeof window[closeFn] === 'function'
-      ? function() { window[closeFn](); }
-      : function() { closeModal(id); };
+    btn.onclick = function() { closeModal(id); };
     modal.insertBefore(btn, modal.firstChild);
   });
 }
@@ -535,8 +531,17 @@ function setStatus(elementId, msg, isError = false) {
 }
 
 // Generic modal open/close by element ID.
+var _modalCloseFns = {};
+
+// Register a custom close function for a modal by overlay id.
+// closeModal(id) dispatches through this registry automatically.
+function registerModal(id, fn) { _modalCloseFns[id] = fn; }
+
 function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
-function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
+function closeModal(id) {
+  if (_modalCloseFns[id]) { _modalCloseFns[id](); return; }
+  document.getElementById(id)?.classList.remove('open');
+}
 
 // Wire Enter-to-save on a modal or panel container.
 // Enter on any <input> triggers saveFn(); textarea and select are left alone.

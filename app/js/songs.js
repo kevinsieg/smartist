@@ -1532,9 +1532,8 @@ async function handleAudioFile(input, sid) {
 
 function toEmbedUrl(url) {
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-  if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1`;
-  if (/soundcloud\.com/.test(url))
-    return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&auto_play=true&color=%23f9bf8f&hide_related=true&show_comments=false`;
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}?autoplay=1`;
+  // SoundCloud uses cross-site tracking — open in new tab instead
   return null;
 }
 
@@ -2513,5 +2512,10 @@ document.getElementById('url-preview-iframe').addEventListener('load', () => {
   document.getElementById('url-preview-loading').style.display = 'none';
   document.getElementById('url-preview-iframe').style.display  = '';
 });
+
+registerModal('player-modal',   closePlayer);
+registerModal('sheet-modal',    closeSheet);
+registerModal('playback-modal', closePlayback);
+registerModal('lyrics-modal',   closeLyrics);
 
 init();
