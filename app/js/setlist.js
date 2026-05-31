@@ -832,21 +832,21 @@ function _openHistPanelContent(item, panelEl) {
     '</div>' +
     '<div class="vsp-actions" style="margin-bottom:1rem;">' +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="Edit setlist" onclick="_histEdit(\'' + sid + '\')">' +
+        '<button class="btn icon-btn" data-tooltip="Edit setlist" onclick="_histEdit(\'' + escHtml(sid) + '\')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
           '</svg>' +
         '</button>') +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="Duplicate" onclick="_histDuplicate(\'' + sid + '\')">' +
+        '<button class="btn icon-btn" data-tooltip="Duplicate" onclick="_histDuplicate(\'' + escHtml(sid) + '\')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
             '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
           '</svg>' +
         '</button>') +
-      '<button class="btn" onclick="_histStage(\'' + sid + '\')">Stage</button>' +
+      '<button class="btn" onclick="_histStage(\'' + escHtml(sid) + '\')">Stage</button>' +
       (_viewMode ? '' :
-        '<button class="btn share-btn" onclick="_histShareMenu(\'' + sid + '\', this)">' +
+        '<button class="btn share-btn" onclick="_histShareMenu(\'' + escHtml(sid) + '\', this)">' +
           '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px">' +
             '<path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>' +
             '<polyline points="16 6 12 2 8 6"/>' +
@@ -1025,12 +1025,12 @@ async function _loadAndRenderHistSongs(sid) {
   var total = 0;
   var rows = loaded.map(function(song, i) {
     total += song.length_min || 0;
-    return '<div class="hist-song-row" data-song-id="' + song.id + '" onclick="_openSongPanel(\'' + sid + '\',' + song.id + ')">' +
+    return '<div class="hist-song-row" data-song-id="' + song.id + '" onclick="_openSongPanel(\'' + escHtml(sid) + '\',' + Number(song.id) + ')">' +
       '<span class="hist-song-pos">' + (i + 1) + '.</span>' +
       '<span class="hist-song-name">' + escHtml(song.title || '') + '</span>' +
       (song.key ? '<span class="hist-song-key">' + escHtml(formatKey(song.key)) + '</span>' : '') +
       '<span class="hist-song-len">' + formatLength(song.length_min) + '</span>' +
-      (!_viewMode ? '<button class="hist-song-edit-btn" onclick="event.stopPropagation();navigate(\'/songs?id=' + song.id + '\')" title="Open in Songs" aria-label="Open in Songs">&#8599;</button>' : '') +
+      (!_viewMode ? '<button class="hist-song-edit-btn" onclick="event.stopPropagation();navigate(\'/songs?id=' + Number(song.id) + '\')" title="Open in Songs" aria-label="Open in Songs">&#8599;</button>' : '') +
     '</div>';
   }).join('');
 
@@ -1065,9 +1065,9 @@ function _renderEditSongsList(sid) {
         (song.key ? '<div class="song-meta"><span>' + escHtml(formatKey(song.key)) + '</span></div>' : '') +
       '</div>' +
       '<div class="song-actions">' +
-        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',-1,\'' + sid + '\')" ' + (isFirst ? 'disabled' : '') + ' aria-label="Move up">↑</button>' +
-        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',1,\'' + sid + '\')" ' + (isLast ? 'disabled' : '') + ' aria-label="Move down">↓</button>' +
-        '<button class="move-btn" onclick="_histEditRemoveSong(' + i + ',\'' + sid + '\')" title="Remove">&#215;</button>' +
+        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',-1,\'' + escHtml(sid) + '\')" ' + (isFirst ? 'disabled' : '') + ' aria-label="Move up">↑</button>' +
+        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',1,\'' + escHtml(sid) + '\')" ' + (isLast ? 'disabled' : '') + ' aria-label="Move down">↓</button>' +
+        '<button class="move-btn" onclick="_histEditRemoveSong(' + i + ',\'' + escHtml(sid) + '\')" title="Remove">&#215;</button>' +
       '</div>' +
     '</li>';
   }).join('');
@@ -1159,7 +1159,7 @@ async function _histEdit(sid) {
   inner.innerHTML =
     '<div class="vsp-header">' +
       '<div class="vsp-header-text"><h2 class="vsp-title">Edit Setlist</h2></div>' +
-      '<button class="vsp-close" onclick="_histCancelEdit(\'' + sid + '\')" aria-label="Cancel">×</button>' +
+      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="Cancel">×</button>' +
     '</div>' +
     skeletonHtml(3);
 
@@ -1176,7 +1176,7 @@ async function _histEdit(sid) {
   inner.innerHTML =
     '<div class="vsp-header">' +
       '<div class="vsp-header-text"><h2 class="vsp-title">Edit Setlist</h2></div>' +
-      '<button class="vsp-close" onclick="_histCancelEdit(\'' + sid + '\')" aria-label="Cancel">×</button>' +
+      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="Cancel">×</button>' +
     '</div>' +
     '<div style="padding:0 1rem 1rem;">' +
       '<div class="modal-field">' +
@@ -1195,16 +1195,16 @@ async function _histEdit(sid) {
         '<label>Songs</label>' +
         '<ul id="hist-edit-songs-ul" class="song-list" style="margin:0;padding:0;"></ul>' +
         '<div class="add-song-row" style="margin-top:0.5rem;">' +
-          '<select id="hist-edit-add-select" onchange="_histEditAddSong(this,\'' + sid + '\')">' +
+          '<select id="hist-edit-add-select" onchange="_histEditAddSong(this,\'' + escHtml(sid) + '\')">' +
             '<option value="">+ add a song…</option>' +
           '</select>' +
         '</div>' +
       '</div>' +
       '<div class="status-msg" id="hist-edit-error"></div>' +
       '<div class="modal-actions" id="hist-edit-actions">' +
-        '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + sid + '\')">Save</button>' +
-        '<button class="btn" onclick="_histCancelEdit(\'' + sid + '\')">Cancel</button>' +
-        '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + sid + '\')">Delete</button>' +
+        '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">Save</button>' +
+        '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">Cancel</button>' +
+        '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">Delete</button>' +
       '</div>' +
     '</div>';
 
@@ -1311,8 +1311,8 @@ function _promptDeleteSetlist(sid) {
     '<p style="font-size:0.85rem;margin:0;">Delete <strong>' + escHtml(s.title || 'this setlist') + '</strong>? This cannot be undone.</p>' +
     gigNote +
     '<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">' +
-      '<button class="btn active" style="background:#e55;border-color:#e55;" onclick="_confirmDeleteSetlist(\'' + sid + '\')">Yes, delete</button>' +
-      '<button class="btn" onclick="_cancelDeleteSetlist(\'' + sid + '\')">Cancel</button>' +
+      '<button class="btn active" style="background:#e55;border-color:#e55;" onclick="_confirmDeleteSetlist(\'' + escHtml(sid) + '\')">Yes, delete</button>' +
+      '<button class="btn" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">Cancel</button>' +
     '</div>';
 }
 
@@ -1321,9 +1321,9 @@ function _cancelDeleteSetlist(sid) {
   var actionsEl = document.getElementById('hist-edit-actions');
   if (!actionsEl) return;
   actionsEl.innerHTML =
-    '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + sid + '\')">Save</button>' +
-    '<button class="btn" onclick="_histCancelEdit(\'' + sid + '\')">Cancel</button>' +
-    '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + sid + '\')">Delete</button>';
+    '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">Save</button>' +
+    '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">Cancel</button>' +
+    '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">Delete</button>';
 }
 
 async function _confirmDeleteSetlist(sid) {
@@ -1348,7 +1348,7 @@ async function _confirmDeleteSetlist(sid) {
     if (_histView) _histView.refresh();
   } catch {
     if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:#e55;margin:0;">Delete failed. Try again.</p>' +
-      '<button class="btn" style="margin-top:0.5rem;" onclick="_cancelDeleteSetlist(\'' + sid + '\')">Back</button>';
+      '<button class="btn" style="margin-top:0.5rem;" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">Back</button>';
   }
 }
 
@@ -1432,7 +1432,7 @@ function _openSongPanel(setlistSid, songId) {
     (cells || '') +
     commentBlock + lyricsBlock +
     '<div class="vsp-actions" style="margin-top:0.75rem;">' +
-      '<button class="btn" onclick="navigate(\'/songs?id=' + song.id + '\')">Open in Songs &#8599;</button>' +
+      '<button class="btn" onclick="navigate(\'/songs?id=' + Number(song.id) + '\')">Open in Songs &#8599;</button>' +
     '</div>';
 
   detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1463,13 +1463,13 @@ function _histShareMenu(sid, btn) {
   menu.className = 'share-menu';
   menu.dataset.sid = sid;
   menu.innerHTML =
-    '<div class="share-menu-item" onclick="_histExportPdf(\'' + sid + '\');var m=document.getElementById(\'share-menu-popup\');if(m)m.remove()">' +
+    '<div class="share-menu-item" onclick="_histExportPdf(\'' + escHtml(sid) + '\');var m=document.getElementById(\'share-menu-popup\');if(m)m.remove()">' +
       '<span class="share-menu-icon">⎙</span><span class="share-menu-label">Export PDF</span>' +
     '</div>' +
-    '<div class="share-menu-item" onclick="_histCopyLink(\'' + sid + '\')">' +
+    '<div class="share-menu-item" onclick="_histCopyLink(\'' + escHtml(sid) + '\')">' +
       '<span class="share-menu-icon">⧉</span><span class="share-menu-label">Copy link</span>' +
     '</div>' +
-    '<div class="share-menu-item" onclick="var m=document.getElementById(\'share-menu-popup\');if(m)m.remove();_histShare(\'' + sid + '\')">' +
+    '<div class="share-menu-item" onclick="var m=document.getElementById(\'share-menu-popup\');if(m)m.remove();_histShare(\'' + escHtml(sid) + '\')">' +
       '<span class="share-menu-icon">✉</span><span class="share-menu-label">Share via email</span>' +
     '</div>';
 
@@ -1509,7 +1509,7 @@ function _histShare(sid) {
   inner.innerHTML =
     '<div class="vsp-header">' +
       '<div class="vsp-header-text"><h2 class="vsp-title">Share Setlist</h2></div>' +
-      '<button class="vsp-close" onclick="_histCancelEdit(\'' + sid + '\')" aria-label="Cancel">×</button>' +
+      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="Cancel">×</button>' +
     '</div>' +
     '<p style="padding:0 1rem;font-size:0.84rem;color:var(--third-color);">Send a PDF of this setlist by email.</p>' +
     '<div style="padding:0 1rem;">' +
@@ -1521,8 +1521,8 @@ function _histShare(sid) {
         '<input type="email" id="hist-share-email" placeholder="recipient@example.com"></div>' +
       '<div class="status-msg" id="hist-share-status"></div>' +
       '<div class="modal-actions">' +
-        '<button class="btn active" id="hist-share-send" onclick="_histShareSend(\'' + sid + '\')">Send PDF</button>' +
-        '<button class="btn" onclick="_histCancelEdit(\'' + sid + '\')">Cancel</button>' +
+        '<button class="btn active" id="hist-share-send" onclick="_histShareSend(\'' + escHtml(sid) + '\')">Send PDF</button>' +
+        '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">Cancel</button>' +
       '</div>' +
     '</div>';
 
