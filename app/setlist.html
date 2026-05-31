@@ -35,7 +35,7 @@
   .hist-meta-links { display:flex; flex-wrap:wrap; gap:0.35rem; padding:0.45rem 0.1rem 0.55rem; border-bottom:1px solid var(--border-color); margin-bottom:0.35rem; }
   .hist-meta-link { font-size:0.73rem; color:var(--secondary-ink); background:var(--primary-color); border:1px solid var(--border-color); border-radius:4px; padding:0.15rem 0.5rem; cursor:pointer; transition:background 60ms,border-color 60ms; }
   .hist-meta-link:hover { background:var(--secondary-color); border-color:var(--secondary-color); }
-  .hist-song-row { display:flex; align-items:baseline; gap:0.5rem; padding:0.22rem 0.25rem; font-size:0.84rem; cursor:pointer; border-radius:3px; }
+  .hist-song-row { display:flex; align-items:center; gap:0.5rem; padding:0.22rem 0.25rem; font-size:0.84rem; cursor:pointer; border-radius:3px; }
   .hist-song-row:hover { background:var(--secondary-color); color:var(--secondary-ink); }
   .hist-song-row--active { background:var(--secondary-color); color:var(--secondary-ink); font-weight:600; }
   .hist-song-pos { color:var(--third-color); font-size:0.75rem; min-width:1.5rem; text-align:right; flex-shrink:0; }
@@ -45,6 +45,12 @@
   .hist-songs-total { font-size:0.76rem; color:var(--third-color); margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid var(--border-color); }
   .hist-nav-btn { background:none; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.45rem; cursor:pointer; font-size:0.78rem; color:var(--secondary-ink); line-height:1.5; flex-shrink:0; transition:background 60ms,border-color 60ms; }
   .hist-nav-btn:hover { background:var(--secondary-color); border-color:var(--secondary-color); }
+  .hist-details-btn { display:none; background:none; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.45rem; cursor:pointer; font-size:0.78rem; color:var(--secondary-ink); line-height:1.5; flex-shrink:0; transition:background 60ms,border-color 60ms; }
+  .hist-details-btn:hover { background:var(--secondary-color); border-color:var(--secondary-color); }
+  @media (max-width:1024px) { .hist-details-btn { display:block; } }
+  .hist-song-edit-btn { background:none; border:none; cursor:pointer; font-size:0.75rem; color:var(--third-color); padding:0 0.2rem; flex-shrink:0; opacity:0.6; }
+  .hist-song-edit-btn:hover { opacity:1; color:var(--secondary-ink); }
+  .hist-song-row:hover .hist-song-edit-btn { color:var(--secondary-ink); opacity:1; }
 
   /* Share menu popover */
   .share-menu { background:#fff; border:1px solid var(--border-color); border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.14); min-width:190px; overflow:hidden; animation:share-menu-in 60ms ease-out; z-index:200; }
