@@ -1073,12 +1073,12 @@ function markDirty(sid) {
   dirty.add(String(sid));
   const row = document.getElementById(`row-${sid}`);
   if (row) row.classList.add('dirty');
-  setStatus('unsaved', 'Unsaved changes');
+  _setBulkStatus('unsaved', 'Unsaved changes');
   document.getElementById('save-btn')?.removeAttribute('disabled');
   document.getElementById('discard-btn')?.removeAttribute('disabled');
 }
 
-function setStatus(cls, msg) {
+function _setBulkStatus(cls, msg) {
   const el = document.getElementById('status');
   if (!el) return;
   el.className = 'status ' + cls;
@@ -1121,7 +1121,7 @@ function addRow() {
   dirty.add(tempId);
   tr.classList.add('dirty');
   tr.querySelector('input[type="text"]')?.focus();
-  setStatus('unsaved', 'Unsaved changes');
+  _setBulkStatus('unsaved', 'Unsaved changes');
 }
 
 async function deleteRow(sid) {
@@ -1129,7 +1129,7 @@ async function deleteRow(sid) {
   if (String(sid).startsWith('_new_')) {
     document.getElementById(`row-${sid}`)?.remove();
     dirty.delete(sid);
-    if (dirty.size === 0) setStatus('', '');
+    if (dirty.size === 0) _setBulkStatus('', '');
     return;
   }
 
@@ -1145,11 +1145,11 @@ async function deleteRow(sid) {
     document.getElementById(`row-${sid}`)?.remove();
     dirty.delete(String(sid));
     songs = songs.filter(s => String(s.id) !== String(sid));
-    if (dirty.size === 0) setStatus('', '');
+    if (dirty.size === 0) _setBulkStatus('', '');
   } else if (r.status === 401) {
     if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); }
   } else {
-    setStatus('error', 'Could not delete song — try again');
+    _setBulkStatus('error', 'Could not delete song — try again');
   }
 }
 
@@ -1167,7 +1167,7 @@ async function saveAll() {
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
-  setStatus('', 'Saving…');
+  _setBulkStatus('', 'Saving…');
 
   try {
     const allRows  = [...document.querySelectorAll('#tbody tr')];
@@ -1204,11 +1204,11 @@ async function saveAll() {
 
     dirty.clear();
     await loadAndRender();
-    setStatus('saved', 'All changes saved');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'All changes saved');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
 
   } catch {
-    setStatus('error', 'Save failed — try again');
+    _setBulkStatus('error', 'Save failed — try again');
   } finally {
     const b = document.getElementById('save-btn');
     if (b) { b.disabled = false; b.textContent = 'Save'; }
@@ -1275,7 +1275,7 @@ async function restoreSong(songId) {
   if (r.ok) {
     await loadAndRender();
   } else {
-    setStatus('error', 'Could not restore song — try again');
+    _setBulkStatus('error', 'Could not restore song — try again');
   }
 }
 
@@ -1402,7 +1402,7 @@ async function _panelUploadHandler(input, sid, mediaType) {
   if (!file) return;
 
   var maxBytes = mediaType === 'sheet' ? 20 * 1024 * 1024 : 50 * 1024 * 1024;
-  if (file.size > maxBytes) { setStatus('error', 'File too large'); return; }
+  if (file.size > maxBytes) { _setBulkStatus('error', 'File too large'); return; }
 
   var btn = input.previousElementSibling;
   var origText = btn ? btn.textContent : '';
@@ -1416,11 +1416,11 @@ async function _panelUploadHandler(input, sid, mediaType) {
     var song = songs.find(function(s) { return String(s.id) === String(sid); });
     var extraKeyMap = { audio: 'listenUrl', sheet: 'sheetUrl', playback: 'playbackUrl' };
     if (song) song.extra = Object.assign({}, song.extra, { [extraKeyMap[mediaType]]: publicUrl });
-    setStatus('saved', 'File uploaded');
-    setTimeout(function() { setStatus('', ''); }, 3000);
+    _setBulkStatus('saved', 'File uploaded');
+    setTimeout(function() { _setBulkStatus('', ''); }, 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
   } finally {
     if (btn) { btn.textContent = origText; btn.disabled = false; }
   }
@@ -1470,7 +1470,7 @@ async function handleAudioFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .listen-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
@@ -1490,11 +1490,11 @@ async function handleAudioFile(input, sid) {
         td.prepend(btn);
       }
     }
-    setStatus('saved', 'Audio uploaded');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Audio uploaded');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -1579,7 +1579,7 @@ async function confirmDeleteAudio() {
       body: JSON.stringify({ media_delete_id: sid, media_type: 'audio' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { setStatus('error', 'Could not remove audio file'); return; }
+    if (!r.ok) { _setBulkStatus('error', 'Could not remove audio file'); return; }
 
     // Update local cache and swap ▶ back to ↑ in the table cell
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1597,10 +1597,10 @@ async function confirmDeleteAudio() {
         td.appendChild(btn);
       }
     }
-    setStatus('saved', 'Audio removed');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Audio removed');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    setStatus('error', 'Could not remove audio file');
+    _setBulkStatus('error', 'Could not remove audio file');
   }
 }
 
@@ -1614,7 +1614,7 @@ async function handleReplaceFile(input) {
   input.value = '';
   const sid = currentPlayerSid;
   if (!sid) return;
-  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
 
   const replaceBtn = document.getElementById('player-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
@@ -1636,10 +1636,10 @@ async function handleReplaceFile(input) {
       content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
     }
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
-    setStatus('saved', 'Audio replaced');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Audio replaced');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
   } finally {
     if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
@@ -1676,7 +1676,7 @@ async function handleSheetFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  if (file.size > 20 * 1024 * 1024) { setStatus('error', 'File too large — max 20 MB'); return; }
+  if (file.size > 20 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 20 MB'); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .sheet-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
@@ -1696,11 +1696,11 @@ async function handleSheetFile(input, sid) {
         td.prepend(btn);
       }
     }
-    setStatus('saved', 'Sheet uploaded');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Sheet uploaded');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -1764,7 +1764,7 @@ async function confirmDeleteSheet() {
       body: JSON.stringify({ media_delete_id: sid, media_type: 'sheet' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { setStatus('error', 'Could not remove sheet'); return; }
+    if (!r.ok) { _setBulkStatus('error', 'Could not remove sheet'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.sheetUrl;
@@ -1781,10 +1781,10 @@ async function confirmDeleteSheet() {
         td.appendChild(btn);
       }
     }
-    setStatus('saved', 'Sheet removed');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Sheet removed');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    setStatus('error', 'Could not remove sheet');
+    _setBulkStatus('error', 'Could not remove sheet');
   }
 }
 
@@ -1798,7 +1798,7 @@ async function handleReplaceSheet(input) {
   input.value = '';
   const sid = currentSheetSid;
   if (!sid) return;
-  if (file.size > 20 * 1024 * 1024) { setStatus('error', 'File too large — max 20 MB'); return; }
+  if (file.size > 20 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 20 MB'); return; }
 
   const replaceBtn = document.getElementById('sheet-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
@@ -1811,10 +1811,10 @@ async function handleReplaceSheet(input) {
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
-    setStatus('saved', 'Sheet replaced');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Sheet replaced');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
   } finally {
     if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
@@ -1857,7 +1857,7 @@ async function handlePlaybackFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .playback-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
@@ -1877,11 +1877,11 @@ async function handlePlaybackFile(input, sid) {
         td.prepend(btn);
       }
     }
-    setStatus('saved', 'Playback uploaded');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Playback uploaded');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -1953,7 +1953,7 @@ async function confirmDeletePlayback() {
       body: JSON.stringify({ media_delete_id: sid, media_type: 'playback' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { setStatus('error', 'Could not remove playback file'); return; }
+    if (!r.ok) { _setBulkStatus('error', 'Could not remove playback file'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.playbackUrl;
@@ -1970,10 +1970,10 @@ async function confirmDeletePlayback() {
         td.appendChild(btn);
       }
     }
-    setStatus('saved', 'Playback removed');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Playback removed');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    setStatus('error', 'Could not remove playback file');
+    _setBulkStatus('error', 'Could not remove playback file');
   }
 }
 
@@ -1987,7 +1987,7 @@ async function handleReplacePlayback(input) {
   input.value = '';
   const sid = currentPlaybackSid;
   if (!sid) return;
-  if (file.size > 50 * 1024 * 1024) { setStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
 
   const replaceBtn = document.getElementById('playback-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
@@ -2001,10 +2001,10 @@ async function handleReplacePlayback(input) {
     document.getElementById('playback-content').innerHTML =
       `<audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio>`;
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
-    setStatus('saved', 'Playback replaced');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Playback replaced');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') setStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
   } finally {
     if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
@@ -2206,8 +2206,8 @@ async function saveLyrics() {
     } else {
       closeLyrics();
     }
-    setStatus('saved', 'Lyrics saved');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Lyrics saved');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (e) {
     _lyricsSaveStatus('Network error — could not save', true);
     console.error('saveLyrics network error', e);
@@ -2238,7 +2238,7 @@ async function confirmDeleteLyrics() {
       body: JSON.stringify({ lyrics_delete_id: sid }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { setStatus('error', 'Could not delete lyrics'); return; }
+    if (!r.ok) { _setBulkStatus('error', 'Could not delete lyrics'); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.lyrics;
@@ -2254,10 +2254,10 @@ async function confirmDeleteLyrics() {
         btn.setAttribute('onclick', `openLyricsEdit('${sid}')`);
       }
     }
-    setStatus('saved', 'Lyrics deleted');
-    setTimeout(() => setStatus('', ''), 3000);
+    _setBulkStatus('saved', 'Lyrics deleted');
+    setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    setStatus('error', 'Could not delete lyrics');
+    _setBulkStatus('error', 'Could not delete lyrics');
   }
 }
 
