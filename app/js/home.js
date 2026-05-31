@@ -53,7 +53,10 @@ async function verifyToken(token) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: token }),
     });
-    return r.ok;
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (data.adminEmail) sessionStorage.setItem('smartist_admin_email', data.adminEmail);
+    return true;
   } catch { return false; }
 }
 
