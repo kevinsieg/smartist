@@ -282,9 +282,10 @@
         if (leafletDone) _tryRender();
       })
       .catch(function() {
-        var sb = document.getElementById('map-sidebar');
-        if (sb) sb.innerHTML = '<p style="color:#e55;font-size:0.82rem;padding:0.5rem">Could not load venues.</p>';
+        _allVenues = [];
         _dataReady = true;
+        dataDone = true;
+        if (leafletDone) _tryRender();
       });
   };
 
@@ -361,5 +362,15 @@
     }
     next();
   };
+
+  // SPA navigation with a cached config resolves loadConfig() as a microtask, causing
+  // venues.js's initPage callback to run before this script executes. In that case
+  // window.initMap was undefined when the callback checked it, so the slug was stored
+  // in _pendingMapSlug for us to pick up here.
+  if (window._pendingMapSlug) {
+    var _pendingSlug = window._pendingMapSlug;
+    delete window._pendingMapSlug;
+    window.initMap(_pendingSlug);
+  }
 
 }());
