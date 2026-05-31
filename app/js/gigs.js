@@ -249,6 +249,24 @@ initPage(async function(config, viewMode) {
   _gigFilters = { gig: '', venue: '', setlist: '', song: '' };
   _gigSongMatchGigIds = null;
 
+  // Set up calendar links immediately — no need to wait for gigs to load
+  var _icsPath = '/api/' + artistSlug + '/gigs?format=ics';
+  var _calEl = document.getElementById('gig-cal-subscribe');
+  if (_calEl) {
+    _calEl.href = (location.protocol === 'https:' ? 'webcals://' : 'webcal://') + location.host + _icsPath;
+    _calEl.style.display = '';
+  }
+  var _copyEl = document.getElementById('gig-cal-copy');
+  if (_copyEl) {
+    _copyEl.dataset.url = location.protocol + '//' + location.host + _icsPath;
+    _copyEl.addEventListener('click', function() {
+      navigator.clipboard.writeText(this.dataset.url).then(function() {
+        _copyEl.textContent = 'copied!';
+        setTimeout(function() { _copyEl.textContent = 'Copy link'; }, 2000);
+      });
+    });
+  }
+
   var _gigCols = window.innerWidth < 640
     ? GIG_COLUMNS.filter(function(c) { return c.field !== 'venue_name' && c.field !== 'type'; })
     : GIG_COLUMNS;
@@ -355,24 +373,6 @@ initPage(async function(config, viewMode) {
   else { openDeepLinkedRow('open'); }
   _applyGigsFilter();
   _updateFilterBadge();
-
-  // Calendar action row: set href and copy-link handler
-  var _icsPath = '/api/' + artistSlug + '/gigs?format=ics';
-  var _calEl = document.getElementById('gig-cal-subscribe');
-  if (_calEl) {
-    _calEl.href = (location.protocol === 'https:' ? 'webcals://' : 'webcal://') + location.host + _icsPath;
-    _calEl.style.display = '';
-  }
-  var _copyEl = document.getElementById('gig-cal-copy');
-  if (_copyEl) {
-    _copyEl.dataset.url = location.protocol + '//' + location.host + _icsPath;
-    _copyEl.addEventListener('click', function() {
-      navigator.clipboard.writeText(this.dataset.url).then(function() {
-        _copyEl.textContent = 'copied!';
-        setTimeout(function() { _copyEl.textContent = 'Copy link'; }, 2000);
-      });
-    });
-  }
 
   onEnterSave(document.getElementById('gig-modal'), saveGig);
 
