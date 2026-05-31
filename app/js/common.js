@@ -450,8 +450,19 @@ function updateAuthIndicator() {
   });
   if (authed) {
     var _email = sessionStorage.getItem('smartist_admin_email') || '';
-    var _label = _email ? '&#10004; ' + escHtml(_email) : '&#10004;';
-    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="Account menu">' + _label + '</button>';
+    var _photoUrl = '', _initials = '';
+    try {
+      var _cachedCfg = JSON.parse(sessionStorage.getItem(_CONFIG_KEY) || '{}');
+      _photoUrl = (_cachedCfg.config && _cachedCfg.config.logoUrl) || '';
+      _initials = getInitials(_cachedCfg.name || '');
+    } catch {}
+    var _avatarHtml = _photoUrl
+      ? '<img class="nav-auth-avatar-img" src="' + escHtml(_photoUrl) + '" alt="">'
+      : '<span class="nav-auth-avatar-mono">' + escHtml(_initials || '&#10004;') + '</span>';
+    var _emailHtml = _email ? '<span class="nav-auth-email">' + escHtml(_email) + '</span>' : '';
+    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="Account menu">' +
+      _avatarHtml + _emailHtml +
+    '</button>';
   } else {
     if (isLoginPage()) {
       el.innerHTML = '';
