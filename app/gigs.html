@@ -13,37 +13,95 @@
   <link rel="stylesheet" href="/app/css/app.css?v=25">
   <style>
     .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
-    .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
     .gigs-section-title { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin: 1.75rem 0 0.75rem; }
     .empty-hint { text-align: center; padding: 2rem 1rem; color: var(--third-color); font-size: 0.88rem; }
     .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
     .status-msg.error { color: #e55; }
-    /* Keep add-button on the same line as filters by nesting fields in their own flex container */
-    #gigs-filter-bar .filter-bar-row1 { flex-wrap: nowrap; align-items: flex-start; }
-    #gigs-filter-bar .filter-bar-fields { display: flex; flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; min-width: 0; }
-    #gigs-filter-bar .filter-bar-row1 > .btn { margin-top: 0.9rem; flex-shrink: 0; }
+
+    /* Action row: calendar group left, add-gig right */
+    #gig-action-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; margin-bottom: 0.6rem;
+    }
+    .gig-cal-group {
+      display: flex; align-items: stretch;
+      border: 1px solid var(--border-color); border-radius: 5px; overflow: hidden;
+    }
+    .gig-cal-group a,
+    .gig-cal-group .gig-cal-copy-btn {
+      display: flex; align-items: center; gap: 0.4rem;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.75rem; font-family: inherit;
+      color: var(--secondary-ink);
+      background: none; border: none; cursor: pointer;
+      text-decoration: none; white-space: nowrap;
+    }
+    .gig-cal-group a { border-right: 1px solid var(--border-color); }
+    .gig-cal-group a:hover,
+    .gig-cal-group .gig-cal-copy-btn:hover { background: rgba(0,0,0,0.04); }
+
+    /* Filter toggle button */
+    #gig-filter-toggle {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      border: 1px solid var(--border-color); border-radius: 5px;
+      background: none; padding: 0.28rem 0.75rem;
+      font-size: 0.75rem; font-family: inherit; color: var(--third-color);
+      cursor: pointer; margin-bottom: 0.5rem;
+    }
+    #gig-filter-toggle.has-active { border-color: var(--secondary-ink); color: var(--secondary-ink); }
+    #gig-filter-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--secondary-ink); color: var(--primary-color);
+      border-radius: 9px; font-size: 0.6rem; font-weight: 700;
+      min-width: 16px; height: 16px; padding: 0 4px;
+    }
+
+    /* Filter panel (collapsible) */
+    #gig-filter-panel { margin-bottom: 0.5rem; }
+    #gig-filter-panel .filter-bar { margin-bottom: 0; }
+    #gig-filter-panel .filter-bar-fields { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
+
     /* Year divider in past gigs list */
     .gigs-year-divider {
       font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
       color: var(--third-color); padding: 1.25rem 0 0.4rem;
       border-bottom: 1px solid var(--border-color); margin-bottom: 0.3rem;
     }
+
     @media (max-width: 639px) {
-      /* Sort: only date and title */
       #sort-bar .sort-btn:not([data-field="date"]):not([data-field="title"]) { display: none; }
-      /* Filter: hide venue */
       .gig-filter-desktop { display: none; }
-      /* Add button below filter fields */
-      #gigs-filter-bar .filter-bar-row1 { flex-wrap: wrap; }
-      #gigs-filter-bar .filter-bar-row1 > .btn { width: 100%; margin-top: 0.5rem; }
+      #gig-action-row { flex-wrap: wrap; }
+      .gig-cal-group { flex: 1; }
+      .gig-cal-group a,
+      .gig-cal-group .gig-cal-copy-btn { flex: 1; justify-content: center; }
+      #gig-add-btn { width: 100%; }
+      #gig-filter-toggle { width: 100%; }
     }
   </style>
 </head>
 <body>
 <div class="app-wrap gigs-wrap">
   <h1>Gigs</h1>
-  <div class="filter-bar" id="gigs-filter-bar">
-    <div class="filter-bar-row1">
+
+  <div id="gig-action-row">
+    <div class="gig-cal-group">
+      <a id="gig-cal-subscribe" href="#" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Subscribe to calendar
+      </a>
+      <button id="gig-cal-copy" class="gig-cal-copy-btn">Copy link</button>
+    </div>
+    <button class="btn active auth-action" disabled id="gig-add-btn" onclick="openAddModal()">+ Add gig</button>
+  </div>
+
+  <button id="gig-filter-toggle" aria-expanded="false" aria-controls="gig-filter-panel">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+    Filters <span id="gig-filter-arrow">▾</span><span id="gig-filter-badge" style="display:none"></span>
+  </button>
+
+  <div id="gig-filter-panel" role="region" aria-label="Filters" style="display:none">
+    <div class="filter-bar" id="gigs-filter-bar">
       <div class="filter-bar-fields">
         <label class="filter-bar-field">
           <span class="filter-bar-label">Gig</span>
@@ -63,16 +121,10 @@
         </label>
         <span class="filter-count" id="gig-filter-count"></span>
       </div>
-      <button class="btn active auth-action" disabled id="gig-add-btn" onclick="openAddModal()">+ Add gig</button>
     </div>
   </div>
+
   <div id="sort-bar" class="sort-bar"></div>
-  <div class="gig-cal-bar" style="display:none">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-    <a id="gig-cal-subscribe" href="#" style="display:none">Subscribe to calendar</a>
-    <span class="gig-cal-sep">·</span>
-    <button id="gig-cal-copy" class="gig-cal-copy-btn">copy link</button>
-  </div>
   <div class="gigs-section-title">Upcoming</div>
   <div id="upcoming-list"><p class="empty-hint">Loading…</p></div>
   <div class="gigs-section-title">Past</div>

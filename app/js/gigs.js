@@ -295,6 +295,34 @@ initPage(async function(config, viewMode) {
     if (!Array.isArray(_gigAllSetlists)) _gigAllSetlists = [];
   } catch { _gigAllSetlists = []; }
 
+  // Filter toggle
+  var _filterPanelOpen = false;
+  function _openFilterPanel() {
+    _filterPanelOpen = true;
+    var panel = document.getElementById('gig-filter-panel');
+    var arrow = document.getElementById('gig-filter-arrow');
+    var toggle = document.getElementById('gig-filter-toggle');
+    if (panel) panel.style.display = '';
+    if (arrow) arrow.textContent = '▴';
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+  }
+  function _updateFilterBadge() {
+    var count = ['gig', 'venue', 'setlist', 'song'].filter(function(k) { return !!_gigFilters[k]; }).length;
+    var badge  = document.getElementById('gig-filter-badge');
+    var toggle = document.getElementById('gig-filter-toggle');
+    if (badge)  { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+    if (toggle) toggle.classList.toggle('has-active', count > 0);
+  }
+  var _toggleEl = document.getElementById('gig-filter-toggle');
+  if (_toggleEl) _toggleEl.addEventListener('click', function() {
+    _filterPanelOpen = !_filterPanelOpen;
+    var panel = document.getElementById('gig-filter-panel');
+    var arrow = document.getElementById('gig-filter-arrow');
+    if (panel) panel.style.display = _filterPanelOpen ? '' : 'none';
+    if (arrow) arrow.textContent = _filterPanelOpen ? '▴' : '▾';
+    _toggleEl.setAttribute('aria-expanded', _filterPanelOpen ? 'true' : 'false');
+  });
+
   // Wire filter inputs
   ['gig', 'venue', 'setlist'].forEach(function(field) {
     var el = document.getElementById('gig-f-' + field);
@@ -302,41 +330,43 @@ initPage(async function(config, viewMode) {
     el.addEventListener('input', function(e) {
       _gigFilters[field] = e.target.value.toLowerCase();
       _applyGigsFilter();
+      _updateFilterBadge();
     });
   });
   var songEl = document.getElementById('gig-f-song');
   if (songEl) songEl.addEventListener('input', function(e) {
     _gigFilters.song = e.target.value;
     _runGigSongFilter(e.target.value.trim().toLowerCase());
+    _updateFilterBadge();
   });
 
   // Deep-link: pre-fill filters from URL params
   var qp = new URLSearchParams(location.search);
-  if (qp.get('venue'))     { document.getElementById('gig-f-venue').value     = qp.get('venue');     _gigFilters.venue     = qp.get('venue').toLowerCase(); }
-if (qp.get('setlist'))   { document.getElementById('gig-f-setlist').value   = qp.get('setlist');   _gigFilters.setlist   = qp.get('setlist').toLowerCase(); }
-  if (qp.get('song'))      { document.getElementById('gig-f-song').value      = qp.get('song');      _runGigSongFilter(qp.get('song').toLowerCase()); }
+  if (qp.get('venue'))   { document.getElementById('gig-f-venue').value   = qp.get('venue');   _gigFilters.venue   = qp.get('venue').toLowerCase(); }
+  if (qp.get('setlist')) { document.getElementById('gig-f-setlist').value = qp.get('setlist'); _gigFilters.setlist = qp.get('setlist').toLowerCase(); }
+  if (qp.get('song'))    { document.getElementById('gig-f-song').value    = qp.get('song');    _runGigSongFilter(qp.get('song').toLowerCase()); }
+  if (qp.get('venue') || qp.get('setlist') || qp.get('song')) _openFilterPanel();
   if (qp.get('id') && !_viewMode) { openEditModal(Number(qp.get('id'))); }
   else { openDeepLinkedRow('open'); }
   _applyGigsFilter();
+  _updateFilterBadge();
 
-  // Calendar subscribe link
+  // Calendar action row: set href and copy-link handler
   var _icsPath = '/api/' + artistSlug + '/gigs?format=ics';
-  var _calBar = document.querySelector('.gig-cal-bar');
   var _calEl = document.getElementById('gig-cal-subscribe');
   if (_calEl) {
     _calEl.href = (location.protocol === 'https:' ? 'webcals://' : 'webcal://') + location.host + _icsPath;
     _calEl.style.display = '';
-    if (_calBar) _calBar.style.display = '';
-    var _copyEl = document.getElementById('gig-cal-copy');
-    if (_copyEl) {
-      _copyEl.dataset.url = location.protocol + '//' + location.host + _icsPath;
-      _copyEl.addEventListener('click', function() {
-        navigator.clipboard.writeText(this.dataset.url).then(function() {
-          _copyEl.textContent = 'copied!';
-          setTimeout(function() { _copyEl.textContent = 'copy link'; }, 2000);
-        });
+  }
+  var _copyEl = document.getElementById('gig-cal-copy');
+  if (_copyEl) {
+    _copyEl.dataset.url = location.protocol + '//' + location.host + _icsPath;
+    _copyEl.addEventListener('click', function() {
+      navigator.clipboard.writeText(this.dataset.url).then(function() {
+        _copyEl.textContent = 'copied!';
+        setTimeout(function() { _copyEl.textContent = 'Copy link'; }, 2000);
       });
-    }
+    });
   }
 
   onEnterSave(document.getElementById('gig-modal'), saveGig);
@@ -350,7 +380,7 @@ if (qp.get('setlist'))   { document.getElementById('gig-f-setlist').value   = qp
 
 async function loadGigs() {
   _gigsOffset = 0;
-  const r = await fetch(`/api/${artistSlug}/gigs?limit=50&offset=0`);
+  const r = await fetch(`/api/${artistSlug}/gigs?limit=50&offset=0`, { cache: 'no-store' });
   const { rows, total } = await r.json();
   _gigsTotal = total;
   allGigs = rows;
@@ -411,7 +441,7 @@ async function _runGigSongFilter(q) {
 
 async function loadMoreGigs() {
   _gigsOffset += 50;
-  const r = await fetch(`/api/${artistSlug}/gigs?limit=50&offset=${_gigsOffset}`);
+  const r = await fetch(`/api/${artistSlug}/gigs?limit=50&offset=${_gigsOffset}`, { cache: 'no-store' });
   const { rows } = await r.json();
   allGigs = [...allGigs, ...rows];
   renderGigs();
