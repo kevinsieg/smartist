@@ -3,8 +3,6 @@ var allGigs = [];
 var allVenues = [];
 var allOrganizers = [];
 var editingId = null;
-var hardDeleteId = null;
-
 var upcomingTable;
 var pastTable;
 var _gigsTotal = 0;
@@ -704,7 +702,28 @@ async function openGigSetlists(gigId) {
 function deleteGigFromPopup() {
   var id = editingId;
   closeGigModal();
-  promptHardDelete(id);
+  openHardDeleteModal({
+    title: 'Permanently delete gig?',
+    refsUrl: '/api/' + artistSlug + '/gigs/' + id + '?refs=1',
+    deleteUrl: '/api/' + artistSlug + '/gigs/' + id,
+    buildRefsMsg: function(refs) {
+      if (!refs.setlists.length) return 'No linked setlists.';
+      return 'Linked setlists:<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
+        refs.setlists.map(function(s) { return '<li>' + escHtml(s.title || 'Untitled setlist') + '</li>'; }).join('') +
+        '</ul>';
+    },
+    buildCascadeOpts: function(refs) {
+      return refs.setlists.length
+        ? '<label><input type="checkbox" id="hd-cascade-setlists"> Also delete ' + refs.setlists.length + ' linked setlist(s)</label>'
+        : '';
+    },
+    getCascade: function() {
+      var c = [];
+      if (document.getElementById('hd-cascade-setlists')?.checked) c.push('setlists');
+      return c;
+    },
+    onSuccess: async function() { delete _gigRefsCache[id]; await loadGigs(); },
+  });
 }
 
 async function saveGig() {
@@ -768,43 +787,3 @@ async function renderGigRelated(gigId) {
     || '<span style="color:var(--third-color);font-size:0.82rem;">No related records.</span>';
 }
 
-async function promptHardDelete(id) {
-  hardDeleteId = id;
-  if (!_gigRefsCache[id]) {
-    const r = await fetch(`/api/${artistSlug}/gigs/${id}?refs=1`);
-    _gigRefsCache[id] = await r.json();
-  }
-  const { refs } = _gigRefsCache[id];
-  const setlists = refs.setlists;
-  var msgEl = document.getElementById('hd-refs-msg');
-  if (setlists.length) {
-    msgEl.innerHTML = 'Linked setlists:' +
-      '<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
-      setlists.map(function(s) { return '<li>' + escHtml(s.title || 'Untitled setlist') + '</li>'; }).join('') +
-      '</ul>';
-  } else {
-    msgEl.textContent = 'No linked setlists.';
-  }
-  document.getElementById('hd-cascade-opts').innerHTML = setlists.length
-    ? '<label><input type="checkbox" id="hd-cascade-setlists"> Also delete ' + setlists.length + ' linked setlist(s)</label>'
-    : '';
-  setStatus('hd-status', '');
-  openModal('hard-delete-modal');
-}
-
-function closeHardDeleteModal() { closeModal('hard-delete-modal'); }
-
-async function confirmHardDelete() {
-  const cascade = [];
-  if (document.getElementById('hd-cascade-setlists')?.checked) cascade.push('setlists');
-  const confirmBtn = document.querySelector('#hard-delete-modal .btn.active');
-  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Deleting…'; }
-  const r = await apiFetch(`/api/${artistSlug}/gigs/${hardDeleteId}`, 'DELETE', { hard: true, cascade });
-  if (r.ok) {
-    setStatus('hd-status', 'Deleted.');
-    setTimeout(async function() { closeHardDeleteModal(); await loadGigs(); }, 700);
-  } else {
-    const j = await r.json(); setStatus('hd-status', j.error || 'Error', true);
-    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Delete permanently'; }
-  }
-}
