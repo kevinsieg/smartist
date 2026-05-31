@@ -796,7 +796,7 @@ function _openHistPanelContent(item, panelEl) {
           '<strong>' + escHtml(gig.title) + '</strong>' +
           (gig.date ? '<br><span style="color:var(--third-color);font-size:0.8rem">' + escHtml(String(gig.date).slice(0, 10)) + '</span>' : '') +
         '</div>' +
-        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/gigs?id=' + gig.id + '\')" title="Open in Gigs">&#8599;</button>') +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/gigs?open=' + gig.id + '\')" title="Open in Gigs">&#8599;</button>') +
       '</div>'
     : '<div class="vsp-section-label">Gig</div>' +
       '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="color:var(--third-color)">No gig linked</div></div>';
@@ -808,7 +808,7 @@ function _openHistPanelContent(item, panelEl) {
           escHtml(gig.venue_name || '') +
           (gig.venue_city ? ', ' + escHtml(gig.venue_city) : '') +
         '</div>' +
-        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/venues?id=' + gig.venue_id + '\')" title="Open in Venues">&#8599;</button>') +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/venues?open=' + gig.venue_id + '\')" title="Open in Venues">&#8599;</button>') +
       '</div>'
     : '';
 
@@ -816,7 +816,7 @@ function _openHistPanelContent(item, panelEl) {
     ? '<div class="vsp-section-label">Organizer</div>' +
       '<div class="vsp-cell vsp-cell--full" style="display:flex;align-items:center;gap:0.5rem;">' +
         '<div class="vsp-cell-value" style="flex:1">' + escHtml(gig.organizer_name || '') + '</div>' +
-        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/organizers?id=' + gig.organizer_id + '\')" title="Open in Organizers">&#8599;</button>') +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/organizers?open=' + gig.organizer_id + '\')" title="Open in Organizers">&#8599;</button>') +
       '</div>'
     : '';
 
@@ -906,6 +906,7 @@ async function _renderHistoryTab() {
     groupBy:   _getSetYear,
     groupSort: function(a, b) { return b > a ? 1 : -1; },
     onOpen:    _openHistPanelContent,
+    onMobileRowClick: function(id) { _toggleHistItemBody(String(id)); },
   });
 
   var qp = new URLSearchParams(location.search);
@@ -943,13 +944,13 @@ function _renderHistRow(s) {
   var orgName = (gig && gig.organizer_name) || '';
   var headerLinks = [];
   if (gigName)   headerLinks.push(gig && gig.id
-    ? '<span class="hist-meta-link" onclick="event.stopPropagation();navigate(\'/gigs?id=' + gig.id + '\')">' + escHtml(gigName) + ' &#8599;</span>'
+    ? '<span class="hist-meta-link" onclick="event.stopPropagation();navigate(\'/gigs?open=' + gig.id + '\')">' + escHtml(gigName) + ' &#8599;</span>'
     : '<span class="hist-meta-link" style="cursor:default">' + escHtml(gigName) + '</span>');
   if (venueName) headerLinks.push(gig && gig.venue_id
-    ? '<span class="hist-meta-link" onclick="event.stopPropagation();navigate(\'/venues?id=' + gig.venue_id + '\')">' + escHtml(venueName) + ' &#8599;</span>'
+    ? '<span class="hist-meta-link" onclick="event.stopPropagation();navigate(\'/venues?open=' + gig.venue_id + '\')">' + escHtml(venueName) + ' &#8599;</span>'
     : '<span class="hist-meta-link" style="cursor:default">' + escHtml(venueName) + '</span>');
   if (orgName)   headerLinks.push(gig && gig.organizer_id
-    ? '<span class="hist-meta-link" onclick="event.stopPropagation();navigate(\'/organizers?id=' + gig.organizer_id + '\')">' + escHtml(orgName) + ' &#8599;</span>'
+    ? '<span class="hist-meta-link" onclick="event.stopPropagation();navigate(\'/organizers?open=' + gig.organizer_id + '\')">' + escHtml(orgName) + ' &#8599;</span>'
     : '<span class="hist-meta-link" style="cursor:default">' + escHtml(orgName) + '</span>');
 
   var sid = String(s.id);
@@ -964,6 +965,7 @@ function _renderHistRow(s) {
         (headerLinks.length ? '<div class="hist-meta-links hist-meta-links--header">' + headerLinks.join('') + '</div>' : '') +
       '</div>' +
       '<button class="hist-toggle" onclick="event.stopPropagation();_toggleHistItemBody(\'' + escHtml(sid) + '\')" title="Show songs">&#9654;</button>' +
+      '<button class="hist-details-btn" onclick="event.stopPropagation();_histView&&_histView.select(\'' + escHtml(sid) + '\')" title="Details" aria-label="Details">&#8801;</button>' +
     '</div>' +
   '</div>' +
   '<div class="hist-body" id="hist-body-' + escHtml(sid) + '" hidden></div>';
@@ -1022,6 +1024,7 @@ async function _loadAndRenderHistSongs(sid) {
       '<span class="hist-song-name">' + escHtml(song.title || '') + '</span>' +
       (song.key ? '<span class="hist-song-key">' + escHtml(formatKey(song.key)) + '</span>' : '') +
       '<span class="hist-song-len">' + formatLength(song.length_min) + '</span>' +
+      (!_viewMode ? '<button class="hist-song-edit-btn" onclick="event.stopPropagation();navigate(\'/songs?id=' + song.id + '\')" title="Open in Songs" aria-label="Open in Songs">&#8599;</button>' : '') +
     '</div>';
   }).join('');
 
@@ -1334,8 +1337,9 @@ async function _confirmDeleteSetlist(sid) {
     if (!r.ok) throw new Error('Failed');
     _histSets = _histSets.filter(function(x) { return String(x.id) !== sid; });
     delete _histLoadedSongs[sid];
-    if (_histView) _histView.setData(_histSets);
-    _histCancelEdit(sid);
+    _editSongs = null;
+    _editingSid = null;
+    if (_histView) _histView.refresh();
   } catch {
     if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:#e55;margin:0;">Delete failed. Try again.</p>' +
       '<button class="btn" style="margin-top:0.5rem;" onclick="_cancelDeleteSetlist(\'' + sid + '\')">Back</button>';
