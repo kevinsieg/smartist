@@ -318,13 +318,7 @@ initPage(async function(config, viewMode) {
 if (qp.get('setlist'))   { document.getElementById('gig-f-setlist').value   = qp.get('setlist');   _gigFilters.setlist   = qp.get('setlist').toLowerCase(); }
   if (qp.get('song'))      { document.getElementById('gig-f-song').value      = qp.get('song');      _runGigSongFilter(qp.get('song').toLowerCase()); }
   if (qp.get('id') && !_viewMode) { openEditModal(Number(qp.get('id'))); }
-  if (qp.get('open')) {
-    var _openGigId = Number(qp.get('open'));
-    if (_openGigId) requestAnimationFrame(function() {
-      var _row = document.querySelector('.sl-row[data-id="' + _openGigId + '"]');
-      if (_row) { _row.scrollIntoView({ block: 'center', behavior: 'smooth' }); _row.click(); }
-    });
-  }
+  else { openDeepLinkedRow('open'); }
   _applyGigsFilter();
 
   // Calendar subscribe link
