@@ -61,6 +61,7 @@ initPage(async function(cfg, viewMode) {
 
   var _orgDeepId = Number(new URLSearchParams(location.search).get('id'));
   if (_orgDeepId && !_viewMode) openEditModal(_orgDeepId);
+  else { openDeepLinkedRow('open'); }
 });
 
 async function loadOrganizers() {

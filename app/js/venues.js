@@ -483,6 +483,7 @@ initPage(async function(cfg, viewMode) {
 
   var _venueDeepId = Number(new URLSearchParams(location.search).get('id'));
   if (_venueDeepId && !_viewMode) openEditModal(_venueDeepId);
+  else { openDeepLinkedRow('open'); }
 });
 
 async function openVenueFromMap(id) {

@@ -325,13 +325,17 @@ function injectViewModeNotice() {
 function injectModalCloseButtons() {
   document.querySelectorAll('.modal-overlay[id] > .modal').forEach(function(modal) {
     if (modal.querySelector('.modal-x-btn')) return;
-    var id = modal.closest('.modal-overlay').id;
+    var overlay = modal.closest('.modal-overlay');
+    var id = overlay.id;
+    var closeFn = overlay.dataset.closeFn;
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'modal-x-btn';
     btn.setAttribute('aria-label', 'Close');
     btn.innerHTML = '&#215;';
-    btn.onclick = function() { closeModal(id); };
+    btn.onclick = closeFn && typeof window[closeFn] === 'function'
+      ? function() { window[closeFn](); }
+      : function() { closeModal(id); };
     modal.insertBefore(btn, modal.firstChild);
   });
 }
@@ -543,6 +547,17 @@ function onEnterSave(containerEl, saveFn) {
       e.preventDefault();
       saveFn();
     }
+  });
+}
+
+// Scroll to and expand the list row whose id matches the `open` URL param.
+// Call from initPage callbacks on pages that use createSortableList.
+function openDeepLinkedRow(param) {
+  var id = Number(new URLSearchParams(location.search).get(param || 'open'));
+  if (!id) return;
+  requestAnimationFrame(function() {
+    var row = document.querySelector('.sl-row[data-id="' + id + '"]');
+    if (row) { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); row.click(); }
   });
 }
 
