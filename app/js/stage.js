@@ -175,7 +175,7 @@ async function initSong(params, el, cfg) {
   var activeArrMeta = (song.arrangements || []).find(function(a) { return a.is_active; });
   if (activeArrMeta) {
     try {
-      var arrVersions = await fetch('/api/' + cfg.slug + '/songs/' + songId + '/arrangements').then(function(r) { return r.json(); });
+      var arrVersions = await fetch('/api/' + cfg.slug + '/songs/' + songId + '/arrangements').then(function(r) { if (!r.ok) throw new Error(); return r.json(); });
       activeArr = Array.isArray(arrVersions) ? arrVersions.find(function(v) { return v.is_active; }) || null : null;
     } catch (_) {}
   }
