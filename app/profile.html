@@ -188,6 +188,28 @@
     .config-remove-btn { background: none; border: none; color: #e55; cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 0.2rem; }
     .config-add-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
     .config-editor-actions { display: flex; gap: 0.5rem; margin-top: 0.85rem; }
+
+    .arr-cfg-sub { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.4rem; }
+    .arr-cfg-list { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.5rem; }
+    .arr-member-row { display: flex; align-items: center; gap: 0.4rem; }
+    .arr-cfg-input { flex: 1; padding: 0.3rem 0.5rem; border: 1px solid var(--border-color); border-radius: 3px; font-size: 0.85rem; font-family: inherit; background: var(--bg-color); color: inherit; }
+    .arr-cfg-abbr { width: 48px; text-align: center; }
+    .arr-cfg-remove { background: none; border: none; color: var(--third-color); cursor: pointer; font-size: 1rem; padding: 0 3px; line-height: 1; }
+    .arr-cfg-remove:hover { color: #e55; }
+    .arr-instrument-card { border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 0.3rem; }
+    .arr-instrument-hdr { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; background: var(--secondary-color-light, #fdf6ef); border-bottom: 1px solid var(--border-color); }
+    .arr-instrument-key { flex: 1; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.82rem; font-weight: 600; font-family: inherit; background: var(--bg-color); color: inherit; }
+    .arr-instrument-label { flex: 1.5; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.82rem; font-family: inherit; background: var(--bg-color); color: inherit; }
+    .arr-techniques { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.4rem 0.6rem; align-items: center; }
+    .arr-tech-chip { display: flex; align-items: center; gap: 0.2rem; background: var(--border-color); border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.78rem; }
+    .arr-tech-chip button { background: none; border: none; color: var(--third-color); cursor: pointer; padding: 0; font-size: 0.85rem; line-height: 1; }
+    .arr-tech-chip button:hover { color: #e55; }
+    .arr-tech-add { border: 1px dashed var(--border-color); border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.78rem; width: 90px; font-family: inherit; background: transparent; color: inherit; outline: none; }
+    .arr-cfg-add-btn { font-size: 0.8rem; border: 1px dashed var(--border-color); background: none; color: var(--third-color); }
+    .arr-save-row { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+    .arr-save-msg { font-size: 0.72rem; color: var(--third-color); min-height: 1.2em; }
+    .arr-save-msg.ok { color: #4a9a6a; }
+    .arr-save-msg.err { color: var(--danger-color); }
   </style>
 </head>
 <body>
@@ -256,6 +278,22 @@
       <div class="config-hint">Controls which columns appear in the songs table — <code>displayFields</code></div>
     </div>
 
+    <!-- Arrangement config -->
+    <div class="profile-section" id="arrangement-section">
+      <label>Arrangement — Band Members</label>
+      <div id="arr-members-list" class="arr-cfg-list"></div>
+      <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddMember()">+ Add member</button>
+
+      <label style="margin-top:1.25rem;">Arrangement — Instruments &amp; Techniques</label>
+      <div id="arr-instruments-list" class="arr-cfg-list"></div>
+      <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddInstrument()">+ Add instrument</button>
+
+      <div class="arr-save-row">
+        <button class="btn active auth-action" disabled onclick="saveArrangementConfig()">Save arrangement config</button>
+        <span class="arr-save-msg" id="arr-save-msg"></span>
+      </div>
+    </div>
+
     <!-- Setlist filter fields -->
     <div class="profile-section" id="filter-fields-section" style="display:none;">
       <div class="config-section-header">
@@ -300,6 +338,138 @@
     return (name || '?').split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
   }
 
+  // ── Arrangement config ────────────────────────────────────────────────────
+
+  function _arrCfg() {
+    return _profileCfg && _profileCfg.config && _profileCfg.config.arrangementConfig
+      ? _profileCfg.config.arrangementConfig
+      : { members: [], instruments: [] };
+  }
+
+  function renderArrMembers(members) {
+    var list = document.getElementById('arr-members-list');
+    if (!list) return;
+    list.innerHTML = members.map(function(m, i) {
+      return '<div class="arr-member-row">' +
+        '<input class="arr-cfg-input" type="text" value="' + escHtml(m.name || '') + '" placeholder="Name" oninput="arrMemberChange(' + i + ',\'name\',this.value)">' +
+        '<input class="arr-cfg-input arr-cfg-abbr" type="text" value="' + escHtml(m.abbr || '') + '" placeholder="Abbr" maxlength="4" title="Abbreviation shown in harmony chips" oninput="arrMemberChange(' + i + ',\'abbr\',this.value)">' +
+        '<button class="arr-cfg-remove" onclick="arrRemoveMember(' + i + ')" title="Remove">&#215;</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderArrInstruments(instruments) {
+    var list = document.getElementById('arr-instruments-list');
+    if (!list) return;
+    list.innerHTML = instruments.map(function(inst, i) {
+      var chips = (inst.techniques || []).map(function(t, ti) {
+        return '<span class="arr-tech-chip">' + escHtml(t) +
+          '<button onclick="arrRemoveTechnique(' + i + ',' + ti + ')" title="Remove">&#215;</button></span>';
+      }).join('');
+      return '<div class="arr-instrument-card">' +
+        '<div class="arr-instrument-hdr">' +
+          '<input class="arr-instrument-key" type="text" value="' + escHtml(inst.key || '') + '" placeholder="Key (e.g. BANJO)" oninput="arrInstChange(' + i + ',\'key\',this.value)">' +
+          '<input class="arr-instrument-label" type="text" value="' + escHtml(inst.label || '') + '" placeholder="Label (e.g. Banjo)" oninput="arrInstChange(' + i + ',\'label\',this.value)">' +
+          '<button class="arr-cfg-remove" onclick="arrRemoveInstrument(' + i + ')" title="Remove">&#215;</button>' +
+        '</div>' +
+        '<div class="arr-techniques">' + chips +
+          '<input class="arr-tech-add" placeholder="+ technique" onkeydown="arrTechKeydown(event,' + i + ')">' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function arrMemberChange(i, field, value) {
+    var cfg = _arrCfg();
+    if (cfg.members[i]) cfg.members[i][field] = value;
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+  }
+
+  function arrInstChange(i, field, value) {
+    var cfg = _arrCfg();
+    if (cfg.instruments[i]) cfg.instruments[i][field] = value;
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+  }
+
+  function arrAddMember() {
+    var cfg = _arrCfg();
+    cfg.members.push({ name: '', abbr: '' });
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+    renderArrMembers(cfg.members);
+  }
+
+  function arrRemoveMember(i) {
+    var cfg = _arrCfg();
+    cfg.members.splice(i, 1);
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+    renderArrMembers(cfg.members);
+  }
+
+  function arrAddInstrument() {
+    var cfg = _arrCfg();
+    cfg.instruments.push({ key: '', label: '', techniques: [] });
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+    renderArrInstruments(cfg.instruments);
+  }
+
+  function arrRemoveInstrument(i) {
+    var cfg = _arrCfg();
+    var inst = cfg.instruments[i];
+    if (!inst) return;
+    if (inst.key) {
+      if (!confirm('Remove instrument "' + inst.key + '"?\nExisting arrangement data for this instrument will still display in saved versions.')) return;
+    }
+    cfg.instruments.splice(i, 1);
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+    renderArrInstruments(cfg.instruments);
+  }
+
+  function arrRemoveTechnique(instIdx, techIdx) {
+    var cfg = _arrCfg();
+    if (!cfg.instruments[instIdx]) return;
+    cfg.instruments[instIdx].techniques.splice(techIdx, 1);
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+    renderArrInstruments(cfg.instruments);
+  }
+
+  function arrTechKeydown(e, instIdx) {
+    if (e.key !== 'Enter' && e.key !== ',') return;
+    e.preventDefault();
+    var val = e.target.value.trim().toUpperCase();
+    if (!val) return;
+    var cfg = _arrCfg();
+    if (!cfg.instruments[instIdx]) return;
+    cfg.instruments[instIdx].techniques.push(val);
+    e.target.value = '';
+    if (!_profileCfg.config) _profileCfg.config = {};
+    _profileCfg.config.arrangementConfig = cfg;
+    renderArrInstruments(cfg.instruments);
+  }
+
+  async function saveArrangementConfig() {
+    var cfg = _arrCfg();
+    var msg = document.getElementById('arr-save-msg');
+    msg.textContent = 'Saving…'; msg.className = 'arr-save-msg';
+    var ok = await patchConfig({ arrangementConfig: cfg });
+    if (ok) {
+      if (!_profileCfg.config) _profileCfg.config = {};
+      _profileCfg.config.arrangementConfig = cfg;
+      msg.textContent = 'Saved.'; msg.className = 'arr-save-msg ok';
+    } else {
+      msg.textContent = 'Save failed.'; msg.className = 'arr-save-msg err';
+    }
+    setTimeout(function() { msg.textContent = ''; msg.className = 'arr-save-msg'; }, 2500);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
   function renderProfile(cfg) {
     _profileCfg = cfg;
     document.getElementById('profile-content').style.display = '';
@@ -322,6 +492,10 @@
 
     renderFieldTags('display-fields', cfg.config && cfg.config.displayFields);
     renderFieldTags('filter-fields',  cfg.config && cfg.config.filterFields);
+
+    var arrConfig = cfg.config && cfg.config.arrangementConfig || { members: [], instruments: [] };
+    renderArrMembers(arrConfig.members || []);
+    renderArrInstruments(arrConfig.instruments || []);
 
     // Name input hint
     nameInput.addEventListener('input', function () {
@@ -719,7 +893,17 @@
     } catch { return false; }
   }
 
-  // Expose editor functions called from onclick attributes
+  // Expose functions called from onclick attributes
+  window.arrMemberChange      = arrMemberChange;
+  window.arrInstChange        = arrInstChange;
+  window.arrAddMember         = arrAddMember;
+  window.arrRemoveMember      = arrRemoveMember;
+  window.arrAddInstrument     = arrAddInstrument;
+  window.arrRemoveInstrument  = arrRemoveInstrument;
+  window.arrRemoveTechnique   = arrRemoveTechnique;
+  window.arrTechKeydown       = arrTechKeydown;
+  window.saveArrangementConfig = saveArrangementConfig;
+
   window.openDisplayFieldsEditor  = openDisplayFieldsEditor;
   window.closeDisplayFieldsEditor = closeDisplayFieldsEditor;
   window.addCustomDisplayField    = addCustomDisplayField;
