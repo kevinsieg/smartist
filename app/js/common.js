@@ -53,7 +53,7 @@ function getInitials(name) {
         '<a href="/venues">Venues</a>' +
         '<a href="/organizers" class="auth-only">Organizers</a>' +
         '<a href="/hub">Hub</a>' +
-        '<a href="/pro-import">PRO</a>' +
+        '<a href="/pro-import" class="auth-only">PRO</a>' +
         '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login &#8594;</a>' +
         '<a href="/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' +
         '<a href="#" class="nav-links-logout" id="nav-links-logout">Logout</a>' +
@@ -320,8 +320,31 @@ function formatLength(mins) {
 // return the cached response immediately and refresh the cache in the background.
 const _CONFIG_KEY = 'artist_config_cache';
 
+// Token format: base64url({"exp":unixsecs}.hexsig) — readable without the HMAC secret.
+// Passwords are also stored here (plain text, non-expiring client-side).
+// Only return true when we can positively identify an expired magic token.
+function _isTokenExpired(token) {
+  try {
+    var b64 = token.replace(/-/g, '+').replace(/_/g, '/');
+    var pad = b64.length % 4;
+    if (pad) b64 += '===='.slice(pad);
+    var decoded = atob(b64);
+    var dotIdx = decoded.indexOf('.');
+    if (dotIdx < 1) return false;                           // not magic-token format
+    var parsed = JSON.parse(decoded.slice(0, dotIdx));
+    if (!parsed.exp) return false;                          // no exp → not a magic token
+    return Math.floor(Date.now() / 1000) >= parsed.exp;
+  } catch (_) { return false; }                            // unparseable → plain password
+}
+
 function isViewMode() {
-  return !sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return true;
+  if (_isTokenExpired(token)) {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    return true;
+  }
+  return false;
 }
 
 function injectViewModeNotice() {
@@ -442,7 +465,9 @@ function applyNav(bandName, bandConfig) {
 function updateAuthIndicator() {
   var el = document.getElementById('nav-auth');
   if (!el) return;
-  var authed = !!sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var _tok = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (_tok && _isTokenExpired(_tok)) { sessionStorage.removeItem(AUTH_TOKEN_KEY); _tok = null; }
+  var authed = !!_tok;
   var header = document.querySelector('.app-header');
   if (header) header.classList.toggle('app-header--authed', authed);
   document.querySelectorAll('.app-logo').forEach(function(a) {

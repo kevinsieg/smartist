@@ -165,10 +165,12 @@ module.exports = wrap(async function handler(req, res) {
       `;
       return res.json(updated);
     }
+    const queries = [];
     if (cascade?.includes('setlists')) {
-      await sql`DELETE FROM setlists WHERE gig_id = ${gigId} AND artist_id = ${artist.id}`;
+      queries.push(sql`DELETE FROM setlists WHERE gig_id = ${gigId} AND artist_id = ${artist.id}`);
     }
-    await sql`DELETE FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
+    queries.push(sql`DELETE FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`);
+    await sql.transaction(queries);
     return res.json({ deleted: true, hard: true });
   }
 });
