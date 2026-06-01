@@ -422,6 +422,80 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(arrangements);
   }
 
+  // ── POST /api/:artist/songs/:id/arrangements — create version ─────────────
+  if (action === 'arrangements' && !arrId && req.method === 'POST') {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+    const sql = getDb();
+    const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+    const { name = 'Default', rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
+    let sourceRows = rows;
+    let sourceHidden = hidden_instruments;
+    if (copy_from) {
+      const [src] = await sql`SELECT rows, hidden_instruments FROM song_arrangements WHERE id = ${Number(copy_from)} AND song_id = ${songId} AND artist_id = ${band.id}`;
+      if (src) { sourceRows = src.rows; sourceHidden = src.hidden_instruments; }
+    }
+    const [created] = await sql`
+      INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
+      VALUES (${songId}, ${band.id}, ${String(name).slice(0, 200)}, ${sourceRows}, ${sourceHidden})
+      RETURNING *
+    `;
+    return res.status(201).json(created);
+  }
+
+  // ── PUT /api/:artist/songs/:id/arrangements/:arrId — update ───────────────
+  if (action === 'arrangements' && arrId && !arrSub && req.method === 'PUT') {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+    const sql = getDb();
+    const { name, rows, hidden_instruments } = req.body ?? {};
+    const updates = {};
+    if (name !== undefined)               updates.name               = String(name).slice(0, 200);
+    if (rows !== undefined)               updates.rows               = rows;
+    if (hidden_instruments !== undefined) updates.hidden_instruments = hidden_instruments;
+    if (!Object.keys(updates).length)     return res.status(400).json({ error: 'Nothing to update' });
+    const [updated] = await sql`
+      UPDATE song_arrangements
+      SET
+        name               = COALESCE(${updates.name               ?? null}, name),
+        rows               = COALESCE(${updates.rows               ?? null}, rows),
+        hidden_instruments = COALESCE(${updates.hidden_instruments ?? null}, hidden_instruments),
+        updated_at         = NOW()
+      WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}
+      RETURNING *
+    `;
+    if (!updated) return res.status(404).json({ error: 'Arrangement not found' });
+    return res.json(updated);
+  }
+
+  // ── POST /api/:artist/songs/:id/arrangements/:arrId/activate ─────────────
+  if (action === 'arrangements' && arrId && arrSub === 'activate' && req.method === 'POST') {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+    const sql = getDb();
+    await sql.transaction([
+      sql`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${band.id}`,
+      sql`UPDATE song_arrangements SET is_active = true, updated_at = NOW() WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`,
+    ]);
+    const [updated] = await sql`SELECT * FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
+    if (!updated) return res.status(404).json({ error: 'Arrangement not found' });
+    return res.json(updated);
+  }
+
+  // ── DELETE /api/:artist/songs/:id/arrangements/:arrId ─────────────────────
+  if (action === 'arrangements' && arrId && !arrSub && req.method === 'DELETE') {
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
+    const sql = getDb();
+    const [arr] = await sql`SELECT id, is_active FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
+    if (!arr) return res.status(404).json({ error: 'Arrangement not found' });
+    const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM song_arrangements WHERE song_id = ${songId} AND artist_id = ${band.id}`;
+    if (count <= 1) return res.status(409).json({ error: 'Cannot delete the last arrangement version' });
+    await sql`DELETE FROM song_arrangements WHERE id = ${arrId} AND artist_id = ${band.id}`;
+    return res.status(204).end();
+  }
+
   // ── GET single song (used by stage view); includes arrangements ─────────────
   if (!action && req.method === 'GET') {
     const band = await getArtist(slug);
