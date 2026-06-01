@@ -18,6 +18,7 @@ var _pendingSongId    = '';
 var _newPanelEscapeHandler = null;
 var SONGS_BULK_EDIT_KEY = 'songs_bulk_edit';
 var _viewMode = false;
+var _songsCfg = null;
 var _songsOffset = 0;
 var _songsTotal = 0;
 var SONGS_VIEW_PAGE = 30;
@@ -160,6 +161,8 @@ async function loadAndRender(viewMode) {
     renderTable();
     loadLogs();
     _viewMode = viewMode || false;
+    _songsCfg          = cfg;
+    window._arrSlug    = cfg.slug;
     if (viewMode) applyViewMode();
   } catch {
     const el = document.getElementById('page-content');
@@ -443,6 +446,10 @@ function _openSongPanelContent(item, panelEl) {
   if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" onclick="openPlayer(\'' + sidEsc + '\')">&#9654; Listen</button>';
   if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" onclick="openPlayback(\'' + sidEsc + '\')">&#9655; Playback</button>';
   if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; Sheet</button>';
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="Arrangement" onclick="_openSongArrangement(' + Number(sid) + ')">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>' +
+    '</svg></button>';
 
   var key     = getVal(song, 'key');
   var energy  = getVal(song, 'energy');
@@ -507,6 +514,7 @@ function _openSongPanelContent(item, panelEl) {
     : '';
 
   panelEl.innerHTML =
+    '<div data-sid="' + escHtml(sid) + '">' +
     '<div class="vsp-header">' +
       '<div class="vsp-header-text">' +
         '<h3 class="vsp-title">' + title + '</h3>' + activeDot +
@@ -516,7 +524,31 @@ function _openSongPanelContent(item, panelEl) {
     (audioHtml || actions ? audioHtml + '<div class="vsp-actions">' + actions + '</div>' : '') +
     perfHtml + aboutHtml + statsHtml + rightsHtml +
     '<div class="vsp-cell vsp-cell--full" id="vsp-setlist-link"><span class="skeleton-line" style="width:7rem;height:0.65rem;display:inline-block;"></span></div>' +
-    lyricsHtml;
+    lyricsHtml + '</div>';
+
+  // Async: arrangement table (auth-only, active version only)
+  if (!_viewMode && song.arrangements && song.arrangements.some(function(a) { return a.is_active; })) {
+    fetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
+      .then(function(r) { return r.json(); })
+      .then(function(versions) {
+        var active = versions.find(function(v) { return v.is_active; });
+        if (!active) return;
+        var panel = document.getElementById('view-side-panel-inner');
+        if (!panel || !panel.querySelector('[data-sid="' + _panelSid + '"]')) return;
+        var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
+        var sec = document.createElement('div');
+        sec.className = 'vsp-section';
+        sec.innerHTML =
+          '<div class="vsp-section-label">Arrangement' +
+          (active.name && active.name !== 'Default'
+            ? ' <span style="color:var(--third-color);font-size:0.72rem">' + escHtml(active.name) + '</span>'
+            : '') +
+          '</div>' +
+          _arrReadOnlyHtml(active, arrCfg);
+        panel.querySelector('[data-sid="' + _panelSid + '"]').appendChild(sec);
+      })
+      .catch(function() {});
+  }
 
   // Async: setlist count
   var _panelSid = sid;
@@ -846,6 +878,8 @@ function renderListRowHtml(s) {
   var icons = '';
   if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="Listen">&#9654;</button>';
   if (hasLyrics) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="Lyrics">&#182;</button>';
+  var hasArrangement = !_viewMode && Array.isArray(s.arrangements) && s.arrangements.length > 0;
+  if (hasArrangement) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="Arrangement">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
     '<div class="songs-list-row-stack">' +
@@ -859,6 +893,13 @@ function renderListRowHtml(s) {
   '</div>';
 }
 
+
+function _openSongArrangement(id) {
+  var song = songs.find(function(s) { return s.id === id; });
+  if (!song) return;
+  var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
+  openArrangementEditor(id, song.title || '', arrCfg);
+}
 
 function _editField(label, html) {
   return '<div class="edit-field">' +
