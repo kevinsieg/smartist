@@ -136,6 +136,7 @@ async function _arrLoadVersions() {
         'POST',
         { name: 'Default' }
       );
+      if (!cr.ok) throw new Error('Failed to create arrangement');
       var v = await cr.json();
       _arrEditorVersions = [v];
     }
@@ -602,18 +603,19 @@ async function arrSetActive() {
   setTimeout(function() { setStatus('arr-modal-status', ''); }, 2000);
 }
 
-function arrRenameVersion(i) {
+async function arrRenameVersion(i) {
   var v = _arrEditorVersions[i];
   if (!v) return;
   var name = prompt('Version name:', v.name);
   if (!name || name === v.name) return;
-  v.name = name;
-  _arrRenderVersionBar();
-  apiFetch(
+  var r = await apiFetch(
     '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements/' + v.id,
     'PUT',
     { name: name }
   );
+  if (!r.ok) { var j = await r.json(); setStatus('arr-modal-status', j.error || 'Rename failed', true); return; }
+  v.name = name;
+  _arrRenderVersionBar();
 }
 
 async function arrSave() {
