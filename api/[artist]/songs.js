@@ -105,7 +105,11 @@ module.exports = wrap(async function handler(req, res) {
       SELECT s.*,
         COUNT(DISTINCT ss.setlist_id)::int AS play_count,
         MAX(sl.created_at)                 AS last_played_at,
-        g.iswc, g.gema_work_number, g.language AS gema_language
+        g.iswc, g.gema_work_number, g.language AS gema_language,
+        EXISTS (
+          SELECT 1 FROM song_arrangements sa
+          WHERE sa.song_id = s.id AND sa.artist_id = s.artist_id
+        ) AS has_arrangement
       FROM songs s
       LEFT JOIN setlist_songs ss ON ss.song_id = s.id
       LEFT JOIN setlists sl      ON sl.id = ss.setlist_id
