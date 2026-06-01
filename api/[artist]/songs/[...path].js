@@ -6,6 +6,7 @@ const { suggestLyricsWithAI } = require('../../_ai');
 const { makeMediaFn } = require('../../_media');
 const { LYRICS_SOURCES, plainFromSynced } = require('../../_lyrics');
 const { GEMA_ROLE_TYPES } = require('../../_constants');
+const { validateStr } = require('../../_validate');
 const logger = require('../../_logger');
 
 // ── GEMA import helpers (merged from gema/import.js) ─────────────────────────
@@ -429,16 +430,20 @@ module.exports = wrap(async function handler(req, res) {
     const sql = getDb();
     const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    const { name = 'Default', rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
+    const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
+    const rawName = req.body?.name;
+    const name = rawName === undefined ? 'Default' : (validateStr(rawName, 200) || 'Default');
     let sourceRows = rows;
     let sourceHidden = hidden_instruments;
     if (copy_from) {
       const [src] = await sql`SELECT rows, hidden_instruments FROM song_arrangements WHERE id = ${Number(copy_from)} AND song_id = ${songId} AND artist_id = ${band.id}`;
-      if (src) { sourceRows = src.rows; sourceHidden = src.hidden_instruments; }
+      if (!src) return res.status(400).json({ error: 'copy_from arrangement not found' });
+      sourceRows = src.rows;
+      sourceHidden = src.hidden_instruments;
     }
     const [created] = await sql`
       INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
-      VALUES (${songId}, ${band.id}, ${String(name).slice(0, 200)}, ${sourceRows}, ${sourceHidden})
+      VALUES (${songId}, ${band.id}, ${name}, ${sourceRows}, ${sourceHidden})
       RETURNING *
     `;
     return res.status(201).json(created);
@@ -448,10 +453,15 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'arrangements' && arrId && !arrSub && req.method === 'PUT') {
     const band = await requireAuth(req, res, slug);
     if (!band) return;
+    if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
     const { name, rows, hidden_instruments } = req.body ?? {};
     const updates = {};
-    if (name !== undefined)               updates.name               = String(name).slice(0, 200);
+    if (name !== undefined) {
+      const validatedName = validateStr(name, 200);
+      if (validatedName === false) return res.status(400).json({ error: 'name too long' });
+      if (validatedName) updates.name = validatedName;
+    }
     if (rows !== undefined)               updates.rows               = rows;
     if (hidden_instruments !== undefined) updates.hidden_instruments = hidden_instruments;
     if (!Object.keys(updates).length)     return res.status(400).json({ error: 'Nothing to update' });
@@ -473,6 +483,7 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'arrangements' && arrId && arrSub === 'activate' && req.method === 'POST') {
     const band = await requireAuth(req, res, slug);
     if (!band) return;
+    if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
     await sql.transaction([
       sql`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${band.id}`,
@@ -487,6 +498,7 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'arrangements' && arrId && !arrSub && req.method === 'DELETE') {
     const band = await requireAuth(req, res, slug);
     if (!band) return;
+    if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
     const [arr] = await sql`SELECT id, is_active FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
     if (!arr) return res.status(404).json({ error: 'Arrangement not found' });
