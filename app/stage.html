@@ -192,6 +192,24 @@
         }
         .stage-share-btn:hover,
         .stage-invert-btn:hover { background: var(--s-text); color: var(--s-bg); border-color: var(--s-text); }
+        .stage-chart-btn {
+            background: rgba(176,106,42,.18);
+            border: 1px solid rgba(176,106,42,.35);
+            border-radius: 4px;
+            color: #f9bf8f;
+            padding: 5px 8px;
+            cursor: pointer;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+            font-family: inherit;
+        }
+        .stage-chart-btn:hover { background: rgba(176,106,42,.3); }
+        body.stage-light .stage-chart-btn { color: #8b4400; border-color: rgba(139,68,0,.35); background: rgba(139,68,0,.08); }
+        body.stage-light .stage-chart-btn:hover { background: rgba(139,68,0,.18); }
+        .stage-chart-wrap { position: absolute; bottom: 10px; left: 1rem; }
         .stage-share-btn[disabled] { opacity: 0.28; cursor: default; pointer-events: none; }
         .stage-nav-sep {
             display: inline-block;
@@ -359,6 +377,7 @@
     </div>
 
     <script src="/app/js/share-utils.js"></script>
+    <script src="/app/js/arrangement.js"></script>
     <script src="/app/js/stage.js"></script>
 </body>
 </html>
