@@ -348,6 +348,45 @@
         .stage-modal-action-btn.primary { background: var(--s-accent); color: #111; border-color: var(--s-accent); font-weight: 600; }
         .stage-modal-action-btn:hover { opacity: 0.85; }
         .stage-modal-status { font-size: 0.78rem; color: var(--s-muted); margin-top: 0.5rem; min-height: 1.1em; }
+
+        /* ── Arrangement popup ───────────────────────────────────────────── */
+        .arr-stage-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 200; align-items: center; justify-content: center; padding: 1rem; }
+        .arr-stage-modal-overlay.open { display: flex; }
+        .arr-stage-modal { background: #1a1a1a; border-radius: 6px; width: min(96vw, 960px); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+        .arr-stage-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid #333; flex-shrink: 0; font-size: 0.78rem; letter-spacing: 0.06em; color: #f9bf8f; }
+        .arr-stage-body { overflow: auto; flex: 1; padding: 0.25rem 0; }
+        body.stage-light .arr-stage-modal { background: #e8e2d9; }
+        body.stage-light .arr-stage-modal-header { color: #8b4400; border-bottom-color: rgba(0,0,0,0.12); }
+
+        /* ── Arrangement table (inside popup) ────────────────────────────── */
+        .arr-table-wrap { overflow-x: auto; }
+        .arr-table { border-collapse: collapse; font-size: 0.82rem; width: 100%; color: #f5f0ea; }
+        .arr-th { padding: 4px 8px; text-align: left; font-size: 0.7rem; letter-spacing: 0.07em; color: #555; border-bottom: 2px solid #2a2a2a; white-space: nowrap; background: #111; position: sticky; top: 0; }
+        .arr-th--inst { color: #b06a2a; }
+        .arr-th--orphan { color: #444; font-style: italic; }
+        .arr-tr { border-bottom: 1px solid #222; }
+        .arr-tr--alt { background: rgba(255,255,255,.03); }
+        .arr-td { padding: 4px 8px; vertical-align: middle; white-space: nowrap; }
+        .arr-td--struct { font-weight: 700; color: #f5f0ea; }
+        .arr-td--inst { color: #888; }
+        .arr-td--harm { color: #6fa8dc; font-weight: 600; }
+        .arr-td--com { color: #555; font-size: 0.75rem; }
+        .arr-lead--person { color: #6fa8dc; font-weight: 600; }
+        .arr-lead--inst   { color: #b06a2a; font-weight: 600; }
+        body.stage-light .arr-table { color: #111; }
+        body.stage-light .arr-th { color: #555; border-bottom-color: #ccc; background: #ddd7ce; }
+        body.stage-light .arr-th--inst { color: #8b4400; }
+        body.stage-light .arr-tr { border-bottom-color: #ddd; }
+        body.stage-light .arr-tr--alt { background: rgba(0,0,0,.03); }
+        body.stage-light .arr-td--struct { color: #111; }
+        body.stage-light .arr-td--inst { color: #555; }
+        body.stage-light .arr-lead--person { color: #1a4a99; }
+        body.stage-light .arr-lead--inst   { color: #8b4400; }
+        body.stage-light .arr-td--harm { color: #1a4a99; }
+        body.stage-light .arr-td--com { color: #777; }
+        @media print {
+            .arr-stage-modal-overlay { display: none !important; }
+        }
     </style>
 </head>
 <body>

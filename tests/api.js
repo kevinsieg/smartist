@@ -156,6 +156,124 @@ async function testSongs(slug) {
   return firstSong;
 }
 
+async function testArrangements(slug, firstSong) {
+  console.log(B(`\n/api/${slug}/songs/:id/arrangements`));
+
+  if (!firstSong) {
+    skip('arrangement tests', 'no songs available');
+    return;
+  }
+
+  const sid = firstSong.id;
+
+  await test('GET /:id/arrangements returns array', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json), 'not an array');
+  });
+
+  await test('GET /:id/arrangements with id=0 → 400', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/0/arrangements`);
+    assertStatus(res, json, 400);
+  });
+
+  await test('GET /:id/arrangements with non-integer id → 400', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/abc/arrangements`);
+    assertStatus(res, json, 400);
+  });
+
+  await test('POST /:id/arrangements without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/${sid}/arrangements`, { name: 'Test' });
+    assertStatus(res, json, 401);
+  });
+
+  await test('PUT /:id/arrangements/:arrId without token → 401', async () => {
+    const { res, json } = await PUT(`/api/${slug}/songs/${sid}/arrangements/1`, { rows: [] });
+    assertStatus(res, json, 401);
+  });
+
+  await test('DELETE /:id/arrangements/:arrId without token → 401', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/songs/${sid}/arrangements/1`);
+    assertStatus(res, json, 401);
+  });
+}
+
+async function testArrangementWrite(slug, token, song) {
+  console.log(B(`\n/api/${slug}/songs/:id/arrangements (write)`));
+
+  const sid = song.id;
+  let arr;
+
+  await test('POST /:id/arrangements creates blank version → 201', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/${sid}/arrangements`,
+      { name: 'Test version' }, { token });
+    assertStatus(res, json, 201);
+    assert(json.id > 0, 'missing id');
+    assert(json.name === 'Test version', 'name mismatch');
+    assert(Array.isArray(json.rows), 'rows not array');
+    assert(typeof json.is_active === 'boolean', 'missing is_active');
+    arr = json;
+  });
+
+  if (!arr) { skip('arrangement write tests', 'create failed'); return; }
+
+  await test('GET /:id/arrangements returns created version', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    assertStatus(res, json, 200);
+    assert(json.some(v => v.id === arr.id), 'created version not in list');
+  });
+
+  await test('PUT /:id/arrangements/:arrId updates rows → 200', async () => {
+    const rows = [{ structure: 'C1', part: 'A', lead: 'Test', lead_type: 'person',
+      harmony: [], licks: '', parts: {}, comment: '' }];
+    const { res, json } = await PUT(`/api/${slug}/songs/${sid}/arrangements/${arr.id}`,
+      { rows }, { token });
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json.rows) && json.rows.length === 1, 'rows not updated');
+    arr = json;
+  });
+
+  await test('PUT /:id/arrangements/:arrId with empty body → 400', async () => {
+    const { res, json } = await PUT(`/api/${slug}/songs/${sid}/arrangements/${arr.id}`,
+      {}, { token });
+    assertStatus(res, json, 400);
+    assert(json.error, 'missing error message');
+  });
+
+  await test('POST /:id/arrangements copy_from duplicates rows → 201', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/${sid}/arrangements`,
+      { name: 'Copy', copy_from: arr.id }, { token });
+    assertStatus(res, json, 201);
+    assert(json.id !== arr.id, 'copy has same id');
+    assert(json.rows.length === arr.rows.length, 'rows not copied');
+  });
+
+  await test('POST /:id/arrangements/:arrId/activate sets is_active → 200', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/${sid}/arrangements/${arr.id}/activate`,
+      undefined, { token });
+    assertStatus(res, json, 200);
+    assert(json.is_active === true, 'is_active not set');
+  });
+
+  // Clean up all created versions
+  await test('DELETE /:id/arrangements/:arrId removes version → 204', async () => {
+    const { res, json: list } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    assertStatus(res, list, 200);
+    let lastStatus;
+    for (const v of list) {
+      const r = await DELETE(`/api/${slug}/songs/${sid}/arrangements/${v.id}`, { token });
+      lastStatus = r.res.status;
+    }
+    assert(lastStatus === 204, `Expected 204 on last delete, got ${lastStatus}`);
+  });
+
+  await test('GET /:id/arrangements returns empty after all deleted', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    assertStatus(res, json, 200);
+    assert(json.length === 0, `expected 0 versions, got ${json.length}`);
+  });
+}
+
 async function testSongLogs(slug) {
   console.log(B(`\n/api/${slug}/song-logs`));
 
@@ -769,9 +887,10 @@ async function testWrite(slug, token, firstSong) {
       assert(json.error?.includes('No artist'), `unexpected error: ${JSON.stringify(json)}`);
     });
 
-    // File and lyrics tests run on the temp song so production data is untouched
+    // File, lyrics, and arrangement tests run on the temp song
     await testLyricsLifecycle(slug, token, song.id);
     await testFileValidation(slug, token, song.id);
+    await testArrangementWrite(slug, token, song);
 
     await test('DELETE /songs/:id soft-deletes → 204', async () => {
       const { res } = await DELETE(`/api/${slug}/songs/${song.id}`, { token });
@@ -877,6 +996,8 @@ async function main() {
     testAuth(slug),
     testFileIdValidation(slug),
   ]);
+
+  await testArrangements(slug, firstSong);
 
   if (PASSWORD) {
     await testWrite(slug, PASSWORD, firstSong);
