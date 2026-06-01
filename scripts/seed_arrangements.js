@@ -61,7 +61,7 @@ const { neon } = require('@neondatabase/serverless');
 //   GTR_L   = Guitar Ludo
 //   GTR_K   = Guitar Kevin
 //   BJO     = Banjo        techniques: ROLL, POMP, CHOP, SOLO, INSTRU
-//   MDO     = Mando        techniques: CHOP, SOLO, INSTRU, OPEN
+//   MDO     = Mando        techniques: CHOP, SOLO, OPEN, INSTRU
 //   VLN     = Violon       techniques: LNG BOW, INSTRU
 //   FDL     = Fiddle       techniques: LONG BOW, NAPE, INSTRU
 //   BASS    = Bass         techniques: ALT, BOW, SOLO
@@ -170,6 +170,97 @@ const SONGS_DATA = [
       { structure: 'C4',     part: 'AA',  lead: 'Ludo',   lead_type: 'person',     harmony: [],               licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: 'Break' },
       { structure: 'R',      part: 'BB',  lead: 'Ludo',   lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
       { structure: 'R',      part: 'BB',  lead: 'Ludo',   lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+    ],
+  },
+
+  // ── How Mountain Girls Can Love ──────────────────────────────────────────
+  // Kevin leads throughout. harmony='All' = whole band sings.
+  // First R is a cappella (no instruments). GTR END on last R = comment only.
+  {
+    title:             'How Mountain Girls Can Love',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'VLN', 'HARMO'],
+    rows: [
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['All'], licks: '',    parts: { GTR: '',      BJO: '',      MDO: '',      BASS: '',    FDL: ''      }, comment: 'A CAPPELLA' },
+      { structure: 'C1',     part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],      licks: 'MDO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: ''      }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['All'], licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: ''      }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'MDO',   lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', BASS: 'ALT', FDL: ''     }, comment: '' },
+      { structure: 'INSTRU', part: 'B', lead: 'BJO',   lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'INSTRU', MDO: 'CHOP', BASS: 'ALT', FDL: ''     }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],      licks: 'FDL', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: ''      }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['All'], licks: 'FDL', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: ''      }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'FDL',   lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'INSTRU' }, comment: '' },
+      { structure: 'INSTRU', part: 'B', lead: 'FDL',   lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'INSTRU' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['All'], licks: 'FDL', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: ''      }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['All'], licks: 'FDL', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: ''      }, comment: 'GTR END' },
+    ],
+  },
+
+  // ── Jackaroe ──────────────────────────────────────────────────────────────
+  // Cerise leads throughout. 'Blanche' = whole/half note style (comment only).
+  // C8 has no instruments (silent section before Blanche).
+  // INSTRU GTR K: both GTR_K and GTR_L play SOLO simultaneously — verify intentional.
+  // Column order in source was GUITAR K / GUITAR L (reversed vs other songs).
+  {
+    title:             'Jackaroe',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR', 'MDO', 'VLN', 'FDL', 'HARMO'],
+    rows: [
+      { structure: 'INTRO',  part: '',  lead: 'GTR K',  lead_type: 'instrument', harmony: [],              licks: '', parts: { GTR_K: 'PICK',  GTR_L: '',      BJO: '',      BASS: ''    }, comment: 'kick Kevin' },
+      { structure: 'C1',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'PICK',  GTR_L: '',      BJO: '',      BASS: ''    }, comment: 'Blanche' },
+      { structure: 'C2',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'PICK',  GTR_L: '',      BJO: '',      BASS: ''    }, comment: 'Blanche' },
+      { structure: 'C3',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'PICK',  GTR_L: 'STRUM', BJO: '',      BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'BJO',    lead_type: 'instrument', harmony: [],              licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'STRUM', BJO: 'SOLO', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'BJO',    lead_type: 'instrument', harmony: [],              licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'STRUM', BJO: 'SOLO', BASS: 'ALT' }, comment: '' },
+      { structure: 'C4',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'STRUM', BJO: '',      BASS: 'ALT' }, comment: '' },
+      { structure: 'C5',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'STRUM', BJO: '',      BASS: 'ALT' }, comment: '' },
+      { structure: 'C6',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'STRUM', BJO: '',      BASS: 'ALT' }, comment: '' },
+      { structure: 'C7',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'STRUM', BJO: '',      BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR L',  lead_type: 'instrument', harmony: [],              licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'SOLO',  BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR K',  lead_type: 'instrument', harmony: [],              licks: '', parts: { GTR_K: 'SOLO',  GTR_L: 'SOLO',  BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR L',  lead_type: 'instrument', harmony: [],              licks: '', parts: { GTR_K: 'STRUM', GTR_L: 'SOLO',  BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'C8',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: '',      GTR_L: '',      BJO: '',      BASS: ''    }, comment: 'Blanche' },
+      { structure: 'C9',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'PICK',  GTR_L: '',      BJO: '',      BASS: ''    }, comment: 'Blanche' },
+      { structure: 'C10',    part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Kevin','Ludo'], licks: '', parts: { GTR_K: 'PICK',  GTR_L: 'STRUM', BJO: '',      BASS: 'ALT' }, comment: '' },
+    ],
+  },
+
+  // ── There Is A Time ──────────────────────────────────────────────────────
+  {
+    title:             'There Is A Time',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'VLN', 'HARMO'],
+    rows: [
+      { structure: 'INTRO',  part: 'A', lead: 'MDO',   lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'SOLO', BASS: 'ALT', FDL: 'CHOP'     }, comment: 'Kick Mando' },
+      { structure: 'C1',     part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],               licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: 'FDL', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'BJO',   lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR: 'STRUM', BJO: 'SOLO', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],               licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: 'FDL', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR',   lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR: 'SOLO',  BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],               licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: 'FDL', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'FDL',   lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'SOLO'     }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'ALT', FDL: 'LONG BOW' }, comment: '' },
+    ],
+  },
+
+  // ── Troubles ─────────────────────────────────────────────────────────────
+  {
+    title:             'Troubles',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'FDL', 'HARMO', 'BASS'],
+    rows: [
+      { structure: 'INTRO',  part: 'A', lead: 'MDO',     lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: [],      licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'OPEN',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'VLN',     lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'OPEN',   VLN: 'INSTRU'  }, comment: '' },
+      { structure: 'C1',     part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: [],      licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'OPEN',   VLN: 'CHOP'    }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: ['Kevin'], licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'OPEN',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'VLN+MDO', lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', VLN: 'INSTRU'  }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: ['Kevin'], licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'OPEN',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: ['Kevin'], licks: 'BJO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'OPEN',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'VLN+MDO', lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', VLN: 'INSTRU'  }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'VLN+MDO', lead_type: 'instrument', harmony: [],      licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', VLN: 'INSTRU'  }, comment: '' },
     ],
   },
 
