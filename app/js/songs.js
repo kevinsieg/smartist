@@ -526,6 +526,9 @@ function _openSongPanelContent(item, panelEl) {
     '<div class="vsp-cell vsp-cell--full" id="vsp-setlist-link"><span class="skeleton-line" style="width:7rem;height:0.65rem;display:inline-block;"></span></div>' +
     lyricsHtml + '</div>';
 
+  // Async: setlist count + arrangement table — both use _panelSid for stale-panel check
+  var _panelSid = sid;
+
   // Async: arrangement table (auth-only, active version only)
   if (!_viewMode && song.arrangements && song.arrangements.some(function(a) { return a.is_active; })) {
     fetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
@@ -551,7 +554,6 @@ function _openSongPanelContent(item, panelEl) {
   }
 
   // Async: setlist count
-  var _panelSid = sid;
   fetch('/api/' + artistSlug + '/songs?setlists=' + sid)
     .then(function(r) { return r.json(); })
     .then(function(ids) {
