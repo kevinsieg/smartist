@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Bulk-loads arrangement data from a JS array into song_arrangements.
-// Usage: ARTIST_SLUG=salb node scripts/seed_arrangements.js
+// Usage: node scripts/seed_arrangements.js <slug> [database_url]
 //
-// Before running:
-//   1. Fill in the SONGS_DATA array below with your arrangement data
-//   2. Set ARTIST_SLUG env var to your artist slug
-//   3. Ensure DATABASE_URL is in .env
+//   slug         — artist slug (required)
+//   database_url — Neon connection string (optional; falls back to DATABASE_URL in .env)
+//
+// Examples:
+//   node scripts/seed_arrangements.js salb
+//   node scripts/seed_arrangements.js salb postgresql://user:pass@host/db
 
 'use strict';
 
@@ -54,23 +56,156 @@ const { neon } = require('@neondatabase/serverless');
 //   },
 // ];
 
+// Instrument keys used across all songs:
+//   GTR     = Guitar (single guitar songs)
+//   GTR_L   = Guitar Ludo
+//   GTR_K   = Guitar Kevin
+//   BJO     = Banjo        techniques: ROLL, POMP, CHOP, SOLO, INSTRU
+//   MDO     = Mando        techniques: CHOP, SOLO, INSTRU, OPEN
+//   VLN     = Violon       techniques: LNG BOW, INSTRU
+//   FDL     = Fiddle       techniques: LONG BOW, NAPE, INSTRU
+//   BASS    = Bass         techniques: ALT, BOW, SOLO
+//   HARMO   = Harp/Harmonica  techniques: NAPE, INSTRU
+//
+// Configure these exact keys in Hub → Arrangement → Instruments before running.
+
 const SONGS_DATA = [
-  // Paste your songs here
+  // ── What Is A Home Without Love ──────────────────────────────────────────
+  {
+    title:             'What Is A Home Without Love',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'FDL', 'BASS'],
+    rows: [
+      { structure: 'INTRO',  part: '',  lead: '',        lead_type: '',           harmony: [],               licks: '',    parts: { GTR: '',      BJO: '',      MDO: 'CHOP',   VLN: ''        }, comment: 'E' },
+      { structure: 'C1',     part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: [],               licks: 'VLN', parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'CHOP',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'R1',     part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: ['Kevin'],        licks: 'VLN', parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'CHOP',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'VLN',     lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'CHOP',   VLN: 'INSTRU'  }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: [],               licks: 'VLN', parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'CHOP',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'R2',     part: 'A', lead: 'Ludo',    lead_type: 'person',     harmony: ['Kevin'],        licks: 'VLN', parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'CHOP',   VLN: 'LNG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'VLN+MDO', lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', VLN: 'INSTRU'  }, comment: 'Turnaround' },
+    ],
+  },
+
+  // ── Big Spike Hammer ─────────────────────────────────────────────────────
+  // NOTE: C3 and final R rows inherit GUITAR=SOLO by ditto from the 2nd INSTRU.
+  // Verify this is intentional — change to 'STRUM' if not.
+  {
+    title:             'Big Spike Hammer',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'VLN', 'FDL'],
+    rows: [
+      { structure: 'INTRO',  part: 'A', lead: 'MDO',  lead_type: 'instrument', harmony: [],                  licks: '',    parts: { BJO: 'POMP', MDO: 'SOLO', GTR: 'STRUM', BASS: 'ALT' }, comment: '' },
+      { structure: 'C1',     part: 'A', lead: 'Ludo', lead_type: 'person',     harmony: [],                  licks: 'BJO', parts: { BJO: 'ROLL', MDO: 'CHOP', GTR: 'STRUM', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Ludo', lead_type: 'person',     harmony: ['Kevin', 'Cerise'], licks: 'BJO', parts: { BJO: 'ROLL', MDO: 'CHOP', GTR: 'STRUM', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'BJO',  lead_type: 'instrument', harmony: [],                  licks: '',    parts: { BJO: 'SOLO', MDO: 'CHOP', GTR: 'STRUM', BASS: 'ALT' }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Ludo', lead_type: 'person',     harmony: [],                  licks: 'GTR', parts: { BJO: 'ROLL', MDO: 'CHOP', GTR: 'STRUM', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Ludo', lead_type: 'person',     harmony: ['Kevin', 'Cerise'], licks: 'GTR', parts: { BJO: 'ROLL', MDO: 'CHOP', GTR: 'STRUM', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR',  lead_type: 'instrument', harmony: [],                  licks: '',    parts: { BJO: 'POMP', MDO: 'OPEN', GTR: 'SOLO',  BASS: 'ALT' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Ludo', lead_type: 'person',     harmony: [],                  licks: 'BJO', parts: { BJO: 'ROLL', MDO: 'CHOP', GTR: 'SOLO',  BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Ludo', lead_type: 'person',     harmony: ['Kevin', 'Cerise'], licks: '',    parts: { BJO: 'ROLL', MDO: 'CHOP', GTR: 'SOLO',  BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Ludo', lead_type: 'person',     harmony: ['Kevin', 'Cerise'], licks: '',    parts: { BJO: 'ROLL', MDO: 'CHOP', GTR: 'SOLO',  BASS: 'ALT' }, comment: '' },
+    ],
+  },
+
+  // ── Gloryland ─────────────────────────────────────────────────────────────
+  // NOTE: Intro has GUITAR L = 'Grun' — unknown technique, clarify with band.
+  // GTR K / VIOLON in LEAD = instrument leads (no separate column for those sections).
+  {
+    title:             'Gloryland',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR', 'MDO', 'VLN', 'FDL'],
+    rows: [
+      { structure: 'INTRO',  part: '',  lead: '',       lead_type: '',           harmony: [],               licks: '',    parts: { GTR_L: 'Grun',  GTR_K: '',     BJO: '',      BASS: ''    }, comment: 'Am' },
+      { structure: 'C1',     part: 'A', lead: 'Ludo',   lead_type: 'person',     harmony: ['Kevin','Cerise'], licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Ludo',   lead_type: 'person',     harmony: ['Kevin','Cerise'], licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR K',  lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR_L: 'STRUM', GTR_K: 'SOLO',  BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Ludo',   lead_type: 'person',     harmony: ['Kevin','Cerise'], licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Ludo',   lead_type: 'person',     harmony: ['Kevin','Cerise'], licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'VIOLON', lead_type: 'instrument', harmony: [],               licks: '',    parts: { GTR_L: 'STRUM', GTR_K: 'SOLO',  BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Ludo',   lead_type: 'person',     harmony: ['Kevin','Cerise'], licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Ludo',   lead_type: 'person',     harmony: ['Kevin','Cerise'], licks: '',    parts: { GTR_L: '',      GTR_K: '',      BJO: '',      BASS: ''    }, comment: 'A CAPPELLA — demi grille' },
+      { structure: 'R',      part: 'B', lead: 'Ludo',   lead_type: 'person',     harmony: ['Kevin','Cerise'], licks: '',    parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+    ],
+  },
+
+  // ── Hares on the Mountain ────────────────────────────────────────────────
+  // HARMO = mouth harp (the "HARP" column). Techniques: NAPE, INSTRU.
+  // NOTE: Intro FIDDLE=NAPE — verify technique name is correct.
+  // NOTE: C5/C6 FIDDLE=INSTRU by ditto from fiddle INSTRU — verify intentional.
+  // LEAD=ALL in final INSTRU = all instruments play together.
+  {
+    title:             'Hares on the Mountain',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'MDO', 'VLN', 'BASS'],
+    rows: [
+      { structure: 'INTRO',  part: 'A', lead: 'BANJO',  lead_type: 'instrument', harmony: [],       licks: '',      parts: { GTR: 'STRUM', HARMO: '',       BJO: 'INSTRU', FDL: 'NAPE'    }, comment: 'Kick Guitar' },
+      { structure: 'C1',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Ludo'], licks: '',      parts: { GTR: 'STRUM', HARMO: '',       BJO: 'ROLL',   FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Ludo'], licks: '',      parts: { GTR: 'STRUM', HARMO: 'NAPE',   BJO: 'ROLL',   FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'HARMO',  lead_type: 'instrument', harmony: [],       licks: '',      parts: { GTR: 'STRUM', HARMO: 'INSTRU', BJO: 'ROLL',   FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Ludo'], licks: 'HARMO', parts: { GTR: 'STRUM', HARMO: 'NAPE',   BJO: 'ROLL',   FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'C4',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Ludo'], licks: 'HARMO', parts: { GTR: 'STRUM', HARMO: 'NAPE',   BJO: 'ROLL',   FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'FIDDLE', lead_type: 'instrument', harmony: [],       licks: '',      parts: { GTR: 'STRUM', HARMO: 'NAPE',   BJO: 'ROLL',   FDL: 'INSTRU'  }, comment: '' },
+      { structure: 'C5',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Ludo'], licks: 'HARMO', parts: { GTR: 'STRUM', HARMO: 'NAPE',   BJO: 'ROLL',   FDL: 'INSTRU'  }, comment: '' },
+      { structure: 'C6',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: ['Ludo'], licks: 'HARMO', parts: { GTR: 'STRUM', HARMO: 'NAPE',   BJO: 'ROLL',   FDL: 'INSTRU'  }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'ALL',    lead_type: 'instrument', harmony: [],       licks: '',      parts: { GTR: 'STRUM', HARMO: 'INSTRU', BJO: 'INSTRU', FDL: 'INSTRU'  }, comment: '' },
+    ],
+  },
+
+  // ── The Train That Carried My Girl From Town ─────────────────────────────
+  {
+    title:             'The Train That Carried My Girl From Town',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR', 'MDO', 'VLN', 'FDL', 'HARMO'],
+    rows: [
+      { structure: 'INTRO',  part: 'AAB', lead: 'GTR L',  lead_type: 'instrument', harmony: [],               licks: '', parts: { GTR_L: 'SOLO',  GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'C1',     part: 'AA',  lead: 'Ludo',   lead_type: 'person',     harmony: [],               licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: 'Break' },
+      { structure: 'R',      part: 'BB',  lead: 'Ludo',   lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'AAB', lead: 'BJO',    lead_type: 'instrument', harmony: [],               licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'SOLO', BASS: 'ALT' }, comment: '' },
+      { structure: 'C2',     part: 'AA',  lead: 'Ludo',   lead_type: 'person',     harmony: [],               licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: 'Break' },
+      { structure: 'R',      part: 'BB',  lead: 'Ludo',   lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'AAB', lead: 'GTR K',  lead_type: 'instrument', harmony: [],               licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'C3',     part: 'AA',  lead: 'Ludo',   lead_type: 'person',     harmony: [],               licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: 'Break' },
+      { structure: 'R',      part: 'BB',  lead: 'Ludo',   lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'AAB', lead: 'GTR L',  lead_type: 'instrument', harmony: [],               licks: '', parts: { GTR_L: 'SOLO',  GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'C4',     part: 'AA',  lead: 'Ludo',   lead_type: 'person',     harmony: [],               licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: 'Break' },
+      { structure: 'R',      part: 'BB',  lead: 'Ludo',   lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'BB',  lead: 'Ludo',   lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: '', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'CHOP', BASS: 'ALT' }, comment: '' },
+    ],
+  },
+
+  // ── Cowboy Man ────────────────────────────────────────────────────────────
+  {
+    title:             'Cowboy Man',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR', 'MDO', 'VLN'],
+    rows: [
+      { structure: 'C1', part: 'A', lead: 'Ludo', lead_type: 'person', harmony: [],                  licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'LNG BOW' }, comment: '' },
+      { structure: 'C2', part: 'A', lead: 'Ludo', lead_type: 'person', harmony: [],                  licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'LNG BOW' }, comment: '' },
+      { structure: 'R',  part: 'B', lead: 'Ludo', lead_type: 'person', harmony: ['Cerise', 'Kevin'], licks: 'FDL', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'CHOP'    }, comment: '' },
+      { structure: 'C3', part: 'A', lead: 'Ludo', lead_type: 'person', harmony: [],                  licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'LNG BOW' }, comment: '' },
+      { structure: 'R',  part: 'B', lead: 'Ludo', lead_type: 'person', harmony: ['Cerise', 'Kevin'], licks: 'FDL', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'CHOP'    }, comment: '' },
+      { structure: 'C4', part: 'A', lead: 'Ludo', lead_type: 'person', harmony: [],                  licks: 'BJO', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'LNG BOW' }, comment: '' },
+      { structure: 'R',  part: 'B', lead: 'Ludo', lead_type: 'person', harmony: ['Cerise', 'Kevin'], licks: 'FDL', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'CHOP'    }, comment: '' },
+      { structure: 'R',  part: 'B', lead: 'Ludo', lead_type: 'person', harmony: ['Cerise', 'Kevin'], licks: 'FDL', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT', FDL: 'CHOP'    }, comment: "Tenir le dernier D jusqu'à épuisement" },
+    ],
+  },
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
-    console.error('ERROR: DATABASE_URL not set. Check your .env file.');
+  const slug   = process.argv[2] || process.env.ARTIST_SLUG;
+  const dbUrl  = process.argv[3] || process.env.DATABASE_URL;
+
+  if (!slug) {
+    console.error('Usage: node scripts/seed_arrangements.js <slug> [database_url]');
     process.exit(1);
   }
-  const slug = process.env.ARTIST_SLUG;
-  if (!slug) {
-    console.error('ERROR: ARTIST_SLUG not set. Usage: ARTIST_SLUG=salb node scripts/seed_arrangements.js');
+  if (!dbUrl) {
+    console.error('ERROR: No database URL. Pass it as the second argument or set DATABASE_URL in .env');
     process.exit(1);
   }
 
-  const sql = neon(process.env.DATABASE_URL);
+  const sql = neon(dbUrl);
 
   const [artist] = await sql`SELECT id, name FROM artists WHERE slug = ${slug}`;
   if (!artist) {
@@ -78,7 +213,7 @@ async function main() {
     process.exit(1);
   }
 
-  const dbHost = new URL(process.env.DATABASE_URL).hostname;
+  const dbHost = new URL(dbUrl).hostname;
   console.log('\nDB host:  ', dbHost);
   console.log('Artist:   ', artist.name, '(id=' + artist.id + ')');
   console.log('Songs:    ', SONGS_DATA.length, 'to seed');
