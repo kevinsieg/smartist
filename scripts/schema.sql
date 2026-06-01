@@ -172,6 +172,27 @@ CREATE TABLE IF NOT EXISTS setlists (
 CREATE INDEX IF NOT EXISTS setlists_artist_id_idx ON setlists(artist_id);
 CREATE INDEX IF NOT EXISTS setlists_gig_id_idx    ON setlists(gig_id);
 
+-- ── song_arrangements ──────────────────────────────────────────────────────
+-- Each row is one named arrangement version for a song.
+-- is_active: at most one per song; enforced at app level, not DB.
+
+CREATE TABLE IF NOT EXISTS song_arrangements (
+  id                 SERIAL PRIMARY KEY,
+  song_id            INTEGER NOT NULL REFERENCES songs(id)   ON DELETE CASCADE,
+  artist_id          INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+  name               TEXT    NOT NULL DEFAULT 'Default',
+  is_active          BOOLEAN NOT NULL DEFAULT false,
+  hidden_instruments JSONB   NOT NULL DEFAULT '[]',
+  rows               JSONB   NOT NULL DEFAULT '[]',
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS song_arrangements_song_id_idx
+  ON song_arrangements(song_id);
+CREATE INDEX IF NOT EXISTS song_arrangements_artist_id_idx
+  ON song_arrangements(artist_id, song_id);
+
 -- ── song_logs ──────────────────────────────────────────────────────────────
 -- Append-only audit log. Every create, update, or soft-delete on a song
 -- writes a row here with a full JSON snapshot of the song at that moment.
