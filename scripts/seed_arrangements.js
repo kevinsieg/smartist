@@ -264,6 +264,135 @@ const SONGS_DATA = [
     ],
   },
 
+  // ── Way Over Yonder ──────────────────────────────────────────────────────
+  // NOTE: C5/C6 and final R rows inherit MDO='SOLO' by ditto from INSTRU MDO — verify intentional.
+  // NOTE: GTR='STRUM' carries from C3 through all subsequent rows including INSTRU sections — verify.
+  // NOTE: harmony on final two R rows is '?' in source — left empty pending confirmation.
+  {
+    title:             'Way Over Yonder',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'VLN', 'BASS', 'HARMO'],
+    rows: [
+      { structure: 'INTRO',  part: '',  lead: '',       lead_type: '',           harmony: [],    licks: '',    parts: { BJO: '',     MDO: '',      GTR: '',      FDL: ''        }, comment: 'INTRO' },
+      { structure: 'C1',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: '',    parts: { BJO: 'OPEN', MDO: '',      GTR: '',      FDL: ''        }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: '',    parts: { BJO: 'OPEN', MDO: '',      GTR: '',      FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'R',      part: 'B', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: '',    parts: { BJO: 'CHOP', MDO: 'STRUM', GTR: '',      FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'BJO',    lead_type: 'instrument', harmony: [],    licks: '',    parts: { BJO: 'SOLO', MDO: 'OPEN',  GTR: '',      FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR',    lead_type: 'instrument', harmony: [],    licks: '',    parts: { BJO: 'POMP', MDO: 'OPEN',  GTR: 'SOLO',  FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: 'MDO', parts: { BJO: '',     MDO: 'OPEN',  GTR: 'STRUM', FDL: 'LONG BOW' }, comment: 'Shuffle' },
+      { structure: 'C4',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: 'MDO', parts: { BJO: '',     MDO: 'OPEN',  GTR: 'STRUM', FDL: 'LONG BOW' }, comment: 'Shuffle' },
+      { structure: 'R',      part: 'B', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: 'FDL', parts: { BJO: 'CHOP', MDO: 'OPEN',  GTR: 'STRUM', FDL: 'LONG BOW' }, comment: 'Licks' },
+      { structure: 'INSTRU', part: 'A', lead: 'VIOLON', lead_type: 'instrument', harmony: [],    licks: '',    parts: { BJO: 'POMP', MDO: 'OPEN',  GTR: 'STRUM', FDL: 'SOLO'    }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'MDO',    lead_type: 'instrument', harmony: [],    licks: '',    parts: { BJO: 'POMP', MDO: 'SOLO',  GTR: 'STRUM', FDL: 'CHOP'    }, comment: '' },
+      { structure: 'C5',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: 'MDO', parts: { BJO: '',     MDO: 'SOLO',  GTR: 'STRUM', FDL: 'LONG BOW' }, comment: '' },
+      { structure: 'C6',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: 'MDO', parts: { BJO: '',     MDO: 'SOLO',  GTR: 'STRUM', FDL: 'LONG BOW' }, comment: 'Shuffle' },
+      { structure: 'R',      part: 'B', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: 'FDL', parts: { BJO: '',     MDO: 'SOLO',  GTR: 'STRUM', FDL: 'LONG BOW' }, comment: 'Licks — harmony TBD' },
+      { structure: 'R',      part: 'B', lead: 'Cerise', lead_type: 'person',     harmony: [],    licks: 'FDL', parts: { BJO: '',     MDO: 'SOLO',  GTR: 'STRUM', FDL: 'LONG BOW' }, comment: 'Licks — harmony TBD' },
+    ],
+  },
+
+  // ── Walk On Boy ──────────────────────────────────────────────────────────
+  // NOTE: C3/R3 (rows after GTR K INSTRU) inherit GTR_K='SOLO' by ditto — verify intentional.
+  // NOTE: C3/R3/OUTRO (rows after GTR L INSTRU) inherit GTR_L='SOLO' + GTR_K='SOLO' by ditto — verify intentional.
+  {
+    title:             'Walk On Boy',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR', 'MDO', 'VLN', 'FDL', 'HARMO'],
+    rows: [
+      { structure: 'C1',     part: 'A', lead: 'Ludo',  lead_type: 'person',     harmony: [],                 licks: 'GTR_L', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: '2 premiere mesure ludo acapella' },
+      { structure: 'R1',     part: 'B', lead: 'Ludo',  lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: 'GTR_L', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'BJO',   lead_type: 'instrument', harmony: [],                 licks: '',      parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'SOLO', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'B', lead: 'BJO',   lead_type: 'instrument', harmony: [],                 licks: '',      parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'SOLO', BASS: 'ALT' }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Ludo',  lead_type: 'person',     harmony: [],                 licks: 'GTR_L', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'R2',     part: 'B', lead: 'Ludo',  lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: 'GTR_L', parts: { GTR_L: 'STRUM', GTR_K: 'STRUM', BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR K', lead_type: 'instrument', harmony: [],                 licks: '',      parts: { GTR_L: 'STRUM', GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'B', lead: 'GTR K', lead_type: 'instrument', harmony: [],                 licks: '',      parts: { GTR_L: 'STRUM', GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Ludo',  lead_type: 'person',     harmony: [],                 licks: 'GTR_L', parts: { GTR_L: 'STRUM', GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'R3',     part: 'B', lead: 'Ludo',  lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: 'GTR_L', parts: { GTR_L: 'STRUM', GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'GTR L', lead_type: 'instrument', harmony: [],                 licks: '',      parts: { GTR_L: 'SOLO',  GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'B', lead: 'GTR L', lead_type: 'instrument', harmony: [],                 licks: '',      parts: { GTR_L: 'SOLO',  GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Ludo',  lead_type: 'person',     harmony: [],                 licks: 'GTR_L', parts: { GTR_L: 'SOLO',  GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'R3',     part: 'B', lead: 'Ludo',  lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: 'GTR_L', parts: { GTR_L: 'SOLO',  GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: '' },
+      { structure: 'OUTRO',  part: 'B', lead: 'Ludo',  lead_type: 'person',     harmony: ['Cerise','Kevin'], licks: 'GTR_L', parts: { GTR_L: 'SOLO',  GTR_K: 'SOLO',  BJO: 'ROLL', BASS: 'ALT' }, comment: 'Turnaround' },
+    ],
+  },
+
+  // ── White Oak Mountain ───────────────────────────────────────────────────
+  // BJO drops out for all verse/refrain rows; only plays CHOP in INSTRU sections.
+  // Final two R (All) rows carry FDL='INSTRU' by ditto from the preceding MDO+FDL INSTRU.
+  {
+    title:             'White Oak Mountain',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'VLN', 'HARMO'],
+    rows: [
+      { structure: 'INTRO',  part: 'A', lead: 'MDO',     lead_type: 'instrument', harmony: [],       licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', FDL: 'CHOP',   BASS: 'ALT' }, comment: 'Kick Mando' },
+      { structure: 'R',      part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: ['Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: '',     MDO: 'OPEN',   FDL: 'CHOP',   BASS: 'ALT' }, comment: '' },
+      { structure: 'C1',     part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: [],       licks: 'FDL', parts: { GTR: 'STRUM', BJO: '',     MDO: 'CHOP',   FDL: 'NAPE',   BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: ['Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: '',     MDO: 'OPEN',   FDL: 'CHOP',   BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'FDL',     lead_type: 'instrument', harmony: [],       licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'OPEN',   FDL: 'INSTRU', BASS: 'ALT' }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: [],       licks: 'FDL', parts: { GTR: 'STRUM', BJO: '',     MDO: 'CHOP',   FDL: 'NAPE',   BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: ['Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: '',     MDO: 'OPEN',   FDL: 'CHOP',   BASS: 'ALT' }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'MDO+FDL', lead_type: 'instrument', harmony: [],       licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', FDL: 'INSTRU', BASS: 'ALT' }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: [],       licks: 'FDL', parts: { GTR: 'STRUM', BJO: '',     MDO: 'CHOP',   FDL: 'NAPE',   BASS: 'ALT' }, comment: '' },
+      { structure: 'C4',     part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: [],       licks: 'FDL', parts: { GTR: 'STRUM', BJO: '',     MDO: 'CHOP',   FDL: 'NAPE',   BASS: 'ALT' }, comment: 'Break sur "Blow"' },
+      { structure: 'R',      part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: ['Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: '',     MDO: 'OPEN',   FDL: 'CHOP',   BASS: 'ALT' }, comment: 'Reprise sur 1' },
+      { structure: 'INSTRU', part: 'A', lead: 'MDO+FDL', lead_type: 'instrument', harmony: [],       licks: '',    parts: { GTR: 'STRUM', BJO: 'CHOP', MDO: 'INSTRU', FDL: 'INSTRU', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: ['All'],  licks: '',    parts: { GTR: 'STRUM', BJO: '',     MDO: 'OPEN',   FDL: 'INSTRU', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: ['All'],  licks: '',    parts: { GTR: 'STRUM', BJO: '',     MDO: 'OPEN',   FDL: 'INSTRU', BASS: 'ALT' }, comment: '' },
+      { structure: 'R',      part: 'A', lead: 'Cerise',  lead_type: 'person',     harmony: ['All'],  licks: '',    parts: { GTR: '',      BJO: '',     MDO: '',       FDL: '',       BASS: ''    }, comment: 'A CAPPELLA' },
+    ],
+  },
+
+  // ── Caleb Meyer ──────────────────────────────────────────────────────────
+  // HARMO column is always '-' (silent) → hidden.
+  // BASS drops out after the INTRO JOIN — only guitar plays through most verses.
+  // BREAK + C7: fully silent / a cappella — all parts empty.
+  // 2nd INSTRU + R3: GTR='STRUM' resumed from pre-break value (source ditto was ambiguous after silent C7).
+  // 'JOIN' technique in INTRO = instruments enter on the guitar cue — add to Hub config if needed.
+  {
+    title:             'Caleb Meyer',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'VLN', 'FDL', 'HARMO'],
+    rows: [
+      { structure: 'INTRO',  part: '',  lead: 'Kevin',  lead_type: 'person',     harmony: [],                licks: '',    parts: { GTR: 'STRUM', BJO: 'JOIN', MDO: 'JOIN', BASS: 'JOIN' }, comment: 'INSTR JOIN GIT' },
+      { structure: 'C1',     part: 'A', lead: 'Kevin',  lead_type: 'person',     harmony: [],                licks: '',    parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'C2',     part: 'A', lead: 'Kevin',  lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'R1',     part: 'A', lead: 'Kevin',  lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'C3',     part: 'A', lead: 'Kevin',  lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'C4',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],                licks: '',    parts: { GTR: 'STRUM', BJO: 'SOLO', MDO: 'CHOP', BASS: ''     }, comment: '' },
+      { structure: 'R2',     part: 'A', lead: 'Kevin',  lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'C5',     part: 'A', lead: 'Kevin',  lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'C6',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'BREAK',  part: '',  lead: '',        lead_type: '',           harmony: [],                licks: '',    parts: { GTR: '',      BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'C7',     part: 'A', lead: 'Cerise', lead_type: 'person',     harmony: [],                licks: '',    parts: { GTR: '',      BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+      { structure: 'INSTRU', part: 'A', lead: 'Ludo',   lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: 'SOLO', BASS: ''     }, comment: '' },
+      { structure: 'R3',     part: 'A', lead: 'Kevin',  lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: 'MDO', parts: { GTR: 'STRUM', BJO: '',     MDO: '',     BASS: ''     }, comment: '' },
+    ],
+  },
+
+  // ── Polly Vaughn ─────────────────────────────────────────────────────────
+  // HARMONICA and VIOLON columns are always '-' (silent) → hidden.
+  // MDO is empty in C3/C4 because LICKS=MDO (plays fills instead of a fixed technique).
+  // BASS='FINGER' — add this technique to Hub config if not already present.
+  {
+    title:             'Polly Vaughn',
+    versionName:       'Default',
+    hiddenInstruments: ['GTR_L', 'GTR_K', 'HARMO', 'VLN'],
+    rows: [
+      { structure: 'INTRO',    part: '',  lead: 'GTR',   lead_type: 'instrument', harmony: [],                licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: 'Acceler vitesse' },
+      { structure: 'C1',       part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],                licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: '' },
+      { structure: 'R1',       part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: '' },
+      { structure: 'C2',       part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],                licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: '' },
+      { structure: 'R2',       part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: '' },
+      { structure: 'C3',       part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: '',     BASS: 'FINGER' }, comment: '' },
+      { structure: 'R3',       part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: '' },
+      { structure: 'C4',       part: 'A', lead: 'Kevin', lead_type: 'person',     harmony: [],                licks: 'MDO', parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: '',     BASS: 'FINGER' }, comment: '' },
+      { structure: 'R4',       part: 'B', lead: 'Kevin', lead_type: 'person',     harmony: ['Cerise','Ludo'], licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: '' },
+      { structure: 'TURNARND', part: '',  lead: 'Kevin', lead_type: 'person',     harmony: [],                licks: '',    parts: { GTR: 'STRUM', BJO: 'ROLL', MDO: 'CHOP', BASS: 'FINGER' }, comment: '' },
+    ],
+  },
+
   // ── Cowboy Man ────────────────────────────────────────────────────────────
   {
     title:             'Cowboy Man',
@@ -354,11 +483,14 @@ async function main() {
       // Deactivate all existing versions before inserting/updating to maintain one-active invariant
       await sql`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${artist.id}`;
 
+      const rowsJson        = JSON.stringify(entry.rows || []);
+      const hiddenJson      = JSON.stringify(entry.hiddenInstruments || []);
+
       if (existing.length) {
         await sql`
           UPDATE song_arrangements
-          SET rows               = ${entry.rows || []},
-              hidden_instruments = ${entry.hiddenInstruments || []},
+          SET rows               = ${rowsJson}::jsonb,
+              hidden_instruments = ${hiddenJson}::jsonb,
               is_active          = true,
               updated_at         = NOW()
           WHERE id = ${existing[0].id}
@@ -367,7 +499,7 @@ async function main() {
       } else {
         await sql`
           INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments, is_active)
-          VALUES (${songId}, ${artist.id}, ${versionName}, ${entry.rows || []}, ${entry.hiddenInstruments || []}, true)
+          VALUES (${songId}, ${artist.id}, ${versionName}, ${rowsJson}::jsonb, ${hiddenJson}::jsonb, true)
         `;
         console.log('INSERTED:', entry.title, '→', versionName);
       }

@@ -18,6 +18,8 @@
     --danger-color:    #a03030;
     --border-color:    #ddd5c8;
     --surface-color:   #fdf9f4;
+    --bg-color:        #fff;
+    --bg-alt:          #f5f0ea;
     --panel-w:         380px;
 }
 
@@ -944,7 +946,7 @@ td input[type="checkbox"] {
 .url-edit-btn:hover { border-color: var(--secondary-ink); color: var(--secondary-ink); }
 
 /* ── Media columns (listen / sheet / playback / lyrics) ──────────────────────── */
-.listen-cell, .sheet-cell, .playback-cell, .lyrics-cell { text-align: center; padding: 0; }
+.listen-cell, .sheet-cell, .playback-cell, .lyrics-cell, .arr-cell { text-align: center; padding: 0; }
 .listen-play-btn,   .listen-upload-btn,
 .sheet-open-btn,    .sheet-upload-btn,
 .playback-open-btn, .playback-upload-btn,
@@ -964,10 +966,15 @@ td input[type="checkbox"] {
 .lyrics-open-btn:hover,   .lyrics-add-btn:hover    { opacity: 1; }
 .listen-upload-btn:hover, .sheet-upload-btn:hover,
 .playback-upload-btn:hover, .lyrics-add-btn:hover  { color: var(--secondary-color); }
+.arr-col-btn { background: none; border: none; cursor: pointer; padding: 2px 6px; font-size: 1rem; line-height: 1; opacity: 0.8; color: var(--secondary-ink); font-family: "Courier New", Courier, monospace; -webkit-tap-highlight-color: transparent; }
+.arr-col-btn:hover { opacity: 1; }
+.arr-col-btn--empty { opacity: 0.2; color: var(--third-color); }
+.arr-col-btn--empty:hover { opacity: 0.45; color: var(--secondary-ink); }
 thead th.col-listen,
 thead th.col-sheet,
 thead th.col-playback,
-thead th.col-lyrics { font-size: 1.1rem; text-transform: none; letter-spacing: 0; text-align: center; }
+thead th.col-lyrics,
+thead th.col-arr { font-size: 1.1rem; text-transform: none; letter-spacing: 0; text-align: center; }
 thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0; text-align: center; }
 .listen-uploading { cursor: not-allowed; animation: upload-pulse 0.7s ease-in-out infinite; }
 @keyframes upload-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -1890,8 +1897,8 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
   --arr-harm-color:  #3d6bce;
 }
 
-.arr-table-wrap { overflow-x: auto; }
-.arr-table { border-collapse: collapse; font-size: 0.8rem; width: 100%; }
+.arr-table-wrap { overflow-x: auto; max-width: 100%; }
+.arr-table { border-collapse: collapse; font-size: 0.8rem; width: max-content; min-width: 100%; }
 .arr-th { padding: 4px 8px; text-align: left; font-size: 0.7rem; letter-spacing: 0.07em; color: var(--third-color); border-bottom: 2px solid var(--border-color); white-space: nowrap; }
 .arr-th--inst { color: var(--arr-lead-inst); }
 .arr-th--orphan { color: var(--third-color); font-style: italic; }
@@ -1907,6 +1914,11 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .arr-td--actions { white-space: nowrap; text-align: right; }
 .arr-lead--person { color: var(--arr-lead-person); font-weight: 600; }
 .arr-lead--inst   { color: var(--arr-lead-inst);   font-weight: 600; }
+
+/* Tighter layout for the side-panel read-only view */
+.vsp-section .arr-table { font-size: 0.72rem; }
+.vsp-section .arr-th    { padding: 3px 5px; }
+.vsp-section .arr-td    { padding: 2px 5px; }
 
 /* Editable cells */
 .arr-inp { border: 1px solid var(--border-color); border-radius: 2px; padding: 2px 5px; font-size: 0.8rem; font-family: inherit; background: var(--bg-color); color: inherit; width: 64px; }
@@ -1945,6 +1957,8 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .arr-tab-name { pointer-events: none; }
 .arr-active-dot { color: var(--secondary-color); font-size: 0.6rem; }
 .arr-set-active-btn { font-size: 0.75rem; padding: 3px 8px; margin-left: 6px; }
+.arr-delete-btn { font-size: 0.75rem; padding: 3px 8px; margin-left: auto; color: var(--danger-color); border-color: var(--danger-color); opacity: 0.7; }
+.arr-delete-btn:hover { background: var(--danger-color); color: #fff; opacity: 1; }
 .arr-col-toggles { display: flex; align-items: center; gap: 10px; padding: 5px 12px; border-bottom: 1px solid var(--border-color); font-size: 0.78rem; flex-wrap: wrap; flex-shrink: 0; }
 .arr-col-label { color: var(--third-color); font-size: 0.7rem; letter-spacing: 0.06em; }
 .arr-col-toggle { display: flex; align-items: center; gap: 3px; cursor: pointer; color: var(--arr-lead-inst); }
