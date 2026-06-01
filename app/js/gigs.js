@@ -188,7 +188,8 @@ var GIG_COLUMNS = [
     render: g => g.type ? `<span class="sl-badge">${escHtml(g.type)}</span>` : '' },
   { field: 'venue_name',     label: 'Venue',     width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
-    if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>';
+    if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>' +
+      (!_viewMode ? '<button class="btn sl-edit-btn" title="Permanently delete" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">Erase</button>' : '');
     var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
     var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="View setlists" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -734,8 +735,8 @@ async function openGigSetlists(gigId) {
   }).join('');
 }
 
-function deleteGigFromPopup() {
-  var id = editingId;
+function deleteGigFromPopup(id) {
+  id = id || editingId;
   closeGigModal();
   openHardDeleteModal({
     title: 'Permanently delete gig?',
