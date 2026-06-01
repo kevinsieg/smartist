@@ -169,12 +169,32 @@ async function initSong(params, el, cfg) {
       : Promise.resolve(null),
   ]);
 
+  // Fetch active arrangement if one exists
+  var activeArr   = null;
+  var arrConfig   = (cfg.config && cfg.config.arrangementConfig) || null;
+  var activeArrMeta = (song.arrangements || []).find(function(a) { return a.is_active; });
+  if (activeArrMeta) {
+    try {
+      var arrVersions = await fetch('/api/' + cfg.slug + '/songs/' + songId + '/arrangements').then(function(r) { return r.json(); });
+      activeArr = Array.isArray(arrVersions) ? arrVersions.find(function(v) { return v.is_active; }) || null : null;
+    } catch (_) {}
+  }
+  window._stageActiveArr = activeArr;
+  window._stageArrConfig = arrConfig;
+
   var navHtml = '';
   if (setlistData) {
     const navSongs = setlistData.songs ?? [];
     const navIdx   = navSongs.findIndex(s => s.id === songId);
     if (navIdx >= 0) navHtml = _navHtml(fromId, navSongs, navIdx);
   }
+
+  var chartBtnHtml = activeArr
+    ? '<button class="stage-chart-btn" onclick="openArrStagePopup(window._stageActiveArr, window._stageArrConfig)" title="Show arrangement chart">' +
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>' +
+      '<span style="font-size:11px">CHART</span>' +
+    '</button>'
+    : '';
 
   document.title = `${song.title} — ${cfg.name}`;
 
@@ -229,6 +249,7 @@ async function initSong(params, el, cfg) {
       <div class="stage-band">${escHtml(cfg.name)}</div>
       <h1 class="stage-title">${escHtml(song.title)}</h1>
       ${subtitle}
+      ${chartBtnHtml ? '<div class="stage-chart-wrap">' + chartBtnHtml + '</div>' : ''}
       ${_shareHtml(navHtml)}
     </div>
     ${metaBadges ? `<div class="song-stage-meta">${metaBadges}</div>` : ''}
@@ -256,9 +277,23 @@ window.addEventListener('beforeprint', function() {
   if (needed > 900) {
     document.documentElement.style.fontSize = Math.max(9, Math.round(16 * 900 / needed)) + 'px';
   }
+  // Inject arrangement table inline for print (stage popup is a modal, won't print)
+  if (window._stageActiveArr && typeof _arrReadOnlyHtml === 'function') {
+    var existing = document.getElementById('_stage_arr_print');
+    if (!existing) {
+      var div = document.createElement('div');
+      div.id        = '_stage_arr_print';
+      div.className = 'stage-arr-print';
+      div.innerHTML = _arrReadOnlyHtml(window._stageActiveArr, window._stageArrConfig);
+      var main = document.querySelector('main') || document.body;
+      main.appendChild(div);
+    }
+  }
 });
 window.addEventListener('afterprint', function() {
   document.documentElement.style.fontSize = '';
+  var div = document.getElementById('_stage_arr_print');
+  if (div) div.remove();
 });
 
 // --- Share menu ---
