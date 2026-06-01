@@ -424,12 +424,14 @@ function arrDuplicateRow(ri) {
 
 // ── Harmony picker ────────────────────────────────────────────────────────────
 
-var _arrHarmPickerRi = -1;
+var _arrHarmPickerRi       = -1;
+var _arrHarmPickerCloseFn  = null; // tracked so closeArrangementEditor can remove it
 
 function arrOpenHarmPicker(cell, ri) {
   var existing = document.getElementById('arr-harm-picker');
   if (existing) {
     existing.remove();
+    if (_arrHarmPickerCloseFn) { document.removeEventListener('click', _arrHarmPickerCloseFn); _arrHarmPickerCloseFn = null; }
     if (_arrHarmPickerRi === ri) { _arrHarmPickerRi = -1; return; }
   }
   _arrHarmPickerRi = ri;
@@ -441,10 +443,11 @@ function arrOpenHarmPicker(cell, ri) {
   var picker = document.createElement('div');
   picker.id        = 'arr-harm-picker';
   picker.className = 'arr-harm-picker';
+  // Use data-name attribute instead of inline onclick string to avoid escaping issues
   picker.innerHTML = members.length
     ? members.map(function(m) {
         var isSel = selected.has(m.name);
-        return '<div class="arr-harm-item' + (isSel ? ' arr-harm-item--sel' : '') + '" onclick="arrToggleHarm(' + ri + ',\'' + escHtml(m.name.replace(/'/g, '\\\'')) + '\')">' +
+        return '<div class="arr-harm-item' + (isSel ? ' arr-harm-item--sel' : '') + '" data-ri="' + ri + '" data-name="' + escHtml(m.name) + '">' +
           '<span class="arr-harm-abbr">' + escHtml(m.abbr) + '</span>' +
           '<span>' + escHtml(m.name) + '</span>' +
           (isSel ? '<span style="margin-left:auto;color:var(--arr-lead-person,#3d6bce)">✓</span>' : '') +
@@ -452,19 +455,25 @@ function arrOpenHarmPicker(cell, ri) {
       }).join('')
     : '<div style="padding:0.5rem;color:var(--third-color);font-size:0.8rem">No members configured in Hub</div>';
 
+  picker.addEventListener('click', function(e) {
+    var item = e.target.closest('.arr-harm-item');
+    if (item) arrToggleHarm(Number(item.dataset.ri), item.dataset.name);
+  });
+
   var rect = cell.getBoundingClientRect();
   picker.style.cssText = 'position:fixed;top:' + (rect.bottom + 2) + 'px;left:' + rect.left + 'px;z-index:1001';
   document.body.appendChild(picker);
 
   setTimeout(function() {
-    function close(e) {
+    _arrHarmPickerCloseFn = function close(e) {
       if (!picker.contains(e.target) && e.target !== cell) {
         picker.remove();
-        _arrHarmPickerRi = -1;
+        _arrHarmPickerRi      = -1;
+        _arrHarmPickerCloseFn = null;
         document.removeEventListener('click', close);
       }
-    }
-    document.addEventListener('click', close);
+    };
+    document.addEventListener('click', _arrHarmPickerCloseFn);
   }, 0);
 }
 
@@ -637,7 +646,9 @@ function closeArrangementEditor() {
   if (modal) modal.classList.remove('open');
   var picker = document.getElementById('arr-harm-picker');
   if (picker) picker.remove();
-  _arrEditorDirty = false;
+  if (_arrHarmPickerCloseFn) { document.removeEventListener('click', _arrHarmPickerCloseFn); _arrHarmPickerCloseFn = null; }
+  _arrHarmPickerRi = -1;
+  _arrEditorDirty  = false;
 }
 
 // ── Stage popup ───────────────────────────────────────────────────────────────
