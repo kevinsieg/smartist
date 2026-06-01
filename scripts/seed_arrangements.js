@@ -125,11 +125,15 @@ async function main() {
         WHERE song_id = ${songId} AND artist_id = ${artist.id} AND name = ${versionName}
       `;
 
+      // Deactivate all existing versions before inserting/updating to maintain one-active invariant
+      await sql`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${artist.id}`;
+
       if (existing.length) {
         await sql`
           UPDATE song_arrangements
           SET rows               = ${entry.rows || []},
               hidden_instruments = ${entry.hiddenInstruments || []},
+              is_active          = true,
               updated_at         = NOW()
           WHERE id = ${existing[0].id}
         `;

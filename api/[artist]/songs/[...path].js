@@ -485,12 +485,13 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
+    const [target] = await sql`SELECT id FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
+    if (!target) return res.status(404).json({ error: 'Arrangement not found' });
     await sql.transaction([
       sql`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${band.id}`,
       sql`UPDATE song_arrangements SET is_active = true, updated_at = NOW() WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`,
     ]);
     const [updated] = await sql`SELECT * FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
-    if (!updated) return res.status(404).json({ error: 'Arrangement not found' });
     return res.json(updated);
   }
 
@@ -504,7 +505,7 @@ module.exports = wrap(async function handler(req, res) {
     if (!arr) return res.status(404).json({ error: 'Arrangement not found' });
     const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM song_arrangements WHERE song_id = ${songId} AND artist_id = ${band.id}`;
     if (count <= 1) return res.status(409).json({ error: 'Cannot delete the last arrangement version' });
-    await sql`DELETE FROM song_arrangements WHERE id = ${arrId} AND artist_id = ${band.id}`;
+    await sql`DELETE FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
     return res.status(204).end();
   }
 
