@@ -277,33 +277,38 @@ function renderArrInstruments(instruments) {
 function arrMemberChange(i, field, value) {
   var cfg = _arrCfg();
   if (cfg.members[i]) cfg.members[i][field] = value;
-  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
 }
 
 function arrInstChange(i, field, value) {
   var cfg = _arrCfg();
   if (cfg.instruments[i]) cfg.instruments[i][field] = value;
-  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
 }
 
 function arrAddMember() {
   var cfg = _arrCfg();
   cfg.members.push({ name: '', abbr: '' });
-  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
   renderArrMembers(cfg.members);
 }
 
 function arrRemoveMember(i) {
   var cfg = _arrCfg();
   cfg.members.splice(i, 1);
-  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
   renderArrMembers(cfg.members);
 }
 
 function arrAddInstrument() {
   var cfg = _arrCfg();
   cfg.instruments.push({ key: '', label: '', techniques: [] });
-  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
   renderArrInstruments(cfg.instruments);
 }
 
@@ -315,7 +320,8 @@ function arrRemoveInstrument(i) {
     if (!confirm('Remove instrument "' + inst.key + '"?\nExisting arrangement data for this instrument will still display in saved versions.')) return;
   }
   cfg.instruments.splice(i, 1);
-  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
   renderArrInstruments(cfg.instruments);
 }
 
@@ -323,7 +329,8 @@ function arrRemoveTechnique(instIdx, techIdx) {
   var cfg = _arrCfg();
   if (cfg.instruments[instIdx]) {
     cfg.instruments[instIdx].techniques.splice(techIdx, 1);
-    if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+    if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
     renderArrInstruments(cfg.instruments);
   }
 }
@@ -336,7 +343,8 @@ function arrTechKeydown(e, instIdx) {
   var cfg = _arrCfg();
   if (!cfg.instruments[instIdx]) return;
   cfg.instruments[instIdx].techniques.push(val);
-  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
   renderArrInstruments(cfg.instruments);
 }
 
