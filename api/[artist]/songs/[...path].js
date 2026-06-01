@@ -125,6 +125,8 @@ module.exports = wrap(async function handler(req, res) {
     ? req.query.path
     : req.url.split('?')[0].split('/songs/')[1]?.split('/') ?? [];
   const [rawId, action] = pathParts;
+  const arrId    = Number(pathParts[2]);
+  const arrSub   = pathParts[3]; // 'activate' or undefined
   const slug = getSlug(req);
 
   // ── GEMA import (merged from gema/import.js via vercel.json rewrite) ──────
@@ -403,6 +405,22 @@ module.exports = wrap(async function handler(req, res) {
     return MEDIA[action](req, res);
   }
 
+  // ── GET /api/:artist/songs/:id/arrangements ───────────────────────────────
+  if (action === 'arrangements' && !arrId && req.method === 'GET') {
+    const band = await getArtist(slug);
+    if (!band) return res.status(404).json({ error: 'Band not found' });
+    const sql = getDb();
+    const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+    const versions = await sql`
+      SELECT id, name, is_active, hidden_instruments, rows, created_at, updated_at
+      FROM song_arrangements
+      WHERE song_id = ${songId} AND artist_id = ${band.id}
+      ORDER BY created_at ASC
+    `;
+    return res.json(versions);
+  }
+
   // ── GET single song (used by stage view) ─────────────────────────────────
   if (!action && req.method === 'GET') {
     const band = await getArtist(slug);
@@ -419,7 +437,13 @@ module.exports = wrap(async function handler(req, res) {
       WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    return res.json(song);
+    const arrangements = await sql`
+      SELECT id, name, is_active, updated_at
+      FROM song_arrangements
+      WHERE song_id = ${songId} AND artist_id = ${band.id}
+      ORDER BY created_at ASC
+    `;
+    return res.json({ ...song, arrangements });
   }
 
   // ── DELETE song ───────────────────────────────────────────────────────────
