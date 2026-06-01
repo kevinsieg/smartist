@@ -165,9 +165,7 @@ function _arrRenderVersionBar() {
     var isCurrent = i === _arrEditorActive;
     var tabCls    = 'arr-tab' + (isCurrent ? ' arr-tab--current' : '');
     var dot       = v.is_active ? '<span class="arr-active-dot" title="Active on stage">●</span>' : '';
-    var closeBtn  = _arrEditorVersions.length > 1
-      ? '<span class="arr-tab-close" onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="Delete">×</span>'
-      : '';
+    var closeBtn  = '<span class="arr-tab-close" onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="Delete version">×</span>';
     return '<button class="' + tabCls + '" onclick="arrSwitchVersion(' + i + ')">' +
       dot +
       '<span class="arr-tab-name" ondblclick="event.stopPropagation();arrRenameVersion(' + i + ')">' +
@@ -183,6 +181,10 @@ function _arrRenderVersionBar() {
   if (cur && !cur.is_active) {
     html += '<button class="btn arr-set-active-btn" onclick="arrSetActive()">Set active</button>';
   }
+
+  var delLabel = _arrEditorVersions.length === 1 ? 'Delete arrangement' : 'Delete version';
+  html += '<button class="btn arr-delete-btn" onclick="arrDeleteVersion(' + _arrEditorActive + ')" title="' + delLabel + '">' + delLabel + '</button>';
+
   bar.innerHTML = html;
 }
 
@@ -567,7 +569,12 @@ async function arrNewVersion() {
 
 async function arrDeleteVersion(i) {
   var v = _arrEditorVersions[i];
-  if (!v || !confirm('Delete version "' + v.name + '"?')) return;
+  if (!v) return;
+  var isLast = _arrEditorVersions.length === 1;
+  var msg = isLast
+    ? 'Delete all arrangement data for "' + _arrEditorSongTitle + '"? This cannot be undone.'
+    : 'Delete version "' + v.name + '"?';
+  if (!confirm(msg)) return;
   var r = await apiFetch(
     '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements/' + v.id,
     'DELETE'
@@ -578,8 +585,13 @@ async function arrDeleteVersion(i) {
     return;
   }
   _arrEditorVersions.splice(i, 1);
-  if (_arrEditorActive >= _arrEditorVersions.length) _arrEditorActive = _arrEditorVersions.length - 1;
   _arrEditorDirty = false;
+  if (!_arrEditorVersions.length) {
+    closeArrangementEditor();
+    if (typeof window._arrOnAllDeleted === 'function') window._arrOnAllDeleted(_arrEditorSongId);
+    return;
+  }
+  if (_arrEditorActive >= _arrEditorVersions.length) _arrEditorActive = _arrEditorVersions.length - 1;
   _arrRenderEditor();
 }
 
@@ -638,8 +650,16 @@ async function arrSave() {
   var updated = await r.json();
   _arrEditorVersions[_arrEditorActive] = updated;
   _arrEditorDirty = false;
-  setStatus('arr-modal-status', 'Saved.');
-  setTimeout(function() { setStatus('arr-modal-status', ''); }, 2000);
+  if (btn) {
+    btn.textContent = '✓ Saved';
+    btn.style.background = '#4a9a6a';
+    btn.style.borderColor = '#4a9a6a';
+    setTimeout(function() {
+      btn.textContent = 'Save';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+    }, 1500);
+  }
 }
 
 function closeArrangementEditor() {
@@ -671,7 +691,7 @@ function _ensureArrStageModal() {
   el.innerHTML =
     '<div class="arr-stage-modal">' +
       '<div class="arr-stage-modal-header">' +
-        '<span>Chart</span>' +
+        '<span>Arrangement</span>' +
         '<button onclick="closeArrStagePopup()" style="background:none;border:none;color:#888;cursor:pointer;font-size:1.1rem;line-height:1">&#215;</button>' +
       '</div>' +
       '<div class="arr-stage-body" id="arr-stage-body"></div>' +

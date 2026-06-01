@@ -65,24 +65,6 @@
     .status-msg { font-size: 0.8rem; color: var(--third-color); margin-top: 0.5rem; min-height: 1.2em; }
     .status-msg.error { color: #e55; }
 
-    .hub-arrangement { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem 1.25rem; }
-    .arr-cfg-sub { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.4rem; }
-    .arr-cfg-list { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.5rem; }
-    .arr-member-row { display: flex; align-items: center; gap: 0.4rem; }
-    .arr-cfg-input { flex: 1; padding: 0.3rem 0.5rem; border: 1px solid var(--border-color); border-radius: 3px; font-size: 0.85rem; font-family: inherit; background: var(--bg-color); color: inherit; }
-    .arr-cfg-abbr { width: 48px; text-align: center; }
-    .arr-cfg-remove { background: none; border: none; color: var(--third-color); cursor: pointer; font-size: 1rem; padding: 0 3px; line-height: 1; }
-    .arr-cfg-remove:hover { color: #e55; }
-    .arr-instrument-card { border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 0.3rem; }
-    .arr-instrument-hdr { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; background: var(--secondary-color-light, #fdf6ef); border-bottom: 1px solid var(--border-color); }
-    .arr-instrument-key { flex: 1; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.82rem; font-weight: 600; font-family: inherit; background: var(--bg-color); color: inherit; }
-    .arr-instrument-label { flex: 1.5; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.82rem; font-family: inherit; background: var(--bg-color); color: inherit; }
-    .arr-techniques { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.4rem 0.6rem; align-items: center; }
-    .arr-tech-chip { display: flex; align-items: center; gap: 0.2rem; background: var(--border-color); border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.78rem; }
-    .arr-tech-chip button { background: none; border: none; color: var(--third-color); cursor: pointer; padding: 0; font-size: 0.85rem; line-height: 1; }
-    .arr-tech-chip button:hover { color: #e55; }
-    .arr-tech-add { border: 1px dashed var(--border-color); border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.78rem; width: 90px; font-family: inherit; background: transparent; color: inherit; outline: none; }
-    .arr-cfg-add-btn { font-size: 0.8rem; border: 1px dashed var(--border-color); background: none; color: var(--third-color); }
   </style>
 </head>
 <body>
@@ -142,24 +124,6 @@
   </div>
 </div>
 
-<div style="margin-top:2.5rem">
-  <div class="section-label">&#8862; Arrangement</div>
-  <div class="hub-arrangement" id="hub-arrangement" style="display:none">
-
-    <div class="arr-cfg-sub">Band Members</div>
-    <div id="arr-members-list" class="arr-cfg-list"></div>
-    <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddMember()">+ Add member</button>
-
-    <div class="arr-cfg-sub" style="margin-top:1.25rem">Instruments &amp; Techniques</div>
-    <div id="arr-instruments-list" class="arr-cfg-list"></div>
-    <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddInstrument()">+ Add instrument</button>
-
-    <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem">
-      <button class="btn active auth-action" disabled onclick="saveArrangementConfig()">Save arrangement config</button>
-      <div class="status-msg" id="arr-cfg-status"></div>
-    </div>
-  </div>
-</div>
 
 <!-- Platform connect / edit modal -->
 <div class="modal-overlay" id="platform-modal">

@@ -125,9 +125,18 @@ module.exports = wrap(async function handler(req, res) {
   const pathParts = Array.isArray(req.query.path) && req.query.path.length
     ? req.query.path
     : req.url.split('?')[0].split('/songs/')[1]?.split('/') ?? [];
-  const [rawId, action] = pathParts;
-  const arrId    = Number(pathParts[2]);
-  const arrSub   = pathParts[3]; // 'activate' or undefined
+  let rawId  = pathParts[0];
+  let action = pathParts[1];
+  let arrId  = Number(pathParts[2]);
+  let arrSub = pathParts[3]; // 'activate' or undefined
+
+  // vercel dev: multi-segment paths fail on catch-alls; vercel.json rewrites flatten them
+  if (rawId === 'arrangements' && req.query.songId) {
+    rawId  = req.query.songId;
+    action = 'arrangements';
+    arrId  = Number(req.query.arrId) || 0;
+    arrSub = req.query.sub;
+  }
   const slug = getSlug(req);
 
   // ── GEMA import (merged from gema/import.js via vercel.json rewrite) ──────
@@ -433,17 +442,17 @@ module.exports = wrap(async function handler(req, res) {
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
     const rawName = req.body?.name;
     const name = rawName === undefined ? 'Default' : (validateStr(rawName, 200) || 'Default');
-    let sourceRows = rows;
-    let sourceHidden = hidden_instruments;
+    let sourceRows = JSON.stringify(rows);
+    let sourceHidden = JSON.stringify(hidden_instruments);
     if (copy_from) {
       const [src] = await sql`SELECT rows, hidden_instruments FROM song_arrangements WHERE id = ${Number(copy_from)} AND song_id = ${songId} AND artist_id = ${band.id}`;
       if (!src) return res.status(400).json({ error: 'copy_from arrangement not found' });
-      sourceRows = src.rows;
-      sourceHidden = src.hidden_instruments;
+      sourceRows = JSON.stringify(src.rows);
+      sourceHidden = JSON.stringify(src.hidden_instruments);
     }
     const [created] = await sql`
       INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
-      VALUES (${songId}, ${band.id}, ${name}, ${sourceRows}, ${sourceHidden})
+      VALUES (${songId}, ${band.id}, ${name}, ${sourceRows}::jsonb, ${sourceHidden}::jsonb)
       RETURNING *
     `;
     return res.status(201).json(created);
@@ -462,15 +471,15 @@ module.exports = wrap(async function handler(req, res) {
       if (validatedName === false) return res.status(400).json({ error: 'name too long' });
       if (validatedName) updates.name = validatedName;
     }
-    if (rows !== undefined)               updates.rows               = rows;
-    if (hidden_instruments !== undefined) updates.hidden_instruments = hidden_instruments;
+    if (rows !== undefined)               updates.rows               = JSON.stringify(rows);
+    if (hidden_instruments !== undefined) updates.hidden_instruments = JSON.stringify(hidden_instruments);
     if (!Object.keys(updates).length)     return res.status(400).json({ error: 'Nothing to update' });
     const [updated] = await sql`
       UPDATE song_arrangements
       SET
         name               = COALESCE(${updates.name               ?? null}, name),
-        rows               = COALESCE(${updates.rows               ?? null}, rows),
-        hidden_instruments = COALESCE(${updates.hidden_instruments ?? null}, hidden_instruments),
+        rows               = COALESCE(${updates.rows               ?? null}::jsonb, rows),
+        hidden_instruments = COALESCE(${updates.hidden_instruments ?? null}::jsonb, hidden_instruments),
         updated_at         = NOW()
       WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}
       RETURNING *
@@ -501,10 +510,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
-    const [arr] = await sql`SELECT id, is_active FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
+    const [arr] = await sql`SELECT id FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
     if (!arr) return res.status(404).json({ error: 'Arrangement not found' });
-    const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM song_arrangements WHERE song_id = ${songId} AND artist_id = ${band.id}`;
-    if (count <= 1) return res.status(409).json({ error: 'Cannot delete the last arrangement version' });
     await sql`DELETE FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
     return res.status(204).end();
   }
@@ -549,6 +556,7 @@ module.exports = wrap(async function handler(req, res) {
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
+    await sql`DELETE FROM song_arrangements WHERE song_id = ${songId} AND artist_id = ${band.id}`;
     await insertAuditLog(sql, band.id, songId, 'delete', song);
     return res.status(204).end();
   }

@@ -12,7 +12,7 @@ Schema file: `scripts/schema.sql` (idempotent — safe to re-run against any dat
 artists
   │
   ├─── songs ──────────────────────── song_logs
-  │      │
+  │      │                        └── song_arrangements
   │      └─(via setlist_songs)──── setlists ──── gig_id (optional) ──┐
   │                                                                    │
   ├─── venues ◄──── gigs.venue_id ─── gigs ◄──────────────────────────┘
@@ -41,7 +41,8 @@ artists
      │                                              │ 1 : n (optional)
      ▼                                              ▼
   song_logs                                      setlists
-  setlist_songs ◄─────────────────────────────── (gig_id FK, SET NULL)
+  song_arrangements                              (gig_id FK, SET NULL)
+  setlist_songs ◄─────────────────────────────── 
   gema_works ──► gema_rightholders
 ```
 
@@ -214,6 +215,43 @@ Junction table: setlist ↔ song with explicit ordering. PK `(setlist_id, positi
 | `position` | integer PK | 0-based display order |
 
 **Indexes:** `setlist_songs_song_id_idx (song_id)`
+
+---
+
+### `song_arrangements`
+
+Versioned arrangement charts for a song. Each song can have multiple named versions; exactly one should be marked `is_active` (enforced at the application level). Arrangements are hard-deleted when the parent song is soft-deleted.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | serial PK | |
+| `song_id` | integer FK → songs CASCADE | Hard-deleted with the song |
+| `artist_id` | integer FK → artists CASCADE | Denormalised for fast per-artist queries |
+| `name` | text NOT NULL DEFAULT `'Default'` | Version label, e.g. `Default`, `Acoustic` |
+| `is_active` | boolean NOT NULL DEFAULT false | The version shown on stage — at most one per song |
+| `hidden_instruments` | jsonb NOT NULL DEFAULT `'[]'` | Array of instrument keys hidden from the chart view |
+| `rows` | jsonb NOT NULL DEFAULT `'[]'` | Ordered array of section rows — see structure below |
+| `created_at` | timestamptz DEFAULT NOW() | |
+| `updated_at` | timestamptz DEFAULT NOW() | |
+
+**Indexes:** `song_arrangements_song_id_idx`, `song_arrangements_artist_id_idx (artist_id, song_id)`
+
+**Row shape** (one element of the `rows` array):
+
+```json
+{
+  "structure":  "C1",
+  "part":       "A",
+  "lead":       "Ludo",
+  "lead_type":  "person",
+  "harmony":    ["Kevin", "Cerise"],
+  "licks":      "BJO",
+  "parts":      { "GTR": "STRUM", "BJO": "ROLL", "BASS": "ALT" },
+  "comment":    ""
+}
+```
+
+`lead_type` is `"person"` or `"instrument"`. `parts` keys and `licks` values are instrument keys defined in `artists.config.arrangementConfig.instruments`.
 
 ---
 

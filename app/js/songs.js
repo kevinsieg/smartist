@@ -180,6 +180,7 @@ var COLS = [
   { key: 'extra.sheetUrl',     label: '≡',                  type: 'sheet',    cls: 'col-sheet',    width: 52, title: 'Sheet — chords & lyrics PDF'   },
   { key: 'extra.playbackUrl',  label: '▷',                  type: 'playback', cls: 'col-playback', width: 52, title: 'Playback — backing track'       },
   { key: 'extra.lyrics',       label: '¶',                  type: 'lyrics',   cls: 'col-lyrics',   width: 52, title: 'Lyrics'                          },
+  { key: 'has_arrangement',    label: '&#8862;',            type: 'arr',      cls: 'col-arr',      width: 44, title: 'Arrangement'                      },
   { key: 'play_count',          label: 'plays',              type: 'stat',   cls: 'col-plays',   width: 50  },
   { key: 'last_played_at',      label: 'last live',          type: 'stat',   cls: 'col-last',    width: 86  },
   { key: 'iswc',                label: 'ISWC',               type: 'stat',   cls: 'col-iswc',    width: 110, title: 'ISWC (GEMA/SACEM)' },
@@ -900,6 +901,12 @@ function _openSongArrangement(id) {
   var song = songs.find(function(s) { return s.id === id; });
   if (!song) return;
   var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
+  window._arrOnAllDeleted = function(songId) {
+    var s = songs.find(function(s) { return s.id === songId; });
+    if (s) s.has_arrangement = false;
+    if (_songsView) _songsView.refresh();
+    window._arrOnAllDeleted = null;
+  };
   openArrangementEditor(id, song.title || '', arrCfg);
 }
 
@@ -1053,6 +1060,15 @@ function renderRow(song) {
         <textarea data-id="${sid}" data-key="${c.key}" style="display:none">${escHtml(String(val ?? ''))}</textarea>
         ${actionBtn}
       </td>`;
+    }
+    if (c.type === 'arr') {
+      const hasArr = !!val;
+      const btn = (hasArr || !_viewMode)
+        ? `<button class="arr-col-btn${hasArr ? '' : ' arr-col-btn--empty'}"
+             onclick="_openSongArrangement(${Number(song.id)})"
+             title="${hasArr ? 'Open arrangement' : 'No arrangement'}">&#8862;</button>`
+        : '';
+      return `<td class="${c.cls}${sticky} arr-cell">${btn}</td>`;
     }
     if (c.type === 'bool') {
       return `<td class="${c.cls}${sticky}">
