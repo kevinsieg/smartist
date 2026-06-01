@@ -406,22 +406,23 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   // ── GET /api/:artist/songs/:id/arrangements ───────────────────────────────
+  // Public — no auth required; arrangements are read-only display data (used by stage view)
   if (action === 'arrangements' && !arrId && req.method === 'GET') {
     const band = await getArtist(slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
     const sql = getDb();
     const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    const versions = await sql`
+    const arrangements = await sql`
       SELECT id, name, is_active, hidden_instruments, rows, created_at, updated_at
       FROM song_arrangements
       WHERE song_id = ${songId} AND artist_id = ${band.id}
       ORDER BY created_at ASC
     `;
-    return res.json(versions);
+    return res.json(arrangements);
   }
 
-  // ── GET single song (used by stage view) ─────────────────────────────────
+  // ── GET single song (used by stage view); includes arrangements ─────────────
   if (!action && req.method === 'GET') {
     const band = await getArtist(slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
