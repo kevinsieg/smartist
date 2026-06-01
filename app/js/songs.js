@@ -530,7 +530,7 @@ function _openSongPanelContent(item, panelEl) {
   var _panelSid = sid;
 
   // Async: arrangement table (auth-only, active version only)
-  if (!_viewMode && song.arrangements && song.arrangements.some(function(a) { return a.is_active; })) {
+  if (!_viewMode && song.has_arrangement) {
     fetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
       .then(function(r) { return r.json(); })
       .then(function(versions) {
@@ -880,7 +880,7 @@ function renderListRowHtml(s) {
   var icons = '';
   if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="Listen">&#9654;</button>';
   if (hasLyrics) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="Lyrics">&#182;</button>';
-  var hasArrangement = !_viewMode && Array.isArray(s.arrangements) && s.arrangements.length > 0;
+  var hasArrangement = !_viewMode && !!s.has_arrangement;
   if (hasArrangement) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="Arrangement">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
