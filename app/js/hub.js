@@ -38,6 +38,7 @@ initPage(async function(cfg, viewMode) {
   _cfg = cfg;
   _viewMode = viewMode;
   renderHub();
+  renderArrangementConfig();
   if (_viewMode) {
     applyViewMode();
   }
@@ -222,4 +223,132 @@ async function disconnectPlatform() {
   invalidateConfigCache();
   closePlatformModal();
   renderHub();
+}
+
+// ── Arrangement config ────────────────────────────────────────────────────
+
+function _arrCfg() {
+  return _cfg && _cfg.config && _cfg.config.arrangementConfig
+    ? _cfg.config.arrangementConfig
+    : { members: [], instruments: [] };
+}
+
+function renderArrangementConfig() {
+  var cfg = _arrCfg();
+  renderArrMembers(cfg.members || []);
+  renderArrInstruments(cfg.instruments || []);
+  var sec = document.getElementById('hub-arrangement');
+  if (sec) sec.style.display = '';
+}
+
+function renderArrMembers(members) {
+  var list = document.getElementById('arr-members-list');
+  if (!list) return;
+  list.innerHTML = members.map(function(m, i) {
+    return '<div class="arr-member-row">' +
+      '<input class="arr-cfg-input" type="text" value="' + escHtml(m.name || '') + '" placeholder="Name" oninput="arrMemberChange(' + i + ',\'name\',this.value)">' +
+      '<input class="arr-cfg-input arr-cfg-abbr" type="text" value="' + escHtml(m.abbr || '') + '" placeholder="Abbr" maxlength="4" title="Abbreviation shown in harmony chips" oninput="arrMemberChange(' + i + ',\'abbr\',this.value)">' +
+      '<button class="arr-cfg-remove" onclick="arrRemoveMember(' + i + ')" title="Remove">&#215;</button>' +
+    '</div>';
+  }).join('');
+}
+
+function renderArrInstruments(instruments) {
+  var list = document.getElementById('arr-instruments-list');
+  if (!list) return;
+  list.innerHTML = instruments.map(function(inst, i) {
+    var chips = (inst.techniques || []).map(function(t, ti) {
+      return '<span class="arr-tech-chip">' + escHtml(t) +
+        '<button onclick="arrRemoveTechnique(' + i + ',' + ti + ')" title="Remove">&#215;</button></span>';
+    }).join('');
+    return '<div class="arr-instrument-card">' +
+      '<div class="arr-instrument-hdr">' +
+        '<input class="arr-instrument-key" type="text" value="' + escHtml(inst.key || '') + '" placeholder="Key (e.g. BANJO)" oninput="arrInstChange(' + i + ',\'key\',this.value)">' +
+        '<input class="arr-instrument-label" type="text" value="' + escHtml(inst.label || '') + '" placeholder="Label (e.g. Banjo)" oninput="arrInstChange(' + i + ',\'label\',this.value)">' +
+        '<button class="arr-cfg-remove" onclick="arrRemoveInstrument(' + i + ')" title="Remove">&#215;</button>' +
+      '</div>' +
+      '<div class="arr-techniques">' + chips +
+        '<input class="arr-tech-add" placeholder="+ technique" onkeydown="arrTechKeydown(event,' + i + ')">' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function arrMemberChange(i, field, value) {
+  var cfg = _arrCfg();
+  if (cfg.members[i]) cfg.members[i][field] = value;
+  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+}
+
+function arrInstChange(i, field, value) {
+  var cfg = _arrCfg();
+  if (cfg.instruments[i]) cfg.instruments[i][field] = value;
+  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+}
+
+function arrAddMember() {
+  var cfg = _arrCfg();
+  cfg.members.push({ name: '', abbr: '' });
+  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  renderArrMembers(cfg.members);
+}
+
+function arrRemoveMember(i) {
+  var cfg = _arrCfg();
+  cfg.members.splice(i, 1);
+  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  renderArrMembers(cfg.members);
+}
+
+function arrAddInstrument() {
+  var cfg = _arrCfg();
+  cfg.instruments.push({ key: '', label: '', techniques: [] });
+  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  renderArrInstruments(cfg.instruments);
+}
+
+function arrRemoveInstrument(i) {
+  var cfg = _arrCfg();
+  var inst = cfg.instruments[i];
+  if (!inst) return;
+  if (inst.key) {
+    if (!confirm('Remove instrument "' + inst.key + '"?\nExisting arrangement data for this instrument will still display in saved versions.')) return;
+  }
+  cfg.instruments.splice(i, 1);
+  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  renderArrInstruments(cfg.instruments);
+}
+
+function arrRemoveTechnique(instIdx, techIdx) {
+  var cfg = _arrCfg();
+  if (cfg.instruments[instIdx]) {
+    cfg.instruments[instIdx].techniques.splice(techIdx, 1);
+    if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+    renderArrInstruments(cfg.instruments);
+  }
+}
+
+function arrTechKeydown(e, instIdx) {
+  if (e.key !== 'Enter' && e.key !== ',') return;
+  e.preventDefault();
+  var val = e.target.value.trim().toUpperCase();
+  if (!val) return;
+  var cfg = _arrCfg();
+  if (!cfg.instruments[instIdx]) return;
+  cfg.instruments[instIdx].techniques.push(val);
+  if (_cfg.config) _cfg.config.arrangementConfig = cfg;
+  renderArrInstruments(cfg.instruments);
+}
+
+async function saveArrangementConfig() {
+  var cfg = _arrCfg();
+  setStatus('arr-cfg-status', 'Saving…');
+  var r = await apiFetch('/api/config', 'PATCH', { config: { arrangementConfig: cfg } });
+  var json = await r.json();
+  if (!r.ok) { setStatus('arr-cfg-status', json.error || 'Error', true); return; }
+  if (!_cfg.config) _cfg.config = {};
+  _cfg.config.arrangementConfig = cfg;
+  invalidateConfigCache();
+  setStatus('arr-cfg-status', 'Saved.');
+  setTimeout(function() { setStatus('arr-cfg-status', ''); }, 2000);
 }
