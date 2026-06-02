@@ -27,7 +27,7 @@ module.exports = wrap(async function handler(req, res) {
     const token = generateMagicToken(band.password_hash);
     const h = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
     const origin = process.env.APP_ORIGIN || `${h.includes('localhost') ? 'http' : 'https'}://${h}`;
-    const loginUrl = `${origin}/songs?magic=${encodeURIComponent(token)}`;
+    const loginUrl = `${origin}/songs#magic=${encodeURIComponent(token)}`;
 
     try {
       await sendEmail({

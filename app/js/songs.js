@@ -44,9 +44,8 @@ function getConfig() {
 // --- Init ---
 
 async function init() {
-  // Magic link login: /songs?magic=TOKEN
-  const params = new URLSearchParams(window.location.search);
-  const magic = params.get('magic');
+  // Magic link login: /songs#magic=TOKEN
+  const magic = new URLSearchParams(window.location.hash.slice(1)).get('magic');
   if (magic) {
     history.replaceState(null, '', window.location.pathname);
     try {
