@@ -1670,6 +1670,17 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .vsp-audio-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--third-color); margin-bottom: 0.25rem; }
 .vsp-audio { width: 100%; height: 32px; display: block; }
 .vsp-lyrics { white-space: pre-wrap; font-size: 0.78rem; line-height: 1.55; flex: 1; min-height: 120px; max-height: 40vh; overflow-y: auto; background: var(--primary-color); border-radius: 4px; padding: 0.5rem 0.6rem; word-break: break-word; }
+.vsp-collapse { border: none; margin: 0; padding: 0; }
+.vsp-collapse-summary {
+  list-style: none; cursor: pointer;
+  font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--third-color);
+  margin: 0.75rem 0 0.35rem;
+  display: flex; align-items: center; gap: 0.3rem;
+}
+.vsp-collapse-summary::-webkit-details-marker { display: none; }
+.vsp-collapse-summary::after { content: '▾'; font-size: 0.65rem; }
+.vsp-collapse[open] .vsp-collapse-summary::after { content: '▴'; }
 
 /* ── Filter bar (mobile-first) ──────────────────────────────────────── */
 .filter-bar {
