@@ -676,6 +676,14 @@ function _openSongEditForm(sid, panelEl) {
           (isrc   ? _editField('ISRC',    '<div class="edit-readonly">' + escHtml(isrc)   + '</div>') : '') +
         '</div>' +
       '</details>' +
+      (!isNew ? (
+        '<details class="edit-section"><summary class="edit-section-summary">Arrangement</summary>' +
+          '<div class="edit-section-body">' +
+            '<div id="edit-arr-preview"></div>' +
+            '<button class="btn" style="margin-top:0.4rem" onclick="_openSongArrangement(' + Number(sid) + ')">Open arrangement editor</button>' +
+          '</div>' +
+        '</details>'
+      ) : '') +
       '<div class="status-msg" id="song-panel-edit-error"></div>' +
       '<div class="modal-actions">' +
         '<button class="btn active auth-action" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? 'Add' : 'Save') + '</button>' +
@@ -685,6 +693,21 @@ function _openSongEditForm(sid, panelEl) {
 
   var titleInput = panelEl.querySelector('input[data-key="title"]');
   if (titleInput) titleInput.focus();
+
+  if (!isNew && song.has_arrangement) {
+    var _editArrSid = String(sid);
+    var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
+    fetch('/api/' + artistSlug + '/songs/' + _editArrSid + '/arrangements')
+      .then(function(r) { return r.json(); })
+      .then(function(versions) {
+        var active = versions.find(function(v) { return v.is_active; });
+        if (!active) return;
+        var preview = document.getElementById('edit-arr-preview');
+        if (!preview || !panelEl.querySelector('[data-id="' + _editArrSid + '"]')) return;
+        preview.innerHTML = _arrReadOnlyHtml(active, arrCfg);
+      })
+      .catch(function() {});
+  }
 }
 
 async function _savePanelSong(formId, isNew, realSid) {
