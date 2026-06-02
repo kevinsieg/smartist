@@ -277,7 +277,7 @@ module.exports = wrap(async function handler(req, res) {
 
     await logger.info('oauth_login', { provider, email });
     const token = generateMagicToken(band.password_hash);
-    return res.redirect(302, `${origin}/?magic=${encodeURIComponent(token)}`);
+    return res.redirect(302, `${origin}/#magic=${encodeURIComponent(token)}`);
   }
 
   // ── GET — public config (songs, counts, feature flags) ───────────────────
