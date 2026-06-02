@@ -928,6 +928,10 @@ function _vspCell(label, value) {
 }
 
 function _vspSection(heading, cellsHtml) {
+  if (window.innerWidth <= 1024) {
+    return '<details class="vsp-collapse" open><summary class="vsp-collapse-summary">' +
+           heading + '</summary><div class="vsp-grid">' + cellsHtml + '</div></details>';
+  }
   return '<div class="vsp-section-label">' + heading + '</div><div class="vsp-grid">' + cellsHtml + '</div>';
 }
 
