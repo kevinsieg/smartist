@@ -189,13 +189,6 @@ async function initSong(params, el, cfg) {
     if (navIdx >= 0) navHtml = _navHtml(fromId, navSongs, navIdx);
   }
 
-  var chartBtnHtml = activeArr
-    ? '<button class="stage-chart-btn" onclick="openArrStagePopup(window._stageActiveArr, window._stageArrConfig)" title="Show arrangement chart">' +
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>' +
-      '<span style="font-size:11px">ARRANGEMENT</span>' +
-    '</button>'
-    : '';
-
   document.title = `${song.title} — ${cfg.name}`;
 
   const extra   = song.extra || {};
@@ -237,6 +230,11 @@ async function initSong(params, el, cfg) {
     extra.sheetUrl     ? `<a class="song-stage-link" href="${escHtml(extra.sheetUrl)}"      target="_blank" rel="noopener">&#8801; Sheet music</a>` : '',
     extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(extra.referenceUrl)}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
     extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(extra.songinfoUrl)}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
+    activeArr
+      ? `<button class="stage-chart-btn" onclick="openArrStagePopup(window._stageActiveArr,window._stageArrConfig)" title="Show arrangement chart">` +
+        `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>` +
+        `<span style="font-size:11px">ARRANGEMENT</span></button>`
+      : '',
   ].filter(Boolean);
   const linksHtml = linkItems.length ? `<div class="song-stage-section song-stage-links">${linkItems.join('')}</div>` : '';
 
@@ -249,7 +247,6 @@ async function initSong(params, el, cfg) {
       <div class="stage-band">${escHtml(cfg.name)}</div>
       <h1 class="stage-title">${escHtml(song.title)}</h1>
       ${subtitle}
-      ${chartBtnHtml ? '<div class="stage-chart-wrap">' + chartBtnHtml + '</div>' : ''}
       ${_shareHtml(navHtml)}
     </div>
     ${metaBadges ? `<div class="song-stage-meta">${metaBadges}</div>` : ''}
