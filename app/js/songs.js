@@ -317,6 +317,7 @@ var FILTER_COLS = {
 };
 
 function renderTable() {
+  if (isMobile()) localStorage.removeItem(SONGS_BULK_EDIT_KEY);
   if (isBulkEdit()) { _renderBulkEditTable(); return; }
   _renderSongsListView();
 }
@@ -1156,6 +1157,7 @@ function collectRow(sid) {
     else if (input.dataset.type === 'time') val = timeToMins(input.value);
     else if (input.type === 'number')       val = input.value.trim() === '' ? null : parseFloat(input.value);
     else                                    val = input.value.trim() || null;
+    if (key === 'title' && val) val = val.charAt(0).toUpperCase() + val.slice(1);
     if (key.startsWith('extra.')) result.extra[key.slice(6)] = val;
     else                          result[key] = val;
   }
