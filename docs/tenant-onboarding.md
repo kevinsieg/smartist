@@ -35,9 +35,23 @@ Then: Account Home → Manage R2 API Tokens → Create token with **Object Read 
 | `R2_ACCESS_KEY_ID` | From the R2 API token |
 | `R2_SECRET_ACCESS_KEY` | From the R2 API token |
 | `R2_BUCKET_NAME` | Bucket name, e.g. `smartist-bandtwo` |
-| `R2_PUBLIC_URL` | Public bucket URL, e.g. `https://pub-xxxx.r2.dev` |
+| `R2_PUBLIC_URL` | Public URL for the bucket — either `https://pub-xxxx.r2.dev` or a custom domain (see below) |
 
 **Per-environment:** ideally use a separate bucket for preview/dev (`smartist-bandtwo-dev`) to keep dev uploads isolated. For demos or internal deployments a single bucket shared across all environments is fine — set the same R2 vars as "All Environments" in Vercel.
+
+#### R2 public URL — two options
+
+**Option 1 — `r2.dev` URL (simpler, any DNS provider):**  
+When you enable public access on the bucket, Cloudflare gives you a `pub-xxxx.r2.dev` URL. Set this as `R2_PUBLIC_URL`. No custom domain or Cloudflare DNS required. You can disable it later if you switch to a custom domain.
+
+**Option 2 — Custom domain (requires Cloudflare DNS):**  
+Files are served from a subdomain you own, e.g. `media.band-two.example`. This requires the domain's nameservers to be pointing to Cloudflare (see DNS section below). Common subdomain names: `media`, `cdn`, `assets`, `files`.
+
+**Important:** the custom domain for R2 must be a *different* subdomain from the Vercel app domain. If your app lives at `smartist.band-two.example`, the R2 domain could be `media.band-two.example` — never the same subdomain.
+
+To connect: Cloudflare → R2 → your bucket → Settings → **Custom Domains → Connect Domain** → enter the subdomain. Cloudflare automatically creates the proxied CNAME record in your DNS — you do not add it manually. Once the custom domain is active, you can disable the `pub-xxxx.r2.dev` URL under Settings → Public Access to prevent direct access.
+
+After connecting, update `R2_PUBLIC_URL` in Vercel (Production environment) to `https://media.band-two.example` (or whichever subdomain you chose), then redeploy.
 
 **CORS policy (required for photo uploads):** R2 blocks browser presigned PUT requests unless a CORS policy is set. In Cloudflare → R2 → your bucket → Settings → CORS Policy, add:
 
@@ -247,19 +261,30 @@ Copy values from `.env.local` into `.env`. Set `DATABASE_URL` to the Neon `dev` 
 
 ## DNS configuration
 
-### Prerequisite: point your nameservers to Cloudflare
+### DNS provider — Cloudflare vs Vercel DNS
 
-**You must use Cloudflare as your DNS provider** — not your registrar's default DNS — for two reasons:
-1. Cloudflare is required to connect a custom domain to an R2 bucket with public access
-2. Cloudflare gives full control over DNS records (DMARC, SPF, DKIM, CNAME flattening for apex domains)
+**Cloudflare is required only if you want a custom domain on your R2 bucket** (e.g. `files.band-two.example` instead of the default `pub-xxxx.r2.dev` URL). If you use the `r2.dev` public URL, any DNS provider works — including Vercel DNS (nameservers pointing to `ns1/ns2.vercel-dns.com`).
 
-At your registrar (OVH, Dogado, Namecheap, etc.): change the nameservers to the two Cloudflare nameservers shown in your Cloudflare dashboard (Websites → your domain → DNS → Nameservers). This is a one-time step per domain. Propagation takes up to 24 hours but is usually under an hour.
+| Setup | DNS provider |
+|---|---|
+| Vercel hosting + R2 `pub-xxxx.r2.dev` URL | Any — Vercel DNS works fine |
+| Vercel hosting + R2 custom domain | **Cloudflare required** — R2 custom domains route through the Cloudflare proxy |
+| Apex domain (`smartist.studio`) | Cloudflare recommended — CNAME flattening; Vercel DNS also supports this |
 
-Once Cloudflare is active, **all DNS records are managed in Cloudflare** — not at your registrar.
+**Switching to Cloudflare:** at your registrar (OVH, Dogado, Namecheap, etc.) change the nameservers to the two Cloudflare nameservers shown in your Cloudflare dashboard (Websites → your domain → DNS → Nameservers). This is a one-time step per domain. Propagation takes up to 24 hours but is usually under an hour. Once active, **all DNS records are managed in Cloudflare** — not at your registrar.
 
-### Adding Vercel records
+**Staying on Vercel DNS:** add DNS records in the Vercel dashboard (project → Settings → Domains, or via the Vercel DNS tab). Vercel will often auto-configure the record when you add a domain to a project.
 
-Add one record per custom domain in Cloudflare → DNS → Records. Set proxy status to **DNS only** (grey cloud) — proxying through Cloudflare breaks Vercel's SSL.
+### Connecting the app domain to Vercel
+
+**Step 1 — Add the domain in Vercel:**  
+Project → Settings → Domains → add your domain (e.g. `smartist.band-two.example`) → assign to **Production** (this means the `main` git branch — the live code). Vercel will show a pending banner until the DNS record resolves. SSL is provisioned automatically once it does.
+
+**Step 2 — Add the DNS record:**
+
+*On Cloudflare:* DNS → Records → add the record below. Set proxy status to **DNS only (grey cloud)** — orange/proxied breaks Vercel's SSL certificate provisioning.
+
+*On Vercel DNS:* Vercel may auto-configure the record when you add the domain to the project. If not, add it manually in the Vercel DNS dashboard.
 
 | Domain type | Record type | Name | Value |
 |---|---|---|---|
@@ -268,7 +293,7 @@ Add one record per custom domain in Cloudflare → DNS → Records. Set proxy st
 | Subdomain on same domain (`demo.smartist.studio`) | CNAME | `demo` | `cname.vercel-dns.com` |
 | www redirect | CNAME | `www` | `cname.vercel-dns.com` |
 
-Then in Vercel: project → Settings → Domains → add the domain → assign to `main`. Vercel will show a banner until DNS propagates (usually under 5 minutes on Cloudflare). SSL is provisioned automatically.
+DNS propagates in under 5 minutes on Cloudflare, longer on other providers.
 
 For www: Vercel will offer to set up an automatic redirect from `www` to the apex — accept it.
 
@@ -303,22 +328,38 @@ Delivery is blocked until all three show green in the Resend dashboard. Each sen
 | `smartist-bandone` | `smartist` | `main` | `smartist.band-one.example` | live |
 | `smartist-demo` | `smartist` | `main` | `demo.smartist.studio` | live |
 | `smartist-studio` | `smartist-studio` | `main` | `smartist.studio` | live |
-| `smartist-bandtwo` | `smartist` | `main` | `smartist.band-two.example` | ⚠ DNS pending — move band-two.example to Cloudflare, then add CNAME + DMARC |
+| `smartist-bandtwo` | `smartist` | `main` | `smartist.band-two.example` | ⚠ in progress — Cloudflare DNS active, R2 custom domain `media.band-two.example` to configure, `R2_PUBLIC_URL` to update in Vercel |
 
 ---
 
 ## Checklist
 
-- [ ] Nameservers for the domain updated to Cloudflare at the registrar
-- [ ] Cloudflare shows the domain as active
+**Database**
 - [ ] Neon DB exists — `main` and `dev` branches — schema applied to both
 - [ ] Artist row created in both DBs — slug matches `ARTIST_SLUG` exactly — password 6+ chars
-- [ ] R2 bucket created with public access enabled — API token generated
-- [ ] Vercel project created, all env vars set per environment
-- [ ] Domain added in Vercel (Settings → Domains → assign to `main`)
-- [ ] A or CNAME record added in Cloudflare (DNS only — grey cloud)
+
+**File storage (R2)**
+- [ ] R2 bucket created, public access enabled, API token generated
+- [ ] CORS policy set on the bucket (add app domain + `http://localhost:3000`)
+- [ ] `R2_PUBLIC_URL` set in Vercel — either `pub-xxxx.r2.dev` or custom domain (see below)
+
+**R2 custom domain (only if not using `r2.dev` URL)**
+- [ ] Domain nameservers pointing to Cloudflare (required for R2 custom domain)
+- [ ] Custom domain connected in Cloudflare → R2 → bucket → Settings → Custom Domains → Connect Domain
+- [ ] `R2_PUBLIC_URL` in Vercel (Production) updated to `https://media.yourdomain.com`
+- [ ] (Optional) `pub-xxxx.r2.dev` public access disabled in R2 bucket settings
+
+**Vercel project**
+- [ ] Project created, all env vars set per environment
+- [ ] Domain added in Vercel (Settings → Domains → assign to **Production** = `main` branch)
+
+**DNS**
+- [ ] A or CNAME record added for the app domain — DNS only / grey cloud (not proxied)
 - [ ] www CNAME added + Vercel redirect configured (optional but recommended)
 - [ ] DMARC TXT record added (`_dmarc` → `v=DMARC1; p=reject;`)
+
+**Verification**
 - [ ] At least one successful production deploy — Vercel shows green
 - [ ] Login works at the custom domain with the password set during `setup.js`
-- [ ] (When ready) Resend domain verified — SPF, DKIM, DMARC all green
+- [ ] File uploads work and files are served from `R2_PUBLIC_URL`
+- [ ] (When ready) Resend domain verified — SPF, DKIM, DMARC all green in Resend dashboard
