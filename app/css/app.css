@@ -1680,7 +1680,7 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 }
 .vsp-collapse-summary::-webkit-details-marker { display: none; }
 .vsp-collapse-summary::after { content: '▾'; font-size: 0.65rem; }
-.vsp-collapse[open] .vsp-collapse-summary::after { content: '▴'; }
+.vsp-collapse[open] .vsp-collapse-summary::after { content: '▴'; font-size: 0.65rem; }
 
 /* ── Filter bar (mobile-first) ──────────────────────────────────────── */
 .filter-bar {
