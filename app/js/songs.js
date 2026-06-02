@@ -627,7 +627,7 @@ function _openSongEditForm(sid, panelEl) {
       '<div class="vsp-header-text"><h3 class="vsp-title">' + (isNew ? 'New song' : escHtml(song.title || 'Edit song')) + '</h3></div>' +
       (!isNew ? '<button class="vsp-close" onclick="_openSongPanelContent({id:' + sid + '}, document.getElementById(\'view-side-panel-inner\'))" aria-label="Cancel">&#215;</button>' : '') +
     '</div>' +
-    '<div style="padding:0 0.5rem;">' +
+    '<div style="padding:0 0.5rem;" data-sid="' + id + '">' +
       '<details class="edit-section" open><summary class="edit-section-summary">General</summary>' +
         '<div class="edit-section-body">' +
           _editField('Title', '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="Song title">') +
@@ -703,7 +703,7 @@ function _openSongEditForm(sid, panelEl) {
         var active = versions.find(function(v) { return v.is_active; });
         if (!active) return;
         var preview = document.getElementById('edit-arr-preview');
-        if (!preview || !panelEl.querySelector('[data-id="' + _editArrSid + '"]')) return;
+        if (!preview || !panelEl.querySelector('[data-sid="' + _editArrSid + '"]')) return;
         preview.innerHTML = _arrReadOnlyHtml(active, arrCfg);
       })
       .catch(function() {});
