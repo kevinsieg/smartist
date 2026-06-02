@@ -267,8 +267,13 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
 /* Hide write-action buttons in view mode */
 body.view-mode .auth-action { display: none !important; }
 
-/* auth-only elements hidden globally in view mode */
+/* auth-only elements hidden when not logged in and in view mode */
+.app-header:not(.app-header--authed) .auth-only { display: none; }
 body.view-mode .auth-only { display: none !important; }
+
+/* belt-and-suspenders: profile + logout never shown when not logged in */
+.app-header:not(.app-header--authed) .nav-links .nav-links-profile,
+.app-header:not(.app-header--authed) .nav-links .nav-links-logout { display: none !important; }
 
 /* venue filter controls hidden in view mode (prevents JS-flicker) */
 body.view-mode .venue-filter-desktop { display: none; }
@@ -1631,7 +1636,7 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 #view-side-panel-inner { padding: 1rem; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
 
 .vsp-header {
-  position: sticky; top: 0; background: inherit; z-index: 1;
+  position: sticky; top: 0; background: var(--bg-color); z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1669,6 +1674,10 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .vsp-audio-block { margin-bottom: 0.75rem; }
 .vsp-audio-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--third-color); margin-bottom: 0.25rem; }
 .vsp-audio { width: 100%; height: 32px; display: block; }
+.audio-speed-btns { display: flex; gap: 0.3rem; margin-top: 0.35rem; }
+.audio-speed-btns button { font-size: 0.7rem; padding: 0.15rem 0.45rem; border: 1px solid var(--border-color); border-radius: 3px; background: none; color: var(--third-color); cursor: pointer; line-height: 1.4; }
+.audio-speed-btns button:hover { color: var(--text-color); border-color: var(--text-color); }
+.audio-speed-btns button.active { color: var(--text-color); border-color: var(--text-color); background: var(--primary-color); }
 .vsp-lyrics { white-space: pre-wrap; font-size: 0.78rem; line-height: 1.55; flex: 1; min-height: 120px; max-height: 40vh; overflow-y: auto; background: var(--primary-color); border-radius: 4px; padding: 0.5rem 0.6rem; word-break: break-word; }
 .vsp-collapse { border: none; margin: 0; padding: 0; }
 .vsp-collapse-summary {
