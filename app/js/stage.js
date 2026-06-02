@@ -1,5 +1,13 @@
 // Stage view — full-screen setlist for on-stage use
 
+function _setAudioSpeed(btn, rate) {
+  var wrap = btn.closest('.song-stage-rec');
+  var audio = wrap && wrap.querySelector('audio');
+  if (audio) audio.playbackRate = rate;
+  btn.parentNode.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+
 var _shareSlug      = null;
 var _shareSetlistId = null;
 
@@ -215,12 +223,12 @@ async function initSong(params, el, cfg) {
   let recItems = [];
   if (extra.listenUrl) {
     recItems.push(audioRe.test(extra.listenUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(extra.listenUrl)}"></audio></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(extra.listenUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
       : `<a class="song-stage-link" href="${escHtml(extra.listenUrl)}" target="_blank" rel="noopener">&#9654; Listen</a>`);
   }
   if (extra.playbackUrl) {
     recItems.push(audioRe.test(extra.playbackUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(extra.playbackUrl)}"></audio></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(extra.playbackUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
       : `<a class="song-stage-link" href="${escHtml(extra.playbackUrl)}" target="_blank" rel="noopener">&#9655; Playback</a>`);
   }
   const recHtml = recItems.length ? `<div class="song-stage-section">${recItems.join('')}</div>` : '';

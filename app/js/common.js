@@ -72,6 +72,12 @@ function getInitials(name) {
 
   document.getElementById('currentYear').textContent = new Date().getFullYear();
 
+  // Set auth class early so CSS hides/shows auth-gated nav items before applyNav() runs.
+  try {
+    const _earlyTok = sessionStorage.getItem(AUTH_TOKEN_KEY);
+    if (_earlyTok && !_isTokenExpired(_earlyTok)) header.classList.add('app-header--authed');
+  } catch {}
+
   // Apply cached config before first paint so header renders complete on load.
   try {
     const cached = JSON.parse(sessionStorage.getItem('artist_config_cache'));
