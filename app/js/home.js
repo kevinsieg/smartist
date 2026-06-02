@@ -2,7 +2,7 @@ var artistSlug = '';
 
 async function init() {
   const params     = new URLSearchParams(window.location.search);
-  const magic      = params.get('magic');
+  const magic      = new URLSearchParams(window.location.hash.slice(1)).get('magic');
   const oauthError = params.get('oauth_error');
   const path       = window.location.pathname.replace(/\/+$/, '') || '/';
 
