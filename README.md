@@ -79,7 +79,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables).
 | Variable | Value |
 |---|---|
 | `ARTIST_SLUG` | Your artist's slug (e.g. `myband`) |
-| `R2_ACCOUNT_ID` | Cloudflare account ID |
+| `R2_ACCOUNT_ID` | Cloudflare account ID (found on R2 overview page, right sidebar — not the API token) |
 | `RESEND_API_KEY` | Resend API key |
 | `RESEND_FROM` | Sender address |
 | `GEMINI_API_KEY` | Google AI Studio key |
@@ -92,9 +92,9 @@ Set these in the Vercel dashboard (Settings → Environment Variables).
 | `APP_ORIGIN` | `https://yourdomain.com` | Preview URL (`<project>-git-dev-*.vercel.app`) |
 | `ARTIST_ADMIN_EMAIL` | `you@yourdomain.com` | `you+dev@yourdomain.com` |
 | `R2_BUCKET_NAME` | Production bucket name | Dev bucket name |
-| `R2_ACCESS_KEY_ID` | Prod R2 token | Dev R2 token |
-| `R2_SECRET_ACCESS_KEY` | Prod R2 secret | Dev R2 secret |
-| `R2_PUBLIC_URL` | Prod bucket public URL | Dev bucket public URL |
+| `R2_ACCESS_KEY_ID` | Prod R2 Access Key ID | Dev R2 Access Key ID |
+| `R2_SECRET_ACCESS_KEY` | Prod R2 Secret Access Key | Dev R2 Secret Access Key |
+| `R2_PUBLIC_URL` | Prod bucket public URL (e.g. `https://media.yourdomain.com`) | Dev bucket public URL |
 
 **Production only** — leave unset in Preview/Development:
 
@@ -123,7 +123,25 @@ DATABASE_URL=<connection-string> node scripts/setup.js
 
 ### 3. Create R2 buckets
 
-Create two Cloudflare R2 buckets (production + dev). For each: enable public access and generate an API token with Object Read & Write on that bucket.
+Create two Cloudflare R2 buckets (production + dev). For each:
+
+1. Enable public access via a **custom domain** (R2 bucket → Settings → Custom Domains) — this becomes `R2_PUBLIC_URL`
+2. Generate an API token under **R2 → Manage R2 API Tokens** (not Profile → API Tokens) with **Object Read & Write** scoped to that bucket
+3. The token gives you an **Access Key ID** and **Secret Access Key** — these are `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`
+4. Set the CORS policy on the bucket (R2 bucket → Settings → CORS Policy) — use explicit header names, not `"*"` (R2 ignores the wildcard for `Access-Control-Allow-Headers`):
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://yourdomain.com"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+    "AllowedHeaders": ["Content-Type", "Authorization", "X-Amz-Content-Sha256", "X-Amz-Date", "X-Amz-Security-Token"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+> **Note:** `R2_ACCOUNT_ID` is the Cloudflare Account ID (visible on the R2 overview page), not any API token value. `cfat_…` tokens from Profile → API Tokens are for the Cloudflare REST API and will not work for S3-compatible R2 access.
 
 ### 4. Set environment variables
 
