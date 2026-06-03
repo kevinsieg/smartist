@@ -425,7 +425,7 @@ function _openSongPanelContent(item, panelEl) {
   var sidEsc      = escHtml(sid);
   var audioRe     = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
 
-  var _spd = '<div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
+  var _spd = '<div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
   var audioHtml = '';
   if (listenUrl  && audioRe.test(listenUrl))
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; Listen</div><audio class="vsp-audio" controls src="' + escHtml(listenUrl) + '"></audio>' + _spd + '</div>';
@@ -1614,7 +1614,7 @@ function openPlayer(sid) {
   const content  = document.getElementById('player-content');
 
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(url)}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(url)}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
     content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}"
       allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
@@ -1717,7 +1717,7 @@ async function handleReplaceFile(input) {
     const embedUrl = toEmbedUrl(publicUrl);
     const content = document.getElementById('player-content');
     if (isAudio) {
-      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     } else if (embedUrl) {
       content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
     } else {
@@ -1991,7 +1991,7 @@ function openPlayback(sid) {
   const embedUrl = toEmbedUrl(url);
   const content  = document.getElementById('playback-content');
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(url)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(url)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
     content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
@@ -2087,7 +2087,7 @@ async function handleReplacePlayback(input) {
     const td = document.querySelector(`#row-${sid} .playback-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('playback-content').innerHTML =
-      `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
     _setBulkStatus('saved', 'Playback replaced');
     setTimeout(() => _setBulkStatus('', ''), 3000);

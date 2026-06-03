@@ -11,6 +11,42 @@ function _setAudioSpeed(btn, rate) {
 var _shareSlug      = null;
 var _shareSetlistId = null;
 
+// ── Lyrics font size ───────────────────────────────────────────────────────────
+var _stageLyricsPx = parseInt(localStorage.getItem('stage_lyrics_px')) || 22;
+
+function _applyLyricsSize() {
+  var el = document.getElementById('_stage_lyrics');
+  if (el) el.style.fontSize = _stageLyricsPx + 'px';
+}
+
+function stageFontUp() {
+  _stageLyricsPx = Math.min(80, Math.round(_stageLyricsPx * 1.15));
+  localStorage.setItem('stage_lyrics_px', _stageLyricsPx);
+  _applyLyricsSize();
+}
+
+function stageFontDown() {
+  _stageLyricsPx = Math.max(8, Math.round(_stageLyricsPx / 1.15));
+  localStorage.setItem('stage_lyrics_px', _stageLyricsPx);
+  _applyLyricsSize();
+}
+
+function stageFitLyrics() {
+  var el = document.getElementById('_stage_lyrics');
+  if (!el) return;
+  var availH = window.innerHeight - el.getBoundingClientRect().top - 24;
+  if (availH < 40) return;
+  var lo = 7, hi = 96, best = lo;
+  for (var i = 0; i < 16; i++) {
+    var mid = (lo + hi) / 2;
+    el.style.fontSize = mid + 'px';
+    if (el.scrollHeight <= availH) { best = mid; lo = mid; } else hi = mid;
+  }
+  _stageLyricsPx = Math.floor(best);
+  localStorage.setItem('stage_lyrics_px', _stageLyricsPx);
+  el.style.fontSize = _stageLyricsPx + 'px';
+}
+
 var _SUN_ICON  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
 var _MOON_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 
@@ -223,12 +259,12 @@ async function initSong(params, el, cfg) {
   let recItems = [];
   if (extra.listenUrl) {
     recItems.push(audioRe.test(extra.listenUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(extra.listenUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(extra.listenUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
       : `<a class="song-stage-link" href="${escHtml(extra.listenUrl)}" target="_blank" rel="noopener">&#9654; Listen</a>`);
   }
   if (extra.playbackUrl) {
     recItems.push(audioRe.test(extra.playbackUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(extra.playbackUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.75)">0.75×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(extra.playbackUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
       : `<a class="song-stage-link" href="${escHtml(extra.playbackUrl)}" target="_blank" rel="noopener">&#9655; Playback</a>`);
   }
   const recHtml = recItems.length ? `<div class="song-stage-section">${recItems.join('')}</div>` : '';
@@ -246,8 +282,14 @@ async function initSong(params, el, cfg) {
   ].filter(Boolean);
   const linksHtml = linkItems.length ? `<div class="song-stage-section song-stage-links">${linkItems.join('')}</div>` : '';
 
+  var _FIT_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>';
   const lyricsHtml = extra.lyrics
-    ? `<div class="song-stage-lyrics" id="_stage_lyrics"></div>`
+    ? `<div class="song-stage-lyrics" id="_stage_lyrics"></div>
+       <div class="lyrics-size-bar">
+         <button class="stage-share-btn" onclick="stageFontDown()" title="Smaller text"><span style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
+         <button class="stage-share-btn" onclick="stageFitLyrics()" title="Fit to screen">${_FIT_ICON}</button>
+         <button class="stage-share-btn" onclick="stageFontUp()" title="Larger text"><span style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
+       </div>`
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
   el.innerHTML = `
@@ -264,6 +306,7 @@ async function initSong(params, el, cfg) {
 
   if (extra.lyrics) {
     document.getElementById('_stage_lyrics').textContent = extra.lyrics;
+    _applyLyricsSize();
   }
 
   if (params.get('print') === '1') setTimeout(function() { window.print(); }, 400);
