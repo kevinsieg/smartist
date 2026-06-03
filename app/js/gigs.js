@@ -254,7 +254,7 @@ initPage(async function(config, viewMode) {
   var _icsPath = '/api/' + artistSlug + '/gigs?format=ics';
   var _calEl = document.getElementById('gig-cal-subscribe');
   if (_calEl) {
-    _calEl.href = (location.protocol === 'https:' ? 'webcals://' : 'webcal://') + location.host + _icsPath;
+    _calEl.href = 'webcal://' + location.host + _icsPath;
     _calEl.style.display = '';
   }
   var _copyEl = document.getElementById('gig-cal-copy');
