@@ -313,6 +313,7 @@
   var artistSlug = '';
 
   async function init() {
+    if (requireLogin()) return;
     var viewMode = isViewMode();
     if (viewMode) document.body.classList.add('view-mode');
     try {
