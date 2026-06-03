@@ -51,7 +51,7 @@ async function init() {
     }
     if (cfg.config?.logoUrl) {
       const printLogo = document.querySelector('#print-header .app-logo-img');
-      if (printLogo) printLogo.src = cfg.config.logoUrl;
+      if (printLogo) printLogo.src = cfg.config.logoUrl.replace(/^http:/i, 'https:');
     }
     // Show tab bar and route to the correct tab
     _activeView = new URLSearchParams(location.search).get('view') || 'generator';

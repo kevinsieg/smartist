@@ -484,7 +484,7 @@ function updateAuthIndicator() {
     var _photoUrl = '', _initials = '';
     try {
       var _cachedCfg = JSON.parse(sessionStorage.getItem(_CONFIG_KEY) || '{}');
-      _photoUrl = (_cachedCfg.config && _cachedCfg.config.logoUrl) || '';
+      _photoUrl = ((_cachedCfg.config && _cachedCfg.config.logoUrl) || '').replace(/^http:/i, 'https:');
       _initials = getInitials(_cachedCfg.name || '');
     } catch {}
     var _avatarHtml = _photoUrl
