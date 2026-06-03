@@ -9,17 +9,17 @@
 
 /* ── Variables ──────────────────────────────────────────────────────────────── */
 :root {
-    --primary-color:   #f8f4ee;
+    --primary-color:   #faf7f2;
     --secondary-color: #f9bf8f;
-    --secondary-ink:   #b06a2a;
-    --third-color:     #3d3a37;
+    --secondary-ink:   #9e5e20;
+    --third-color:     #28261f;
     --white:           #fff;
-    --black:           #111111;
+    --black:           #0d0c0b;
     --danger-color:    #a03030;
-    --border-color:    #ddd5c8;
-    --surface-color:   #fdf9f4;
+    --border-color:    #d6cdc0;
+    --surface-color:   #fdfaf5;
     --bg-color:        #fff;
-    --bg-alt:          #f5f0ea;
+    --bg-alt:          #f3ede4;
     --panel-w:         380px;
 }
 
@@ -30,7 +30,9 @@ main { transition: opacity 0.15s ease; }
 html, body { height: 100%; }
 body {
     font-family: "Courier New", Courier, monospace;
-    line-height: 1.6;
+    font-size: 16px;
+    line-height: 1.65;
+    letter-spacing: 0.022em;
     background: var(--primary-color);
     color: var(--black);
     -webkit-font-smoothing: antialiased;
@@ -644,6 +646,13 @@ footer {
 .setlist-result h2 {
     color: var(--third-color); font-size: 1rem; font-weight: 300;
     margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em;
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+}
+.feel-badge {
+    font-size: 0.72rem; font-weight: 400; letter-spacing: 0.01em; text-transform: none;
+    background: rgba(249, 191, 143, 0.08); border: 1px solid rgba(249, 191, 143, 0.35);
+    border-radius: 4px; padding: 0.1rem 0.45rem;
+    color: var(--third-color); white-space: nowrap; flex-shrink: 0;
 }
 .song-list { list-style: none; padding: 0; }
 .song-item {
@@ -1545,6 +1554,7 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
         font-size: 8pt; color: #888; font-weight: normal;
         margin: 0 0 6pt; letter-spacing: 0.04em;
     }
+    .feel-badge { display: none; }
 
     .song-list { list-style: none; padding: 0; margin: 0; }
     .song-item {

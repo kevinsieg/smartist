@@ -145,8 +145,28 @@
         body.stage-light .stage-modal-input { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.14); }
         body.stage-light .stage-modal-action-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); }
 
+        .lyrics-size-bar {
+            position: fixed;
+            bottom: 1.25rem;
+            right: 1.25rem;
+            display: flex;
+            gap: 0.3rem;
+            z-index: 50;
+            background: var(--s-bg);
+            border: 1px solid rgba(240,237,232,0.18);
+            border-radius: 4px;
+            padding: 0.2rem;
+        }
+        body.stage-light .lyrics-size-bar {
+            background: #e8e2d9;
+            border-color: rgba(28,23,20,0.15);
+        }
+        @media (max-width: 480px) {
+            .lyrics-size-bar { bottom: 0.75rem; right: 0.75rem; }
+        }
+
         @media print {
-            .stage-header-btns, .stage-share-menu, .stage-modal-overlay { display: none !important; }
+            .stage-header-btns, .stage-share-menu, .stage-modal-overlay, .lyrics-size-bar { display: none !important; }
             html, body { background: #fff !important; color: #111 !important; }
             .stage-wrap { padding: 1rem 1.5rem !important; max-width: none !important; }
             .stage-band { color: #666 !important; opacity: 1 !important; margin-bottom: 0.3rem !important; }
@@ -268,7 +288,7 @@
         .song-stage-rec {
             display: flex;
             flex-direction: column;
-            gap: 0.3rem;
+            gap: 0.4rem;
         }
         .song-stage-rec-label {
             font-size: 0.72rem;
@@ -281,6 +301,27 @@
             height: 32px;
             display: block;
         }
+        .audio-speed-btns {
+            display: flex;
+            gap: 0.3rem;
+        }
+        .audio-speed-btns button {
+            font-family: inherit;
+            font-size: 0.7rem;
+            padding: 0.18rem 0.5rem;
+            border: 1px solid rgba(240,237,232,0.25);
+            border-radius: 3px;
+            background: none;
+            color: var(--s-muted);
+            cursor: pointer;
+            line-height: 1.4;
+            transition: color 0.1s, border-color 0.1s, background 0.1s;
+        }
+        .audio-speed-btns button:hover { color: var(--s-text); border-color: rgba(240,237,232,0.5); }
+        .audio-speed-btns button.active { color: var(--s-accent); border-color: var(--s-accent); background: rgba(249,191,143,0.1); }
+        body.stage-light .audio-speed-btns button { border-color: rgba(28,23,20,0.22); color: #706050; }
+        body.stage-light .audio-speed-btns button:hover { color: #1c1714; border-color: rgba(28,23,20,0.5); }
+        body.stage-light .audio-speed-btns button.active { color: #8b4400; border-color: #8b4400; background: rgba(139,68,0,0.08); }
         .song-stage-links {
             flex-direction: row;
             flex-wrap: wrap;
