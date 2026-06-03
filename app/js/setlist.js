@@ -1,5 +1,51 @@
 // Setlist generator
 
+// BPM → 0–1 (Largo 0 … Presto 1) using classical tempo markings
+function bpmNorm(song) {
+  const b = song.bpm;
+  if (b == null) return null;
+  if (b < 66)  return 0;    // Largo
+  if (b < 76)  return 0.2;  // Adagio
+  if (b < 108) return 0.4;  // Andante
+  if (b < 120) return 0.6;  // Moderato
+  if (b < 168) return 0.8;  // Allegro
+  return 1;                  // Presto
+}
+
+// song.energy text → 0–1 (calm 0 … intense 1)
+// Handles common descriptive words and bare numbers (e.g. "7" on a 1–10 scale).
+function energyNorm(song) {
+  const raw = (song.energy || '').trim();
+  if (!raw) return null;
+  const n = parseFloat(raw);
+  if (!isNaN(n) && raw === String(Math.round(n))) // bare integer
+    return Math.min(1, Math.max(0, (n - 1) / 9));
+  const e = raw.toLowerCase();
+  if (/low|soft|calm|quiet|gentle|acoustic|mellow|ballad/.test(e))   return 0.15;
+  if (/med|mid|moderate|normal/.test(e))                              return 0.5;
+  if (/high|intense|epic|powerful|energetic|anthem|dance|heavy/.test(e)) return 0.85;
+  return 0.5;
+}
+
+// Combined feel: 0 = yoga-calm, 1 = triathlon-intense.
+// Equal weight between tempo and energy; uses whichever is available if only one is set.
+function songFeel(song) {
+  const b = bpmNorm(song), e = energyNorm(song);
+  if (b != null && e != null) return b * 0.5 + e * 0.5;
+  return b ?? e ?? null;
+}
+
+// Setlist score labels — shown as a badge on the generated result
+const FEEL_LABELS = [
+  { max: 0.12, icon: '🧘', label: 'Savasana'      },
+  { max: 0.28, icon: '🌙', label: 'Late Night'     },
+  { max: 0.44, icon: '🛶', label: 'Morning Paddle' },
+  { max: 0.58, icon: '🚶', label: 'Sunday Stroll'  },
+  { max: 0.72, icon: '🏃', label: '10K Run'        },
+  { max: 0.88, icon: '🚴', label: 'Sprint Cycling' },
+  { max: 1.01, icon: '🔥', label: 'Triathlon'      },
+];
+
 var artistSlug = '';
 var bandConfig = null;
 var allSongs = [];
@@ -102,7 +148,7 @@ var activeFilters = new Map(); // field -> Set<value>
 
 function getFilteredSongs() {
   const activeOnly = document.getElementById('active-only')?.checked ?? true;
-  const energySet = getEnergySet();
+  const feelRange  = getFeelRange();
   return allSongs.filter(song => {
     if (activeOnly && !song.active) return false;
     if (song.heart) return true;  // heart songs bypass all filters
@@ -111,9 +157,9 @@ function getFilteredSongs() {
       const v = getFieldValue(song, field);
       if (!values.has(v)) return false;
     }
-    if (energySet) {
-      const t = (song.energy || '').toLowerCase();
-      if (t && !energySet.has(t)) return false;
+    if (feelRange) {
+      const f = songFeel(song);
+      if (f != null && (f < feelRange.min || f > feelRange.max)) return false;
     }
     return true;
   });
@@ -210,11 +256,45 @@ function computeSplitIndex(songs) {
   return Math.ceil(songs.length / 2);
 }
 
+// Returns songs outside the preferred feel range, sorted closest-first.
+// Fast preference: fills from just below the min downward.
+// Calm preference: fills from just above the max upward.
+function _buildFillPool(inSet, activeOnly) {
+  const range = getFeelRange();
+  if (!range) return [];
+  const base = allSongs.filter(s => {
+    if (!(!activeOnly || s.active) || inSet.has(s.id)) return false;
+    const f = songFeel(s);
+    return f != null && (f < range.min || f > range.max);
+  });
+  const preferIntense = range.min > 0; // slider is on the intense side
+  base.sort((a, b) => {
+    const fa = songFeel(a), fb = songFeel(b);
+    return preferIntense ? fb - fa : fa - fb; // closest to preferred edge first
+  });
+  return base;
+}
+
 function onGenerate() {
   const filtered  = getFilteredSongs();
   const targetMin = parseFloat(document.getElementById('target-min')?.value) || 0;
   const split     = document.getElementById('split-sets')?.checked;
   currentSet = generateSet(filtered, targetMin);
+
+  // If the preferred energy pool falls short, fill with adjacent tiers (closest first)
+  if (targetMin > 0) {
+    const inSet = new Set(currentSet.map(s => s.id));
+    let total   = currentSet.reduce((sum, s) => sum + (s.length_min || 4), 0);
+    if (total < targetMin) {
+      const activeOnly = document.getElementById('active-only')?.checked ?? true;
+      for (const song of _buildFillPool(inSet, activeOnly)) {
+        if (total >= targetMin) break;
+        currentSet.push(song);
+        total += song.length_min || 4;
+      }
+    }
+  }
+
   if (split && currentSet.length >= 2) {
     const mid  = computeSplitIndex(currentSet);
     const set1 = applyCapoOpts(currentSet.slice(0, mid));
@@ -277,9 +357,9 @@ function renderControls() {
   for (const f of fields) activeFilters.set(f.field, new Set());
 
   const sliderHtml = `<div class="tempo-slider-wrap">
-        <span class="tempo-label">Slow</span>
+        <span class="tempo-label">🧘 Calm</span>
         <input type="range" id="tempo-slider" min="0" max="100" value="50" class="tempo-slider">
-        <span class="tempo-label">Fast</span>
+        <span class="tempo-label">🔥 Intense</span>
       </div>`;
   const filterRows = fields.map(f =>
     `<div class="filter-row">
@@ -321,13 +401,15 @@ function renderControls() {
   refreshFilterOptions();
 }
 
-function getEnergySet() {
+function getFeelRange() {
   const v = Number(document.getElementById('tempo-slider')?.value ?? 50);
-  if (v <= 15) return new Set(['slow']);
-  if (v <= 35) return new Set(['slow', 'medium']);
-  if (v <= 65) return null; // all tempos
-  if (v <= 85) return new Set(['medium', 'fast']);
-  return new Set(['fast']);
+  if (v <= 10) return { min: 0,    max: 0.15 };
+  if (v <= 25) return { min: 0,    max: 0.30 };
+  if (v <= 40) return { min: 0,    max: 0.50 };
+  if (v <= 60) return null; // all feels
+  if (v <= 75) return { min: 0.50, max: 1    };
+  if (v <= 90) return { min: 0.65, max: 1    };
+  return           { min: 0.80, max: 1    };
 }
 
 // --- Render result ---
@@ -425,9 +507,14 @@ function renderResult(songs) {
     ? `${songs.length} songs &bull; ${formatLength(totalMin)} &ensp;(2 sets)`
     : `${songs.length} songs &bull; ${formatLength(totalMin)}`;
 
+  const feelScores = songs.map(s => songFeel(s)).filter(f => f != null);
+  const avgFeel    = feelScores.length ? feelScores.reduce((a, b) => a + b) / feelScores.length : null;
+  const feelLabel  = avgFeel != null ? FEEL_LABELS.find(l => avgFeel <= l.max) : null;
+  const feelBadge  = feelLabel ? `<span class="feel-badge" title="Vibe score ${Math.round(avgFeel * 100)}/100">${feelLabel.icon} ${feelLabel.label}</span>` : '';
+
   resultArea.innerHTML = `
     <div class="setlist-result">
-      <h2>${headerText}</h2>
+      <h2>${headerText}${feelBadge}</h2>
       <ul class="song-list">${items}</ul>
       <div class="add-song-row">
         <select id="add-song-select" onchange="addSongToSet(this)">
@@ -471,8 +558,13 @@ function onOptimize() {
 }
 
 function optimizeSetlist(songs) {
-  const energyRank = { slow: 1, medium: 2, fast: 3 };
-  const rank = s => energyRank[(s.energy || '').toLowerCase()] ?? 2;
+  const rank = s => {
+    const f = songFeel(s);
+    if (f == null) return 2;
+    if (f < 0.35) return 1;
+    if (f < 0.68) return 2;
+    return 3;
+  };
 
   const buckets = {
     1: shuffleArray(songs.filter(s => rank(s) === 1)),
