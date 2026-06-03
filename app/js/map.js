@@ -260,7 +260,9 @@
     _buildMarkers();
     var bounds = _layerGroup.getBounds();
     if (bounds.isValid()) _map.fitBounds(bounds.pad(0.2));
-    setTimeout(function() { if (_map) _map.invalidateSize(); }, 50);
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { if (_map) _map.invalidateSize(); });
+    });
   }
 
   window.initMap = function(slug) {
@@ -296,7 +298,9 @@
   }
 
   window.showMap = function() {
-    _resize();
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { if (_map) _map.invalidateSize(); });
+    });
   };
 
   window.addEventListener('resize', _resize);
