@@ -137,6 +137,10 @@ module.exports = wrap(async function handler(req, res) {
     arrId  = Number(req.query.arrId) || 0;
     arrSub = req.query.sub;
   }
+  if (rawId === 'gema' && req.query.songId) {
+    rawId  = req.query.songId;
+    action = 'gema';
+  }
   const slug = getSlug(req);
 
   // ── GEMA import (merged from gema/import.js via vercel.json rewrite) ──────

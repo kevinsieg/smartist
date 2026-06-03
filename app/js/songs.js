@@ -24,7 +24,7 @@ var _songsTotal = 0;
 var SONGS_VIEW_PAGE = 30;
 
 function isMobile() { return window.innerWidth <= 1024; }
-function isBulkEdit() { return !isMobile() && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
+function isBulkEdit() { return !isMobile() && !_viewMode && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
 
 function toggleBulkEdit() {
   if (localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1') {
@@ -157,11 +157,11 @@ async function loadAndRender(viewMode) {
     var _qp = new URLSearchParams(location.search);
     _pendingSetlistId = Number(_qp.get('setlist_id'));
     _pendingSongId    = String(_qp.get('id') || '');
-    renderTable();
-    loadLogs();
     _viewMode = viewMode || false;
     _songsCfg          = cfg;
     window._arrSlug    = cfg.slug;
+    renderTable();
+    loadLogs();
     if (viewMode) applyViewMode();
   } catch {
     const el = document.getElementById('page-content');
