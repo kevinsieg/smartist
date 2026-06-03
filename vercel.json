@@ -4,6 +4,7 @@
     { "source": "/api/:artist/request-reset",  "destination": "/api/:artist/auth" },
     { "source": "/api/:artist/song-logs",      "destination": "/api/:artist/songs" },
     { "source": "/api/:artist/gema/import",    "destination": "/api/:artist/songs/gema-import" },
+    { "source": "/api/:artist/songs/:songId/gema",                         "destination": "/api/:artist/songs/gema?songId=:songId" },
     { "source": "/api/:artist/songs/:songId/arrangements/:arrId/activate", "destination": "/api/:artist/songs/arrangements?songId=:songId&arrId=:arrId&sub=activate" },
     { "source": "/api/:artist/songs/:songId/arrangements/:arrId",          "destination": "/api/:artist/songs/arrangements?songId=:songId&arrId=:arrId" },
     { "source": "/api/:artist/songs/:songId/arrangements",                 "destination": "/api/:artist/songs/arrangements?songId=:songId" },
