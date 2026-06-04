@@ -73,7 +73,8 @@ module.exports = wrap(async function handler(req, res) {
 
     const resetToken = generateMagicToken(tokenSeed);
     const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-    const origin = process.env.APP_ORIGIN || `${h.includes('localhost') ? 'http' : 'https'}://${h}`;
+    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
+    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
     // Encode email as hint so client can pass it back for user lookup
     const hint   = Buffer.from(resetEmail).toString('base64url');
     const link   = `${origin}/login?magic=${encodeURIComponent(resetToken)}&hint=${hint}`;
@@ -162,7 +163,7 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'GET') {
     if (!requireRole(req, res, 'admin')) return;
     const users = await sql`
-      SELECT id, email, role, created_at,
+      SELECT id, email, role, created_at, invite_expires_at,
              (password_hash IS NOT NULL)                                    AS accepted,
              (invite_token_hash IS NOT NULL AND invite_expires_at > now())  AS invite_pending
       FROM users WHERE artist_id = ${artist.id}
@@ -193,7 +194,8 @@ module.exports = wrap(async function handler(req, res) {
     `;
 
     const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-    const origin = process.env.APP_ORIGIN || `${h.includes('localhost') ? 'http' : 'https'}://${h}`;
+    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
+    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
     const link   = `${origin}/login?invite=${rawToken}`;
 
     try {
@@ -226,8 +228,11 @@ module.exports = wrap(async function handler(req, res) {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expires   = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+    await sql`UPDATE users SET invite_token_hash = ${tokenHash}, invite_expires_at = ${expires} WHERE id = ${user.id}`;
+
     const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-    const origin = process.env.APP_ORIGIN || `${h.includes('localhost') ? 'http' : 'https'}://${h}`;
+    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
+    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
     const link   = `${origin}/login?invite=${rawToken}`;
 
     try {
@@ -240,7 +245,6 @@ module.exports = wrap(async function handler(req, res) {
       });
     } catch { return res.status(500).json({ error: 'Failed to send email' }); }
 
-    await sql`UPDATE users SET invite_token_hash = ${tokenHash}, invite_expires_at = ${expires} WHERE id = ${user.id}`;
     return res.json({ ok: true });
   }
 
