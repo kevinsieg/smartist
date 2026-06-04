@@ -601,6 +601,7 @@ async function apiFetch(url, method = 'GET', body) {
   if (r.status === 401) {
     if (!isViewMode()) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       requireLogin();
     }
     throw new Error('Session expired');
