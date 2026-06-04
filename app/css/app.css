@@ -272,6 +272,7 @@ body.view-mode .auth-action { display: none !important; }
 /* auth-only elements hidden when not logged in and in view mode */
 .app-header:not(.app-header--authed) .auth-only { display: none; }
 body.view-mode .auth-only { display: none !important; }
+.app-header:not(.app-header--admin) .admin-only { display: none !important; }
 
 /* belt-and-suspenders: profile + logout never shown when not logged in */
 .app-header:not(.app-header--authed) .nav-links .nav-links-profile,
