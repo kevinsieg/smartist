@@ -56,6 +56,21 @@ function run(r) {
     process.env.APP_SECRET = 'test-secret-exactly-32-bytes-ok!';
     delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];
   });
+
+  test('missing APP_SECRET throws at require time', () => {
+    const saved = process.env.APP_SECRET;
+    delete process.env.APP_SECRET;
+    delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];
+    try {
+      require(path.join(__dirname, '../../api/_token'));
+      throw new Error('expected throw, got none');
+    } catch (e) {
+      assert(/APP_SECRET/.test(e.message), `expected APP_SECRET in message, got: ${e.message}`);
+    } finally {
+      process.env.APP_SECRET = saved;
+      delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];
+    }
+  });
 }
 
 if (require.main === module) {

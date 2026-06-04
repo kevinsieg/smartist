@@ -1,5 +1,9 @@
 const crypto = require('crypto');
 
+if (!process.env.APP_SECRET) {
+  throw new Error('APP_SECRET env var is required — set it in .env or Vercel project settings');
+}
+
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 function generateMagicToken(passwordHash) {
