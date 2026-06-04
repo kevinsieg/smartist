@@ -18,4 +18,29 @@ function verifyMagicToken(token, passwordHash) {
   } catch { return false; }
 }
 
-module.exports = { generateMagicToken, verifyMagicToken };
+const TTL_8H  =  8 * 60 * 60 * 1000;
+const TTL_30D = 30 * 24 * 60 * 60 * 1000;
+
+function generateUserToken(userId, role, ttlMs) {
+  const exp     = Date.now() + ttlMs;
+  const payload = JSON.stringify({ userId, role, exp });
+  const sig     = crypto.createHmac('sha256', process.env.APP_SECRET)
+    .update(payload).digest('hex');
+  return Buffer.from(JSON.stringify({ payload, sig })).toString('base64url');
+}
+
+function verifyUserToken(token) {
+  try {
+    if (!token) return null;
+    const { payload, sig } = JSON.parse(Buffer.from(token, 'base64url').toString());
+    const expected = crypto.createHmac('sha256', process.env.APP_SECRET)
+      .update(payload).digest('hex');
+    if (sig.length !== expected.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
+    const { userId, role, exp } = JSON.parse(payload);
+    if (Date.now() > Number(exp)) return null;
+    return { userId, role };
+  } catch { return null; }
+}
+
+module.exports = { generateMagicToken, verifyMagicToken, generateUserToken, verifyUserToken, TTL_8H, TTL_30D };
