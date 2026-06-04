@@ -54,6 +54,7 @@ function getInitials(name) {
         '<a href="/organizers" class="auth-only">Organizers</a>' +
         '<a href="/hub">Hub</a>' +
         '<a href="/pro-import" class="auth-only">PRO</a>' +
+        '<a href="/users" class="admin-only">Users</a>' +
         '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login &#8594;</a>' +
         '<a href="/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' +
         '<a href="#" class="nav-links-logout" id="nav-links-logout">Logout</a>' +
@@ -344,10 +345,11 @@ function _isTokenExpired(token) {
 }
 
 function isViewMode() {
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   if (!token) return true;
   if (_isTokenExpired(token)) {
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     return true;
   }
   return false;
@@ -471,11 +473,19 @@ function applyNav(bandName, bandConfig) {
 function updateAuthIndicator() {
   var el = document.getElementById('nav-auth');
   if (!el) return;
-  var _tok = sessionStorage.getItem(AUTH_TOKEN_KEY);
-  if (_tok && _isTokenExpired(_tok)) { sessionStorage.removeItem(AUTH_TOKEN_KEY); _tok = null; }
+  var _tok = getToken();
+  if (_tok && _isTokenExpired(_tok)) {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    _tok = null;
+  }
   var authed = !!_tok;
+  var _role  = authed ? getAuthRole() : null;
   var header = document.querySelector('.app-header');
-  if (header) header.classList.toggle('app-header--authed', authed);
+  if (header) {
+    header.classList.toggle('app-header--authed', authed);
+    header.classList.toggle('app-header--admin',  _role === 'admin');
+  }
   document.querySelectorAll('.app-logo').forEach(function(a) {
     a.href = authed ? '/dashboard' : loginPageUrl();
   });
@@ -511,6 +521,7 @@ function updateAuthIndicator() {
 
 function doLogout() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
   sessionStorage.removeItem('smartist_admin_email');
   var _navH = document.querySelector('.app-header');
   if (_navH) _navH.classList.remove('nav-open');
@@ -551,7 +562,7 @@ function _openAuthMenu(btn) {
 // Redirect to the login page if there is no session token. Returns true when a
 // redirect was triggered so callers can bail out early (e.g. initPage).
 function requireLogin() {
-  if (!sessionStorage.getItem(AUTH_TOKEN_KEY)) {
+  if (!getToken()) {
     goToLogin();
     return true;
   }
@@ -560,7 +571,21 @@ function requireLogin() {
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
-function getToken() { return sessionStorage.getItem(AUTH_TOKEN_KEY); }
+function getToken() {
+  return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || null;
+}
+
+function getAuthRole() {
+  var tok = getToken();
+  if (!tok) return null;
+  try {
+    var b64 = tok.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var outer = JSON.parse(atob(b64));
+    if (!outer.payload) return null;
+    return JSON.parse(outer.payload).role || null;
+  } catch { return null; }
+}
 
 // Authenticated fetch. Adds the auth header when a token exists. On 401 clears
 // the token and redirects to login (then throws so callers abort cleanly).
