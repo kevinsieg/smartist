@@ -34,6 +34,7 @@ function _platforms() { return _cfg?.config?.platforms || {}; }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
+window.onNavAuthEmpty = function() { goToLogin(); };
 initPage(async function(cfg, viewMode) {
   _cfg = cfg;
   _viewMode = viewMode;
