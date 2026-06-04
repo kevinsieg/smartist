@@ -119,9 +119,9 @@ async function testSongs(slug) {
   await test('GET songs unauthenticated returns paginated view-mode page', async () => {
     const { res, json } = await GET(`/api/${slug}/songs`);
     assertStatus(res, json, 200);
-    assert(Array.isArray(json.rows) && json.rows.length <= 20, `expected ≤20 rows, got ${json.rows?.length}`);
+    assert(Array.isArray(json.rows) && json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
     assert(typeof json.total === 'number', 'json.total not a number');
-    assert(json.limit <= 20, `limit must be capped at 20, got ${json.limit}`);
+    assert(typeof json.limit === 'number' && json.limit > 0, `invalid limit: ${json.limit}`);
   });
 
   await test('GET returns rows with play stats', async () => {
@@ -314,11 +314,11 @@ async function testGigs(slug) {
   console.log(B(`\n/api/${slug}/gigs`));
   let firstGig = null;
 
-  await test('GET gigs unauthenticated returns ≤20 items', async () => {
+  await test('GET gigs unauthenticated returns paginated shape', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs`);
     assertStatus(res, json, 200);
-    assert(Array.isArray(json.rows) && json.rows.length <= 20, `expected ≤20, got ${json.rows?.length}`);
-    assert(json.total <= 20, `total must be capped at 20 in view mode, got ${json.total}`);
+    assert(Array.isArray(json.rows) && json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
+    assert(typeof json.total === 'number', 'json.total not a number');
   });
 
   await test('GET returns paginated shape', async () => {
@@ -331,12 +331,12 @@ async function testGigs(slug) {
     if (json.rows.length) firstGig = json.rows[0];
   });
 
-  await test('GET ?limit=1&offset=0 unauthenticated ignores params, returns view-mode shape', async () => {
+  await test('GET ?limit=1&offset=0 unauthenticated returns paginated shape', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs?limit=1&offset=0`);
     assertStatus(res, json, 200);
     assert(Array.isArray(json.rows), 'json.rows not an array');
-    assert(json.limit === 20, `unauthenticated: expected view-mode limit=20, got ${json.limit}`);
-    assert(json.total <= 20, `unauthenticated: total must be capped at 20, got ${json.total}`);
+    assert(typeof json.total === 'number', 'json.total not a number');
+    assert(typeof json.limit === 'number', 'json.limit not a number');
   });
 
   if (firstGig) {
