@@ -164,8 +164,9 @@ module.exports = wrap(async function handler(req, res) {
     if (!requireRole(req, res, 'admin')) return;
     const users = await sql`
       SELECT id, email, role, created_at, invite_expires_at,
-             (password_hash IS NOT NULL)                                    AS accepted,
-             (invite_token_hash IS NOT NULL AND invite_expires_at > now())  AS invite_pending
+             (password_hash IS NOT NULL)                                                               AS accepted,
+             (invite_token_hash IS NOT NULL AND invite_expires_at >  now() AND password_hash IS NULL) AS invite_pending,
+             (invite_token_hash IS NOT NULL AND invite_expires_at <= now() AND password_hash IS NULL) AS invite_expired
       FROM users WHERE artist_id = ${artist.id}
       ORDER BY created_at
     `;
