@@ -11,14 +11,17 @@ function run(r) {
 
   console.log(B('\nrate-limit helpers'));
 
-  test('clientIp uses first forwarded IP before proxies', () => {
+  test('clientIp returns rightmost forwarded IP (non-spoofable)', () => {
     assertEq(
-      clientIp({ headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' } }),
-      '203.0.113.10'
+      clientIp({ headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.1' } }),
+      '10.0.0.1'
     );
   });
-  test('clientIp trims forwarded IP whitespace', () => {
-    assertEq(clientIp({ headers: { 'x-forwarded-for': ' 2001:db8::1 ' } }), '2001:db8::1');
+  test('clientIp trims whitespace', () => {
+    assertEq(clientIp({ headers: { 'x-forwarded-for': ' 2001:db8::1 , 9.9.9.9 ' } }), '9.9.9.9');
+  });
+  test('clientIp single value works', () => {
+    assertEq(clientIp({ headers: { 'x-forwarded-for': '203.0.113.10' } }), '203.0.113.10');
   });
   test('clientIp missing forwarded header → unknown', () => {
     assertEq(clientIp({ headers: {} }), 'unknown');

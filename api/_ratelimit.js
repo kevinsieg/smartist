@@ -39,7 +39,9 @@ function isMissingRateLimitTable(err) {
 }
 
 function clientIp(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'unknown';
+  const fwd = req.headers['x-forwarded-for'];
+  if (fwd) return fwd.split(',').pop().trim();
+  return req.headers['x-real-ip'] || 'unknown';
 }
 
 module.exports = { checkRateLimit, clientIp, isMissingRateLimitTable };
