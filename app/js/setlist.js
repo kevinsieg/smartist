@@ -665,7 +665,7 @@ function initDragAndDrop() {
 // --- Accept / auth flow ---
 
 function openAcceptModal() {
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   document.getElementById('auth-step').style.display  = token ? 'none'  : 'block';
   document.getElementById('save-step').style.display  = token ? 'block' : 'none';
   if (token) loadGigs();
@@ -736,7 +736,7 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
   const name  = document.getElementById('gig-name').value.trim();
   if (!name) return;
   const date  = document.getElementById('gig-date').value || null;
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   const r = await fetch(`/api/${artistSlug}/gigs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -756,7 +756,7 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
 });
 
 document.getElementById('save-btn').addEventListener('click', async () => {
-  const token   = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token   = getToken();
   const title   = document.getElementById('setlist-title').value.trim();
   const gigId   = document.getElementById('gig-select').value || null;
   const comment = document.getElementById('setlist-comment').value.trim() || null;
@@ -785,6 +785,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
 
   if (r.status === 401) {
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     document.getElementById('save-step').style.display = 'none';
     document.getElementById('auth-step').style.display = 'block';
     const err = document.getElementById('auth-error');
@@ -1315,7 +1316,7 @@ async function _saveHistEdit(sid) {
   var titleVal = (document.getElementById('hist-edit-title').value || '').trim();
   var gigId    = document.getElementById('hist-edit-gig').value || null;
   var comment  = (document.getElementById('hist-edit-comment').value || '').trim() || null;
-  var token    = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token    = getToken();
 
   if (!titleVal) {
     var errEl = document.getElementById('hist-edit-error');
@@ -1338,6 +1339,7 @@ async function _saveHistEdit(sid) {
 
     if (r.status === 401) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       var errEl3 = document.getElementById('hist-edit-error');
       if (errEl3) { errEl3.textContent = 'Session expired. Please refresh and log in again.'; errEl3.className = 'status-msg error'; }
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
@@ -1424,7 +1426,7 @@ async function _confirmDeleteSetlist(sid) {
   var s = _histSets.find(function(x) { return String(x.id) === sid; });
   if (!s) return;
 
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   var actionsEl = document.getElementById('hist-edit-actions');
   if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:var(--third-color);margin:0;">Deleting…</p>';
 
@@ -1604,7 +1606,7 @@ function _histShare(sid) {
   sid = String(sid);
   var inner = document.getElementById('view-side-panel-inner');
   if (!inner) return;
-  var hasToken = !!sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var hasToken = !!getToken();
 
   inner.innerHTML =
     '<div class="vsp-header">' +
@@ -1641,7 +1643,7 @@ async function _histShareSend(sid) {
     return;
   }
 
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   var pwEl = document.getElementById('hist-share-pw');
   if (pwEl && pwEl.value.trim()) token = pwEl.value.trim();
 
@@ -1664,6 +1666,7 @@ async function _histShareSend(sid) {
 
     if (r.status === 401) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       if (st) { st.textContent = 'Wrong password.'; st.className = 'status-msg error'; }
       if (btn) { btn.disabled = false; btn.textContent = 'Send PDF'; }
       return;
@@ -1687,7 +1690,7 @@ async function _histShareSend(sid) {
 
 async function _histDuplicate(sid) {
   sid = String(sid);
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
 
   var dupBtn = document.querySelector('.vsp-actions button[onclick*="_histDuplicate"]');
 
@@ -1709,6 +1712,7 @@ async function _histDuplicate(sid) {
 
     if (r.status === 401) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = 'Duplicate'; }
       return;
     }
