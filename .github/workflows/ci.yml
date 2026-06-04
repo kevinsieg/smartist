@@ -19,3 +19,39 @@ jobs:
         run: npm ci
       - name: Run unit tests
         run: npm run test:unit
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    # Only run when Vercel secrets are present (skip on forks/dependabot)
+    if: vars.VERCEL_ORG_ID != '' || secrets.VERCEL_TOKEN != ''
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Vercel CLI and test deps
+        run: |
+          npm install -g vercel@latest
+          npm ci
+          cd tests && npm ci
+
+      - name: Deploy preview
+        id: deploy
+        run: |
+          vercel pull --yes --environment=preview --token=$VERCEL_TOKEN
+          DEPLOY_URL=$(vercel deploy --token=$VERCEL_TOKEN)
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+
+      - name: Run integration tests
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+          ARTIST_PASSWORD: ${{ secrets.ARTIST_PASSWORD }}
+          ARTIST_SLUG: ${{ vars.ARTIST_SLUG }}
+        run: cd tests && node api.js

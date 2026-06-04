@@ -125,11 +125,12 @@ function renderLogin(errorMsg, cfg) {
       '<button class="btn active auth-submit" id="pw-btn">Sign in</button>' +
       '<button class="reset-link" id="reset-toggle">Forgot password?</button>' +
       '<div class="reset-form" id="reset-form" style="display:none">' +
-        '<div class="auth-row">' +
-          '<input type="email" id="reset-email" placeholder="Email address" autocomplete="email">' +
-          '<button class="btn" id="reset-btn">Send link</button>' +
+        '<div class="auth-field">' +
+          '<label class="auth-label" for="reset-email">Email address</label>' +
+          '<input type="email" id="reset-email" placeholder="you@band.com" autocomplete="email">' +
         '</div>' +
         '<div class="auth-error" id="reset-msg"></div>' +
+        '<button class="btn auth-submit" id="reset-btn">Send link</button>' +
       '</div>' +
       '<div class="auth-view-hint">No account? <a href="/songs">Browse in view mode →</a></div>' +
     '</div>';
