@@ -218,6 +218,11 @@
 <div class="app-wrap profile-wrap">
   <h1>Profile</h1>
 
+  <div id="bootstrap-prompt" style="display:none;margin-bottom:1.5rem;padding:0.9rem 1rem;background:#fef9c3;border:1px solid #fde68a;border-radius:4px;font-size:0.85rem;line-height:1.5">
+    <strong>Set up named accounts</strong> — You're using single-password login.
+    <a href="/users" style="color:var(--secondary-ink)">Go to Users →</a> to invite band members and create per-person accounts.
+  </div>
+
   <div id="profile-loading" style="text-align:center;color:var(--third-color);padding:2rem 0;">Loading…</div>
   <div id="profile-auth-notice" class="auth-notice" style="display:none;">
     <a href="/">Log in</a> to edit your profile.
@@ -330,6 +335,14 @@
         if (frame) { frame.style.pointerEvents = 'none'; frame.style.cursor = 'default'; }
         if (hint) { hint.style.display = 'none'; }
       }
+      apiFetch('/api/' + artistSlug + '/auth').then(function(r) {
+        return r.json();
+      }).then(function(data) {
+        if (data.users && data.users.length === 0) {
+          var el = document.getElementById('bootstrap-prompt');
+          if (el) el.style.display = '';
+        }
+      }).catch(function() {});
     } catch (e) {
       document.getElementById('profile-loading').textContent = 'Could not load profile.';
     }
