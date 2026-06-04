@@ -305,6 +305,21 @@ CREATE TABLE IF NOT EXISTS subscribers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ── users ──────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS users (
+  id                SERIAL PRIMARY KEY,
+  artist_id         INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+  email             TEXT NOT NULL,
+  password_hash     TEXT,                    -- NULL until invite accepted
+  role              TEXT NOT NULL DEFAULT 'member'
+                    CHECK (role IN ('admin', 'member', 'viewer')),
+  invite_token_hash TEXT,                    -- SHA256(raw token); NULL after accepted
+  invite_expires_at TIMESTAMPTZ,
+  invited_by        INTEGER REFERENCES users(id),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (artist_id, email)
+);
+
 -- ── Future migrations ────────────────────────────────────────────────────────
 -- Add ALTER TABLE … ADD COLUMN IF NOT EXISTS blocks here when the schema evolves.
 -- Each block should carry a comment with the date it was added so the history
