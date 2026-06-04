@@ -226,8 +226,6 @@ module.exports = wrap(async function handler(req, res) {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expires   = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    await sql`UPDATE users SET invite_token_hash = ${tokenHash}, invite_expires_at = ${expires} WHERE id = ${user.id}`;
-
     const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
     const origin = process.env.APP_ORIGIN || `${h.includes('localhost') ? 'http' : 'https'}://${h}`;
     const link   = `${origin}/login?invite=${rawToken}`;
@@ -241,6 +239,8 @@ module.exports = wrap(async function handler(req, res) {
                <p>This link expires in 7 days.</p>`,
       });
     } catch { return res.status(500).json({ error: 'Failed to send email' }); }
+
+    await sql`UPDATE users SET invite_token_hash = ${tokenHash}, invite_expires_at = ${expires} WHERE id = ${user.id}`;
     return res.json({ ok: true });
   }
 
@@ -250,7 +250,7 @@ module.exports = wrap(async function handler(req, res) {
     const { userId, role } = req.body ?? {};
     if (!userId) return res.status(400).json({ error: 'userId required' });
     if (!['admin', 'member', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
-    if (req.user.id && req.user.id === Number(userId)) return res.status(400).json({ error: 'Cannot change your own role' });
+    if (req.user.id !== null && req.user.id === Number(userId)) return res.status(400).json({ error: 'Cannot change your own role' });
 
     const [updated] = await sql`
       UPDATE users SET role = ${role}
@@ -266,7 +266,7 @@ module.exports = wrap(async function handler(req, res) {
     if (!requireRole(req, res, 'admin')) return;
     const { userId } = req.body ?? {};
     if (!userId) return res.status(400).json({ error: 'userId required' });
-    if (req.user.id && req.user.id === Number(userId)) return res.status(400).json({ error: 'Cannot remove yourself' });
+    if (req.user.id !== null && req.user.id === Number(userId)) return res.status(400).json({ error: 'Cannot remove yourself' });
 
     const [deleted] = await sql`
       DELETE FROM users WHERE id = ${Number(userId)} AND artist_id = ${artist.id} RETURNING id
