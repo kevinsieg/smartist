@@ -611,10 +611,36 @@ async function testMultiUserAuth(slug) {
     assert(_testUserId, 'invite returns user id');
   });
 
+  await test('POST invite duplicate email → 409', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
+      { email: TEST_EMAIL, role: 'member' }, { token: PASSWORD });
+    assertStatus(res, json, 409);
+  });
+
+  if (_testUserId) {
+    await test('POST resend-invite → 200', async () => {
+      const { res, json } = await POST(`/api/${slug}/auth?action=resend-invite`,
+        { userId: _testUserId }, { token: PASSWORD });
+      assertStatus(res, json, 200);
+    });
+  }
+
+  await test('POST resend-invite non-existent userId → 404', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=resend-invite`,
+      { userId: 999999 }, { token: PASSWORD });
+    assertStatus(res, json, 404);
+  });
+
   // accept-invite with garbage token → 400
   await test('POST ?action=accept-invite with garbage token → 400', async () => {
     const { res, json } = await POST(`/api/${slug}/auth?action=accept-invite`,
       { token: 'garbage', password: 'somepassword' });
+    assertStatus(res, json, 400);
+  });
+
+  await test('POST accept-invite short password → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=accept-invite`,
+      { token: 'any', password: 'short' });
     assertStatus(res, json, 400);
   });
 
@@ -633,6 +659,47 @@ async function testMultiUserAuth(slug) {
     const { res, json } = await POST(`/api/${slug}/auth`,
       { email: 'nobody@example.com', password: 'wrongpassword' });
     assertStatus(res, json, 401);
+  });
+
+  await test('POST email login missing password → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth`,
+      { email: 'test@example.com' });
+    assertStatus(res, json, 400);
+  });
+
+  await test('GET /auth without token → 401', async () => {
+    const { res, json } = await GET(`/api/${slug}/auth`);
+    assertStatus(res, json, 401);
+  });
+
+  await test('POST invite without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
+      { email: 'x@example.com', role: 'member' });
+    assertStatus(res, json, 401);
+  });
+
+  await test('PUT role without token → 401', async () => {
+    const { res, json } = await PUT(`/api/${slug}/auth`,
+      { userId: 1, role: 'viewer' });
+    assertStatus(res, json, 401);
+  });
+
+  await test('DELETE without token → 401', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/auth`,
+      { body: { userId: 1 } });
+    assertStatus(res, json, 401);
+  });
+
+  await test('POST invite missing email → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
+      { role: 'member' }, { token: PASSWORD });
+    assertStatus(res, json, 400);
+  });
+
+  await test('POST invite invalid role → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
+      { email: 'x@example.com', role: 'superuser' }, { token: PASSWORD });
+    assertStatus(res, json, 400);
   });
 
   // DELETE — clean up test user
