@@ -152,7 +152,7 @@ module.exports = wrap(async function handler(req, res) {
   if (rawId === 'gema-import') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const { type, csv, dryRun = false, ownerIpNameNumber } = req.body || {};
@@ -443,7 +443,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── POST /api/:artist/songs/:id/arrangements — create version ─────────────
   if (action === 'arrangements' && !arrId && req.method === 'POST') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const sql = getDb();
     const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
@@ -469,7 +469,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── PUT /api/:artist/songs/:id/arrangements/:arrId — update ───────────────
   if (action === 'arrangements' && arrId && !arrSub && req.method === 'PUT') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
@@ -499,7 +499,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── POST /api/:artist/songs/:id/arrangements/:arrId/activate ─────────────
   if (action === 'arrangements' && arrId && arrSub === 'activate' && req.method === 'POST') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
@@ -515,7 +515,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── DELETE /api/:artist/songs/:id/arrangements/:arrId ─────────────────────
   if (action === 'arrangements' && arrId && !arrSub && req.method === 'DELETE') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
@@ -554,7 +554,7 @@ module.exports = wrap(async function handler(req, res) {
   if (!action) {
     if (req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const sql = getDb();
@@ -574,7 +574,7 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'restore') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const sql = getDb();
@@ -663,7 +663,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── PUT/DELETE lyrics ─────────────────────────────────────────────────────
   if (action === 'lyrics') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const sql = getDb();
@@ -704,7 +704,7 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'lyrics-suggest') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const sql = getDb();
