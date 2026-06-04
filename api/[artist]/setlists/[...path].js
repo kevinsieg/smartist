@@ -8,9 +8,11 @@ const logger = require('../../_logger');
 
 module.exports = wrap(async function handler(req, res) {
   // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
+  const _rawUrl   = req.url.split('?')[0];
   const pathParts = Array.isArray(req.query.path) && req.query.path.length
     ? req.query.path
-    : req.url.split('?')[0].split('/setlists/')[1]?.split('/') ?? [];
+    : _rawUrl.split('/setlists/')[1]?.split('/')
+      ?? (_rawUrl.endsWith('/export') ? ['export'] : []);
   const [rawId, action] = pathParts;
   const slug = getSlug(req);
 

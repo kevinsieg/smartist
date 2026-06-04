@@ -141,6 +141,11 @@ module.exports = wrap(async function handler(req, res) {
     rawId  = req.query.songId;
     action = 'gema';
   }
+  // vercel dev: single-segment sub-routes also need flattening rewrites
+  if (req.query.songId && ['audio', 'sheet', 'playback', 'setlists', 'restore'].includes(rawId)) {
+    action = rawId;
+    rawId  = req.query.songId;
+  }
   const slug = getSlug(req);
 
   // ── GEMA import (merged from gema/import.js via vercel.json rewrite) ──────
