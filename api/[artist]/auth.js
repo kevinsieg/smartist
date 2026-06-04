@@ -178,6 +178,8 @@ module.exports = wrap(async function handler(req, res) {
     const { email, role } = req.body ?? {};
     const cleanEmail = validateStr(email, 200);
     if (!cleanEmail) return res.status(400).json({ error: 'Email required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail))
+      return res.status(400).json({ error: 'Invalid email address' });
     if (!['admin', 'member', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
 
     const [existing] = await sql`SELECT id FROM users WHERE artist_id = ${artist.id} AND email = ${cleanEmail.toLowerCase()}`;
