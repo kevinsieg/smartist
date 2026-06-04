@@ -484,7 +484,7 @@ function updateAuthIndicator() {
   var header = document.querySelector('.app-header');
   if (header) {
     header.classList.toggle('app-header--authed', authed);
-    header.classList.toggle('app-header--admin',  _role === 'admin');
+    header.classList.toggle('app-header--admin',  authed && (_role === 'admin' || _role === null));
   }
   document.querySelectorAll('.app-logo').forEach(function(a) {
     a.href = authed ? '/dashboard' : loginPageUrl();

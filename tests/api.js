@@ -116,18 +116,13 @@ async function testSongs(slug) {
   console.log(B(`\n/api/${slug}/songs`));
   let firstSong = null;
 
-  await test('GET songs unauthenticated returns paginated view-mode page', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs`);
-    assertStatus(res, json, 200);
-    assert(Array.isArray(json.rows) && json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
-    assert(typeof json.total === 'number', 'json.total not a number');
-    assert(typeof json.limit === 'number' && json.limit > 0, `invalid limit: ${json.limit}`);
-  });
-
-  await test('GET returns rows with play stats', async () => {
+  await test('GET songs returns paginated shape with play stats', async () => {
     const { res, json } = await GET(`/api/${slug}/songs`);
     assertStatus(res, json, 200);
     assert(Array.isArray(json.rows), 'json.rows not an array');
+    assert(json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
+    assert(typeof json.total === 'number', 'json.total not a number');
+    assert(typeof json.limit === 'number' && json.limit > 0, `invalid limit: ${json.limit}`);
     if (json.rows.length) {
       firstSong = json.rows[0];
       assert('play_count' in json.rows[0], 'missing play_count');
@@ -136,12 +131,24 @@ async function testSongs(slug) {
   });
 
   if (firstSong) {
+    await test('GET /:id returns single song with arrangements → 200', async () => {
+      const { res, json } = await GET(`/api/${slug}/songs/${firstSong.id}`);
+      assertStatus(res, json, 200);
+      assert(json.id === firstSong.id, 'id mismatch');
+      assert(Array.isArray(json.arrangements), 'missing arrangements array');
+    });
+
     await test('GET /:id/setlists returns appearances', async () => {
       const { res, json } = await GET(`/api/${slug}/songs/${firstSong.id}/setlists`);
       assertStatus(res, json, 200);
       assert(Array.isArray(json), 'not an array');
     });
   }
+
+  await test('GET /:id not found → 404', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/999999999`);
+    assertStatus(res, json, 404);
+  });
 
   await test('GET /:id/setlists with id=0 → 400', async () => {
     const { res, json } = await GET(`/api/${slug}/songs/0/setlists`);
@@ -314,17 +321,11 @@ async function testGigs(slug) {
   console.log(B(`\n/api/${slug}/gigs`));
   let firstGig = null;
 
-  await test('GET gigs unauthenticated returns paginated shape', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs`);
-    assertStatus(res, json, 200);
-    assert(Array.isArray(json.rows) && json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
-    assert(typeof json.total === 'number', 'json.total not a number');
-  });
-
-  await test('GET returns paginated shape', async () => {
+  await test('GET gigs returns paginated shape', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs`);
     assertStatus(res, json, 200);
     assert(Array.isArray(json.rows), 'json.rows not an array');
+    assert(json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
     assert(typeof json.total === 'number', 'json.total not a number');
     assert(typeof json.limit === 'number', 'json.limit not a number');
     assert(typeof json.offset === 'number', 'json.offset not a number');
@@ -360,6 +361,20 @@ async function testGigs(slug) {
   await test('GET /:id with id=0 → 400', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs/0`);
     assertStatus(res, json, 400);
+  });
+
+  await test('GET /:id not found → 404', async () => {
+    const { res, json } = await GET(`/api/${slug}/gigs/999999999`);
+    assertStatus(res, json, 404);
+  });
+
+  await test('GET ?format=ics returns iCalendar → 200', async () => {
+    const res = await fetch(`${BASE_URL}/api/${slug}/gigs?format=ics`);
+    assert(res.status === 200, `Expected 200, got ${res.status}`);
+    const ct = res.headers.get('content-type') || '';
+    assert(ct.includes('text/calendar'), `expected text/calendar, got: ${ct}`);
+    const body = await res.text();
+    assert(body.startsWith('BEGIN:VCALENDAR'), 'not a valid iCalendar response');
   });
 
   return firstGig;
@@ -414,6 +429,11 @@ async function testVenues(slug) {
     const { res, json } = await GET(`/api/${slug}/venues/0`);
     assertStatus(res, json, 400);
   });
+
+  await test('GET /:id not found → 404', async () => {
+    const { res, json } = await GET(`/api/${slug}/venues/999999999`);
+    assertStatus(res, json, 404);
+  });
 }
 
 async function testOrganizers(slug) {
@@ -465,22 +485,22 @@ async function testOrganizers(slug) {
     const { res, json } = await GET(`/api/${slug}/organizers/0`);
     assertStatus(res, json, 400);
   });
+
+  await test('GET /:id not found → 404', async () => {
+    const { res, json } = await GET(`/api/${slug}/organizers/999999999`);
+    assertStatus(res, json, 404);
+  });
 }
 
 async function testSetlists(slug) {
   console.log(B(`\n/api/${slug}/setlists`));
   let firstSetlist = null;
 
-  await test('GET setlists unauthenticated returns ≤20 items', async () => {
-    const { res, json } = await GET(`/api/${slug}/setlists`);
-    assertStatus(res, json, 200);
-    assert(Array.isArray(json) && json.length <= 20, `expected ≤20, got ${Array.isArray(json) ? json.length : 'non-array'}`);
-  });
-
-  await test('GET returns array with song_count', async () => {
+  await test('GET setlists returns array with song_count', async () => {
     const { res, json } = await GET(`/api/${slug}/setlists`);
     assertStatus(res, json, 200);
     assert(Array.isArray(json), 'not an array');
+    assert(json.length <= 20, `expected ≤20, got ${json.length}`);
     if (json.length) {
       firstSetlist = json[0];
       assert('song_count' in json[0], 'missing song_count');
@@ -585,11 +605,40 @@ async function testAuth(slug) {
     const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_suggest_id: 1 });
     assertStatus(res, json, 401);
   });
+
+  // Gigs, venues, organizers auth
+  for (const resource of ['gigs', 'venues', 'organizers']) {
+    const body = resource === 'gigs' ? { title: 'x' } : { name: 'x' };
+    await test(`POST /${resource} without token → 401`, async () => {
+      const { res, json } = await POST(`/api/${slug}/${resource}`, body);
+      assertStatus(res, json, 401);
+    });
+    await test(`PUT /${resource}/:id without token → 401`, async () => {
+      const { res, json } = await PUT(`/api/${slug}/${resource}/1`, body);
+      assertStatus(res, json, 401);
+    });
+    await test(`DELETE /${resource}/:id without token → 401`, async () => {
+      const { res, json } = await DELETE(`/api/${slug}/${resource}/1`);
+      assertStatus(res, json, 401);
+    });
+  }
+
+  // Setlist DELETE auth
+  await test('DELETE /setlists/:id without token → 401', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/setlists/1`);
+    assertStatus(res, json, 401);
+  });
+
+  // Config PATCH auth
+  await test('PATCH /config without token → 401', async () => {
+    const { res, json } = await PATCH('/api/config', { name: 'x' });
+    assertStatus(res, json, 401);
+  });
 }
 
 // ── Multi-user auth ──────────────────────────────────────────────────────────
 
-async function testMultiUserAuth(slug) {
+async function testMultiUserAuth(slug, token) {
   console.log(B('\nMulti-user auth'));
 
   const TEST_EMAIL = '[TEST]user_' + Date.now() + '@example.com';
@@ -597,7 +646,7 @@ async function testMultiUserAuth(slug) {
 
   // GET /auth — list users (bootstrap admin can access)
   await test('GET /auth lists users', async () => {
-    const { res, json } = await GET(`/api/${slug}/auth`, { token: PASSWORD });
+    const { res, json } = await GET(`/api/${slug}/auth`, { token });
     assertStatus(res, json, 200);
     assert(Array.isArray(json.users), 'users is an array');
   });
@@ -605,7 +654,7 @@ async function testMultiUserAuth(slug) {
   // POST ?action=invite — create pending user
   await test('POST ?action=invite creates pending user → 201', async () => {
     const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
-      { email: TEST_EMAIL, role: 'member' }, { token: PASSWORD });
+      { email: TEST_EMAIL, role: 'member' }, { token });
     // 500 "Failed to send invite email" = email not configured locally; user is rolled back
     if (res.status === 500 && json?.error === 'Failed to send invite email') {
       console.log('    (email not configured locally — invite rolled back, skipping invite flow)');
@@ -619,21 +668,21 @@ async function testMultiUserAuth(slug) {
   await test('POST invite duplicate email → 409', async () => {
     if (!_testUserId) { console.log('    (skipped — no pending user)'); return; }
     const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
-      { email: TEST_EMAIL, role: 'member' }, { token: PASSWORD });
+      { email: TEST_EMAIL, role: 'member' }, { token });
     assertStatus(res, json, 409);
   });
 
   if (_testUserId) {
     await test('POST resend-invite → 200', async () => {
       const { res, json } = await POST(`/api/${slug}/auth?action=resend-invite`,
-        { userId: _testUserId }, { token: PASSWORD });
+        { userId: _testUserId }, { token });
       assertStatus(res, json, 200);
     });
   }
 
   await test('POST resend-invite non-existent userId → 404', async () => {
     const { res, json } = await POST(`/api/${slug}/auth?action=resend-invite`,
-      { userId: 999999 }, { token: PASSWORD });
+      { userId: 999999 }, { token });
     assertStatus(res, json, 404);
   });
 
@@ -654,7 +703,7 @@ async function testMultiUserAuth(slug) {
   if (_testUserId) {
     await test('PUT updates user role → 200', async () => {
       const { res, json } = await PUT(`/api/${slug}/auth`,
-        { userId: _testUserId, role: 'viewer' }, { token: PASSWORD });
+        { userId: _testUserId, role: 'viewer' }, { token });
       assertStatus(res, json, 200);
       assert(json.user?.role === 'viewer', 'role updated');
     });
@@ -698,13 +747,13 @@ async function testMultiUserAuth(slug) {
 
   await test('POST invite missing email → 400', async () => {
     const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
-      { role: 'member' }, { token: PASSWORD });
+      { role: 'member' }, { token });
     assertStatus(res, json, 400);
   });
 
   await test('POST invite invalid role → 400', async () => {
     const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
-      { email: 'x@example.com', role: 'superuser' }, { token: PASSWORD });
+      { email: 'x@example.com', role: 'superuser' }, { token });
     assertStatus(res, json, 400);
   });
 
@@ -712,7 +761,7 @@ async function testMultiUserAuth(slug) {
   if (_testUserId) {
     await test('DELETE removes test user → 200', async () => {
       const { res, json } = await DELETE(`/api/${slug}/auth`,
-        { body: { userId: _testUserId }, token: PASSWORD });
+        { body: { userId: _testUserId }, token });
       assertStatus(res, json, 200);
     });
   }
@@ -920,13 +969,11 @@ async function testLyricsLifecycle(slug, token, songId) {
     assert(json.ok === true, 'expected ok:true');
   });
 
-  await test('GET /songs reflects saved lyrics in extra.lyrics', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs`, { token });
+  await test('GET /songs/:id reflects saved lyrics', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/${songId}`);
     assertStatus(res, json, 200);
-    const song = json.find(s => s.id === songId);
-    assert(song, 'test song not found in GET /songs');
-    assert(song.extra?.lyrics === testLyrics.trim(),
-      `lyrics mismatch — got: ${JSON.stringify(song.extra?.lyrics)}`);
+    assert(json.extra?.lyrics === testLyrics.trim(),
+      `lyrics mismatch — got: ${JSON.stringify(json.extra?.lyrics)}`);
   });
 
   await test('POST /songs lyrics_delete_id clears field → 200', async () => {
@@ -936,13 +983,11 @@ async function testLyricsLifecycle(slug, token, songId) {
     assert(json.ok === true, 'expected ok:true');
   });
 
-  await test('GET /songs confirms lyrics removed', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs`, { token });
+  await test('GET /songs/:id confirms lyrics removed', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/${songId}`);
     assertStatus(res, json, 200);
-    const song = json.find(s => s.id === songId);
-    assert(song, 'test song not found');
-    assert(!song.extra?.lyrics,
-      `expected no lyrics, got: ${JSON.stringify(song.extra?.lyrics)}`);
+    assert(!json.extra?.lyrics,
+      `expected no lyrics, got: ${JSON.stringify(json.extra?.lyrics)}`);
   });
 
   await test('POST /songs lyrics_delete_id again (already empty) → 200', async () => {
@@ -1046,9 +1091,10 @@ async function testWrite(slug, token, firstSong) {
     });
   }
 
-  // Setlist operations (creates [TEST] entries that persist — no delete endpoint)
+  // Setlist operations
   if (firstSong) {
     let setlist;
+    let duplicate;
 
     await test('POST /setlists creates setlist → 201', async () => {
       const { res, json } = await POST(`/api/${slug}/setlists`,
@@ -1079,11 +1125,39 @@ async function testWrite(slug, token, firstSong) {
         assertStatus(res, json, 201);
         assert(json.id !== setlist.id, 'duplicate has same id as original');
         assert(json.song_count === setlist.song_count, `song count mismatch — expected ${setlist.song_count}, got ${json.song_count}`);
+        duplicate = json;
       });
+
+      // Cleanup — delete both setlists created above
+      await test('DELETE /setlists/:id cleanup original → 200', async () => {
+        const { res, json } = await DELETE(`/api/${slug}/setlists/${setlist.id}`, { token });
+        assertStatus(res, json, 200);
+        assert(json.deleted === true, 'expected deleted:true');
+      });
+
+      if (duplicate) {
+        await test('DELETE /setlists/:id cleanup duplicate → 200', async () => {
+          const { res, json } = await DELETE(`/api/${slug}/setlists/${duplicate.id}`, { token });
+          assertStatus(res, json, 200);
+          assert(json.deleted === true, 'expected deleted:true');
+        });
+      }
     }
   } else {
     skip('setlist write tests', 'no existing songs to reference');
   }
+
+  // Config update
+  await test('PATCH /config empty name → 400', async () => {
+    const { res, json } = await PATCH('/api/config', { name: '' }, { token });
+    assertStatus(res, json, 400);
+  });
+
+  await test('PATCH /config valid config update → 200', async () => {
+    const { res, json } = await PATCH('/api/config', { config: { _test: null } }, { token });
+    assertStatus(res, json, 200);
+    assert(json.ok === true, 'expected ok:true');
+  });
 
   // Export
   await test('GET /export returns JSON attachment', async () => {
@@ -1097,6 +1171,61 @@ async function testWrite(slug, token, firstSong) {
     assert(Array.isArray(body.songs), 'missing songs array');
     assert(Array.isArray(body.setlists), 'missing setlists array');
     assert(Array.isArray(body.gigs), 'missing gigs array');
+  });
+}
+
+// ── CRM write lifecycle (venues, organizers, gigs) ───────────────────────────
+// Shared factory: create → validate → update → GET verify → soft-delete →
+// 409 on modify → hard-delete cleanup. Parameterised on resource + payloads.
+
+async function testCrudLifecycle(slug, token, { resource, createBody, invalidBody, updateBody, labelField }) {
+  console.log(B(`\nWrite ops — ${resource}`));
+  let item;
+
+  await test(`POST /${resource} creates → 201`, async () => {
+    const { res, json } = await POST(`/api/${slug}/${resource}`, createBody, { token });
+    assertStatus(res, json, 201);
+    assert(json.id > 0, 'missing id');
+    assert(json[labelField] === createBody[labelField], `${labelField} mismatch`);
+    item = json;
+  });
+
+  await test(`POST /${resource} missing required field → 400`, async () => {
+    const { res, json } = await POST(`/api/${slug}/${resource}`, invalidBody, { token });
+    assertStatus(res, json, 400);
+  });
+
+  if (!item) return;
+
+  await test(`PUT /${resource}/:id updates → 200`, async () => {
+    const { res, json } = await PUT(`/api/${slug}/${resource}/${item.id}`, updateBody, { token });
+    assertStatus(res, json, 200);
+    assert(json[labelField] === updateBody[labelField], `${labelField} not updated`);
+    item = json;
+  });
+
+  await test(`GET /${resource}/:id reflects update → 200`, async () => {
+    const { res, json } = await GET(`/api/${slug}/${resource}/${item.id}`);
+    assertStatus(res, json, 200);
+    assert(json[labelField] === updateBody[labelField], `${labelField} not reflected`);
+  });
+
+  await test(`DELETE /${resource}/:id soft-delete → 200`, async () => {
+    const { res, json } = await DELETE(`/api/${slug}/${resource}/${item.id}`, { token });
+    assertStatus(res, json, 200);
+    assert(json.deleted === true, 'expected deleted:true on soft-deleted row');
+  });
+
+  await test(`PUT /${resource}/:id after soft-delete → 409`, async () => {
+    const { res, json } = await PUT(`/api/${slug}/${resource}/${item.id}`, updateBody, { token });
+    assertStatus(res, json, 409);
+  });
+
+  await test(`DELETE /${resource}/:id hard cleanup → 200`, async () => {
+    const { res, json } = await DELETE(`/api/${slug}/${resource}/${item.id}`,
+      { body: { hard: true }, token });
+    assertStatus(res, json, 200);
+    assert(json.deleted === true && json.hard === true, 'expected deleted+hard:true');
   });
 }
 
@@ -1132,7 +1261,28 @@ async function main() {
 
   if (PASSWORD) {
     await testWrite(slug, PASSWORD, firstSong);
-    await testMultiUserAuth(slug);
+    await testCrudLifecycle(slug, PASSWORD, {
+      resource: 'venues',
+      labelField: 'name',
+      createBody:  { name: '[TEST] Venue',   city: 'Teststadt', country: 'DE' },
+      invalidBody: { city: 'x' },
+      updateBody:  { name: '[TEST] Venue updated', city: 'Teststadt' },
+    });
+    await testCrudLifecycle(slug, PASSWORD, {
+      resource: 'organizers',
+      labelField: 'name',
+      createBody:  { name: '[TEST] Organizer',   city: 'Teststadt', country: 'DE' },
+      invalidBody: { city: 'x' },
+      updateBody:  { name: '[TEST] Organizer updated', city: 'Teststadt' },
+    });
+    await testCrudLifecycle(slug, PASSWORD, {
+      resource: 'gigs',
+      labelField: 'title',
+      createBody:  { title: '[TEST] Gig', date: '2099-12-31' },
+      invalidBody: { date: '2099-12-31' },
+      updateBody:  { title: '[TEST] Gig updated', date: '2099-12-31' },
+    });
+    await testMultiUserAuth(slug, PASSWORD);
   } else {
     console.log(B('\nWrite ops'));
     console.log(D('  Set ARTIST_PASSWORD=<password> to enable write tests'));
