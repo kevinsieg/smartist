@@ -136,7 +136,7 @@ module.exports = wrap(async function handler(req, res) {
   // Dispatched via body field to avoid multi-segment POST routing issues.
   // Client sends POST /api/:band/songs with { lyrics_suggest_id: songId }.
   if (req.method === 'POST' && req.body?.lyrics_suggest_id != null) {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const songId = Number(req.body.lyrics_suggest_id);
@@ -219,7 +219,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── POST lyrics update (replaces PUT /songs/:id/lyrics) ───────────────────
   if (req.method === 'POST' && req.body?.lyrics_update_id != null) {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const songId = Number(req.body.lyrics_update_id);
@@ -246,7 +246,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── POST lyrics delete (replaces DELETE /songs/:id/lyrics) ────────────────
   if (req.method === 'POST' && req.body?.lyrics_delete_id != null) {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const songId = Number(req.body.lyrics_delete_id);
@@ -274,7 +274,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // Confirm upload: save publicUrl to DB, verify file exists in R2, delete previous file.
   if (req.method === 'POST' && req.body?.media_confirm_id != null) {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const songId = Number(req.body.media_confirm_id);
@@ -325,7 +325,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // Delete media file from R2 and clear the DB field.
   if (req.method === 'POST' && req.body?.media_delete_id != null) {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const songId = Number(req.body.media_delete_id);
@@ -352,7 +352,7 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   if (req.method === 'POST' && req.body?.upload_presign_id != null) {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const songId = Number(req.body.upload_presign_id);
@@ -389,7 +389,7 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
@@ -434,7 +434,7 @@ module.exports = wrap(async function handler(req, res) {
   // Batch update: [{ id, title, active, key, genre, tempo, length_min,
   //                   interpret, reference_interpret, comment, extra }, ...]
   if (req.method === 'PATCH') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const updates = req.body;
     if (!Array.isArray(updates) || updates.length === 0)

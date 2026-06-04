@@ -32,7 +32,7 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const { title: rawTitle, gig_id: rawGigId, comment: rawComment, song_ids, duplicate_id: rawDupId, share_id: rawShareId } = req.body ?? {};
 

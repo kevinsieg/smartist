@@ -23,7 +23,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });
 
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'admin');
     if (!band) return;
 
     const sql = getDb();
@@ -63,6 +63,11 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       if (!base || !publicUrl.startsWith(`${base}/${keyPrefix}`))
         return res.status(400).json({ error: 'Invalid publicUrl' });
 
+      const [song] = await sql`
+        SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
+      `;
+      if (!song) return res.status(404).json({ error: 'Song not found' });
+
       const head = await verifyUpload(keyFromUrl(publicUrl));
       if (!head) return res.status(400).json({ error: 'Uploaded file not found in storage' });
       if (!head.contentType.startsWith(mimePrefix)) {
@@ -73,11 +78,6 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
         await deleteFromR2(publicUrl);
         return res.status(400).json({ error: `Uploaded file exceeds ${maxMB} MB` });
       }
-
-      const [song] = await sql`
-        SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
-      `;
-      if (!song) return res.status(404).json({ error: 'Song not found' });
 
       const previousUrl = song.extra?.[extraKey] ?? null;
       const newExtra = { ...(song.extra ?? {}), [extraKey]: publicUrl };
