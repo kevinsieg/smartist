@@ -1,6 +1,6 @@
 const path = require('path');
 
-function run(r) {
+async function run(r) {
   const { test, assert, assertEq, B } = r;
 
   // requireRole is the only thing we need from _auth.js
@@ -69,13 +69,86 @@ function run(r) {
   test('req.user.id=null (bootstrap) with role admin still passes', () => {
     assertEq(requireRole({ user: { id: null, role: 'admin' } }, mockRes(), 'admin'), true);
   });
+
+  // ── requireAuth with minRole ─────────────────────────────────────────────────
+  const { stubLogger } = require('./_runner');
+  stubLogger();
+
+  const dbPath2    = require.resolve(path.join(__dirname, '../../api/_db'));
+  const tokenPath2 = require.resolve(path.join(__dirname, '../../api/_token'));
+  const authPath   = require.resolve(path.join(__dirname, '../../api/_auth'));
+
+  const FAKE_ARTIST = { id: 1, slug: 'testband', name: 'Test Band', password_hash: '$2b$12$fakehash' };
+
+  function stubAuthDeps(tokenClaim) {
+    require.cache[dbPath2] = {
+      id: dbPath2, filename: dbPath2, loaded: true,
+      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => null },
+    };
+    require.cache[tokenPath2] = {
+      id: tokenPath2, filename: tokenPath2, loaded: true,
+      exports: {
+        verifyUserToken: () => tokenClaim,
+        verifyMagicToken: () => false,
+        generateMagicToken: () => '',
+        generateUserToken: () => '',
+        TTL_8H: 28800000, TTL_30D: 2592000000,
+      },
+    };
+    delete require.cache[authPath];
+    return require(path.join(__dirname, '../../api/_auth'));
+  }
+
+  console.log(B('\nrequireAuth minRole'));
+
+  await r.testAsync('viewer blocked from member-gated route → null + 403', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 1, role: 'viewer' });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'member');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 403);
+  });
+
+  await r.testAsync('member passes member-gated route → artist returned', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 1, role: 'member' });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'member');
+    assert(result !== null, 'expected artist object');
+    assertEq(result.slug, 'testband');
+  });
+
+  await r.testAsync('admin passes admin-gated route → artist returned', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 1, role: 'admin' });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assert(result !== null, 'expected artist object');
+  });
+
+  await r.testAsync('member blocked from admin-gated route → null + 403', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 1, role: 'member' });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 403);
+  });
+
+  await r.testAsync('no minRole: viewer passes (backward compat) → artist returned', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 1, role: 'viewer' });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband');
+    assert(result !== null, 'expected artist');
+  });
 }
 
 if (require.main === module) {
   const { makeRunner } = require('./_runner');
   const r = makeRunner();
-  run(r);
-  process.exit(r.summary() > 0 ? 1 : 0);
+  run(r).then(() => process.exit(r.summary() > 0 ? 1 : 0));
 }
 
 module.exports = run;
