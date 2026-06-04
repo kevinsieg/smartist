@@ -587,6 +587,64 @@ async function testAuth(slug) {
   });
 }
 
+// ── Multi-user auth ──────────────────────────────────────────────────────────
+
+async function testMultiUserAuth(slug) {
+  console.log(B('\nMulti-user auth'));
+
+  const TEST_EMAIL = '[TEST]user_' + Date.now() + '@example.com';
+  let _testUserId = null;
+
+  // GET /auth — list users (bootstrap admin can access)
+  await test('GET /auth lists users', async () => {
+    const { res, json } = await GET(`/api/${slug}/auth`, { token: PASSWORD });
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json.users), 'users is an array');
+  });
+
+  // POST ?action=invite — create pending user
+  await test('POST ?action=invite creates pending user → 201', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=invite`,
+      { email: TEST_EMAIL, role: 'member' }, { token: PASSWORD });
+    assertStatus(res, json, 201);
+    _testUserId = json.user?.id;
+    assert(_testUserId, 'invite returns user id');
+  });
+
+  // accept-invite with garbage token → 400
+  await test('POST ?action=accept-invite with garbage token → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=accept-invite`,
+      { token: 'garbage', password: 'somepassword' });
+    assertStatus(res, json, 400);
+  });
+
+  // PUT — update role
+  if (_testUserId) {
+    await test('PUT updates user role → 200', async () => {
+      const { res, json } = await PUT(`/api/${slug}/auth`,
+        { userId: _testUserId, role: 'viewer' }, { token: PASSWORD });
+      assertStatus(res, json, 200);
+      assert(json.user?.role === 'viewer', 'role updated');
+    });
+  }
+
+  // POST login with email — wrong password → 401
+  await test('POST email login rejects bad credentials → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth`,
+      { email: 'nobody@example.com', password: 'wrongpassword' });
+    assertStatus(res, json, 401);
+  });
+
+  // DELETE — clean up test user
+  if (_testUserId) {
+    await test('DELETE removes test user → 200', async () => {
+      const { res, json } = await DELETE(`/api/${slug}/auth`,
+        { body: { userId: _testUserId }, token: PASSWORD });
+      assertStatus(res, json, 200);
+    });
+  }
+}
+
 // ── File endpoint tests ───────────────────────────────────────────────────────
 
 async function testFileIdValidation(slug) {
@@ -1001,6 +1059,7 @@ async function main() {
 
   if (PASSWORD) {
     await testWrite(slug, PASSWORD, firstSong);
+    await testMultiUserAuth(slug);
   } else {
     console.log(B('\nWrite ops'));
     console.log(D('  Set ARTIST_PASSWORD=<password> to enable write tests'));
