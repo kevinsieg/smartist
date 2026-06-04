@@ -32,7 +32,7 @@ async function requireAuth(req, res, slug, minRole = null) {
 }
 
 function requireRole(req, res, minRole) {
-  const userRole = req.user?.role || 'admin';
+  const userRole = req.user?.role || 'viewer';
   if (ROLE_ORDER.indexOf(userRole) < ROLE_ORDER.indexOf(minRole)) {
     res.status(403).json({ error: 'Forbidden' });
     return false;
