@@ -63,8 +63,10 @@ async function run(r) {
     assertEq(res.statusCode(), 403);
   });
 
-  test('missing req.user defaults to admin (bootstrap compat)', () => {
-    assertEq(requireRole({}, mockRes(), 'admin'), true);
+  test('missing req.user defaults to viewer → denied on admin route', () => {
+    const res = mockRes();
+    assertEq(requireRole({}, res, 'admin'), false);
+    assertEq(res.statusCode(), 403);
   });
   test('req.user.id=null (bootstrap) with role admin still passes', () => {
     assertEq(requireRole({ user: { id: null, role: 'admin' } }, mockRes(), 'admin'), true);
