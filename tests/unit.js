@@ -16,6 +16,7 @@ const suites = [
   require('./unit/subscribe'),
   require('./unit/contact'),
   require('./unit/arrangement'),
+  require('./unit/user_token'),
 ];
 
 (async () => {
