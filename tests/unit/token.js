@@ -1,5 +1,9 @@
 const path = require('path');
 const crypto = require('crypto');
+
+// Ensure APP_SECRET is set before loading _token
+process.env.APP_SECRET = process.env.APP_SECRET || 'test-secret-exactly-32-bytes-ok!';
+
 const { generateMagicToken, verifyMagicToken } =
   require(path.join(__dirname, '../../api/_token'));
 
