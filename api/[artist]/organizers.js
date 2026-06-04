@@ -42,7 +42,7 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const artist = await requireAuth(req, res, slug);
+    const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
     const b       = req.body ?? {};
     const name    = validateStr(b.name, 200);

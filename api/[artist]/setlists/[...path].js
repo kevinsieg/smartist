@@ -19,7 +19,7 @@ module.exports = wrap(async function handler(req, res) {
   // ── Export (merged from export.js via vercel.json rewrite) ───────────────
   if (rawId === 'export') {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const sql = getDb();
     const [songs, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs] = await Promise.all([
@@ -62,7 +62,7 @@ module.exports = wrap(async function handler(req, res) {
 
     let band;
     if (req.method === 'PUT' || req.method === 'DELETE') {
-      band = await requireAuth(req, res, slug);
+      band = await requireAuth(req, res, slug, 'member');
       if (!band) return;
     } else {
       band = await getArtist(slug);
@@ -140,7 +140,7 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'duplicate') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const [source] = await sql`
@@ -187,7 +187,7 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'share') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
     const [setlist] = await sql`

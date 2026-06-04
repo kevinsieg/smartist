@@ -165,7 +165,7 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'PATCH') {
     const slug = process.env.ARTIST_SLUG;
     if (!slug) return res.status(500).json({ error: 'ARTIST_SLUG not configured' });
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'admin');
     if (!band) return;
     const sql = getDb();
     if (req.body?.name !== undefined) {
@@ -186,7 +186,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── GET ?action=photo-url — presigned upload URL (auth required) ──────────
   if (req.query.action === 'photo-url') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'admin');
     if (!band) return;
     const contentType = req.query.type || 'image/jpeg';
     if (!contentType.startsWith('image/')) return res.status(400).json({ error: 'Image files only' });
@@ -197,7 +197,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── GET ?action=favicon-url — presigned upload URL for favicon ────────────
   if (req.query.action === 'favicon-url') {
-    const band = await requireAuth(req, res, slug);
+    const band = await requireAuth(req, res, slug, 'admin');
     if (!band) return;
     const contentType = req.query.type || 'image/png';
     if (!contentType.startsWith('image/')) return res.status(400).json({ error: 'Image files only' });

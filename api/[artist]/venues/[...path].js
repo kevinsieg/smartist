@@ -29,7 +29,7 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(venue);
   }
 
-  const artist = await requireAuth(req, res, slug);
+  const artist = await requireAuth(req, res, slug, 'member');
   if (!artist) return;
   const [venue] = await sql`SELECT * FROM venues WHERE id = ${id} AND artist_id = ${artist.id}`;
   if (!venue) return res.status(404).json({ error: 'Venue not found' });

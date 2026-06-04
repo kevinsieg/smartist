@@ -53,7 +53,7 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(gig);
   }
 
-  const artist = await requireAuth(req, res, slug);
+  const artist = await requireAuth(req, res, slug, 'member');
   if (!artist) return;
   const [gig] = await sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
   if (!gig) return res.status(404).json({ error: 'Gig not found' });
