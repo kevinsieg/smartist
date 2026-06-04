@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Users</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css?v=26">
+  <style>
+    .users-wrap { max-width: 680px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
+    .invite-bar { display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;padding:1rem 1.1rem;background:var(--surface-color);border:1px solid var(--border-color);border-radius:4px; }
+    .invite-field { display:flex;flex-direction:column;gap:0.3rem;flex:1 1 180px;min-width:0; }
+    .invite-field label { font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color); }
+    .invite-input { padding:0.45rem 0.65rem;border:1px solid var(--border-color);border-radius:3px;font-family:'Courier New',monospace;font-size:0.88rem;background:var(--bg-color);color:var(--black);outline:none; }
+    .invite-input:focus { border-color:var(--secondary-color); }
+    .invite-role { padding:0.45rem 0.55rem;border:1px solid var(--border-color);border-radius:3px;font-family:'Courier New',monospace;font-size:0.88rem;background:var(--bg-color);color:var(--black);cursor:pointer;min-width:110px; }
+    .user-section-label { font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color);margin:1.25rem 0 0.5rem; }
+    .user-list { border:1px solid var(--border-color);border-radius:4px;overflow:hidden; }
+    .user-row { display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:0.75rem;padding:0.7rem 1rem;border-bottom:1px solid #f0ebe3;background:var(--bg-color); }
+    .user-row:last-child { border-bottom:none; }
+    .user-row.header { background:var(--surface-color);padding:0.4rem 1rem;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color); }
+    .user-email { font-size:0.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .you-badge { font-size:0.7rem;color:var(--third-color);margin-left:0.4rem; }
+    .status-badge { font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;white-space:nowrap; }
+    .status-active  { background:#dcfce7;color:#166534; }
+    .status-pending { background:#fef9c3;color:#854d0e; }
+    .role-select-inline { padding:0.15rem 0.35rem;border:1px solid var(--border-color);border-radius:3px;font-family:inherit;font-size:0.75rem;background:var(--bg-color);cursor:pointer; }
+    .user-action-btn { background:none;border:1px solid var(--border-color);border-radius:3px;padding:0.2rem 0.5rem;font-family:inherit;font-size:0.72rem;color:var(--third-color);cursor:pointer;white-space:nowrap; }
+    .user-action-btn:hover { border-color:var(--secondary-ink);color:var(--secondary-ink); }
+    .user-action-btn.danger:hover { border-color:#e55;color:#e55; }
+    .users-status { font-size:0.8rem;color:var(--third-color);margin-top:0.75rem;min-height:1.2em; }
+    .users-status.error { color:#e55; }
+    .empty-users { padding:1.5rem 1rem;text-align:center;font-size:0.85rem;color:var(--third-color); }
+  </style>
+</head>
+<body>
+<div class="app-wrap users-wrap">
+  <h1>Users</h1>
+  <div class="invite-bar">
+    <div class="invite-field">
+      <label for="invite-email">Email</label>
+      <input type="email" id="invite-email" class="invite-input" placeholder="bandmate@example.com">
+    </div>
+    <div class="invite-field" style="flex:0 0 auto">
+      <label for="invite-role">Role</label>
+      <select id="invite-role" class="invite-role">
+        <option value="member">member</option>
+        <option value="viewer">viewer</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <button class="btn active" id="invite-btn" onclick="sendInvite()">Send invite</button>
+  </div>
+  <div id="users-status" class="users-status"></div>
+  <div class="user-section-label">Active</div>
+  <div class="user-list" id="active-list"><p class="empty-users">Loading…</p></div>
+  <div id="pending-section" style="display:none">
+    <div class="user-section-label">Pending invites</div>
+    <div class="user-list" id="pending-list"></div>
+  </div>
+</div>
+<script src="/app/js/common.js?v=12"></script>
+<script src="/app/js/users.js"></script>
+</body>
+</html>

@@ -25,6 +25,7 @@
     { "source": "/gigs",             "destination": "/app/gigs.html" },
     { "source": "/organizers",       "destination": "/app/organizers.html" },
     { "source": "/hub",              "destination": "/app/hub.html" },
+    { "source": "/users",            "destination": "/app/users.html" },
     { "source": "/dashboard",        "destination": "/app/dashboard.html" }
   ],
   "headers": [
