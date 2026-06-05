@@ -82,10 +82,23 @@ async function run(r) {
 
   const FAKE_ARTIST = { id: 1, slug: 'testband', name: 'Test Band', password_hash: '$2b$12$fakehash' };
 
-  function stubAuthDeps(tokenClaim) {
+  function makeSql(rows) {
+    const sql = async (strings, ...values) => {
+      sql.calls.push({ strings, values });
+      return rows;
+    };
+    sql.calls = [];
+    return sql;
+  }
+
+  function stubAuthDeps(tokenClaim, userRows) {
+    const rows = userRows === undefined && tokenClaim
+      ? [{ id: Number(tokenClaim.userId), role: tokenClaim.role }]
+      : (userRows || []);
+    const sql = makeSql(rows);
     require.cache[dbPath2] = {
       id: dbPath2, filename: dbPath2, loaded: true,
-      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => null },
+      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => sql },
     };
     require.cache[tokenPath2] = {
       id: tokenPath2, filename: tokenPath2, loaded: true,
@@ -98,7 +111,7 @@ async function run(r) {
       },
     };
     delete require.cache[authPath];
-    return require(path.join(__dirname, '../../api/_auth'));
+    return { ...require(path.join(__dirname, '../../api/_auth')), sql };
   }
 
   console.log(B('\nrequireAuth minRole'));
@@ -144,6 +157,27 @@ async function run(r) {
     const req = { headers: { authorization: 'Bearer faketoken' } };
     const result = await requireAuth(req, res, 'testband');
     assert(result !== null, 'expected artist');
+  });
+
+  await r.testAsync('user token without current-artist user row is rejected', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 99, role: 'admin' }, []);
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 401);
+  });
+
+  await r.testAsync('current DB role overrides signed role claim', async () => {
+    const { requireAuth } = stubAuthDeps(
+      { userId: 1, role: 'admin' },
+      [{ id: 1, role: 'viewer' }],
+    );
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'member');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 403);
   });
 }
 
