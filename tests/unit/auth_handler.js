@@ -145,7 +145,7 @@ async function run(r) {
     });
     assertEq(updated, { passwordHash: 'hashed:long-enough:12', userId: 42 });
     assert(sql.calls.some(call => call.text.includes('invite_expires_at > now()')), 'invite lookup must reject expired tokens');
-    assert(sql.calls.some(call => call.text.includes('password_hash = NULL')), 'invite lookup must only accept unused invites');
+    assert(sql.calls.some(call => call.text.includes('password_hash IS NULL')), 'invite lookup must only accept unused invites');
   });
 
   await testAsync('POST accept-invite rejects expired or already-used invite without updating user', async () => {
