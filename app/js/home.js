@@ -49,6 +49,7 @@ async function init() {
 
 async function verifyToken(token, hint) {
   try {
+    if (!hint && isValidStoredUserToken(token)) return true;
     const body = hint
       ? { magic: token, hint }
       : { password: token };
@@ -66,6 +67,17 @@ async function verifyToken(token, hint) {
       sessionStorage.setItem('smartist_admin_email', data.adminEmail);
     }
     return true;
+  } catch { return false; }
+}
+
+function isValidStoredUserToken(token) {
+  try {
+    var b64 = token.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var outer = JSON.parse(atob(b64));
+    if (!outer.payload) return false;
+    var claim = JSON.parse(outer.payload);
+    return Number(claim.exp) > Date.now();
   } catch { return false; }
 }
 
