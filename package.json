@@ -2,7 +2,7 @@
   "name": "smartist",
   "private": true,
   "scripts": {
-    "test:unit": "node tests/unit.js && node tests/history-client.js"
+    "test:unit": "node tests/unit.js && node tests/history-client.js && node tests/home-client.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1038.0",
