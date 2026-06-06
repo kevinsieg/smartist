@@ -10,27 +10,42 @@ async function checkCredentials(token, artist) {
 }
 
 async function isBootstrapAuthEnabled(sql, artistId) {
-  const [row] = await sql`
-    SELECT COUNT(*)::int AS count
-    FROM users
-    WHERE artist_id = ${artistId}
-      AND password_hash IS NOT NULL
-  `;
-  return Number(row?.count || 0) === 0;
+  try {
+    const [row] = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM users
+      WHERE artist_id = ${artistId}
+        AND password_hash IS NOT NULL
+    `;
+    return Number(row?.count || 0) === 0;
+  } catch (err) {
+    if (isMissingUsersTable(err)) return true;
+    throw err;
+  }
 }
 
 async function getTokenUser(sql, artistId, claim) {
   const userId = Number(claim?.userId);
   if (!Number.isInteger(userId) || userId <= 0) return null;
 
-  const [user] = await sql`
-    SELECT id, role
-    FROM users
-    WHERE id = ${userId}
-      AND artist_id = ${artistId}
-      AND password_hash IS NOT NULL
-  `;
-  return user || null;
+  try {
+    const [user] = await sql`
+      SELECT id, role
+      FROM users
+      WHERE id = ${userId}
+        AND artist_id = ${artistId}
+        AND password_hash IS NOT NULL
+    `;
+    return user || null;
+  } catch (err) {
+    if (isMissingUsersTable(err)) return null;
+    throw err;
+  }
+}
+
+function isMissingUsersTable(err) {
+  return err?.code === '42P01'
+    || /relation ["']?users["']? does not exist/i.test(err?.message || '');
 }
 
 async function requireAuth(req, res, slug, minRole = null) {
@@ -70,4 +85,4 @@ function requireRole(req, res, minRole) {
   return true;
 }
 
-module.exports = { requireAuth, requireRole, checkCredentials, isBootstrapAuthEnabled };
+module.exports = { requireAuth, requireRole, checkCredentials, isBootstrapAuthEnabled, isMissingUsersTable };

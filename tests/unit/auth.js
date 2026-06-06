@@ -82,9 +82,14 @@ async function run(r) {
 
   const FAKE_ARTIST = { id: 1, slug: 'testband', name: 'Test Band', password_hash: '$2b$12$fakehash' };
 
-  function makeSql({ userRows = [], acceptedUserCount = 0 } = {}) {
+  function makeSql({ userRows = [], acceptedUserCount = 0, missingUsersTable = false } = {}) {
     return async function sql(strings) {
       const query = strings.join(' ');
+      if (missingUsersTable && query.includes('FROM users')) {
+        const err = new Error('relation "users" does not exist');
+        err.code = '42P01';
+        throw err;
+      }
       if (query.includes('COUNT(*)')) return [{ count: acceptedUserCount }];
       if (query.includes('FROM users')) return userRows;
       return [];
@@ -95,6 +100,7 @@ async function run(r) {
     const sql = makeSql({
       userRows: opts.userRows ?? (tokenClaim ? [{ id: tokenClaim.userId, role: tokenClaim.role }] : []),
       acceptedUserCount: opts.acceptedUserCount ?? 0,
+      missingUsersTable: opts.missingUsersTable ?? false,
     });
     require.cache[dbPath2] = {
       id: dbPath2, filename: dbPath2, loaded: true,
@@ -204,6 +210,27 @@ async function run(r) {
     const { requireAuth } = stubAuthDeps(null, { magicOk: true, acceptedUserCount: 1 });
     const res = mockRes();
     const req = { headers: { authorization: 'Bearer bootstrap-magic' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 401);
+  });
+
+  await r.testAsync('missing users table keeps bootstrap credential path available', async () => {
+    const { requireAuth } = stubAuthDeps(null, { magicOk: true, missingUsersTable: true });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer bootstrap-magic' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assert(result !== null, 'expected artist object');
+    assertEq(req.user, { id: null, role: 'admin' });
+  });
+
+  await r.testAsync('missing users table rejects user token instead of crashing', async () => {
+    const { requireAuth } = stubAuthDeps(
+      { userId: 1, role: 'admin' },
+      { missingUsersTable: true }
+    );
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
     const result = await requireAuth(req, res, 'testband', 'admin');
     assertEq(result, null);
     assertEq(res.statusCode(), 401);
