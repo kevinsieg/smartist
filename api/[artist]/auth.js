@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getArtist, getDb, getSlug }            = require('../_db');
-const { checkCredentials, requireAuth, requireRole } = require('../_auth');
+const { checkCredentials, isBootstrapAuthEnabled, requireAuth, requireRole } = require('../_auth');
 const { generateUserToken, generateMagicToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
 const { sendEmail }    = require('../_email');
 const { wrap }         = require('../_handler');
@@ -65,6 +65,7 @@ module.exports = wrap(async function handler(req, res) {
       tokenSeed  = user.password_hash;
     } else {
       // Bootstrap fallback: match ARTIST_ADMIN_EMAIL
+      if (!await isBootstrapAuthEnabled(sql, band.id)) return res.json({ ok: true });
       const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
       if (!adminEmail || cleanEmail !== adminEmail.toLowerCase()) return res.json({ ok: true });
       resetEmail = adminEmail;
@@ -117,7 +118,7 @@ module.exports = wrap(async function handler(req, res) {
         return res.status(401).json({ error: 'Invalid or expired login link' });
       }
       // Bootstrap magic token (no hint → single-user install)
-      if (await checkCredentials(magic, band)) {
+      if (await isBootstrapAuthEnabled(sql, band.id) && await checkCredentials(magic, band)) {
         return res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
       }
       return res.status(401).json({ error: 'Invalid or expired login link' });
@@ -130,6 +131,7 @@ module.exports = wrap(async function handler(req, res) {
         return res.status(429).json({ error: 'Too many attempts — try again later' });
       const band = await getArtist(slug);
       if (!band) return res.status(404).json({ error: 'Artist not found' });
+      if (!await isBootstrapAuthEnabled(sql, band.id)) return res.status(401).json({ error: 'Invalid password' });
       if (!await checkCredentials(password, band)) return res.status(401).json({ error: 'Invalid password' });
       return res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
     }

@@ -82,16 +82,29 @@ async function run(r) {
 
   const FAKE_ARTIST = { id: 1, slug: 'testband', name: 'Test Band', password_hash: '$2b$12$fakehash' };
 
-  function stubAuthDeps(tokenClaim) {
+  function makeSql({ userRows = [], acceptedUserCount = 0 } = {}) {
+    return async function sql(strings) {
+      const query = strings.join(' ');
+      if (query.includes('COUNT(*)')) return [{ count: acceptedUserCount }];
+      if (query.includes('FROM users')) return userRows;
+      return [];
+    };
+  }
+
+  function stubAuthDeps(tokenClaim, opts = {}) {
+    const sql = makeSql({
+      userRows: opts.userRows ?? (tokenClaim ? [{ id: tokenClaim.userId, role: tokenClaim.role }] : []),
+      acceptedUserCount: opts.acceptedUserCount ?? 0,
+    });
     require.cache[dbPath2] = {
       id: dbPath2, filename: dbPath2, loaded: true,
-      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => null },
+      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => sql },
     };
     require.cache[tokenPath2] = {
       id: tokenPath2, filename: tokenPath2, loaded: true,
       exports: {
         verifyUserToken: () => tokenClaim,
-        verifyMagicToken: () => false,
+        verifyMagicToken: () => !!opts.magicOk,
         generateMagicToken: () => '',
         generateUserToken: () => '',
         TTL_8H: 28800000, TTL_30D: 2592000000,
@@ -144,6 +157,56 @@ async function run(r) {
     const req = { headers: { authorization: 'Bearer faketoken' } };
     const result = await requireAuth(req, res, 'testband');
     assert(result !== null, 'expected artist');
+  });
+
+  await r.testAsync('user token with no matching artist user → null + 401', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 1, role: 'admin' }, { userRows: [] });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 401);
+  });
+
+  await r.testAsync('DB role overrides stale elevated token role', async () => {
+    const { requireAuth } = stubAuthDeps(
+      { userId: 1, role: 'admin' },
+      { userRows: [{ id: 1, role: 'member' }] }
+    );
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 403);
+  });
+
+  await r.testAsync('DB role grants access even if token has stale lower role', async () => {
+    const { requireAuth } = stubAuthDeps(
+      { userId: 1, role: 'viewer' },
+      { userRows: [{ id: 1, role: 'admin' }] }
+    );
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assert(result !== null, 'expected artist object');
+  });
+
+  await r.testAsync('bootstrap credential passes before accepted users exist', async () => {
+    const { requireAuth } = stubAuthDeps(null, { magicOk: true, acceptedUserCount: 0 });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer bootstrap-magic' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assert(result !== null, 'expected artist object');
+    assertEq(req.user, { id: null, role: 'admin' });
+  });
+
+  await r.testAsync('bootstrap credential denied after accepted user exists', async () => {
+    const { requireAuth } = stubAuthDeps(null, { magicOk: true, acceptedUserCount: 1 });
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer bootstrap-magic' } };
+    const result = await requireAuth(req, res, 'testband', 'admin');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 401);
   });
 }
 
