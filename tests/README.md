@@ -37,6 +37,7 @@ node tests/history-client.js
 | `tests/unit/gema.js` | `api/[artist]/songs/[...path].js` | CSV parsers, GEMA normalizers (gema import is merged into the songs catch-all) |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
+| `tests/unit/auth_handler.js` | `api/[artist]/auth.js` | invite email validation/rollback, resend token persistence, expired invite listing |
 | `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
 
 Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
