@@ -19,6 +19,7 @@ const suites = [
   require('./unit/user_token'),
   require('./unit/auth'),
   require('./unit/identity'),
+  require('./unit/artist'),
 ];
 
 (async () => {
