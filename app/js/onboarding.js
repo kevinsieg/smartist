@@ -4,7 +4,7 @@
   var _email    = null;
   var _slugTimer = null;
 
-  var AUTH_TOKEN_KEY = 'setlist_token';
+  var AUTH_TOKEN_KEY = 'smartist_token';
 
   function _storedAuthToken() {
     return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || null;
