@@ -120,12 +120,14 @@ async function init() {
   try {
     // Start network fetch immediately, but use cached config if available so
     // the slug is known synchronously and data fetches don't have to wait.
-    const cfgFetch = fetch('/api/config').then(r => { if (!r.ok) throw new Error(); return r.json(); });
+    const _stageSlug = window.location.pathname.split('/').filter(Boolean)[0] || '';
+    var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default');
+    const cfgFetch = fetch('/api/config' + (_stageSlug ? '?slug=' + encodeURIComponent(_stageSlug) : '')).then(r => { if (!r.ok) throw new Error(); return r.json(); });
     var cfg;
-    try { cfg = JSON.parse(sessionStorage.getItem('artist_config_cache')) || await cfgFetch; }
+    try { cfg = JSON.parse(sessionStorage.getItem(_stageCacheKey)) || await cfgFetch; }
     catch { cfg = await cfgFetch; }
     cfgFetch.then(function(fresh) {
-      try { sessionStorage.setItem('artist_config_cache', JSON.stringify(fresh)); } catch {}
+      try { sessionStorage.setItem(_stageCacheKey, JSON.stringify(fresh)); } catch {}
     }).catch(function() {});
 
     _shareSlug = cfg.slug;
