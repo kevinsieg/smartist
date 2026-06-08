@@ -49,6 +49,9 @@
   .hero p { font-size: 1rem; color: #666; line-height: 1.7; max-width: 480px; margin-bottom: 36px; }
   .cta-btn { display: inline-block; padding: 12px 30px; border: 1.5px solid #b06a2a; color: #b06a2a; font-family: 'Courier New', monospace; font-size: 0.8rem; letter-spacing: 0.22em; text-transform: uppercase; text-decoration: none; border-radius: 2px; transition: background 0.15s, color 0.15s; }
   .cta-btn:hover, .cta-btn:focus { background: #b06a2a; color: #f5f0ea; }
+  .cta-btn--filled { background: #b06a2a; color: #f5f0ea; }
+  .cta-btn--filled:hover, .cta-btn--filled:focus { background: #964f1c; border-color: #964f1c; color: #f5f0ea; }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 
   /* Waveform decoration */
   .hero-waveform { position: absolute; right: 0; top: 48px; display: flex; align-items: flex-end; gap: 3px; opacity: 0.1; pointer-events: none; }
@@ -168,7 +171,10 @@
   <h1>The toolkit independent musicians <em>actually</em> need.</h1>
   <div class="divider"></div>
   <p>Streamline your artist organisation and keep the full overview — setlists, song catalogue, PRO reporting, social reach, platform availability. Built by a musician, for musicians. No subscriptions. No bloat.</p>
-  <a class="cta-btn" href="/demo">Open demo →</a>
+  <div class="hero-cta">
+    <a class="cta-btn cta-btn--filled" href="/signup">Sign up free →</a>
+    <a class="cta-btn" href="/demo">Open demo →</a>
+  </div>
 </section>
 
 <div class="features-wrap">
