@@ -12,12 +12,12 @@ async function resolveArtist(slug, sql) {
 
 async function isSlugAvailable(slug, sql) {
   if (RESERVED_SLUGS.has(slug)) return false;
-  const [row] = await sql`SELECT COUNT(*)::int AS count FROM artists WHERE slug = ${slug}`;
-  return Number(row.count) === 0;
+  const [row] = await sql`SELECT EXISTS(SELECT 1 FROM artists WHERE slug = ${slug}) AS exists`;
+  return !row.exists;
 }
 
 async function getArtistsForUser(userId, sql) {
-  return sql`
+  return await sql`
     SELECT a.slug, a.name, u.role
     FROM users u
     JOIN artists a ON a.id = u.artist_id
