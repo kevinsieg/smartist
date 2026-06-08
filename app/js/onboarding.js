@@ -28,9 +28,7 @@
 
   async function _checkSlug(slug) {
     if (!slug || !/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)) return false;
-    const r = await fetch('/api/config?action=check-slug&slug=' + encodeURIComponent(slug));
-    const d = await r.json();
-    return d.available === true;
+    return checkSlug(slug);
   }
 
   function _renderExpired() {
@@ -71,13 +69,18 @@
         return;
       }
       slugStatus.textContent = 'Checking…';
-      const avail = await _checkSlug(slug);
-      if (avail) {
-        slugStatus.textContent = '✓ Available';
+      try {
+        const avail = await _checkSlug(slug);
+        if (avail) {
+          slugStatus.textContent = '✓ Available';
+          submitBtn.disabled = false;
+        } else {
+          slugStatus.textContent = 'Already taken — try another';
+          submitBtn.disabled = true;
+        }
+      } catch {
+        slugStatus.textContent = '';
         submitBtn.disabled = false;
-      } else {
-        slugStatus.textContent = 'Already taken — try another';
-        submitBtn.disabled = true;
       }
     }
 
@@ -122,7 +125,7 @@
           return;
         }
         sessionStorage.setItem(AUTH_TOKEN_KEY, d.token);
-        window.location.href = '/' + d.slug + '/dashboard';
+        window.location.href = '/' + slug + '/dashboard';
       } catch (err) {
         _showError(err.message || 'Something went wrong');
         submitBtn.disabled = false;
