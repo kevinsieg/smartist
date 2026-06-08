@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { getArtist, getDb, getSlug }            = require('../_db');
 const { checkCredentials, requireAuth, requireRole } = require('../_auth');
 const { generateUserToken, generateMagicToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
+const { getArtistsForUser } = require('../_domain/artist');
 const { sendEmail }    = require('../_email');
 const { wrap }         = require('../_handler');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
@@ -41,7 +42,8 @@ module.exports = wrap(async function handler(req, res) {
       WHERE id = ${user.id}
     `;
     const sessionToken = generateUserToken(user.id, user.role, TTL_8H);
-    return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email });
+    const artists      = await getArtistsForUser(user.id, sql);
+    return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
   }
 
   // ── Password reset request (via /api/:artist/request-reset rewrite) ───────
@@ -112,7 +114,8 @@ module.exports = wrap(async function handler(req, res) {
         `;
         if (user && verifyMagicToken(magic, user.password_hash)) {
           const sessionToken = generateUserToken(user.id, user.role, TTL_8H);
-          return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email });
+          const artists      = await getArtistsForUser(user.id, sql);
+          return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
         }
         return res.status(401).json({ error: 'Invalid or expired login link' });
       }
@@ -150,9 +153,10 @@ module.exports = wrap(async function handler(req, res) {
     if (!user || !await bcrypt.compare(password, user.password_hash))
       return res.status(401).json({ error: 'Invalid email or password' });
 
-    const ttl   = rememberMe ? TTL_30D : TTL_8H;
-    const token = generateUserToken(user.id, user.role, ttl);
-    return res.json({ ok: true, token, role: user.role, email: user.email });
+    const ttl     = rememberMe ? TTL_30D : TTL_8H;
+    const token   = generateUserToken(user.id, user.role, ttl);
+    const artists = await getArtistsForUser(user.id, sql);
+    return res.json({ ok: true, token, role: user.role, email: user.email, artists });
   }
 
   // ── Authenticated actions ─────────────────────────────────────────────────
