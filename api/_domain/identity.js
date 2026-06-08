@@ -19,6 +19,7 @@ function verifyState(state) {
   if (!state) return null;
   try {
     const { provider, nonce, expires, mode, sig } = JSON.parse(Buffer.from(state, 'base64url').toString());
+    if (provider !== 'google' && provider !== 'facebook') return null;
     if (Date.now() > Number(expires)) return null;
     const msg      = `${provider}:${nonce}:${expires}:${mode}`;
     const expected = crypto.createHmac('sha256', _stateSecret(provider)).update(msg).digest('hex');
