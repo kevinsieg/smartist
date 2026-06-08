@@ -278,6 +278,8 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     if (mode === 'signup') {
+      if (await checkRateLimit(`signup-link:${email.toLowerCase()}`, 3, 3600))
+        return res.redirect(302, `${origin}/signup?error=rate_limited`);
       const sql = getDb();
       const rawToken = await createSignupToken(email, sql);
       await logger.info('oauth_signup_started', { provider, email });
