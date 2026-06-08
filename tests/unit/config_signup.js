@@ -20,8 +20,10 @@ async function run(r) {
     const emailPath  = require.resolve(path.join(__dirname, '../../api/_email'));
     const configPath = require.resolve(path.join(__dirname, '../../api/config'));
 
+    const tokenPath = require.resolve(path.join(__dirname, '../../api/_token'));
     delete require.cache[dbPath];
     delete require.cache[configPath];
+    delete require.cache[tokenPath];
     ['identity', 'artist', 'registration'].forEach(function(m) {
       try { delete require.cache[require.resolve(path.join(__dirname, '../../api/_domain/' + m))]; } catch {}
     });
