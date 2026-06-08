@@ -42,11 +42,18 @@ async function run(r) {
     assertEq(verifyState(tampered), null);
   });
 
-  test('verifyState returns null for expired state', () => {
-    const s = generateState('google', 'login');
-    const parsed = JSON.parse(Buffer.from(s, 'base64url').toString());
-    parsed.expires = Date.now() - 1;
-    const expired = Buffer.from(JSON.stringify(parsed)).toString('base64url');
+  test('verifyState returns null for expired token (valid sig, past expiry)', () => {
+    // Build a validly-signed token with an already-expired timestamp.
+    // We must sign it ourselves because generateState always uses Date.now() + TTL.
+    const nonce   = 'aabbccddee1122334455';
+    const expires = Date.now() - 1000; // 1 second in the past
+    const mode    = 'login';
+    const provider = 'google';
+    const secret  = process.env.GOOGLE_CLIENT_SECRET || 'test-google-secret';
+    const crypto  = require('crypto');
+    const msg = `${provider}:${nonce}:${expires}:${mode}`;
+    const sig = crypto.createHmac('sha256', secret).update(msg).digest('hex');
+    const expired = Buffer.from(JSON.stringify({ provider, nonce, expires, mode, sig })).toString('base64url');
     assertEq(verifyState(expired), null);
   });
 
