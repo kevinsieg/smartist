@@ -134,8 +134,10 @@ await sql`INSERT INTO setlist_songs (setlist_id, song_id, position)
   SELECT * FROM unnest(${ids}::int[], ${songIds}::int[], ${positions}::int[])`;
 ```
 
+**Driver:** postgres.js (`postgres` npm package). Connects to Neon over the standard wire protocol. `sql.begin(async tx => {...})` is available for transactions. The swap point is `DB.connect` in `api/_db.js` — the rest of the codebase is driver-agnostic.
+
 **JSONB:**
-- Neon serialises JS objects directly — do **not** `JSON.stringify()`.
+- postgres.js serialises JS objects directly — do **not** `JSON.stringify()`.
 - Use `extra || ${update.extra}` (JSONB `||`) for partial PATCH; full replacement overwrites keys like `isrc` and `language` that the UI doesn't manage.
 
 ---

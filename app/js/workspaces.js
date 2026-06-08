@@ -16,33 +16,35 @@
   }
 
   function _renderList(artists) {
-    var el = document.getElementById('workspaces-content');
+    var el = document.getElementById(‘workspaces-content’);
     if (!artists || artists.length === 0) {
       el.innerHTML =
-        '<p class="landing-lead">You don’t have any workspaces yet.</p>' +
-        '<a href="/onboarding" class="btn btn--primary">Create your first workspace</a>';
+        ‘<div class="landing-login">’ +
+          ‘<p class="auth-hint" style="margin-bottom:0.75rem">You don\’t have any workspaces yet.</p>’ +
+          ‘<a href="/onboarding" class="btn active auth-submit">Create your first workspace</a>’ +
+        ‘</div>’;
       return;
     }
 
     var cards = artists.map(function(a) {
-      return '<a class="workspace-card" href="/' + _esc(a.slug) + '/dashboard">' +
-        '<span class="workspace-name">' + _esc(a.name) + '</span>' +
-        '<span class="workspace-role">' + _esc(_roleLabel(a.role)) + '</span>' +
-      '</a>';
-    }).join('');
+      return ‘<a class="workspace-card" href="/’ + _esc(a.slug) + ‘/dashboard">’ +
+        ‘<span class="workspace-name">’ + _esc(a.name) + ‘</span>’ +
+        ‘<span class="workspace-role">’ + _esc(_roleLabel(a.role)) + ‘</span>’ +
+      ‘</a>’;
+    }).join(‘’);
 
     el.innerHTML =
-      '<div class="workspace-list">' + cards + '</div>' +
-      '<div class="workspace-actions">' +
-        '<a href="/onboarding" class="btn btn--secondary">Create new workspace</a>' +
-      '</div>';
+      ‘<div class="workspace-list">’ + cards + ‘</div>’ +
+      ‘<a href="/onboarding" class="btn auth-submit" style="margin-top:0.5rem">+ New workspace</a>’;
   }
 
   function _renderUnauth() {
-    var el = document.getElementById('workspaces-content');
+    var el = document.getElementById(‘workspaces-content’);
     el.innerHTML =
-      '<p class="landing-lead">You need to be logged in to see your workspaces.</p>' +
-      '<a href="/login" class="btn btn--primary">Log in</a>';
+      ‘<div class="landing-login">’ +
+        ‘<p class="auth-hint" style="margin-bottom:0.75rem">You need to be logged in to see your workspaces.</p>’ +
+        ‘<a href="/login" class="btn active auth-submit">Log in</a>’ +
+      ‘</div>’;
   }
 
   // Init
@@ -63,7 +65,7 @@
     d = await r.json();
   } catch {
     document.getElementById('workspaces-content').innerHTML =
-      '<p class="form-error">Could not load workspaces. Please try again.</p>';
+      '<p class="auth-error">Could not load workspaces. Please try again.</p>';
     return;
   }
   _renderList(d.artists || []);
