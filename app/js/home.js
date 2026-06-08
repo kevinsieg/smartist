@@ -1,12 +1,14 @@
 var artistSlug = '';
 
 async function init() {
-  const params     = new URLSearchParams(window.location.search);
-  const magic      = params.get('magic') || new URLSearchParams(window.location.hash.slice(1)).get('magic');
-  const hint       = params.get('hint');
-  const invite     = params.get('invite');
-  const oauthError = params.get('oauth_error');
-  const path       = window.location.pathname.replace(/\/+$/, '') || '/';
+  const params       = new URLSearchParams(window.location.search);
+  const magic        = params.get('magic') || new URLSearchParams(window.location.hash.slice(1)).get('magic');
+  const hint         = params.get('hint');
+  const invite       = params.get('invite');
+  const oauthError   = params.get('oauth_error');
+  const path         = window.location.pathname.replace(/\/+$/, '') || '/';
+  const next         = params.get('next') || '';
+  const slugFromNext = next.split('/').filter(Boolean)[0] || '';
 
   const hasToken = !!(sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY));
   if (path === '/' && !magic && !oauthError && !invite && !hasToken) {
@@ -18,8 +20,12 @@ async function init() {
 
   let cfg;
   try {
-    cfg = await loadConfig();
-    artistSlug = cfg.slug;
+    cfg = await loadConfig(slugFromNext || undefined);
+    artistSlug = cfg.slug || slugFromNext;
+    if (!artistSlug) {
+      window.location.replace('/signup');
+      return;
+    }
     applyNav(cfg.name, cfg.config);
     document.title = cfg.name || 'Band Tools';
   } catch {
@@ -31,20 +37,20 @@ async function init() {
   if (invite)     { renderSetPassword(invite, cfg); return; }
 
   if (magic) {
-    const ok = await verifyToken(magic, hint || null);
-    if (ok) renderLoggedIn(cfg);
+    const { ok, artists } = await verifyToken(magic, hint || null);
+    if (ok) renderLoggedIn(cfg, artists);
     else    renderLogin('Invalid or expired login link.', cfg);
     return;
   }
 
   const token = sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
-  if (token && await verifyToken(token)) {
-    renderLoggedIn(cfg);
-  } else {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    renderLogin(null, cfg);
+  if (token) {
+    const { ok, artists } = await verifyToken(token);
+    if (ok) { renderLoggedIn(cfg, artists); return; }
   }
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  renderLogin(null, cfg);
 }
 
 async function verifyToken(token, hint) {
@@ -57,7 +63,7 @@ async function verifyToken(token, hint) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!r.ok) return false;
+    if (!r.ok) return { ok: false, artists: [] };
     const data = await r.json();
     if (data.token) {
       storeToken(data.token, false);
@@ -65,16 +71,27 @@ async function verifyToken(token, hint) {
     } else if (data.adminEmail) {
       sessionStorage.setItem('smartist_admin_email', data.adminEmail);
     }
-    return true;
-  } catch { return false; }
+    return { ok: true, artists: data.artists || [] };
+  } catch { return { ok: false, artists: [] }; }
 }
 
 // ── Logged-in state ───────────────────────────────────────────────────────────
 
-function renderLoggedIn(cfg) {
+function renderLoggedIn(cfg, artists) {
   const next = new URLSearchParams(window.location.search).get('next');
-  const dest = (next && next.startsWith('/') && !next.startsWith('//')) ? next : '/dashboard';
-  window.location.href = dest;
+  if (next && next.startsWith('/') && !next.startsWith('//')) {
+    window.location.href = next;
+    return;
+  }
+  if (!artists || artists.length === 0) {
+    window.location.href = '/onboarding';
+    return;
+  }
+  if (artists.length === 1) {
+    window.location.href = '/' + artists[0].slug + '/dashboard';
+    return;
+  }
+  window.location.href = '/home';
 }
 
 // ── Login form ────────────────────────────────────────────────────────────────
@@ -201,7 +218,7 @@ async function doAcceptInvite(inviteToken, cfg) {
     if (!r.ok) { err.textContent = data.error || 'Failed to create account.'; btn.disabled = false; btn.textContent = 'Create account'; return; }
     storeToken(data.token, false);
     sessionStorage.setItem('smartist_admin_email', data.email || '');
-    renderLoggedIn(cfg);
+    renderLoggedIn(cfg, data.artists || []);
   } catch {
     err.textContent = 'Connection error. Try again.';
     btn.disabled = false; btn.textContent = 'Create account';
@@ -238,7 +255,7 @@ async function doLogin() {
       if (data.adminEmail) sessionStorage.setItem('smartist_admin_email', data.adminEmail);
     }
     applyNav(cfg.name, cfg.config);
-    renderLoggedIn(cfg);
+    renderLoggedIn(cfg, data.artists || []);
   } catch {
     err.textContent = 'Connection error. Try again.';
     btn.disabled = false; btn.textContent = 'Sign in';
