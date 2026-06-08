@@ -20,6 +20,7 @@ const suites = [
   require('./unit/auth'),
   require('./unit/identity'),
   require('./unit/artist'),
+  require('./unit/registration'),
 ];
 
 (async () => {
