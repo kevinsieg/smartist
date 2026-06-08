@@ -21,6 +21,7 @@ const suites = [
   require('./unit/identity'),
   require('./unit/artist'),
   require('./unit/registration'),
+  require('./unit/config_signup'),
 ];
 
 (async () => {
