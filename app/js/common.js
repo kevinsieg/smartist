@@ -20,6 +20,7 @@ function goToLogin(e) {
   if (e && e.preventDefault) e.preventDefault();
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   sessionStorage.removeItem('setlist_token');
+  localStorage.removeItem(AUTH_TOKEN_KEY);
   var url = loginPageUrl();
   window.location.assign(url);
 }
