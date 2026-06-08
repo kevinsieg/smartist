@@ -1,10 +1,13 @@
 // Shared utilities for all app pages
 
 const AUTH_TOKEN_KEY = 'smartist_token';
+var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','demo','impressum']);
+var _rawSegment   = (window.location.pathname.split('/').filter(Boolean)[0] || '');
+var _artistSlug   = _GLOBAL_PAGES.has(_rawSegment) ? '' : _rawSegment;
+var _CONFIG_KEY   = 'artist_config_cache_' + (_artistSlug || 'default');
 
 function isLoginPage() {
-  var p = window.location.pathname.replace(/\/+$/, '') || '/';
-  return p === '/' || p === '/login';
+  return !_artistSlug;
 }
 
 function loginPageUrl() {
@@ -37,6 +40,8 @@ function getInitials(name) {
   // This prevents the header/content flash on every page navigation.
   document.documentElement.style.opacity = '0';
 
+  var _base = _artistSlug ? '/' + _artistSlug : '';
+
   const header = document.createElement('header');
   header.className = 'app-header';
   header.innerHTML =
@@ -47,16 +52,16 @@ function getInitials(name) {
         '<span class="band-name"></span>' +
       '</a>' +
       '<div class="nav-links">' +
-        '<a href="/songs">Songs</a>' +
-        '<a href="/setlist">Setlists</a>' +
-        '<a href="/gigs">Gigs</a>' +
-        '<a href="/venues">Venues</a>' +
-        '<a href="/organizers" class="auth-only">Organizers</a>' +
-        '<a href="/hub">Hub</a>' +
-        '<a href="/pro-import" class="auth-only">PRO</a>' +
-        '<a href="/users" class="admin-only">Users</a>' +
+        '<a href="' + _base + '/songs">Songs</a>' +
+        '<a href="' + _base + '/setlist">Setlists</a>' +
+        '<a href="' + _base + '/gigs">Gigs</a>' +
+        '<a href="' + _base + '/venues">Venues</a>' +
+        '<a href="' + _base + '/organizers" class="auth-only">Organizers</a>' +
+        '<a href="' + _base + '/hub">Hub</a>' +
+        '<a href="' + _base + '/pro-import" class="auth-only">PRO</a>' +
+        '<a href="' + _base + '/users" class="admin-only">Users</a>' +
         '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login &#8594;</a>' +
-        '<a href="/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' +
+        '<a href="' + _base + '/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' +
         '<a href="#" class="nav-links-logout" id="nav-links-logout">Logout</a>' +
       '</div>' +
       '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">' +
@@ -81,7 +86,7 @@ function getInitials(name) {
 
   // Apply cached config before first paint so header renders complete on load.
   try {
-    const cached = JSON.parse(sessionStorage.getItem('artist_config_cache'));
+    const cached = JSON.parse(sessionStorage.getItem(_CONFIG_KEY));
     if (cached) {
       document.querySelectorAll('.band-name').forEach(el => { el.textContent = cached.name || ''; });
       const _initials = getInitials(cached.name);
@@ -322,11 +327,6 @@ function formatLength(mins) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// Fetch /api/config with stale-while-revalidate via sessionStorage.
-// First call waits for the network; subsequent calls within the same tab
-// return the cached response immediately and refresh the cache in the background.
-const _CONFIG_KEY = 'artist_config_cache';
-
 // Token format: base64url({"exp":unixsecs}.hexsig) — readable without the HMAC secret.
 // Passwords are also stored here (plain text, non-expiring client-side).
 // Only return true when we can positively identify an expired magic token.
@@ -394,19 +394,22 @@ function applyViewMode() {
   });
 }
 
-async function loadConfig() {
+async function loadConfig(slugOverride) {
+  var slug = (slugOverride !== undefined) ? slugOverride : _artistSlug;
+  var key  = 'artist_config_cache_' + (slug || 'default');
   let cached = null;
-  try { cached = JSON.parse(sessionStorage.getItem(_CONFIG_KEY)); } catch {}
+  try { cached = JSON.parse(sessionStorage.getItem(key)); } catch {}
 
-  const fetchFresh = fetch('/api/config')
+  var url = slug ? '/api/config?slug=' + encodeURIComponent(slug) : '/api/config';
+  const fetchFresh = fetch(url)
     .then(r => { if (!r.ok) throw new Error('config unavailable'); return r.json(); })
     .then(cfg => {
-      try { sessionStorage.setItem(_CONFIG_KEY, JSON.stringify(cfg)); } catch {}
+      try { sessionStorage.setItem(key, JSON.stringify(cfg)); } catch {}
       return cfg;
     });
 
   if (cached) {
-    fetchFresh.catch(() => {}); // refresh in background, suppress errors
+    fetchFresh.catch(() => {});
     return cached;
   }
   return fetchFresh;
@@ -486,8 +489,9 @@ function updateAuthIndicator() {
     header.classList.toggle('app-header--authed', authed);
     header.classList.toggle('app-header--admin',  authed && (_role === 'admin' || _role === null));
   }
+  var _logoBase = _artistSlug ? '/' + _artistSlug : '';
   document.querySelectorAll('.app-logo').forEach(function(a) {
-    a.href = authed ? '/dashboard' : loginPageUrl();
+    a.href = authed ? (_logoBase + '/dashboard') : loginPageUrl();
   });
   if (authed) {
     var _email = sessionStorage.getItem('smartist_admin_email') || '';
@@ -535,11 +539,12 @@ function doLogout() {
 function _openAuthMenu(btn) {
   var existing = document.getElementById('nav-auth-menu');
   if (existing) { existing.remove(); return; }
+  var _profilePath = _artistSlug ? '/' + _artistSlug + '/profile' : '/profile';
   var menu = document.createElement('div');
   menu.id = 'nav-auth-menu';
   menu.className = 'nav-auth-menu';
   menu.innerHTML =
-    '<div class="nav-auth-menu-item" onclick="navigate(\'/profile\');document.getElementById(\'nav-auth-menu\')&&document.getElementById(\'nav-auth-menu\').remove()">' +
+    '<div class="nav-auth-menu-item" onclick="navigate(\'' + _profilePath + '\');document.getElementById(\'nav-auth-menu\')&&document.getElementById(\'nav-auth-menu\').remove()">' +
       'Profile' +
     '</div>' +
     '<div class="nav-auth-menu-item" onclick="doLogout()">' +
@@ -681,7 +686,8 @@ document.addEventListener('click', function(e) {
 
 // Force the next loadConfig() call to fetch fresh data from the network.
 function invalidateConfigCache() {
-  try { sessionStorage.removeItem(_CONFIG_KEY); } catch {}
+  var slug = _artistSlug;
+  sessionStorage.removeItem('artist_config_cache_' + (slug || 'default'));
 }
 
 // ── Reusable sortable list ────────────────────────────────────────────────────
