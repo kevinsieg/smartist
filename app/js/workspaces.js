@@ -49,17 +49,22 @@
   var authTok = _storedAuthToken();
   if (!authTok) { _renderUnauth(); return; }
 
-  const r = await fetch('/api/config?action=my-artists', {
-    headers: { Authorization: 'Bearer ' + authTok },
-  });
-
-  if (r.status === 401) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    _renderUnauth();
+  let d;
+  try {
+    const r = await fetch('/api/config?action=my-artists', {
+      headers: { Authorization: 'Bearer ' + authTok },
+    });
+    if (r.status === 401) {
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      _renderUnauth();
+      return;
+    }
+    d = await r.json();
+  } catch {
+    document.getElementById('workspaces-content').innerHTML =
+      '<p class="form-error">Could not load workspaces. Please try again.</p>';
     return;
   }
-
-  const d = await r.json();
   _renderList(d.artists || []);
 })();
