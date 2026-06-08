@@ -54,12 +54,7 @@
       btn.disabled    = true;
       btn.textContent = 'Sending…';
       try {
-        const r = await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'signup-link', email }),
-        });
-        if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Failed'); }
+        await sendSignupLink(email);
         _render('sent');
       } catch (err) {
         btn.disabled    = false;
