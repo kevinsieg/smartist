@@ -67,13 +67,18 @@ async function run(r) {
 
   console.log(B('\ngetArtistsForUser'));
 
-  await testAsync('returns workspace list for a user', async () => {
+  await testAsync('returns all artist workspaces for a user', async () => {
+    let queryCalled = false;
     const ROWS = [
       { slug: 'band-a', name: 'Band A', role: 'admin' },
       { slug: 'band-b', name: 'Band B', role: 'member' },
     ];
-    const sql = async () => ROWS;
+    const sql = async (strings, ...vals) => {
+      queryCalled = true;
+      return ROWS;
+    };
     const result = await getArtistsForUser(42, sql);
+    assert(queryCalled, 'expected sql to be called');
     assertEq(result.length, 2);
     assertEq(result[0].slug, 'band-a');
     assertEq(result[1].role, 'member');

@@ -21,7 +21,7 @@ async function getArtistsForUser(userId, sql) {
     SELECT a.slug, a.name, u.role
     FROM users u
     JOIN artists a ON a.id = u.artist_id
-    WHERE u.id = ${userId}
+    WHERE u.email = (SELECT email FROM users WHERE id = ${userId})
     ORDER BY a.name
   `;
 }
