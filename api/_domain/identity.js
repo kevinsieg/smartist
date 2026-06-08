@@ -22,7 +22,7 @@ function verifyState(state) {
     if (Date.now() > Number(expires)) return null;
     const msg      = `${provider}:${nonce}:${expires}:${mode}`;
     const expected = crypto.createHmac('sha256', _stateSecret(provider)).update(msg).digest('hex');
-    if (sig.length !== expected.length) return null;
+    if (!/^[0-9a-f]{64}$/.test(sig)) return null;
     const valid = crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'));
     return valid ? { provider, mode } : null;
   } catch { return null; }
