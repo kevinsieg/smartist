@@ -305,6 +305,10 @@ CREATE TABLE IF NOT EXISTS subscribers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS subscribers_signup_token_idx
+  ON subscribers ((meta->>'signup_token_hash'))
+  WHERE meta ? 'signup_token_hash';
+
 -- ── users ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
   id                SERIAL PRIMARY KEY,
