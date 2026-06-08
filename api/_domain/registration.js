@@ -1,14 +1,15 @@
 const crypto = require('crypto');
 
 async function createSignupToken(email, sql) {
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const hash     = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const expires  = new Date(Date.now() + 30 * 60 * 1000);
+  const rawToken  = crypto.randomBytes(32).toString('hex');
+  const hash      = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expires   = new Date(Date.now() + 30 * 60 * 1000);
+  const tokenMeta = { signup_token_hash: hash, signup_token_expires: expires.toISOString() };
   await sql`
     INSERT INTO subscribers (email, source, meta)
-    VALUES (${email}, 'signup', ${{ signup_token_hash: hash, signup_token_expires: expires.toISOString() }})
+    VALUES (${email}, 'signup', ${tokenMeta})
     ON CONFLICT (email) DO UPDATE
-      SET meta = subscribers.meta || ${{ signup_token_hash: hash, signup_token_expires: expires.toISOString() }}
+      SET meta = subscribers.meta || ${tokenMeta}
   `;
   return rawToken;
 }
@@ -28,17 +29,19 @@ async function verifySignupToken(rawToken, sql) {
 }
 
 async function createArtistAndAdmin(name, slug, email, sql) {
-  const [artist] = await sql`
-    INSERT INTO artists (slug, name, config)
-    VALUES (${slug}, ${name}, '{}')
-    RETURNING id
-  `;
-  const [user] = await sql`
-    INSERT INTO users (artist_id, email, role, password_hash)
-    VALUES (${artist.id}, ${email}, 'admin', NULL)
-    RETURNING id
-  `;
-  return { artistId: artist.id, userId: user.id };
+  return await sql.begin(async tx => {
+    const [artist] = await tx`
+      INSERT INTO artists (slug, name, config)
+      VALUES (${slug}, ${name}, '{}')
+      RETURNING id
+    `;
+    const [user] = await tx`
+      INSERT INTO users (artist_id, email, role, password_hash)
+      VALUES (${artist.id}, ${email}, 'admin', NULL)
+      RETURNING id
+    `;
+    return { artistId: artist.id, userId: user.id };
+  });
 }
 
 async function clearSignupToken(email, sql) {

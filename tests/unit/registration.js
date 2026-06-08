@@ -61,11 +61,24 @@ async function run(r) {
       if (String(strings[0]).includes('INSERT INTO users'))   return [{ id: 20 }];
       return [];
     };
+    sql.begin = async fn => fn(sql);
     const result = await createArtistAndAdmin('My Band', 'my-band', 'admin@example.com', sql);
     assertEq(result.artistId, 10);
     assertEq(result.userId, 20);
     assert(calls.some(c => c.includes('INSERT INTO artists')), 'expected artist insert');
     assert(calls.some(c => c.includes('INSERT INTO users')),   'expected user insert');
+  });
+
+  await testAsync('rolls back if user insert fails', async () => {
+    const failSql = async (strings) => {
+      if (String(strings[0]).includes('INSERT INTO artists')) return [{ id: 10 }];
+      throw new Error('users insert failed');
+    };
+    failSql.begin = async fn => fn(failSql);
+    let threw = false;
+    try { await createArtistAndAdmin('Band', 'band', 'fail@example.com', failSql); }
+    catch { threw = true; }
+    assert(threw, 'expected createArtistAndAdmin to throw when user insert fails');
   });
 
   console.log(B('\nclearSignupToken'));
