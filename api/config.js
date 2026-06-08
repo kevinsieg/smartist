@@ -53,6 +53,8 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     if (req.body?.action === 'verify-signup-token') {
+      if (await checkRateLimit(`signup-consume:${clientIp(req)}`, 10, 60))
+        return res.status(429).json({ error: 'Too many requests' });
       const { token } = req.body ?? {};
       if (!token) return res.status(400).json({ error: 'token required' });
       const sql = getDb();
@@ -62,6 +64,8 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     if (req.body?.action === 'signup') {
+      if (await checkRateLimit(`signup-consume:${clientIp(req)}`, 10, 60))
+        return res.status(429).json({ error: 'Too many requests' });
       const { token, name, slug: rawSlug } = req.body ?? {};
       if (!token) return res.status(400).json({ error: 'token required' });
       const bandName = validateStr(name, 200);
@@ -277,6 +281,8 @@ module.exports = wrap(async function handler(req, res) {
       return fail('token_exchange_failed');
     }
 
+    if (!email) return fail('no_email_from_provider');
+
     if (mode === 'signup') {
       if (await checkRateLimit(`signup-link:${email.toLowerCase()}`, 3, 3600))
         return res.redirect(302, `${origin}/signup?error=rate_limited`);
@@ -288,18 +294,19 @@ module.exports = wrap(async function handler(req, res) {
 
     // Multi-tenant: check for existing user
     const sql = getDb();
-    const [existingUser] = await sql`
-      SELECT u.id, u.role, a.slug
-      FROM users u
-      JOIN artists a ON a.id = u.artist_id
-      WHERE u.email = ${email.toLowerCase()}
-      LIMIT 1
+    const [firstUser] = await sql`
+      SELECT u.id, u.role FROM users u WHERE u.email = ${email.toLowerCase()} LIMIT 1
     `;
-    if (existingUser) {
-      const userToken = generateUserToken(existingUser.id, existingUser.role, TTL_8H);
+    if (firstUser) {
+      const artists = await getArtistsForUser(firstUser.id, sql);
+      const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H);
       const hint = Buffer.from(email.toLowerCase()).toString('base64url');
       await logger.info('oauth_login', { provider, email });
-      return res.redirect(302, `${origin}/login?magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/${existingUser.slug}/dashboard`);
+      if (artists.length > 1) {
+        return res.redirect(302, `${origin}/login?magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/home`);
+      }
+      const slug = artists[0]?.slug || '';
+      return res.redirect(302, `${origin}/login?magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/${slug}/dashboard`);
     }
 
     // Single-tenant fallback (ARTIST_ADMIN_EMAIL)

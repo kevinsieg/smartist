@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS artists (
   id            SERIAL PRIMARY KEY,
   slug          TEXT UNIQUE NOT NULL,             -- URL-safe identifier, e.g. "myband"
   name          TEXT NOT NULL,                    -- display name, e.g. "My Band"
-  password_hash TEXT NOT NULL,                    -- bcrypt hash; plain password never stored
+  password_hash TEXT,                             -- bcrypt hash; NULL for OAuth/signup-created artists
   config        JSONB NOT NULL DEFAULT '{}',
   social_links  JSONB NOT NULL DEFAULT '{}'
 );
@@ -347,3 +347,6 @@ ALTER TABLE venues ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 -- 2026-05-29: gig poster and thumbnail (columns already added manually)
 ALTER TABLE gigs ADD COLUMN IF NOT EXISTS poster_url TEXT;
 ALTER TABLE gigs ADD COLUMN IF NOT EXISTS thumb_url  TEXT;
+
+-- 2026-06-08: multi-tenant signup — password_hash no longer required on artists
+ALTER TABLE artists ALTER COLUMN password_hash DROP NOT NULL;
