@@ -1,14 +1,20 @@
-const { neon } = require('@neondatabase/serverless');
+const postgres = require('postgres');
 
 // ── Database provider ─────────────────────────────────────────────────────────
-// Current: Neon (serverless PostgreSQL over HTTP, @neondatabase/serverless)
-// To switch to a standard PostgreSQL pool replace the connect function —
-// both postgres.js and pg return an sql tagged-template executor with the
-// same interface used throughout this codebase (sql`SELECT ...`).
-//   postgres.js:  connect: url => require('postgres')(url)
-//   pg (Pool):    connect: url => { const { Pool } = require('pg'); ... }
+// Current: postgres.js (standard PostgreSQL wire protocol, supports transactions)
+// postgres.js connects over port 5432. Neon supports both the HTTP endpoint
+// (@neondatabase/serverless) and the standard wire protocol — the DATABASE_URL
+// pooler connection string works with both.
+//
+// postgres.js was chosen over @neondatabase/serverless because:
+//   - sql.begin() / transactions are required for multi-step writes
+//   - the tagged-template interface is identical — no query changes needed
+//
+// To switch drivers, replace the connect line only:
+//   neon HTTP (no transactions): connect: url => require('@neondatabase/serverless').neon(url)
+//   pg Pool:                     connect: url => { ... }  (see DATABASE.md)
 const DB = {
-  connect: url => neon(url),
+  connect: url => postgres(url, { ssl: 'require', max: 1 }),
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
