@@ -6,8 +6,11 @@ const { checkRateLimit, clientIp } = require('./_ratelimit');
 const { requireAuth } = require('./_auth');
 const { createPresignedUrl } = require('./_r2');
 const { sendEmail } = require('./_email');
-const { generateMagicToken } = require('./_token');
+const { generateMagicToken, generateUserToken, verifyUserToken, TTL_8H } = require('./_token');
 const logger = require('./_logger');
+const { resolveOAuthEmail, generateState, verifyState } = require('./_domain/identity');
+const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
+const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken } = require('./_domain/registration');
 
 // ── OAuth helpers ─────────────────────────────────────────────────────────────
 
@@ -20,80 +23,64 @@ function _callbackUri(req) {
   return `${_origin(req)}/auth/callback`;
 }
 
-// State is signed with the provider's own client secret so each provider's
-// state is independently verifiable without a separate env var.
-function _stateSecret(provider) {
-  if (provider === 'google')   return process.env.GOOGLE_CLIENT_SECRET   || '';
-  if (provider === 'facebook') return process.env.FACEBOOK_APP_SECRET    || '';
-  return '';
-}
-
-function _generateState(provider) {
-  const nonce   = crypto.randomBytes(10).toString('hex');
-  const expires = Date.now() + 15 * 60 * 1000; // 15 min
-  const msg     = `${provider}:${nonce}:${expires}`;
-  const sig     = crypto.createHmac('sha256', _stateSecret(provider)).update(msg).digest('hex');
-  return Buffer.from(JSON.stringify({ provider, nonce, expires, sig })).toString('base64url');
-}
-
-function _verifyState(state) {
-  try {
-    const { provider, nonce, expires, sig } = JSON.parse(Buffer.from(state, 'base64url').toString());
-    if (Date.now() > Number(expires)) return null;
-    const msg      = `${provider}:${nonce}:${expires}`;
-    const expected = crypto.createHmac('sha256', _stateSecret(provider)).update(msg).digest('hex');
-    if (sig.length !== expected.length) return null;
-    return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex')) ? provider : null;
-  } catch { return null; }
-}
-
-// Exchange OAuth code for the user's email address.
-async function _resolveEmail(provider, code, redirectUri) {
-  if (provider === 'google') {
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id:     process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri:  redirectUri,
-        grant_type:    'authorization_code',
-      }),
-    });
-    const { access_token, error } = await tokenRes.json();
-    if (error || !access_token) throw new Error(`Google token error: ${error}`);
-    const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${access_token}` },
-    });
-    const { email } = await userRes.json();
-    return email || null;
-  }
-
-  if (provider === 'facebook') {
-    const params = new URLSearchParams({
-      client_id:     process.env.FACEBOOK_APP_ID,
-      client_secret: process.env.FACEBOOK_APP_SECRET,
-      redirect_uri:  redirectUri,
-      code,
-    });
-    const tokenRes = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?${params}`);
-    const { access_token, error } = await tokenRes.json();
-    if (error || !access_token) throw new Error(`Facebook token error: ${error?.message}`);
-    const userRes = await fetch(`https://graph.facebook.com/me?fields=email&access_token=${encodeURIComponent(access_token)}`);
-    const { email } = await userRes.json();
-    return email || null;
-  }
-
-  return null;
-}
-
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 module.exports = wrap(async function handler(req, res) {
 
   // ── POST: contact form / email subscribe / demo signup ────────────────────
   if (req.method === 'POST') {
+    if (req.body?.action === 'signup-link') {
+      const email = validateEmail(req.body?.email);
+      if (!email) return res.status(400).json({ error: 'Valid email required' });
+      if (await checkRateLimit(`signup-link:${email}`, 3, 3600))
+        return res.status(429).json({ error: 'Too many requests — try again in an hour' });
+      const sql = getDb();
+      const rawToken = await createSignupToken(email, sql);
+      const origin = _origin(req);
+      const link = `${origin}/onboarding?token=${encodeURIComponent(rawToken)}`;
+      try {
+        await sendEmail({
+          to: email,
+          subject: 'Your smartist sign-up link',
+          html: `<p>Click the link below to set up your artist workspace. Valid for 30 minutes.</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, ignore this email.</p>`,
+        });
+      } catch (err) {
+        await logger.error('signup_link_failed', { email, error: err.message });
+        return res.status(500).json({ error: 'Failed to send email — try again later' });
+      }
+      await logger.info('signup_link_sent', { email });
+      return res.json({ ok: true });
+    }
+
+    if (req.body?.action === 'verify-signup-token') {
+      const { token } = req.body ?? {};
+      if (!token) return res.status(400).json({ error: 'token required' });
+      const sql = getDb();
+      const result = await verifySignupToken(String(token), sql);
+      if (!result) return res.status(400).json({ error: 'Invalid or expired link' });
+      return res.json({ ok: true, email: result.email });
+    }
+
+    if (req.body?.action === 'signup') {
+      const { token, name, slug: rawSlug } = req.body ?? {};
+      if (!token) return res.status(400).json({ error: 'token required' });
+      const bandName = validateStr(name, 200);
+      if (!bandName) return res.status(400).json({ error: 'Band name required' });
+      const slug = String(rawSlug || '').trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug))
+        return res.status(400).json({ error: 'Slug must be 3–50 lowercase letters, numbers, or hyphens' });
+      const sql = getDb();
+      const verified = await verifySignupToken(String(token), sql);
+      if (!verified) return res.status(400).json({ error: 'Invalid or expired link' });
+      const available = await isSlugAvailable(slug, sql);
+      if (!available) return res.status(409).json({ error: 'That URL is already taken' });
+      const { userId } = await createArtistAndAdmin(bandName, slug, verified.email, sql);
+      await clearSignupToken(verified.email, sql);
+      const sessionToken = generateUserToken(userId, 'admin', TTL_8H);
+      await logger.info('signup_complete', { slug, email: verified.email });
+      return res.status(201).json({ ok: true, token: sessionToken, slug, role: 'admin', email: verified.email });
+    }
+
     if (req.body?.source === 'contact') {
       const name = validateStr(req.body?.name, 200);
       if (!name) return res.status(400).json({ error: 'Name is required' });
@@ -163,9 +150,9 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── PATCH: update artist name / config ────────────────────────────────────
   if (req.method === 'PATCH') {
-    const slug = process.env.ARTIST_SLUG;
-    if (!slug) return res.status(500).json({ error: 'ARTIST_SLUG not configured' });
-    const band = await requireAuth(req, res, slug, 'admin');
+    const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
+    if (!slugParam) return res.status(400).json({ error: 'slug required' });
+    const band = await requireAuth(req, res, slugParam, 'admin');
     if (!band) return;
     const sql = getDb();
     if (req.body?.name !== undefined) {
@@ -181,12 +168,34 @@ module.exports = wrap(async function handler(req, res) {
 
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const slug = process.env.ARTIST_SLUG;
-  if (!slug) return res.status(500).json({ error: 'ARTIST_SLUG not configured' });
+  // ── GET ?action=check-slug — is a slug available? ─────────────────────────
+  if (req.query.action === 'check-slug') {
+    const slugToCheck = String(req.query.slug || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slugToCheck))
+      return res.json({ available: false });
+    if (await checkRateLimit(`check-slug:${clientIp(req)}`, 30, 60))
+      return res.status(429).json({ error: 'Too many requests' });
+    const sql = getDb();
+    const available = await isSlugAvailable(slugToCheck, sql);
+    return res.json({ available });
+  }
+
+  // ── GET ?action=my-artists — artists for current user ─────────────────────
+  if (req.query.action === 'my-artists') {
+    const authHeader = (req.headers.authorization || '').replace(/^Bearer /, '');
+    const claim = verifyUserToken(authHeader);
+    if (!claim) return res.status(401).json({ error: 'Unauthorised' });
+    const sql = getDb();
+    const artists = await getArtistsForUser(claim.userId, sql);
+    return res.json({ artists });
+  }
+
+  const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
+  if (!slugParam) return res.status(404).json({ error: 'Artist not found' });
 
   // ── GET ?action=photo-url — presigned upload URL (auth required) ──────────
   if (req.query.action === 'photo-url') {
-    const band = await requireAuth(req, res, slug, 'admin');
+    const band = await requireAuth(req, res, slugParam, 'admin');
     if (!band) return;
     const contentType = req.query.type || 'image/jpeg';
     if (!contentType.startsWith('image/')) return res.status(400).json({ error: 'Image files only' });
@@ -197,7 +206,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── GET ?action=favicon-url — presigned upload URL for favicon ────────────
   if (req.query.action === 'favicon-url') {
-    const band = await requireAuth(req, res, slug, 'admin');
+    const band = await requireAuth(req, res, slugParam, 'admin');
     if (!band) return;
     const contentType = req.query.type || 'image/png';
     if (!contentType.startsWith('image/')) return res.status(400).json({ error: 'Image files only' });
@@ -215,7 +224,7 @@ module.exports = wrap(async function handler(req, res) {
       redirect_uri:  _callbackUri(req),
       response_type: 'code',
       scope:         'openid email',
-      state:         _generateState('google'),
+      state:         generateState('google', req.query.mode || 'login'),
       access_type:   'online',
       prompt:        'select_account',
     });
@@ -231,7 +240,7 @@ module.exports = wrap(async function handler(req, res) {
       redirect_uri: _callbackUri(req),
       response_type: 'code',
       scope:        'email',
-      state:        _generateState('facebook'),
+      state:        generateState('facebook', req.query.mode || 'login'),
     });
     return res.json({ url: `https://www.facebook.com/v18.0/dialog/oauth?${params}` });
   }
@@ -252,29 +261,53 @@ module.exports = wrap(async function handler(req, res) {
     const { code, state } = req.query;
     if (!code || !state) return fail('missing_code_or_state');
 
-    const provider = _verifyState(state);
-    if (!provider) return fail('invalid_or_expired_state');
+    const stateResult = verifyState(state);
+    if (!stateResult) return fail('invalid_or_expired_state');
+    const provider = stateResult.provider;
+    const mode     = stateResult.mode || 'login';
 
     if (await checkRateLimit(`oauth:${clientIp(req)}`, 10, 60))
       return res.redirect(302, `${origin}/?oauth_error=1`);
 
     let email;
     try {
-      email = await _resolveEmail(provider, code, _callbackUri(req));
+      email = await resolveOAuthEmail(provider, code, _callbackUri(req));
     } catch (err) {
       await logger.error('oauth_token_exchange_failed', { provider, error: err.message });
       return fail('token_exchange_failed');
     }
 
+    if (mode === 'signup') {
+      const sql = getDb();
+      const rawToken = await createSignupToken(email, sql);
+      await logger.info('oauth_signup_started', { provider, email });
+      return res.redirect(302, `${origin}/onboarding?token=${encodeURIComponent(rawToken)}`);
+    }
+
+    // Multi-tenant: check for existing user
+    const sql = getDb();
+    const [existingUser] = await sql`
+      SELECT u.id, u.role, a.slug
+      FROM users u
+      JOIN artists a ON a.id = u.artist_id
+      WHERE u.email = ${email.toLowerCase()}
+      LIMIT 1
+    `;
+    if (existingUser) {
+      const userToken = generateUserToken(existingUser.id, existingUser.role, TTL_8H);
+      const hint = Buffer.from(email.toLowerCase()).toString('base64url');
+      await logger.info('oauth_login', { provider, email });
+      return res.redirect(302, `${origin}/login?magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/${existingUser.slug}/dashboard`);
+    }
+
+    // Single-tenant fallback (ARTIST_ADMIN_EMAIL)
     const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
-    if (!email || !adminEmail || email.toLowerCase() !== adminEmail.toLowerCase()) {
+    if (!adminEmail || email.toLowerCase() !== adminEmail.toLowerCase()) {
       await logger.warn('oauth_email_mismatch', { provider, email });
       return fail('email_not_authorised');
     }
-
-    const band = await getArtist(slug);
+    const band = await resolveArtist('', sql);
     if (!band) return fail('band_not_found');
-
     await logger.info('oauth_login', { provider, email });
     const token = generateMagicToken(band.password_hash);
     return res.redirect(302, `${origin}/#magic=${encodeURIComponent(token)}`);
@@ -285,7 +318,7 @@ module.exports = wrap(async function handler(req, res) {
   // so we avoid the sequential getArtist() → data queries pattern.
   const sql = getDb();
   const [[band], songs, [counts]] = await Promise.all([
-    sql`SELECT id, slug, name, config FROM artists WHERE slug = ${slug} LIMIT 1`,
+    sql`SELECT id, slug, name, config FROM artists WHERE slug = ${slugParam} LIMIT 1`,
     sql`
       SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language
       FROM songs s
@@ -296,15 +329,15 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY gema_work_number
         LIMIT 1
       ) g ON true
-      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND s.deleted = false
+      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND s.deleted = false
       ORDER BY s.title
     `,
     sql`
       SELECT
-        (SELECT COUNT(*)::int FROM gigs       WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND NOT deleted) AS gigs,
-        (SELECT COUNT(*)::int FROM venues     WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND NOT deleted) AS venues,
-        (SELECT COUNT(*)::int FROM organizers WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND NOT deleted) AS organizers,
-        (SELECT COUNT(*)::int FROM setlists   WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}))                 AS setlists
+        (SELECT COUNT(*)::int FROM gigs       WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND NOT deleted) AS gigs,
+        (SELECT COUNT(*)::int FROM venues     WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND NOT deleted) AS venues,
+        (SELECT COUNT(*)::int FROM organizers WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND NOT deleted) AS organizers,
+        (SELECT COUNT(*)::int FROM setlists   WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}))                 AS setlists
     `,
   ]);
   if (!band) return res.status(404).json({ error: 'Band not found in database' });
