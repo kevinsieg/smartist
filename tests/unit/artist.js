@@ -42,13 +42,13 @@ async function run(r) {
   console.log(B('\nisSlugAvailable'));
 
   await testAsync('returns true when no artist with that slug', async () => {
-    const sql = async () => [{ count: '0' }];
+    const sql = async () => [{ exists: false }];
     const result = await isSlugAvailable('newband', sql);
     assertEq(result, true);
   });
 
   await testAsync('returns false when slug already taken', async () => {
-    const sql = async () => [{ count: '1' }];
+    const sql = async () => [{ exists: true }];
     const result = await isSlugAvailable('takenband', sql);
     assertEq(result, false);
   });
@@ -87,6 +87,12 @@ async function run(r) {
   await testAsync('returns empty array when user has no artists', async () => {
     const sql = async () => [];
     const result = await getArtistsForUser(99, sql);
+    assertEq(result.length, 0);
+  });
+
+  await testAsync('returns empty array when userId is null (silent — WHERE id = NULL returns no rows)', async () => {
+    const sql = async () => [];
+    const result = await getArtistsForUser(null, sql);
     assertEq(result.length, 0);
   });
 }
