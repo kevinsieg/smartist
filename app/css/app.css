@@ -229,18 +229,35 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
    Specificity (0,2,0) beats .nav-links a (0,1,1). */
 .nav-links .nav-links-login,
 .nav-links .nav-links-logout,
-.nav-links .nav-links-profile { display: none; }
+.nav-links .nav-links-profile,
+.nav-links .nav-links-signup { display: none; }
 @media (max-width: 767px) {
-    /* Hide the header login button — it lives in the burger dropdown instead */
+    /* Hide the header login/signup buttons — they live in the burger dropdown instead */
     .nav-auth-vm { display: none; }
-    /* Show login when not authed; profile + logout when authed */
-    .app-header:not(.app-header--authed) .nav-links .nav-links-login { display: block; }
-    .app-header--authed .nav-links .nav-links-login                  { display: none; }
-    .app-header--authed .nav-links .nav-links-profile                { display: block; }
-    .app-header--authed .nav-links .nav-links-logout                 { display: block; }
+    /* Show login + signup when not authed; profile + logout when authed */
+    .app-header:not(.app-header--authed) .nav-links .nav-links-login  { display: block; }
+    .app-header:not(.app-header--authed) .nav-links .nav-links-signup { display: block; }
+    .app-header--authed .nav-links .nav-links-login                   { display: none; }
+    .app-header--authed .nav-links .nav-links-profile                 { display: block; }
+    .app-header--authed .nav-links .nav-links-logout                  { display: block; }
 }
 
-/* Make the login prompt in view mode stand out more */
+/* Sign up button in nav (view mode) */
+.nav-auth-signup {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background: var(--secondary-color);
+    color: var(--black) !important;
+    text-decoration: none !important;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    border-radius: 3px;
+    transition: opacity 0.12s;
+}
+.nav-auth-signup:hover { opacity: 0.82; }
+
+/* View-mode login link (next to sign up) */
 .nav-auth-login--vm {
     border: 1px solid var(--secondary-color);
     border-radius: 3px;
@@ -1452,6 +1469,26 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .oauth-btn { width: 100%; text-align: center; }
 .auth-divider { display: flex; align-items: center; gap: 0.75rem; margin: 0.75rem 0; color: var(--third-color); font-size: 0.78rem; }
 .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
+.auth-hint { font-size: 0.78rem; color: var(--third-color); margin-top: 0.75rem; }
+.auth-hint a { color: var(--third-color); text-decoration: underline; }
+.auth-hint a:hover { color: var(--secondary-ink); }
+
+/* Signup/onboarding page title */
+.landing-title { font-size: 1.15rem; font-weight: 600; color: var(--black); margin-bottom: 1.5rem; letter-spacing: 0.02em; text-align: left; }
+
+/* Slug URL field */
+.slug-wrap { display: flex; align-items: stretch; border: 1px solid var(--border-color); border-radius: 3px; overflow: hidden; background: var(--surface-color); }
+.slug-wrap:focus-within { border-color: var(--secondary-color); }
+.slug-prefix { padding: 0.5rem 0.5rem 0.5rem 0.7rem; font-family: "Courier New", Courier, monospace; font-size: 0.78rem; color: var(--third-color); border-right: 1px solid var(--border-color); white-space: nowrap; display: flex; align-items: center; }
+.slug-wrap input { flex: 1; min-width: 0; border: none; padding: 0.5rem 0.7rem; font-family: "Courier New", Courier, monospace; font-size: 1rem; color: var(--black); background: transparent; outline: none; }
+.slug-status { font-size: 0.72rem; color: var(--third-color); margin-top: 0.3rem; min-height: 1.1em; }
+
+/* Workspace picker cards */
+.workspace-list { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.75rem; }
+.workspace-card { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 0.9rem; border: 1px solid rgba(249,191,143,0.35); border-radius: 3px; color: var(--black); text-decoration: none; transition: border-color 0.14s, background 0.14s; }
+.workspace-card:hover { border-color: var(--secondary-ink); background: rgba(176,106,42,0.05); text-decoration: none; }
+.workspace-name { font-size: 0.88rem; font-weight: 500; }
+.workspace-role { font-size: 0.68rem; color: var(--third-color); letter-spacing: 0.07em; text-transform: uppercase; }
 
 /* ── Smartist brand wordmark (legacy — kept for future use) ──────────────────── */
 .smartist-brand    { text-align: center; margin-bottom: 2.5rem; }

@@ -61,7 +61,8 @@ function getInitials(name) {
         '<a href="' + _base + '/hub">Hub</a>' +
         '<a href="' + _base + '/pro-import" class="auth-only">PRO</a>' +
         '<a href="' + _base + '/users" class="admin-only">Users</a>' +
-        '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login &#8594;</a>' +
+        '<a href="/signup" class="nav-links-signup">Sign up &#8594;</a>' +
+        '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login</a>' +
         '<a href="' + _base + '/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' +
         '<a href="#" class="nav-links-logout" id="nav-links-logout">Logout</a>' +
       '</div>' +
@@ -515,7 +516,8 @@ function updateAuthIndicator() {
     } else {
       el.innerHTML =
         '<div class="nav-auth-vm">' +
-          '<a class="nav-auth-login nav-auth-login--vm go-login" href="' + loginPageUrl() + '">Login &#8594;</a>' +
+          '<a class="nav-auth-signup" href="/signup">Sign up</a>' +
+          '<a class="nav-auth-login nav-auth-login--vm go-login" href="' + loginPageUrl() + '">Login</a>' +
         '</div>';
       var _nlLogin = document.getElementById('nav-links-login');
       if (_nlLogin) _nlLogin.href = loginPageUrl();

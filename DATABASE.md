@@ -1,6 +1,14 @@
 # Database Model
 
-PostgreSQL (Neon serverless). All tables are scoped to an `artist_id` — a single database supports multiple independent artists.
+PostgreSQL via **Neon** (hosted). All tables are scoped to an `artist_id` — a single database supports multiple independent artists.
+
+## Driver
+
+**postgres.js** (`postgres` npm package, v3). Connects over the standard PostgreSQL wire protocol (port 5432) using Neon's pooler connection string.
+
+`@neondatabase/serverless` is kept in `package.json` for reference but is **not used** — it was replaced because its HTTP transport has no transaction support (`sql.begin()` is unavailable). postgres.js supports the full interface: tagged-template queries, transactions, and prepared statements.
+
+The swap point is the `DB.connect` line in `api/_db.js`. The rest of the codebase is driver-agnostic (`sql\`...\`` tagged templates only).
 
 Schema file: `scripts/schema.sql` (idempotent — safe to re-run against any database version to apply missing tables/columns without data loss).
 

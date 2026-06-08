@@ -177,7 +177,6 @@ async function run(r) {
       if (q.includes('INSERT INTO users'))   return [{ id: 20 }];
       return [];
     };
-    // sql.begin must be supported for the transaction in createArtistAndAdmin
     sql.begin = async fn => fn(sql);
     const handler = makeHandler(sql);
     const res = mockRes();

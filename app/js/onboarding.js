@@ -34,26 +34,32 @@
   function _renderExpired() {
     document.getElementById('onboarding-title').textContent = 'Link expired';
     document.getElementById('onboarding-content').innerHTML =
-      '<p class="landing-lead">This sign-up link has expired or already been used.</p>' +
-      '<p><a href="/signup" class="btn btn--primary">Request a new link</a></p>';
+      '<div class="landing-login">' +
+        '<p class="auth-hint" style="margin-bottom:0.75rem">This sign-up link has expired or already been used.</p>' +
+        '<a href="/signup" class="btn active auth-submit">Request a new link</a>' +
+      '</div>';
   }
 
   function _renderForm(email) {
     var el = document.getElementById('onboarding-content');
     el.innerHTML =
-      (email ? '<p class="form-hint">Setting up workspace for <strong>' + _esc(email) + '</strong></p>' : '') +
-      '<form id="onboarding-form">' +
-        '<label for="ob-name">Band / project name</label>' +
-        '<input id="ob-name" type="text" autocomplete="organization" placeholder="My Band" required maxlength="200">' +
-        '<label for="ob-slug">Workspace URL</label>' +
-        '<div class="slug-wrap">' +
-          '<span class="slug-prefix">smartist.studio/</span>' +
-          '<input id="ob-slug" type="text" placeholder="my-band" required maxlength="50" pattern="[a-z0-9][a-z0-9-]{2,49}">' +
+      '<div class="landing-login">' +
+        (email ? '<p class="auth-hint" style="margin-bottom:0.75rem">Setting up workspace for <strong>' + _esc(email) + '</strong></p>' : '') +
+        '<div class="auth-field">' +
+          '<label class="auth-label" for="ob-name">Band / project name</label>' +
+          '<input id="ob-name" type="text" autocomplete="organization" placeholder="My Band" maxlength="200">' +
         '</div>' +
-        '<p class="slug-status" id="slug-status"></p>' +
-        '<button type="submit" id="ob-submit" class="btn btn--primary" disabled>Create workspace</button>' +
-        '<p class="form-error" id="onboarding-error"></p>' +
-      '</form>';
+        '<div class="auth-field">' +
+          '<label class="auth-label" for="ob-slug">Workspace URL</label>' +
+          '<div class="slug-wrap">' +
+            '<span class="slug-prefix">smartist.studio/</span>' +
+            '<input id="ob-slug" type="text" placeholder="my-band" maxlength="50">' +
+          '</div>' +
+          '<p class="slug-status" id="slug-status"></p>' +
+        '</div>' +
+        '<div class="auth-error" id="onboarding-error"></div>' +
+        '<button type="button" id="ob-submit" class="btn active auth-submit" disabled>Create workspace</button>' +
+      '</div>';
 
     var nameInput = document.getElementById('ob-name');
     var slugInput = document.getElementById('ob-slug');
@@ -96,8 +102,7 @@
       _slugTimer = setTimeout(_doSlugCheck, 400);
     });
 
-    document.getElementById('onboarding-form').addEventListener('submit', async function(e) {
-      e.preventDefault();
+    submitBtn.addEventListener('click', async function() {
       var name = nameInput.value.trim();
       var slug = slugInput.value.trim();
       submitBtn.disabled = true;
