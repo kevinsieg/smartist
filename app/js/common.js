@@ -11,8 +11,8 @@ function isLoginPage() {
 }
 
 function loginPageUrl() {
+  if (isLoginPage()) return '/login';
   var next = window.location.pathname + window.location.search;
-  if (isLoginPage()) next = '/dashboard';
   return '/login?next=' + encodeURIComponent(next);
 }
 
@@ -984,6 +984,16 @@ async function warmPage(href) {
 }
 
 async function navigate(href) {
+  // Remap bare artist-page paths to slugged paths when on a slugged page
+  if (_artistSlug) {
+    var _navUrl  = new URL(href, location.origin);
+    var _navSeg  = _navUrl.pathname.split('/').filter(Boolean)[0] || '';
+    if (!_GLOBAL_PAGES.has(_navSeg) && !_navUrl.pathname.startsWith('/' + _artistSlug + '/')) {
+      _navUrl.pathname = '/' + _artistSlug + _navUrl.pathname;
+      href = _navUrl.pathname + _navUrl.search + _navUrl.hash;
+    }
+  }
+
   var path = new URL(href, location.origin).pathname.replace(/\/+$/, '') || '/';
   if (path === '/' || path === '/login') {
     goToLogin();
