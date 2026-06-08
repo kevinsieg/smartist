@@ -1,6 +1,7 @@
 var artistSlug = '';
 
 initPage(async function(cfg, viewMode) {
+  if (viewMode) { goToLogin(); return; }
   artistSlug = cfg.slug;
   document.title = cfg.name || 'Dashboard';
   renderDashboard(cfg, viewMode);

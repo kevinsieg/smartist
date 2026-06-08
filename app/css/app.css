@@ -223,7 +223,7 @@ h2 { font-weight: 600; font-size: clamp(1.1rem, 3vw, 1.5rem); margin-bottom: 0.7
 .nav-auth-menu-item:hover { background: var(--secondary-color); }
 
 /* View-mode login in nav */
-.nav-auth-vm { display: flex; flex-direction: column; align-items: flex-end; gap: 0.05rem; }
+.nav-auth-vm { display: flex; flex-direction: row; align-items: center; gap: 0.4rem; }
 
 /* Login/logout/profile burger links: hidden everywhere by default.
    Specificity (0,2,0) beats .nav-links a (0,1,1). */
