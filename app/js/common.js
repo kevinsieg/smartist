@@ -2,8 +2,12 @@
 
 const AUTH_TOKEN_KEY = 'smartist_token';
 var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','demo','impressum']);
-var _rawSegment   = (window.location.pathname.split('/').filter(Boolean)[0] || '');
-var _artistSlug   = _GLOBAL_PAGES.has(_rawSegment) ? '' : _rawSegment;
+// Global pages are single-segment paths; deeper paths under the same name are
+// workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
+// artist's dashboard).
+var _pathParts    = window.location.pathname.split('/').filter(Boolean);
+var _rawSegment   = _pathParts[0] || '';
+var _artistSlug   = (_GLOBAL_PAGES.has(_rawSegment) && _pathParts.length === 1) ? '' : _rawSegment;
 var _CONFIG_KEY       = 'artist_config_cache_' + (_artistSlug || 'default');
 var _CONFIG_KEY_LIGHT = _CONFIG_KEY + '_light';
 

@@ -10,7 +10,7 @@ const { generateMagicToken, generateUserToken, verifyUserToken, TTL_8H } = requi
 const logger = require('./_logger');
 const { resolveOAuthEmail, generateState, verifyState } = require('./_domain/identity');
 const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
-const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken } = require('./_domain/registration');
+const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken, checkEmailDeliverable } = require('./_domain/registration');
 
 // ── OAuth helpers ─────────────────────────────────────────────────────────────
 
@@ -32,12 +32,49 @@ module.exports = wrap(async function handler(req, res) {
     if (req.body?.action === 'signup-link') {
       const email = validateEmail(req.body?.email);
       if (!email) return res.status(400).json({ error: 'Valid email required' });
+      // Honeypot: hidden form field humans never see — bots that fill it get
+      // a fake success and no email.
+      if (req.body?.website) return res.json({ ok: true });
       if (await checkRateLimit(`signup-link:${email}`, 3, 3600))
         return res.status(429).json({ error: 'Too many requests — try again in an hour' });
+      if (await checkRateLimit(`signup-link-ip:${clientIp(req)}`, 10, 3600))
+        return res.status(429).json({ error: 'Too many requests — try again in an hour' });
       const sql = getDb();
+
+      // Already registered → send a login email instead of a setup link.
+      // The page response is identical either way (no account enumeration).
+      // Additional workspaces are created from /home after logging in.
+      const [existing] = await sql`
+        SELECT id, email, password_hash FROM users WHERE email = ${email} LIMIT 1
+      `;
+      if (existing) {
+        const origin = _origin(req);
+        const hint   = Buffer.from(email).toString('base64url');
+        const loginHtml = existing.password_hash
+          ? `<p><a href="${origin}/login#magic=${encodeURIComponent(generateMagicToken(existing.password_hash))}&hint=${hint}">Click here to log in</a> (valid for 30 minutes).</p>`
+          : `<p>Log in at <a href="${origin}/login">${origin}/login</a> — if you signed up with Google or Facebook, use those buttons.</p>`;
+        try {
+          await sendEmail({
+            to: email,
+            subject: 'You already have a smartist account',
+            html: `<p>Someone (probably you) tried to sign up with this email, but it already has a smartist account.</p>${loginHtml}<p>To create an additional workspace, log in and choose “+ New workspace”.</p><p>If this wasn't you, you can ignore this email.</p>`,
+          });
+        } catch (err) {
+          await logger.error('signup_link_failed', { email, error: err.message });
+          return res.status(500).json({ error: 'Failed to send email — try again later' });
+        }
+        await logger.info('signup_link_existing_account', { email });
+        return res.json({ ok: true });
+      }
+
+      const deliverable = await checkEmailDeliverable(email);
+      if (!deliverable.ok) {
+        await logger.info('signup_link_rejected', { email, reason: deliverable.reason });
+        return res.status(400).json({ error: 'This email address cannot receive mail — please check for typos or use a different address' });
+      }
       const rawToken = await createSignupToken(email, sql);
       const origin = _origin(req);
-      const link = `${origin}/onboarding?token=${encodeURIComponent(rawToken)}`;
+      const link = `${origin}/onboarding#token=${encodeURIComponent(rawToken)}`;
       try {
         await sendEmail({
           to: email,
@@ -138,9 +175,10 @@ module.exports = wrap(async function handler(req, res) {
         VALUES (${email}, 'demo', ${meta})
         ON CONFLICT (email) DO UPDATE SET source = 'demo', meta = ${meta}
       `;
-      const demoArtist = await getArtist(process.env.ARTIST_SLUG);
-      const demoToken = demoArtist ? generateMagicToken(demoArtist.password_hash) : null;
-      return res.status(200).json({ ok: true, token: demoToken });
+      const demoSlug   = process.env.DEMO_ARTIST_SLUG || 'demo';
+      const demoArtist = await getArtist(demoSlug);
+      const demoToken  = demoArtist?.password_hash ? generateMagicToken(demoArtist.password_hash) : null;
+      return res.status(200).json({ ok: true, token: demoToken, slug: demoArtist?.slug || demoSlug });
     }
 
     try {
@@ -257,7 +295,7 @@ module.exports = wrap(async function handler(req, res) {
     const origin = _origin(req);
     const fail   = (reason) => {
       logger.error('oauth_callback_failed', { reason, provider: req.query.state ? 'unknown' : undefined });
-      return res.redirect(302, `${origin}/?oauth_error=1`);
+      return res.redirect(302, `${origin}/login?oauth_error=1`);
     };
 
     if (req.query.error) return fail(`provider_error:${req.query.error}`);
@@ -271,7 +309,7 @@ module.exports = wrap(async function handler(req, res) {
     const mode     = stateResult.mode || 'login';
 
     if (await checkRateLimit(`oauth:${clientIp(req)}`, 10, 60))
-      return res.redirect(302, `${origin}/?oauth_error=1`);
+      return res.redirect(302, `${origin}/login?oauth_error=1`);
 
     let email;
     try {
@@ -283,20 +321,22 @@ module.exports = wrap(async function handler(req, res) {
 
     if (!email) return fail('no_email_from_provider');
 
-    if (mode === 'signup') {
-      if (await checkRateLimit(`signup-link:${email.toLowerCase()}`, 3, 3600))
-        return res.redirect(302, `${origin}/signup?error=rate_limited`);
-      const sql = getDb();
-      const rawToken = await createSignupToken(email, sql);
-      await logger.info('oauth_signup_started', { provider, email });
-      return res.redirect(302, `${origin}/onboarding?token=${encodeURIComponent(rawToken)}`);
-    }
-
-    // Multi-tenant: check for existing user
     const sql = getDb();
     const [firstUser] = await sql`
       SELECT u.id, u.role FROM users u WHERE u.email = ${email.toLowerCase()} LIMIT 1
     `;
+
+    // Signup mode only creates a new workspace for genuinely new emails —
+    // existing accounts fall through to the login flow below instead of
+    // accidentally setting up a second workspace.
+    if (mode === 'signup' && !firstUser) {
+      if (await checkRateLimit(`signup-link:${email.toLowerCase()}`, 3, 3600))
+        return res.redirect(302, `${origin}/signup?error=rate_limited`);
+      const rawToken = await createSignupToken(email, sql);
+      await logger.info('oauth_signup_started', { provider, email });
+      return res.redirect(302, `${origin}/onboarding#token=${encodeURIComponent(rawToken)}`);
+    }
+
     if (firstUser) {
       const artists = await getArtistsForUser(firstUser.id, sql);
       const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H);
