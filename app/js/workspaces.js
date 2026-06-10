@@ -51,6 +51,17 @@
   var authTok = _storedAuthToken();
   if (!authTok) { _renderUnauth(); return; }
 
+  var logoutEl = document.getElementById('ws-logout');
+  if (logoutEl) {
+    logoutEl.style.display = '';
+    logoutEl.addEventListener('click', function(e) {
+      e.preventDefault();
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      window.location.replace('/login');
+    });
+  }
+
   let d;
   try {
     const r = await fetch('/api/config?action=my-artists', {

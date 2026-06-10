@@ -145,9 +145,12 @@
     });
   }
 
-  // Init
-  var params = new URLSearchParams(window.location.search);
-  _token = params.get('token') || null;
+  // Init — token arrives in the fragment (kept out of server logs);
+  // query param still accepted for older emailed links.
+  var params     = new URLSearchParams(window.location.search);
+  var hashParams = new URLSearchParams(window.location.hash.slice(1));
+  _token = hashParams.get('token') || params.get('token') || null;
+  if (_token) history.replaceState(null, '', window.location.pathname);
 
   if (_token) {
     // Sign-up mode: verify the token

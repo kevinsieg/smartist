@@ -1263,6 +1263,28 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
     padding-top: 2.5rem;
     align-items: flex-start;
 }
+
+/* ── Brand chrome — standalone pages (signup, onboarding, /home) ─────────── */
+/* Mirrors the landing page header/footer so users know where they are. */
+body.brand-page { min-height: 100dvh; display: flex; flex-direction: column; }
+body.brand-page .landing-main { min-height: 0; flex: 1; }
+.brand-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+.brand-wordmark { font-size: 1rem; font-weight: 700; letter-spacing: 0.12em; color: var(--black); text-decoration: none; }
+.brand-bar nav a { font-size: 0.68rem; color: #999; text-decoration: none; letter-spacing: 0.1em; margin-left: 18px; }
+.brand-bar nav a:hover { color: var(--secondary-ink); }
+.brand-signin { color: var(--secondary-ink) !important; border: 1px solid var(--secondary-ink); border-radius: 2px; padding: 4px 10px; }
+.brand-signin:hover { background: var(--secondary-ink); color: var(--primary-color) !important; }
+.brand-wave { display: flex; align-items: flex-end; justify-content: center; gap: 3px; opacity: 0.25; margin-bottom: 0.75rem; pointer-events: none; }
+.brand-wave span { display: block; width: 3px; background: var(--secondary-ink); border-radius: 1px; }
+.brand-label { font-size: 0.62rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--secondary-ink); margin-bottom: 1.5rem; }
+.brand-foot { text-align: center; font-size: 0.62rem; color: var(--third-color); opacity: 0.55; letter-spacing: 0.08em; padding: 1.25rem 1rem 1.5rem; }
+.brand-foot a { color: inherit; text-decoration: underline; }
+@media (min-width: 640px) {
+    .brand-bar { padding: 20px 40px; }
+    .brand-wordmark { font-size: 1.1rem; }
+    .brand-bar nav a { font-size: 0.72rem; margin-left: 24px; }
+    .brand-signin { padding: 5px 12px; }
+}
 .landing-card        { width: 100%; max-width: 380px; text-align: center; }
 .landing-logo        { height: 90px; width: auto; object-fit: contain; margin: 0 auto 1.25rem; display: block; }
 .landing-logo[src=""] { display: none; }

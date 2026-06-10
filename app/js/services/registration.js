@@ -1,8 +1,8 @@
-async function sendSignupLink(email) {
+async function sendSignupLink(email, website) {
   const r = await fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'signup-link', email }),
+    body: JSON.stringify({ action: 'signup-link', email, website: website || undefined }),
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || 'Failed to send link');

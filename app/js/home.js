@@ -33,7 +33,7 @@ async function init() {
       return;
     }
     applyNav(cfg.name, cfg.config);
-    document.title = cfg.name || 'Band Tools';
+    document.title = cfg.name || 'smartist';
   } catch {
     renderLogin();
     return;
