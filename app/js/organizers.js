@@ -8,7 +8,6 @@ var _orgsTotal = 0;
 var _orgsOffset = 0;
 var _orgsQ = '';
 var _orgsTimer = null;
-var _viewMode = false;
 
 var ORGANIZER_COLUMNS = [
   { field: 'name',    label: 'Name',    width: '1.5fr', sortable: true, filterable: true },
@@ -19,16 +18,13 @@ var ORGANIZER_COLUMNS = [
   { field: 'email',   label: 'Email',   width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(o) {
     if (o.deleted) return '<span class="sl-deleted-badge">deleted</span>';
-    if (_viewMode)  return '';
     return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + o.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
 ];
 
-initPage(async function(cfg, viewMode) {
-  _viewMode = viewMode;
-  if (_viewMode) { goToLogin(); return; }
+initPage(async function(cfg) {
   artistSlug = cfg.slug;
 
   organizerTable = createSortableList({
@@ -59,14 +55,14 @@ initPage(async function(cfg, viewMode) {
   onEnterSave(document.getElementById('organizer-modal'), saveOrganizer);
 
   var _orgDeepId = Number(new URLSearchParams(location.search).get('id'));
-  if (_orgDeepId && !_viewMode) openEditModal(_orgDeepId);
+  if (_orgDeepId) openEditModal(_orgDeepId);
   else { openDeepLinkedRow('open'); }
 });
 
 async function loadOrganizers() {
   const params = new URLSearchParams({ limit: 50, offset: _orgsOffset });
   if (_orgsQ) params.set('q', _orgsQ);
-  const r = await fetch(`/api/${artistSlug}/organizers?${params}`);
+  const r = await apiFetch(`/api/${artistSlug}/organizers?${params}`);
   const { rows, total } = await r.json();
   _orgsTotal = total;
   if (_orgsOffset === 0) {
@@ -132,7 +128,7 @@ function closeOrgModal() { delete _orgRefsCache[editingId]; closeModal('organize
 async function expandOrganizer(o) {
   if (!_orgRefsCache[o.id]) {
     try {
-      const r = await fetch('/api/' + artistSlug + '/organizers/' + o.id + '?refs=1');
+      const r = await apiFetch('/api/' + artistSlug + '/organizers/' + o.id + '?refs=1');
       if (!r.ok) throw new Error(r.status);
       _orgRefsCache[o.id] = await r.json();
     } catch {
@@ -193,7 +189,7 @@ async function renderOrganizerGigs(orgId, orgName) {
 
   if (!_orgRefsCache[orgId]) {
     try {
-      const r = await fetch(`/api/${artistSlug}/organizers/${orgId}?refs=1`);
+      const r = await apiFetch(`/api/${artistSlug}/organizers/${orgId}?refs=1`);
       if (!r.ok) throw new Error(r.status);
       _orgRefsCache[orgId] = await r.json();
     } catch {

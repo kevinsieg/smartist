@@ -4,7 +4,16 @@ const AUTH_TOKEN_KEY = 'smartist_token';
 var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','demo','impressum']);
 var _rawSegment   = (window.location.pathname.split('/').filter(Boolean)[0] || '');
 var _artistSlug   = _GLOBAL_PAGES.has(_rawSegment) ? '' : _rawSegment;
-var _CONFIG_KEY   = 'artist_config_cache_' + (_artistSlug || 'default');
+var _CONFIG_KEY       = 'artist_config_cache_' + (_artistSlug || 'default');
+var _CONFIG_KEY_LIGHT = _CONFIG_KEY + '_light';
+
+// Cached config for early paint / auth indicator — light or full, whichever exists.
+function _readCachedConfig() {
+  try {
+    return JSON.parse(sessionStorage.getItem(_CONFIG_KEY_LIGHT)) ||
+           JSON.parse(sessionStorage.getItem(_CONFIG_KEY));
+  } catch { return null; }
+}
 
 function isLoginPage() {
   return !_artistSlug;
@@ -53,17 +62,19 @@ function getInitials(name) {
         '<span class="band-name"></span>' +
       '</a>' +
       '<div class="nav-links">' +
-        '<a href="' + _base + '/songs">Songs</a>' +
-        '<a href="' + _base + '/setlist">Setlists</a>' +
-        '<a href="' + _base + '/gigs">Gigs</a>' +
-        '<a href="' + _base + '/venues">Venues</a>' +
-        '<a href="' + _base + '/organizers" class="auth-only">Organizers</a>' +
-        '<a href="' + _base + '/hub">Hub</a>' +
-        '<a href="' + _base + '/pro-import" class="auth-only">PRO</a>' +
-        '<a href="' + _base + '/users" class="admin-only">Users</a>' +
+        (_artistSlug ? (
+          '<a href="' + _base + '/songs">Songs</a>' +
+          '<a href="' + _base + '/setlist">Setlists</a>' +
+          '<a href="' + _base + '/gigs">Gigs</a>' +
+          '<a href="' + _base + '/venues">Venues</a>' +
+          '<a href="' + _base + '/organizers" class="auth-only">Organizers</a>' +
+          '<a href="' + _base + '/hub">Hub</a>' +
+          '<a href="' + _base + '/pro-import" class="auth-only">PRO</a>' +
+          '<a href="' + _base + '/users" class="admin-only">Users</a>'
+        ) : '') +
         '<a href="/signup" class="nav-links-signup">Sign up &#8594;</a>' +
         '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login</a>' +
-        '<a href="' + _base + '/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' +
+        (_artistSlug ? '<a href="' + _base + '/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' : '') +
         '<a href="#" class="nav-links-logout" id="nav-links-logout">Logout</a>' +
       '</div>' +
       '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">' +
@@ -88,7 +99,7 @@ function getInitials(name) {
 
   // Apply cached config before first paint so header renders complete on load.
   try {
-    const cached = JSON.parse(sessionStorage.getItem(_CONFIG_KEY));
+    const cached = _readCachedConfig();
     if (cached) {
       document.querySelectorAll('.band-name').forEach(el => { el.textContent = cached.name || ''; });
       const _initials = getInitials(cached.name);
@@ -375,6 +386,12 @@ function injectModalCloseButtons() {
   });
 }
 
+// Only http(s) URLs are safe to interpolate into href — anything else
+// (javascript:, data:, …) is replaced so stored values can't run script.
+function safeUrl(url) {
+  return /^https?:\/\//i.test(url || '') ? url : '#';
+}
+
 function skeletonHtml(lines) {
   var widths = [75, 55, 65, 45, 80];
   var html = '<div class="skeleton-block">';
@@ -396,14 +413,23 @@ function applyViewMode() {
   });
 }
 
-async function loadConfig(slugOverride) {
-  var slug = (slugOverride !== undefined) ? slugOverride : _artistSlug;
-  var key  = 'artist_config_cache_' + (slug || 'default');
+// opts.light skips the songs payload — use it on pages that only need
+// name/config/counts. Light and full responses are cached under separate keys.
+async function loadConfig(slugOverride, opts) {
+  var slug  = (slugOverride !== undefined) ? slugOverride : _artistSlug;
+  var light = !!(opts && opts.light);
+  var key   = 'artist_config_cache_' + (slug || 'default') + (light ? '_light' : '');
   let cached = null;
   try { cached = JSON.parse(sessionStorage.getItem(key)); } catch {}
 
-  var url = slug ? '/api/config?slug=' + encodeURIComponent(slug) : '/api/config';
-  const fetchFresh = fetch(url)
+  var params = [];
+  if (slug)  params.push('slug=' + encodeURIComponent(slug));
+  if (light) params.push('light=1');
+  var url = '/api/config' + (params.length ? '?' + params.join('&') : '');
+  // Send the token when present — private workspaces only serve full config
+  // (songs, counts) to authenticated members.
+  var _cfgToken = getToken();
+  const fetchFresh = fetch(url, _cfgToken ? { headers: { Authorization: 'Bearer ' + _cfgToken } } : undefined)
     .then(r => { if (!r.ok) throw new Error('config unavailable'); return r.json(); })
     .then(cfg => {
       try { sessionStorage.setItem(key, JSON.stringify(cfg)); } catch {}
@@ -499,7 +525,7 @@ function updateAuthIndicator() {
     var _email = sessionStorage.getItem('smartist_admin_email') || '';
     var _photoUrl = '', _initials = '';
     try {
-      var _cachedCfg = JSON.parse(sessionStorage.getItem(_CONFIG_KEY) || '{}');
+      var _cachedCfg = _readCachedConfig() || {};
       _photoUrl = ((_cachedCfg.config && _cachedCfg.config.logoUrl) || '').replace(/^http:/i, 'https:');
       _initials = getInitials(_cachedCfg.name || '');
     } catch {}
@@ -618,23 +644,29 @@ async function apiFetch(url, method = 'GET', body) {
 }
 
 // Standard page bootstrap: config → nav → page-specific callback.
-// Does NOT require login — pages render in view mode when no token is present.
-async function initPage(onReady) {
+// Requires login — unauthenticated visits redirect to login immediately.
+// Config fetch failure (unknown slug, network) redirects to /home.
+// Loads the light config (no songs payload) unless opts.fullConfig is set.
+async function initPage(onReady, opts) {
+  if (isViewMode()) { goToLogin(); return; }
+  var cfg;
   try {
-    var cfg = await loadConfig();
-    applyNav(cfg.name, cfg.config);
-    var viewMode = isViewMode();
-    if (viewMode) {
-      document.body.classList.add('view-mode');
-      injectViewModeNotice();
-    } else {
-      document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
-        el.disabled = false;
-      });
-    }
-    await onReady(cfg, viewMode);
-    injectModalCloseButtons();
+    cfg = await loadConfig(undefined, { light: !(opts && opts.fullConfig) });
+  } catch (e) {
+    console.error(e);
+    // Flag stops workspaces.js from auto-redirecting straight back here.
+    try { sessionStorage.setItem('ws_skip_autoredirect', '1'); } catch {}
+    window.location.assign('/home');
+    return;
+  }
+  applyNav(cfg.name, cfg.config);
+  document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
+    el.disabled = false;
+  });
+  try {
+    await onReady(cfg);
   } catch (e) { console.error(e); }
+  injectModalCloseButtons();
 }
 
 // Set a status element's text and error styling.
@@ -689,8 +721,9 @@ document.addEventListener('click', function(e) {
 
 // Force the next loadConfig() call to fetch fresh data from the network.
 function invalidateConfigCache() {
-  var slug = _artistSlug;
-  sessionStorage.removeItem('artist_config_cache_' + (slug || 'default'));
+  var base = 'artist_config_cache_' + (_artistSlug || 'default');
+  sessionStorage.removeItem(base);
+  sessionStorage.removeItem(base + '_light');
 }
 
 // ── Reusable sortable list ────────────────────────────────────────────────────
@@ -1164,7 +1197,7 @@ async function openHardDeleteModal(opts) {
   if (btn) { btn.disabled = false; btn.textContent = 'Delete permanently'; }
   openModal('hard-delete-modal');
   try {
-    var r = await fetch(opts.refsUrl);
+    var r = await apiFetch(opts.refsUrl);
     var data = await r.json();
     document.getElementById('hd-refs-msg').innerHTML = opts.buildRefsMsg(data.refs);
     document.getElementById('hd-cascade-opts').innerHTML = opts.buildCascadeOpts ? opts.buildCascadeOpts(data.refs) : '';

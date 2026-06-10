@@ -79,7 +79,8 @@ module.exports = wrap(async function handler(req, res) {
     const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
     // Encode email as hint so client can pass it back for user lookup
     const hint   = Buffer.from(resetEmail).toString('base64url');
-    const link   = `${origin}/login?magic=${encodeURIComponent(resetToken)}&hint=${hint}`;
+    // Fragment, not query — tokens must not land in server/CDN logs.
+    const link   = `${origin}/login#magic=${encodeURIComponent(resetToken)}&hint=${hint}`;
 
     try {
       await sendEmail({
@@ -203,7 +204,7 @@ module.exports = wrap(async function handler(req, res) {
     const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
     const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
     const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
-    const link   = `${origin}/login?invite=${rawToken}`;
+    const link   = `${origin}/login#invite=${rawToken}`;
 
     try {
       await sendEmail({
@@ -240,7 +241,7 @@ module.exports = wrap(async function handler(req, res) {
     const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
     const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
     const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
-    const link   = `${origin}/login?invite=${rawToken}`;
+    const link   = `${origin}/login#invite=${rawToken}`;
 
     try {
       await sendEmail({

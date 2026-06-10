@@ -489,8 +489,8 @@ function _openSongPanelContent(item, panelEl) {
     (refInt  ? _vspCell('Ref. interpret', escHtml(String(refInt))) : '') +
     (author  ? _vspCell('Author',         escHtml(String(author))) : '') +
     (comment ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Comment</div><div class="vsp-cell-value">' + escHtml(String(comment)) + '</div></div>' : '') +
-    (refUrl  ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Reference</div><div class="vsp-cell-value"><a href="' + escHtml(String(refUrl))  + '" target="_blank" rel="noopener">' + escHtml(String(refUrl))  + '</a></div></div>' : '') +
-    (infoUrl ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Song info</div><div class="vsp-cell-value"><a href="' + escHtml(String(infoUrl)) + '" target="_blank" rel="noopener">' + escHtml(String(infoUrl)) + '</a></div></div>' : '');
+    (refUrl  ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Reference</div><div class="vsp-cell-value"><a href="' + escHtml(safeUrl(String(refUrl)))  + '" target="_blank" rel="noopener">' + escHtml(String(refUrl))  + '</a></div></div>' : '') +
+    (infoUrl ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Song info</div><div class="vsp-cell-value"><a href="' + escHtml(safeUrl(String(infoUrl))) + '" target="_blank" rel="noopener">' + escHtml(String(infoUrl)) + '</a></div></div>' : '');
   var aboutHtml = aboutCells ? _vspSection('About', aboutCells) : '';
 
   var plays    = getVal(song, 'play_count');

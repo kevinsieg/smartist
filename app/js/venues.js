@@ -251,7 +251,6 @@ var _venuesStatus = '';
 var _venuesCategory = '';
 var _venuesCountry = '';
 var _venuesTimer = null;
-var _viewMode = false;
 var _pendingLat = null;
 var _pendingLng = null;
 var _geocodeAccepted = false;
@@ -317,34 +316,6 @@ function switchVenueTab(view) {
   }
 }
 
-var _COUNTRY_CODES = {
-  'afghanistan':'AF','albania':'AL','algeria':'DZ','argentina':'AR','armenia':'AM',
-  'australia':'AU','austria':'AT','azerbaijan':'AZ','belarus':'BY','belgium':'BE',
-  'bolivia':'BO','bosnia and herzegovina':'BA','brazil':'BR','bulgaria':'BG',
-  'canada':'CA','chile':'CL','china':'CN','colombia':'CO','croatia':'HR',
-  'cyprus':'CY','czech republic':'CZ','czechia':'CZ','denmark':'DK','ecuador':'EC',
-  'egypt':'EG','estonia':'EE','finland':'FI','france':'FR','georgia':'GE',
-  'germany':'DE','ghana':'GH','greece':'GR','hungary':'HU','iceland':'IS',
-  'india':'IN','indonesia':'ID','ireland':'IE','israel':'IL','italy':'IT',
-  'japan':'JP','jordan':'JO','kazakhstan':'KZ','kenya':'KE','latvia':'LV',
-  'lebanon':'LB','liechtenstein':'LI','lithuania':'LT','luxembourg':'LU',
-  'malaysia':'MY','malta':'MT','mexico':'MX','moldova':'MD','monaco':'MC',
-  'montenegro':'ME','morocco':'MA','netherlands':'NL','new zealand':'NZ',
-  'nigeria':'NG','north macedonia':'MK','norway':'NO','pakistan':'PK','peru':'PE',
-  'philippines':'PH','poland':'PL','portugal':'PT','romania':'RO','russia':'RU',
-  'san marino':'SM','saudi arabia':'SA','serbia':'RS','singapore':'SG',
-  'slovakia':'SK','slovenia':'SI','south africa':'ZA','south korea':'KR',
-  'spain':'ES','sweden':'SE','switzerland':'CH','taiwan':'TW','thailand':'TH',
-  'tunisia':'TN','turkey':'TR','ukraine':'UA','united arab emirates':'AE',
-  'united kingdom':'GB','great britain':'GB','uk':'GB','united states':'US',
-  'usa':'US','uruguay':'UY','venezuela':'VE','vietnam':'VN',
-};
-function _countryCode(name) {
-  if (!name) return '';
-  if (name.length <= 3) return name.toUpperCase();
-  return (_COUNTRY_CODES[name.toLowerCase()] || name.slice(0, 2).toUpperCase());
-}
-
 var VENUE_COLUMNS = [
   { field: 'name',    label: 'Name',     width: '1.5fr', sortable: true, filterable: true },
   { field: 'postcode',label: 'Postcode', width: '90px',  sortable: true, filterable: true, muted: true },
@@ -356,63 +327,40 @@ var VENUE_COLUMNS = [
   { width: 'auto', actions: true, render: function(v) {
     if (v.deleted)                    return '<span class="sl-deleted-badge">deleted</span>';
     if (v.category === 'placeholder') return '';
-    if (_viewMode)                    return '';
     return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + v.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
 ];
 
-initPage(async function(cfg, viewMode) {
+initPage(async function(cfg) {
   populateSelects();
-  _viewMode = viewMode;
-  window._venueViewMode = viewMode;
   artistSlug = cfg.slug;
 
-  if (!viewMode) {
-    var tabsEl = document.getElementById('venues-tabs');
-    if (tabsEl) {
-      tabsEl.style.display = '';
-      var hdr = document.querySelector('.app-header');
-      if (hdr) document.documentElement.style.setProperty('--venues-tabs-top', hdr.getBoundingClientRect().height + 'px');
-    }
-    var initView = new URLSearchParams(location.search).get('view') || 'list';
-    if (initView === 'map') {
-      var listEl = document.getElementById('venues-list-view');
-      if (listEl) listEl.style.display = 'none';
-      _venueActiveTab = 'map';
-      document.querySelectorAll('#venues-tabs .setlist-tab').forEach(function(t) {
-        t.classList.toggle('setlist-tab--active', t.dataset.tab === 'map');
-      });
-      _showMapContainers();
-      _mapReady = true;
-      if (window.initMap) window.initMap(artistSlug);
-      else window._pendingMapSlug = artistSlug;
-    }
+  var tabsEl = document.getElementById('venues-tabs');
+  if (tabsEl) {
+    tabsEl.style.display = '';
+    var hdr = document.querySelector('.app-header');
+    if (hdr) document.documentElement.style.setProperty('--venues-tabs-top', hdr.getBoundingClientRect().height + 'px');
   }
-
-  var visibleColumns = viewMode ? VENUE_COLUMNS.filter(c => c.field !== 'size' && c.field !== 'status') : VENUE_COLUMNS;
-
-  if (viewMode) {
-    var filterEl2 = document.getElementById('filter-input');
-    if (filterEl2) filterEl2.placeholder = 'Search name, city…';
+  var initView = new URLSearchParams(location.search).get('view') || 'list';
+  if (initView === 'map') {
+    var listEl = document.getElementById('venues-list-view');
+    if (listEl) listEl.style.display = 'none';
+    _venueActiveTab = 'map';
+    document.querySelectorAll('#venues-tabs .setlist-tab').forEach(function(t) {
+      t.classList.toggle('setlist-tab--active', t.dataset.tab === 'map');
+    });
+    _showMapContainers();
+    _mapReady = true;
+    if (window.initMap) window.initMap(artistSlug);
+    else window._pendingMapSlug = artistSlug;
   }
 
   venueTable = createSortableList({
     containerId:    'venues-list',
     sortBarId:      'sort-bar',
-    columns:        viewMode ? [
-      { field: '_nameCity', label: 'Venue', width: '1fr', sortable: false, filterable: true,
-        render: function(v) {
-          var cc = _countryCode(v.country);
-          var loc = [v.city, cc ? '(' + cc + ')' : ''].filter(Boolean).join(' ');
-          return '<span style="white-space:normal;line-height:1.4">' + escHtml(v.name || '') +
-            (loc ? '<span style="color:var(--third-color);font-size:0.82rem"> ' + escHtml(loc) + '</span>' : '') +
-            '</span>';
-        }
-      },
-    ] : visibleColumns,
-    filterInputId:  viewMode ? 'filter-input' : undefined,
+    columns:        VENUE_COLUMNS,
     defaultSort:    'name',
     rowClass:       v => v.deleted ? 'deleted' : '',
     onRowClick:     v => { if (!v.deleted) openVenueGigsModal(v); },
@@ -421,7 +369,7 @@ initPage(async function(cfg, viewMode) {
 
   placeholderTable = createSortableList({
     containerId: 'placeholder-list',
-    columns:     visibleColumns,
+    columns:     VENUE_COLUMNS,
     defaultSort: 'name',
     rowClass:    v => v.deleted ? 'deleted' : '',
     onRowClick:  v => { if (!v.deleted) openVenueGigsModal(v); },
@@ -432,7 +380,7 @@ initPage(async function(cfg, viewMode) {
   const statusEl   = document.getElementById('filter-status');
   const categoryEl = document.getElementById('filter-category');
 
-  if (filterEl && !_viewMode) {
+  if (filterEl) {
     filterEl.addEventListener('input', function() {
       clearTimeout(_venuesTimer);
       _venuesTimer = setTimeout(async function() {
@@ -470,10 +418,6 @@ initPage(async function(cfg, viewMode) {
 
   await loadVenues();
 
-  if (_viewMode) {
-    applyViewMode();
-  }
-
   initGeoFields('vm-city', 'vm-country', 'vm-postcode');
   ['vm-city', 'vm-country', 'vm-street', 'vm-postcode'].forEach(function(id) {
     var el = document.getElementById(id);
@@ -482,7 +426,7 @@ initPage(async function(cfg, viewMode) {
   onEnterSave(document.getElementById('venue-modal'), saveVenue);
 
   var _venueDeepId = Number(new URLSearchParams(location.search).get('id'));
-  if (_venueDeepId && !_viewMode) openEditModal(_venueDeepId);
+  if (_venueDeepId) openEditModal(_venueDeepId);
   else { openDeepLinkedRow('open'); }
 });
 
@@ -494,7 +438,7 @@ async function openVenueFromMap(id) {
   }
   // Venue not in current paginated load — fetch it directly
   try {
-    const r = await fetch('/api/' + artistSlug + '/venues/' + id + '?refs=1');
+    const r = await apiFetch('/api/' + artistSlug + '/venues/' + id + '?refs=1');
     if (!r.ok) return;
     const data = await r.json();
     allVenues.push(data.venue);
@@ -503,22 +447,18 @@ async function openVenueFromMap(id) {
 }
 
 async function loadVenues() {
-  const params = new URLSearchParams({ limit: _viewMode ? 500 : 50, offset: _venuesOffset });
+  const params = new URLSearchParams({ limit: 50, offset: _venuesOffset });
   if (_venuesQ)        params.set('q',        _venuesQ);
   if (_venuesStatus)   params.set('status',   _venuesStatus);
   if (_venuesCategory) params.set('category', _venuesCategory);
   if (_venuesCountry)  params.set('country',  _venuesCountry);
-  if (_viewMode)       params.set('has_gigs', '1');
-  const r = await fetch(`/api/${artistSlug}/venues?${params}`);
+  const r = await apiFetch(`/api/${artistSlug}/venues?${params}`);
   const { rows, total } = await r.json();
   _venuesTotal = total;
-  var processedRows = _viewMode
-    ? rows.map(function(v) { return Object.assign({}, v, { _nameCity: (v.name || '') + ' ' + (v.city || '') }); })
-    : rows;
   if (_venuesOffset === 0) {
-    allVenues = processedRows;
+    allVenues = rows;
   } else {
-    allVenues = [...allVenues, ...processedRows];
+    allVenues = [...allVenues, ...rows];
   }
   placeholderTable.setData(allVenues.filter(v => v.category === 'placeholder'));
   venueTable.setData(allVenues.filter(v => v.category !== 'placeholder'));
@@ -600,7 +540,7 @@ var _venueRefsCache = {};
 async function expandVenue(v) {
   if (!_venueRefsCache[v.id]) {
     try {
-      const r = await fetch('/api/' + artistSlug + '/venues/' + v.id + '?refs=1');
+      const r = await apiFetch('/api/' + artistSlug + '/venues/' + v.id + '?refs=1');
       if (!r.ok) throw new Error(r.status);
       _venueRefsCache[v.id] = await r.json();
     } catch {
@@ -685,7 +625,7 @@ async function renderVenueGigs(venueId, venueName) {
 
   if (!_venueRefsCache[venueId]) {
     try {
-      const r = await fetch(`/api/${artistSlug}/venues/${venueId}?refs=1`);
+      const r = await apiFetch(`/api/${artistSlug}/venues/${venueId}?refs=1`);
       if (!r.ok) throw new Error(r.status);
       _venueRefsCache[venueId] = await r.json();
     } catch {
@@ -722,7 +662,7 @@ async function openVenueGigsModal(v) {
   openModal('venue-gigs-modal');
   if (!_venueRefsCache[v.id]) {
     try {
-      const r = await fetch('/api/' + artistSlug + '/venues/' + v.id + '?refs=1');
+      const r = await apiFetch('/api/' + artistSlug + '/venues/' + v.id + '?refs=1');
       if (!r.ok) throw new Error(r.status);
       _venueRefsCache[v.id] = await r.json();
     } catch {

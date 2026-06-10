@@ -295,17 +295,6 @@ body.view-mode .auth-only { display: none !important; }
 .app-header:not(.app-header--authed) .nav-links .nav-links-profile,
 .app-header:not(.app-header--authed) .nav-links .nav-links-logout { display: none !important; }
 
-/* venue filter controls hidden in view mode (prevents JS-flicker) */
-body.view-mode .venue-filter-desktop { display: none; }
-
-/* Hub platform cards in view mode — not clickable */
-.platform-card.pc-view { cursor: default; }
-.platform-card.pc-view:hover { background: inherit; }
-
-/* Dashboard view-mode CTA */
-.dash-vm-cta { font-size: 0.85rem; color: var(--third-color); margin-bottom: 1.5rem; }
-.dash-vm-cta a { color: var(--secondary-color); text-decoration: underline; }
-
 /* Dashboard next-action hint */
 .dash-next-hint { font-size: 0.72rem; color: var(--third-color); margin: -0.4rem 0 1.1rem; line-height: 1.4; }
 
@@ -1264,10 +1253,15 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 /* ── Landing page ────────────────────────────────────────────────────────── */
 .landing-main {
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 5rem 1rem 3rem; /* top clears fixed nav */
+}
+.landing-main--no-nav {
+    padding-top: 2.5rem;
+    align-items: flex-start;
 }
 .landing-card        { width: 100%; max-width: 380px; text-align: center; }
 .landing-logo        { height: 90px; width: auto; object-fit: contain; margin: 0 auto 1.25rem; display: block; }
@@ -1334,6 +1328,8 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 @media (max-width: 479px) {
     .landing-logo { height: 70px; }
     .landing-main { align-items: flex-start; padding-top: 6rem; }
+    .landing-main--no-nav { padding-top: 1.5rem; }
+    .slug-prefix { font-size: 0.72rem; padding-left: 0.5rem; }
 }
 
 /* ── Dashboard (logged-in home) ──────────────────────────────────────────── */
@@ -1462,9 +1458,6 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 }
 .reset-link:hover { color: var(--secondary-ink); }
 .reset-form { margin-top: 0.75rem; }
-.auth-view-hint { margin-top: 1.25rem; font-size: 0.78rem; color: var(--third-color); }
-.auth-view-hint a { color: var(--third-color); text-decoration: underline; }
-.auth-view-hint a:hover { color: var(--secondary-ink); }
 .oauth-btns { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
 .oauth-btn { width: 100%; text-align: center; }
 .auth-divider { display: flex; align-items: center; gap: 0.75rem; margin: 0.75rem 0; color: var(--third-color); font-size: 0.78rem; }
@@ -1969,8 +1962,6 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
     #past-list     .sl-cell--title { white-space: normal; overflow: visible; text-overflow: clip; padding: 0.15rem 0; }
 }
 
-/* Venue view-mode: combined name+city cell wraps */
-#venues-list .sl-cell--_nameCity { white-space: normal; overflow: visible; text-overflow: clip; }
 @media (max-width: 639px) {
     #venues-list .sl-row { align-items: center; }
 }

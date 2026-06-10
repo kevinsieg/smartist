@@ -3,7 +3,7 @@ const { getArtist, getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateEmail, validateStr } = require('./_validate');
 const { checkRateLimit, clientIp } = require('./_ratelimit');
-const { requireAuth } = require('./_auth');
+const { requireAuth, getAccess, isPrivate } = require('./_auth');
 const { createPresignedUrl } = require('./_r2');
 const { sendEmail } = require('./_email');
 const { generateMagicToken, generateUserToken, verifyUserToken, TTL_8H } = require('./_token');
@@ -303,10 +303,10 @@ module.exports = wrap(async function handler(req, res) {
       const hint = Buffer.from(email.toLowerCase()).toString('base64url');
       await logger.info('oauth_login', { provider, email });
       if (artists.length > 1) {
-        return res.redirect(302, `${origin}/login?magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/home`);
+        return res.redirect(302, `${origin}/login#magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/home`);
       }
       const slug = artists[0]?.slug || '';
-      return res.redirect(302, `${origin}/login?magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/${slug}/dashboard`);
+      return res.redirect(302, `${origin}/login#magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/${slug}/dashboard`);
     }
 
     // Single-tenant fallback (ARTIST_ADMIN_EMAIL)
@@ -323,12 +323,18 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   // ── GET — public config (songs, counts, feature flags) ───────────────────
-  // Run all three queries in parallel — artist lookup is embedded as a subquery
-  // so we avoid the sequential getArtist() → data queries pattern.
+  // ?light=1 skips the songs payload (full song rows incl. lyrics + GEMA join)
+  // for pages that only need name/config/counts — most of the app.
+  // Private workspaces serve only name/config/flags (login-page branding) to
+  // unauthenticated visitors — no songs, no counts.
   const sql = getDb();
-  const [[band], songs, [counts]] = await Promise.all([
-    sql`SELECT id, slug, name, config FROM artists WHERE slug = ${slugParam} LIMIT 1`,
-    sql`
+  const { artist: band, user } = await getAccess(req, slugParam);
+  if (!band) return res.status(404).json({ error: 'Band not found in database' });
+  const priv  = !user && isPrivate(band);
+  const light = priv || req.query.light === '1';
+
+  const [songs, [counts]] = await Promise.all([
+    light ? Promise.resolve([]) : sql`
       SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language
       FROM songs s
       LEFT JOIN LATERAL (
@@ -338,25 +344,27 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY gema_work_number
         LIMIT 1
       ) g ON true
-      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND s.deleted = false
+      WHERE s.artist_id = ${band.id} AND s.deleted = false
       ORDER BY s.title
     `,
-    sql`
+    priv ? Promise.resolve([undefined]) : sql`
       SELECT
-        (SELECT COUNT(*)::int FROM gigs       WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND NOT deleted) AS gigs,
-        (SELECT COUNT(*)::int FROM venues     WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND NOT deleted) AS venues,
-        (SELECT COUNT(*)::int FROM organizers WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}) AND NOT deleted) AS organizers,
-        (SELECT COUNT(*)::int FROM setlists   WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slugParam}))                 AS setlists
+        (SELECT COUNT(*)::int FROM songs      WHERE artist_id = ${band.id} AND NOT deleted) AS songs,
+        (SELECT COUNT(*)::int FROM gigs       WHERE artist_id = ${band.id} AND NOT deleted) AS gigs,
+        (SELECT COUNT(*)::int FROM venues     WHERE artist_id = ${band.id} AND NOT deleted) AS venues,
+        (SELECT COUNT(*)::int FROM organizers WHERE artist_id = ${band.id} AND NOT deleted) AS organizers,
+        (SELECT COUNT(*)::int FROM setlists   WHERE artist_id = ${band.id})                 AS setlists
     `,
   ]);
-  if (!band) return res.status(404).json({ error: 'Band not found in database' });
 
-  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+  // Responses vary by auth for private workspaces — only the public variant
+  // may sit in a shared CDN cache.
+  if (!user) res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
   res.json({
     slug:          band.slug,
     name:          band.name,
     config:        band.config,
-    songs,
+    songs:         light ? undefined : songs,
     counts,
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),

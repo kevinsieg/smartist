@@ -272,6 +272,16 @@
       <div class="slug-value" id="slug-value"></div>
     </div>
 
+    <!-- Privacy -->
+    <div class="profile-section">
+      <label>Privacy</label>
+      <label class="config-check-row" style="margin-top:0.4rem;">
+        <input type="checkbox" id="private-toggle" disabled>
+        Private workspace — only logged-in members can see songs, setlists, gigs and venues
+      </label>
+      <span class="save-msg" id="private-msg"></span>
+    </div>
+
     <!-- Song table fields -->
     <div class="profile-section" id="display-fields-section" style="display:none;">
       <div class="config-section-header">
@@ -324,7 +334,7 @@
     var viewMode = isViewMode();
     if (viewMode) document.body.classList.add('view-mode');
     try {
-      var cfg = await loadConfig();
+      var cfg = await loadConfig(undefined, { light: true });
       artistSlug = cfg.slug;
       applyNav(cfg.name, cfg.config);
       document.getElementById('profile-loading').style.display = 'none';
@@ -506,6 +516,35 @@
     // Slug
     document.getElementById('slug-value').textContent = cfg.slug;
 
+    // Privacy toggle
+    var privToggle = document.getElementById('private-toggle');
+    privToggle.checked  = !!(cfg.config && cfg.config.private);
+    privToggle.disabled = false;
+    privToggle.addEventListener('change', function () {
+      var msg = document.getElementById('private-msg');
+      msg.textContent = 'Saving…';
+      msg.className = 'save-msg';
+      fetch('/api/config?slug=' + encodeURIComponent(artistSlug), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getToken(),
+        },
+        body: JSON.stringify({ config: { private: privToggle.checked } }),
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error('Failed to save');
+          invalidateConfigCache();
+          msg.textContent = privToggle.checked ? 'Workspace is now private.' : 'Workspace is now public.';
+          setTimeout(function () { msg.textContent = ''; }, 2500);
+        })
+        .catch(function (err) {
+          privToggle.checked = !privToggle.checked;
+          msg.textContent = err.message || 'Failed to save.';
+          msg.className = 'save-msg err';
+        });
+    });
+
     renderFieldTags('display-fields', cfg.config && cfg.config.displayFields);
     renderFieldTags('filter-fields',  cfg.config && cfg.config.filterFields);
 
@@ -526,11 +565,11 @@
       if (!name) { msg.textContent = 'Name required.'; msg.className = 'save-msg err'; return; }
       btn.disabled = true;
       msg.textContent = '';
-      fetch('/api/config', {
+      fetch('/api/config?slug=' + encodeURIComponent(artistSlug), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+          'Authorization': 'Bearer ' + getToken(),
         },
         body: JSON.stringify({ name: name }),
       })
@@ -620,11 +659,11 @@
       .then(function (publicUrl) {
         progress.textContent = 'Saving…';
         var versionedUrl = publicUrl + '?v=' + Date.now();
-        return fetch('/api/config', {
+        return fetch('/api/config?slug=' + encodeURIComponent(artistSlug), {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+            'Authorization': 'Bearer ' + getToken(),
           },
           body: JSON.stringify({ config: { faviconUrl: versionedUrl } }),
         }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: versionedUrl, data: d }; }); });
@@ -671,11 +710,11 @@
       })
       .then(function (publicUrl) {
         progress.textContent = 'Saving…';
-        return fetch('/api/config', {
+        return fetch('/api/config?slug=' + encodeURIComponent(artistSlug), {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+            'Authorization': 'Bearer ' + getToken(),
           },
           body: JSON.stringify({ config: { logoUrl: publicUrl } }),
         }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: publicUrl, data: d }; }); });
@@ -896,11 +935,11 @@
 
   async function patchConfig(configUpdate) {
     try {
-      var r = await fetch('/api/config', {
+      var r = await fetch('/api/config?slug=' + encodeURIComponent(artistSlug), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY),
+          'Authorization': 'Bearer ' + getToken(),
         },
         body: JSON.stringify({ config: configUpdate }),
       });
