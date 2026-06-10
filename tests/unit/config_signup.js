@@ -74,18 +74,72 @@ async function run(r) {
     assertEq(res._status, 400);
   });
 
+  // gmail.com: real MX lookup passes online; DNS failure fails open offline.
+  // (example.com would be rejected — it publishes a null MX.)
   await testAsync('valid email → 200 + ok:true + email sent', async () => {
     let emailSent = false;
     const handler = makeHandler(async () => [], async () => { emailSent = true; });
     const res = mockRes();
     await handler({
       method: 'POST',
-      body: { action: 'signup-link', email: 'test@example.com' },
+      body: { action: 'signup-link', email: 'test@gmail.com' },
       headers: { host: 'localhost:3000' },
     }, res);
     assertEq(res._status, 200);
     assertEq(res._body && res._body.ok, true);
     assert(emailSent, 'expected signup email to be sent');
+  });
+
+  await testAsync('disposable email domain → 400 + no email', async () => {
+    let emailSent = false;
+    const handler = makeHandler(async () => [], async () => { emailSent = true; });
+    const res = mockRes();
+    await handler({
+      method: 'POST',
+      body: { action: 'signup-link', email: 'bot@mailinator.com' },
+      headers: { host: 'localhost:3000' },
+    }, res);
+    assertEq(res._status, 400);
+    assert(!emailSent, 'expected NO email for disposable domain');
+  });
+
+  await testAsync('existing account → 200 + login email instead of setup link', async () => {
+    let sentMail = null;
+    let signupTokenStored = false;
+    const sql = async function(strings) {
+      const q = String(strings[0]);
+      if (q.includes('FROM users')) return [{ id: 7, email: 'old@gmail.com', password_hash: '$2b$12$hash' }];
+      if (q.includes('INSERT INTO subscribers')) signupTokenStored = true;
+      return [];
+    };
+    const handler = makeHandler(sql, async (mail) => { sentMail = mail; });
+    const res = mockRes();
+    await handler({
+      method: 'POST',
+      body: { action: 'signup-link', email: 'old@gmail.com' },
+      headers: { host: 'localhost:3000' },
+    }, res);
+    assertEq(res._status, 200);
+    assertEq(res._body && res._body.ok, true);
+    assert(sentMail, 'expected an email to be sent');
+    assert(/already/i.test(sentMail.subject || '') || /already/i.test(sentMail.html || ''), 'expected already-have-account email');
+    assert(!/onboarding/.test(sentMail.html || ''), 'must NOT contain a workspace-setup link');
+    assert(/\/login/.test(sentMail.html || ''), 'expected a login link');
+    assert(!signupTokenStored, 'must not store a signup token for existing accounts');
+  });
+
+  await testAsync('honeypot field filled → fake 200, no email sent', async () => {
+    let emailSent = false;
+    const handler = makeHandler(async () => [], async () => { emailSent = true; });
+    const res = mockRes();
+    await handler({
+      method: 'POST',
+      body: { action: 'signup-link', email: 'bot@gmail.com', website: 'http://spam.example' },
+      headers: { host: 'localhost:3000' },
+    }, res);
+    assertEq(res._status, 200);
+    assertEq(res._body && res._body.ok, true);
+    assert(!emailSent, 'expected NO email when honeypot is filled');
   });
 
   // ── POST ?action=verify-signup-token ────────────────────────────────────────

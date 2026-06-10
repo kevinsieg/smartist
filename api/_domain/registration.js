@@ -1,5 +1,43 @@
 const crypto = require('crypto');
 
+// Common disposable/temp-mail providers — accounts behind these are throwaway
+// by definition, and sends to them waste quota and hurt sender reputation.
+const DISPOSABLE_DOMAINS = new Set([
+  'mailinator.com', 'guerrillamail.com', 'guerrillamail.info', 'sharklasers.com',
+  'grr.la', '10minutemail.com', '10minutemail.net', 'yopmail.com', 'yopmail.fr',
+  'tempmail.com', 'temp-mail.org', 'temp-mail.io', 'tempr.email', 'tempinbox.com',
+  'trashmail.com', 'trashmail.de', 'getnada.com', 'dispostable.com', 'maildrop.cc',
+  'mintemail.com', 'throwawaymail.com', 'fakeinbox.com', 'mailnesia.com',
+  'spamgourmet.com', 'mytemp.email', 'emailondeck.com', 'mohmal.com',
+  'discard.email', 'mailcatch.com', 'spam4.me', 'mail.tm', 'dropmail.me',
+]);
+
+// Cheap deliverability gate before sending a signup email: rejects disposable
+// domains and domains that cannot receive mail (no MX, or the RFC 7505 null MX
+// "0 ."). The link click remains the real ownership proof — this only protects
+// the sending step. DNS failures fail open: a transient resolver problem must
+// never block signups.
+async function checkEmailDeliverable(email, resolveMx) {
+  const domain = String(email).split('@')[1] || '';
+  if (DISPOSABLE_DOMAINS.has(domain)) return { ok: false, reason: 'disposable' };
+
+  const resolve = resolveMx || require('dns').promises.resolveMx;
+  let timer;
+  try {
+    const records = await Promise.race([
+      resolve(domain),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(Object.assign(new Error('dns timeout'), { code: 'ETIMEOUT' })), 2500); }),
+    ]);
+    const usable = (records || []).filter(r => r.exchange && r.exchange !== '.');
+    return usable.length ? { ok: true } : { ok: false, reason: 'no_mx' };
+  } catch (e) {
+    if (e.code === 'ENOTFOUND' || e.code === 'ENODATA') return { ok: false, reason: 'no_mx' };
+    return { ok: true }; // fail open
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function createSignupToken(email, sql) {
   const rawToken  = crypto.randomBytes(32).toString('hex');
   const hash      = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -52,4 +90,4 @@ async function clearSignupToken(email, sql) {
   `;
 }
 
-module.exports = { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken };
+module.exports = { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken, checkEmailDeliverable };
