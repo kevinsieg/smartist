@@ -14,8 +14,9 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const artist = await getArtist(slug);
-    if (!artist) return res.status(404).json({ error: 'Artist not found' });
+    // Private CRM data — auth required even for reads.
+    const artist = await requireAuth(req, res, slug);
+    if (!artist) return;
     const [org] = await sql`SELECT * FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`;
     if (!org) return res.status(404).json({ error: 'Organizer not found' });
     if (req.query.refs) {

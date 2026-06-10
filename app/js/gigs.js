@@ -13,7 +13,6 @@ var _gigAllSetlists = [];
 var _gigSongTimer = null;
 var _gigSongMatchGigIds = null;  // null = no filter; Set<gigId>
 var cfg = null;
-var _viewMode = false;
 
 // ── Gig poster image utilities ────────────────────────────────────────────
 
@@ -175,10 +174,7 @@ var GIG_COLUMNS = [
         return '<div class="gig-thumb-wrap" data-poster="' + escHtml(g.poster_url) + '" onclick="event.stopPropagation();openLightbox(this.dataset.poster)">' +
                '<img class="gig-thumb" src="' + escHtml(g.thumb_url) + '" loading="lazy"></div>';
       }
-      if (!_viewMode) {
-        return '<div class="gig-thumb-placeholder gig-thumb-add" onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="Upload poster"></div>';
-      }
-      return '<div class="gig-thumb-placeholder"></div>';
+      return '<div class="gig-thumb-placeholder gig-thumb-add" onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="Upload poster"></div>';
     }
   },
   { field: 'date', label: 'Date', width: '75px', sortable: true, type: 'date',
@@ -189,14 +185,13 @@ var GIG_COLUMNS = [
   { field: 'venue_name',     label: 'Venue',     width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
     if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>' +
-      (!_viewMode ? '<button class="btn sl-edit-btn" title="Permanently delete" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">Erase</button>' : '');
+      '<button class="btn sl-edit-btn" title="Permanently delete" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">Erase</button>';
     var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
     var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="View setlists" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
       '</svg></button>' : '';
-    if (_viewMode) return setsBtn;
     return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>' + setsBtn;
@@ -243,9 +238,8 @@ function _insertYearDividers(containerId) {
   });
 }
 
-initPage(async function(config, viewMode) {
+initPage(async function(config) {
   cfg = config;
-  _viewMode = viewMode;
   artistSlug = cfg.slug;
   _gigFilters = { gig: '', venue: '', setlist: '', song: '' };
   _gigSongMatchGigIds = null;
@@ -303,10 +297,6 @@ initPage(async function(config, viewMode) {
     _sortBarEl.addEventListener('click', function(e) {
       if (e.target.closest('.sort-btn')) setTimeout(function() { _insertYearDividers('past-list'); }, 0);
     });
-  }
-
-  if (_viewMode) {
-    applyViewMode();
   }
 
   // Fetch setlists for cross-entity filter
@@ -370,7 +360,7 @@ initPage(async function(config, viewMode) {
   if (qp.get('setlist') && _setlistEl) { _setlistEl.value = qp.get('setlist'); _gigFilters.setlist = qp.get('setlist').toLowerCase(); }
   if (qp.get('song')    && _songDlEl)  { _songDlEl.value  = qp.get('song');    _runGigSongFilter(qp.get('song').toLowerCase()); }
   if (qp.get('venue') || qp.get('setlist') || qp.get('song')) _openFilterPanel();
-  if (qp.get('id') && !_viewMode) { openEditModal(Number(qp.get('id'))); }
+  if (qp.get('id')) { openEditModal(Number(qp.get('id'))); }
   else { openDeepLinkedRow('open'); }
   _applyGigsFilter();
   _updateFilterBadge();
@@ -382,11 +372,11 @@ initPage(async function(config, viewMode) {
     var hdr = document.querySelector('.app-header');
     if (hdr) document.documentElement.style.setProperty('--songs-toolbar-top', hdr.getBoundingClientRect().height + 'px');
   });
-});
+}, { fullConfig: true }); // song filter needs cfg.songs
 
 async function loadGigs() {
   _gigsOffset = 0;
-  const r = await fetch(`/api/${artistSlug}/gigs?limit=50&offset=0`, { cache: 'no-store' });
+  const r = await apiFetch(`/api/${artistSlug}/gigs?limit=50&offset=0`);
   const { rows, total } = await r.json();
   _gigsTotal = total;
   allGigs = rows;
@@ -447,7 +437,7 @@ async function _runGigSongFilter(q) {
 
 async function loadMoreGigs() {
   _gigsOffset += 50;
-  const r = await fetch(`/api/${artistSlug}/gigs?limit=50&offset=${_gigsOffset}`, { cache: 'no-store' });
+  const r = await apiFetch(`/api/${artistSlug}/gigs?limit=50&offset=${_gigsOffset}`);
   const { rows } = await r.json();
   allGigs = [...allGigs, ...rows];
   renderGigs();
@@ -468,7 +458,7 @@ var _venueTypeahead = null;
 
 async function ensureVenuesLoaded() {
   if (allVenues.length) return;
-  const r = await fetch(`/api/${artistSlug}/venues?slim=1`);
+  const r = await apiFetch(`/api/${artistSlug}/venues?slim=1`);
   allVenues = await r.json();
 }
 
@@ -527,7 +517,7 @@ var _organizerTypeahead = null;
 
 async function ensureOrganizersLoaded() {
   if (allOrganizers.length) return;
-  const r = await fetch(`/api/${artistSlug}/organizers?slim=1`);
+  const r = await apiFetch(`/api/${artistSlug}/organizers?slim=1`);
   allOrganizers = await r.json();
 }
 
@@ -660,7 +650,7 @@ function _downloadGigIcs(id) {
   var desc = [
     g.type            ? 'Type: ' + g.type           : '',
     g.additional_link ? 'Link: ' + g.additional_link : '',
-    !_viewMode && g.comment ? g.comment              : '',
+    g.comment || '',
   ].filter(Boolean).join('\\n');
   var now  = new Date().toISOString().replace(/[-:.]/g,'').slice(0,15) + 'Z';
   var ics  = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Smartist//EN',
@@ -682,11 +672,11 @@ function expandGig(g) {
   var rows = [];
   if (g.venue_name)      rows.push(['Venue',     escHtml(g.venue_name)]);
   if (!g.venue_name && g.location) rows.push(['Location', escHtml(g.location)]);
-  if (g.organizer_name && !_viewMode) rows.push(['Organizer', escHtml(g.organizer_name)]);
+  if (g.organizer_name) rows.push(['Organizer', escHtml(g.organizer_name)]);
   if (g.type)            rows.push(['Type',      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
   if (g.time_start)      rows.push(['Time',      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
-  if (g.additional_link) rows.push(['Link',      '<a href="' + escHtml(g.additional_link) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
-  if (g.comment && !_viewMode) rows.push(['Notes', escHtml(g.comment)]);
+  if (g.additional_link) rows.push(['Link',      '<a href="' + escHtml(safeUrl(g.additional_link)) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
+  if (g.comment) rows.push(['Notes', escHtml(g.comment)]);
   if (g.additional_text) rows.push(['Info',      escHtml(g.additional_text)]);
   var html = rows.map(function(r) {
     return '<div class="expansion-row"><span class="expansion-label expansion-key">' + r[0] + '</span><span>' + r[1] + '</span></div>';
@@ -708,7 +698,7 @@ async function openGigSetlists(gigId) {
   openModal('setlist-detail-modal');
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await fetch('/api/' + artistSlug + '/gigs/' + gigId + '?refs=1');
+      const r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?refs=1');
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
@@ -797,7 +787,7 @@ async function renderGigRelated(gigId) {
 
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await fetch(`/api/${artistSlug}/gigs/${gigId}?refs=1`);
+      const r = await apiFetch(`/api/${artistSlug}/gigs/${gigId}?refs=1`);
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {

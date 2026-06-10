@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { getDb, getArtist, insertAuditLog, getSlug, parsePage } = require('../_db');
-const { requireAuth } = require('../_auth');
+const { requireAuth, getAccess, isPrivate } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
 const { suggestLyricsWithAI } = require('../_ai');
@@ -17,8 +17,10 @@ module.exports = wrap(async function handler(req, res) {
   // ── song-logs (merged from song-logs.js via vercel.json rewrite) ──────────
   if (req.url.includes('song-logs')) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-    const band = await getArtist(slug);
+    const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!user && isPrivate(band))
+      return res.status(401).json({ error: 'This workspace is private' });
     const { songId } = req.query;
     let logs;
     if (songId) {
@@ -44,8 +46,10 @@ module.exports = wrap(async function handler(req, res) {
     const songId = Number(req.query.setlists);
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });
-    const band = await getArtist(slug);
+    const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!user && isPrivate(band))
+      return res.status(401).json({ error: 'This workspace is private' });
     const setlists = await sql`
       SELECT sl.id, sl.title, sl.comment, sl.created_at,
              g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
@@ -60,7 +64,11 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const viewMode = !req.headers.authorization;
+    const { artist: band, user } = await getAccess(req, slug);
+    if (!band) return res.status(404).json({ error: 'Band not found' });
+    const viewMode = !user;
+    if (viewMode && isPrivate(band))
+      return res.status(401).json({ error: 'This workspace is private' });
     if (viewMode) {
       const { limit: rawLimit, offset } = parsePage(req);
       const limit = Math.min(rawLimit, 30);
@@ -81,17 +89,13 @@ module.exports = wrap(async function handler(req, res) {
           ORDER BY gema_work_number
           LIMIT 1
         ) g ON true
-        WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+        WHERE s.artist_id = ${band.id}
           AND s.deleted = false
           AND (${!activeOnly} OR s.active = true)
         GROUP BY s.id, g.iswc, g.gema_work_number, g.language
         ORDER BY s.title
         LIMIT ${limit} OFFSET ${offset}
       `;
-      if (!rows.length) {
-        const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
-        if (!exists) return res.status(404).json({ error: 'Band not found' });
-      }
       const total = Number(rows[0]?.total ?? 0);
       res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
       return res.json({
@@ -120,15 +124,11 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY gema_work_number
         LIMIT 1
       ) g ON true
-      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+      WHERE s.artist_id = ${band.id}
         AND s.deleted = false
       GROUP BY s.id, g.iswc, g.gema_work_number, g.language
       ORDER BY s.title
     `;
-    if (!songs.length) {
-      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
-      if (!exists) return res.status(404).json({ error: 'Band not found' });
-    }
     return res.json(songs);
   }
 

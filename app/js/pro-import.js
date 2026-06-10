@@ -7,23 +7,9 @@ var artistSlug = null;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
-var _viewMode = false;
-
-initPage(async function(cfg, viewMode) {
-  _viewMode = viewMode;
+initPage(async function(cfg) {
   artistSlug = cfg.slug;
   document.getElementById('import-area').style.display = '';
-  if (_viewMode) {
-    applyViewMode();
-    var gemaCard = document.getElementById('pro-card-gema');
-    if (gemaCard) { gemaCard.disabled = true; gemaCard.style.opacity = '0.45'; }
-    var dropZone = document.getElementById('drop-zone');
-    if (dropZone) {
-      dropZone.style.pointerEvents = 'none';
-      dropZone.style.opacity = '0.4';
-      dropZone.onclick = null;
-    }
-  }
 });
 
 // ── File handling ─────────────────────────────────────────────────────────────

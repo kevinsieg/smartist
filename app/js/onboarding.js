@@ -47,13 +47,13 @@
         (email ? '<p class="auth-hint" style="margin-bottom:0.75rem">Setting up workspace for <strong>' + _esc(email) + '</strong></p>' : '') +
         '<div class="auth-field">' +
           '<label class="auth-label" for="ob-name">Band / project name</label>' +
-          '<input id="ob-name" type="text" autocomplete="organization" placeholder="My Band" maxlength="200">' +
+          '<input id="ob-name" type="text" autocomplete="organization" autocapitalize="words" autocorrect="off" placeholder="My Band" maxlength="200">' +
         '</div>' +
         '<div class="auth-field">' +
           '<label class="auth-label" for="ob-slug">Workspace URL</label>' +
           '<div class="slug-wrap">' +
             '<span class="slug-prefix">smartist.studio/</span>' +
-            '<input id="ob-slug" type="text" placeholder="my-band" maxlength="50">' +
+            '<input id="ob-slug" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="my-band" maxlength="50">' +
           '</div>' +
           '<p class="slug-status" id="slug-status"></p>' +
         '</div>' +
@@ -95,11 +95,17 @@
       clearTimeout(_slugTimer);
       _slugTimer = setTimeout(_doSlugCheck, 400);
     });
+    nameInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); slugInput.focus(); }
+    });
 
     slugInput.addEventListener('input', function() {
       slugInput._touched = true;
       clearTimeout(_slugTimer);
       _slugTimer = setTimeout(_doSlugCheck, 400);
+    });
+    slugInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !submitBtn.disabled) submitBtn.click();
     });
 
     submitBtn.addEventListener('click', async function() {

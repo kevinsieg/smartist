@@ -11,6 +11,12 @@ function _setAudioSpeed(btn, rate) {
 var _shareSlug      = null;
 var _shareSetlistId = null;
 
+// Members of private workspaces must authenticate to read config/setlists/songs.
+function _stageAuthHeaders() {
+  var t = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
+  return t ? { Authorization: 'Bearer ' + t } : {};
+}
+
 // ── Lyrics font size ───────────────────────────────────────────────────────────
 var _stageLyricsPx = parseInt(localStorage.getItem('stage_lyrics_px')) || 22;
 
@@ -122,7 +128,9 @@ async function init() {
     // the slug is known synchronously and data fetches don't have to wait.
     const _stageSlug = window.location.pathname.split('/').filter(Boolean)[0] || '';
     var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default');
-    const cfgFetch = fetch('/api/config' + (_stageSlug ? '?slug=' + encodeURIComponent(_stageSlug) : '')).then(r => { if (!r.ok) throw new Error(); return r.json(); });
+    const cfgFetch = fetch('/api/config' + (_stageSlug ? '?slug=' + encodeURIComponent(_stageSlug) : ''),
+      { headers: _stageAuthHeaders() }
+    ).then(r => { if (!r.ok) throw new Error(); return r.json(); });
     var cfg;
     try { cfg = JSON.parse(sessionStorage.getItem(_stageCacheKey)) || await cfgFetch; }
     catch { cfg = await cfgFetch; }
@@ -150,7 +158,7 @@ async function initSetlist(params, el, cfg) {
   }
 
   _shareSetlistId = setlistId;
-  const data = await fetch(`/api/${cfg.slug}/setlists/${setlistId}`).then(r => {
+  const data = await fetch(`/api/${cfg.slug}/setlists/${setlistId}`, { headers: _stageAuthHeaders() }).then(r => {
     if (!r.ok) throw new Error('not found');
     return r.json();
   });
@@ -206,12 +214,12 @@ async function initSong(params, el, cfg) {
     try { cachedSl = JSON.parse(sessionStorage.getItem('stage_sl_' + fromId)); } catch {}
   }
   const [song, setlistData] = await Promise.all([
-    fetch(`/api/${cfg.slug}/songs/${songId}`).then(r => {
+    fetch(`/api/${cfg.slug}/songs/${songId}`, { headers: _stageAuthHeaders() }).then(r => {
       if (!r.ok) throw new Error('not found');
       return r.json();
     }),
     cachedSl         ? Promise.resolve(cachedSl)
-      : fromId       ? fetch(`/api/${cfg.slug}/setlists/${fromId}`).then(r => r.ok ? r.json() : null).catch(() => null)
+      : fromId       ? fetch(`/api/${cfg.slug}/setlists/${fromId}`, { headers: _stageAuthHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null)
       : Promise.resolve(null),
   ]);
 
@@ -221,7 +229,7 @@ async function initSong(params, el, cfg) {
   var activeArrMeta = (song.arrangements || []).find(function(a) { return a.is_active; });
   if (activeArrMeta) {
     try {
-      var arrVersions = await fetch('/api/' + cfg.slug + '/songs/' + songId + '/arrangements').then(function(r) { if (!r.ok) throw new Error(); return r.json(); });
+      var arrVersions = await fetch('/api/' + cfg.slug + '/songs/' + songId + '/arrangements', { headers: _stageAuthHeaders() }).then(function(r) { if (!r.ok) throw new Error(); return r.json(); });
       activeArr = Array.isArray(arrVersions) ? arrVersions.find(function(v) { return v.is_active; }) || null : null;
     } catch (_) {}
   }
