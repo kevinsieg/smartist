@@ -1,15 +1,14 @@
 var artistSlug = '';
 
-initPage(async function(cfg, viewMode) {
-  if (viewMode) { goToLogin(); return; }
+initPage(async function(cfg) {
   artistSlug = cfg.slug;
   document.title = cfg.name || 'Dashboard';
-  renderDashboard(cfg, viewMode);
+  renderDashboard(cfg);
 });
 
 function _nextAction(cfg) {
-  var songs  = (cfg.songs  || []).length;
   var c      = cfg.counts  || {};
+  var songs  = c.songs     || 0;
   var sets   = c.setlists  || 0;
   var gigs   = c.gigs      || 0;
   var venues = c.venues    || 0;
@@ -20,57 +19,57 @@ function _nextAction(cfg) {
   return               { href: '/setlist', label: '+ Create setlist',             hint: null };
 }
 
-function renderDashboard(cfg, viewMode) {
+function renderDashboard(cfg) {
   var el = document.getElementById('dash-content');
   if (!el) return;
 
+  var b = '/' + artistSlug;
   var next = _nextAction(cfg);
-  var actionRow = viewMode
-    ? '<p class="dash-vm-cta"><a class="go-login" href="' + loginPageUrl() + '">Login</a> for full access.</p>'
-    : '<a href="' + next.href + '" class="dash-cta">' + next.label + '</a>' +
-      (next.hint ? '<p class="dash-next-hint">' + next.hint + '</p>' : '');
+  var actionRow =
+    '<a href="' + b + next.href + '" class="dash-cta">' + next.label + '</a>' +
+    (next.hint ? '<p class="dash-next-hint">' + next.hint + '</p>' : '');
 
   el.innerHTML =
     actionRow +
     '<div class="dash-grid">' +
-      '<a href="/setlist" class="dash-card">' +
+      '<a href="' + b + '/setlist" class="dash-card">' +
         '<span class="dash-card-label">Setlists</span>' +
         '<span class="dash-card-count" id="dc-setlists">—</span>' +
       '</a>' +
-      '<a href="/songs" class="dash-card">' +
+      '<a href="' + b + '/songs" class="dash-card">' +
         '<span class="dash-card-label">Songs</span>' +
         '<span class="dash-card-count" id="dc-songs">—</span>' +
       '</a>' +
-      '<a href="/gigs" class="dash-card">' +
+      '<a href="' + b + '/gigs" class="dash-card">' +
         '<span class="dash-card-label">Gigs</span>' +
         '<span class="dash-card-count" id="dc-gigs">—</span>' +
       '</a>' +
-      '<a href="/venues" class="dash-card">' +
+      '<a href="' + b + '/venues" class="dash-card">' +
         '<span class="dash-card-label">Venues</span>' +
         '<span class="dash-card-count" id="dc-venues">—</span>' +
       '</a>' +
-      '<a href="/organizers" class="dash-card">' +
+      '<a href="' + b + '/organizers" class="dash-card">' +
         '<span class="dash-card-label">Organizers</span>' +
         '<span class="dash-card-count" id="dc-organizers">—</span>' +
       '</a>' +
-      '<a href="/pro-import" class="dash-card">' +
+      '<a href="' + b + '/pro-import" class="dash-card">' +
         '<span class="dash-card-label">PRO</span>' +
         '<span class="dash-card-count--muted">GEMA · Suisa · …</span>' +
       '</a>' +
-      '<a href="/hub" class="dash-card">' +
+      '<a href="' + b + '/hub" class="dash-card">' +
         '<span class="dash-card-label">Hub</span>' +
         '<span class="dash-card-count--muted">streaming · socials</span>' +
       '</a>' +
-      '<a href="/profile" class="dash-card">' +
+      '<a href="' + b + '/profile" class="dash-card">' +
         '<span class="dash-card-label">Profile</span>' +
         '<span class="dash-card-count--muted">settings · photo</span>' +
       '</a>' +
     '</div>' +
-    (viewMode ? '' : '<button class="reset-link landing-logout" onclick="handleLogout()">logout</button>');
+    '<button class="reset-link landing-logout" onclick="handleLogout()">logout</button>';
 
   var set = function(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; };
   var c = cfg.counts || {};
-  set('dc-songs',      (cfg.songs || []).length);
+  set('dc-songs',      c.songs      !== undefined ? c.songs      : '—');
   set('dc-setlists',   c.setlists   !== undefined ? c.setlists   : '—');
   set('dc-gigs',       c.gigs       !== undefined ? c.gigs       : '—');
   set('dc-venues',     c.venues     !== undefined ? c.venues     : '—');

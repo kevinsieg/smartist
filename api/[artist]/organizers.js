@@ -8,6 +8,9 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
+    // Organizer records are private CRM data (contact emails, notes) — no
+    // public view mode for this resource.
+    if (!await requireAuth(req, res, slug)) return;
     if (req.query.slim) {
       const orgs = await sql`
         SELECT id, name, city FROM organizers

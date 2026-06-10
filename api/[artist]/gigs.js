@@ -1,5 +1,5 @@
-const { getDb, getArtist, getSlug, parsePage } = require('../_db');
-const { requireAuth } = require('../_auth');
+const { getDb, getSlug, parsePage } = require('../_db');
+const { requireAuth, getAccess, isPrivate } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr } = require('../_validate');
 
@@ -8,9 +8,12 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
+    const { artist, user } = await getAccess(req, slug);
+    if (!artist) return res.status(404).json({ error: 'Artist not found' });
+    if (!user && isPrivate(artist))
+      return res.status(401).json({ error: 'This workspace is private' });
+
     if (req.query.format === 'ics') {
-      const artist = await getArtist(slug);
-      if (!artist) return res.status(404).json({ error: 'Artist not found' });
       const today = new Date().toISOString().slice(0, 10);
       const gigs = await sql`
         SELECT g.*, v.name AS venue_name, v.city AS venue_city
@@ -42,10 +45,11 @@ module.exports = wrap(async function handler(req, res) {
           dtend   = `DTEND;VALUE=DATE:${next.toISOString().slice(0,10).replace(/-/g,'')}`;
         }
         const loc  = [g.venue_name, g.venue_city].filter(Boolean).join(', ');
+        // No comments here: the feed URL is guessable (webcal can't auth),
+        // so private gig notes must never appear in it.
         const desc = [
           g.type            ? `Type: ${g.type}`           : '',
           g.additional_link ? `Link: ${g.additional_link}` : '',
-          g.comment         ? g.comment                    : '',
         ].filter(Boolean).join('\\n');
         return ['BEGIN:VEVENT', `UID:gig-${g.id}@smartist`, `DTSTAMP:${now}`,
           dtstart, dtend, `SUMMARY:${esc(g.title)}`,
@@ -72,17 +76,18 @@ module.exports = wrap(async function handler(req, res) {
       FROM gigs g
       LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN organizers o ON o.id = g.organizer_id
-      WHERE g.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+      WHERE g.artist_id = ${artist.id}
       ORDER BY g.date DESC NULLS LAST, g.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
-    if (!rows.length) {
-      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
-      if (!exists) return res.status(404).json({ error: 'Artist not found' });
-    }
     const total = Number(rows[0]?.total ?? 0);
-    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
-    return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
+    // Public visitors never see gig comments (private notes: fees, contacts).
+    // Only the public variant may be CDN-cached.
+    if (!user) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    return res.json({
+      rows: rows.map(({ total: _, comment, ...r }) => (user ? { comment, ...r } : r)),
+      total, limit, offset,
+    });
   }
 
   if (req.method === 'POST') {

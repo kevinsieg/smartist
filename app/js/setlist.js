@@ -865,7 +865,7 @@ async function _resolveHistSongFilter(q) {
   try {
     var results = await Promise.all(
       matchingSongs.map(function(s) {
-        return fetch('/api/' + artistSlug + '/songs/' + s.id + '/setlists')
+        return apiFetch('/api/' + artistSlug + '/songs/' + s.id + '/setlists')
           .then(function(r) { return r.json(); });
       })
     );
@@ -969,7 +969,7 @@ async function _renderHistoryTab() {
 
   if (!_histLoaded) {
     try {
-      var setsRes = await fetch('/api/' + artistSlug + '/setlists');
+      var setsRes = await apiFetch('/api/' + artistSlug + '/setlists');
       var gigsRes = await fetch('/api/' + artistSlug + '/gigs?limit=500');
       _histSets = await setsRes.json();
       if (!Array.isArray(_histSets)) _histSets = [];
@@ -1091,7 +1091,7 @@ async function _loadHistSongs(sid) {
   sid = String(sid);
   if (_histLoadedSongs[sid]) return;
   try {
-    var detail = await fetch('/api/' + artistSlug + '/setlists/' + sid).then(function(r) { return r.json(); });
+    var detail = await apiFetch('/api/' + artistSlug + '/setlists/' + sid).then(function(r) { return r.json(); });
     var songs = Array.isArray(detail) ? detail : (detail.songs || []);
     _histLoadedSongs[sid] = songs.slice().sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
   } catch {

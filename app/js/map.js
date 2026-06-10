@@ -33,7 +33,8 @@
     _leafletCallbacks = [cb];
     var s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-    s.crossOrigin = '';
+    s.integrity = 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';
+    s.crossOrigin = 'anonymous';
     s.onload = function() {
       var cbs = _leafletCallbacks;
       _leafletCallbacks = null;
@@ -81,10 +82,13 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // The venues API only returns non-public statuses to authenticated requests.
+  function _authHeaders() {
+    var token = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
+    return token ? { Authorization: 'Bearer ' + token } : {};
+  }
+
   function _popup(v) {
-    if (!!(window._venueViewMode)) {
-      return '<div><strong>' + _escHtml(v.name) + '</strong></div>';
-    }
     var color  = STATUS_COLORS[(v.status || '').toLowerCase()] || STATUS_COLORS[''];
     var status = v.status
       ? '<span style="background:' + color + ';color:#fff;padding:1px 7px;border-radius:10px;font-size:0.75rem">' + _escHtml(v.status) + '</span> '
@@ -123,7 +127,6 @@
   }
 
   function _updateUnmappedCount() {
-    if (!!(window._venueViewMode)) return;
     var noCoords = _allVenues.filter(function(v) { return !v.lat || !v.lng; }).length;
     var msgEl = document.getElementById('map-unmapped-msg');
     var secEl = document.getElementById('map-geocode-section');
@@ -136,20 +139,6 @@
   function _buildSidebar() {
     var sb = document.getElementById('map-sidebar');
     if (!sb) return;
-    var viewMode = !!(window._venueViewMode);
-
-    if (viewMode) {
-      var legendHtmlOnly = '<div class="map-filter-label">Legend</div>';
-      Object.keys(STATUS_COLORS).forEach(function(k) {
-        if (!k) return;
-        legendHtmlOnly += '<div class="map-filter-row">' +
-          '<span class="map-legend-dot" style="background:' + STATUS_COLORS[k] + '"></span>' +
-          _escHtml(k.charAt(0).toUpperCase() + k.slice(1)) + '</div>';
-      });
-      legendHtmlOnly += '<div class="map-filter-row"><span class="map-legend-dot" style="background:' + STATUS_COLORS[''] + '"></span>No status</div>';
-      sb.innerHTML = legendHtmlOnly;
-      return;
-    }
 
     var statusHtml = '<div class="map-filter-label">Status</div>';
     window.VENUE_STATUSES.forEach(function(s) {
@@ -208,7 +197,7 @@
     _dataReady = false;
     _allVenues = [];
     var url = '/api/' + _slug + '/venues?all=1' + (_confirmedOnly ? '&status=confirmed' : '');
-    fetch(url)
+    fetch(url, { headers: _authHeaders() })
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(venues) {
         _allVenues = venues;
@@ -275,7 +264,7 @@
       if (dataDone) _tryRender();
     });
 
-    fetch('/api/' + slug + '/venues?all=1&status=confirmed')
+    fetch('/api/' + slug + '/venues?all=1&status=confirmed', { headers: _authHeaders() })
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(venues) {
         _allVenues = venues;
@@ -310,7 +299,7 @@
     if (!ungeocoded.length) return;
     var btn      = document.getElementById('map-geocode-btn');
     var progress = document.getElementById('map-geocode-progress');
-    var token    = sessionStorage.getItem('smartist_token');
+    var token    = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
     if (btn)      btn.disabled = true;
     if (progress) progress.style.display = '';
 
