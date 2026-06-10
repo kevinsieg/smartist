@@ -109,7 +109,12 @@
         if (r.ok || r.status === 409) {
           sessionStorage.setItem('demo_email', email);
           sessionStorage.setItem('demo_name', email.split('@')[0]);
-          window.location.href = '/dashboard';
+          var slug = (r.data && r.data.slug) || 'demo';
+          var tok  = r.data && r.data.token;
+          if (tok) sessionStorage.setItem('smartist_token', tok);
+          // With a token the demo workspace opens fully; without one fall back
+          // to the public songs view.
+          window.location.href = tok ? '/' + slug + '/dashboard' : '/' + slug + '/songs';
         } else {
           msg.textContent = (r.data && r.data.error) || 'Something went wrong — try again.';
           btn.disabled = false; btn.textContent = 'Next →';

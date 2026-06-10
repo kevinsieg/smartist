@@ -10,15 +10,28 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=26">
+  <link rel="stylesheet" href="/app/css/app.css?v=27">
 </head>
-<body>
+<body class="brand-page">
+<header class="brand-bar">
+  <a class="brand-wordmark" href="/">smartist</a>
+  <nav><a href="#" id="ws-logout" style="display:none">log out</a></nav>
+</header>
 <main class="landing-main landing-main--no-nav">
   <div class="landing-card">
+    <div class="brand-wave" aria-hidden="true">
+      <span style="height:6px"></span><span style="height:14px"></span><span style="height:10px"></span>
+      <span style="height:22px"></span><span style="height:16px"></span><span style="height:28px"></span>
+      <span style="height:20px"></span><span style="height:30px"></span><span style="height:18px"></span>
+      <span style="height:24px"></span><span style="height:12px"></span><span style="height:18px"></span>
+      <span style="height:8px"></span>
+    </div>
+    <div class="brand-label">smartist studio for musicians</div>
     <h1 class="landing-title">Your workspaces</h1>
     <div id="workspaces-content"></div>
   </div>
 </main>
+<footer class="brand-foot">smartist · open source · <a href="/impressum">Impressum</a></footer>
 <script src="/app/js/services/identity.js"></script>
 <script src="/app/js/workspaces.js"></script>
 </body>

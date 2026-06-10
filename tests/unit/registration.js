@@ -8,8 +8,41 @@ async function run(r) {
   const { stubLogger } = require('./_runner');
   stubLogger();
 
-  const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken } =
+  const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken, checkEmailDeliverable } =
     require(path.join(__dirname, '../../api/_domain/registration'));
+
+  console.log(B('\ncheckEmailDeliverable'));
+
+  await testAsync('disposable domain → not deliverable', async () => {
+    const result = await checkEmailDeliverable('x@mailinator.com', async () => [{ exchange: 'mx.mailinator.com', priority: 10 }]);
+    assertEq(result.ok, false);
+  });
+
+  await testAsync('domain with MX records → deliverable', async () => {
+    const result = await checkEmailDeliverable('x@realband.com', async () => [{ exchange: 'mx1.realband.com', priority: 10 }]);
+    assertEq(result.ok, true);
+  });
+
+  await testAsync('domain with no MX records → not deliverable', async () => {
+    const result = await checkEmailDeliverable('x@nomail.com', async () => []);
+    assertEq(result.ok, false);
+  });
+
+  await testAsync('null MX (RFC 7505, exchange ".") → not deliverable', async () => {
+    const result = await checkEmailDeliverable('x@example.com', async () => [{ exchange: '.', priority: 0 }]);
+    assertEq(result.ok, false);
+  });
+
+  await testAsync('NXDOMAIN → not deliverable', async () => {
+    const err = Object.assign(new Error('nope'), { code: 'ENOTFOUND' });
+    const result = await checkEmailDeliverable('x@no-such-domain.zz', async () => { throw err; });
+    assertEq(result.ok, false);
+  });
+
+  await testAsync('transient DNS error → fail open (deliverable)', async () => {
+    const result = await checkEmailDeliverable('x@realband.com', async () => { throw new Error('ETIMEOUT'); });
+    assertEq(result.ok, true);
+  });
 
   console.log(B('\ncreateSignupToken'));
 
