@@ -1,5 +1,5 @@
-const { getDb, getArtist, getSlug, parsePage } = require('../_db');
-const { requireAuth } = require('../_auth');
+const { getDb, getSlug, parsePage } = require('../_db');
+const { requireAuth, getAccess, isPrivate } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr, validateNum } = require('../_validate');
 const { VENUE_PUBLIC_STATUSES } = require('../_constants');
@@ -9,10 +9,17 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
+    const { artist, user } = await getAccess(req, slug);
+    if (!artist) return res.status(404).json({ error: 'Artist not found' });
+    const viewOnly = !user;
+    if (viewOnly && isPrivate(artist))
+      return res.status(401).json({ error: 'This workspace is private' });
+
     if (req.query.slim) {
       const venues = await sql`
         SELECT id, name, city FROM venues
-        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND deleted = false
+        WHERE artist_id = ${artist.id} AND deleted = false
+          AND (NOT ${viewOnly} OR LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES}))
         ORDER BY name ASC
       `;
       return res.json(venues);
@@ -20,10 +27,14 @@ module.exports = wrap(async function handler(req, res) {
 
     if (req.query.all) {
       const statusFilter = req.query.status ? req.query.status.toLowerCase() : null;
+      // Map payload: no comment (private CRM notes) and no audit columns.
       const venues = await sql`
-        SELECT * FROM venues
-        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND deleted = false
+        SELECT id, name, street_number, street, city, postcode, country,
+               category, status, size, lat, lng
+        FROM venues
+        WHERE artist_id = ${artist.id} AND deleted = false
           AND (${statusFilter}::text IS NULL OR LOWER(status) = ${statusFilter})
+          AND (NOT ${viewOnly} OR LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES}))
         ORDER BY name ASC
       `;
       return res.json(venues);
@@ -36,13 +47,12 @@ module.exports = wrap(async function handler(req, res) {
     const country  = (req.query.country  || '').trim() || null;
     const has_gigs = req.query.has_gigs === '1';
     const pattern  = q ? `%${q}%` : null;
-    const viewOnly = !req.headers.authorization;
     let rows;
     if (has_gigs) {
       rows = await sql`
         SELECT *, COUNT(*) OVER() AS total
         FROM venues
-        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+        WHERE artist_id = ${artist.id}
           AND (${pattern}::text IS NULL
             OR name     ILIKE ${pattern}
             OR city     ILIKE ${pattern}
@@ -63,7 +73,7 @@ module.exports = wrap(async function handler(req, res) {
       rows = await sql`
         SELECT *, COUNT(*) OVER() AS total
         FROM venues
-        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+        WHERE artist_id = ${artist.id}
           AND (${pattern}::text IS NULL
             OR name     ILIKE ${pattern}
             OR city     ILIKE ${pattern}
@@ -77,12 +87,10 @@ module.exports = wrap(async function handler(req, res) {
         LIMIT ${limit} OFFSET ${offset}
       `;
     }
-    if (!rows.length) {
-      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
-      if (!exists) return res.status(404).json({ error: 'Artist not found' });
-    }
     const total = Number(rows[0]?.total ?? 0);
-    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    // Only the public (view-mode) response may be CDN-cached — authed responses
+    // contain non-public venues and must not be served from a shared cache.
+    if (viewOnly) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }
 

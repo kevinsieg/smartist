@@ -28,20 +28,15 @@ var PLATFORMS = [
 
 var _cfg = null;
 var _editingId = null; // platform key being edited; null = new custom
-var _viewMode = false;
 
 function _platforms() { return _cfg?.config?.platforms || {}; }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 window.onNavAuthEmpty = function() { goToLogin(); };
-initPage(async function(cfg, viewMode) {
+initPage(async function(cfg) {
   _cfg = cfg;
-  _viewMode = viewMode;
   renderHub();
-  if (_viewMode) {
-    applyViewMode();
-  }
 });
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -69,7 +64,7 @@ function renderCustom(conn) {
     .filter(([id]) => id.startsWith('custom_'))
     .sort(([, a], [, b]) => (a.label || '').localeCompare(b.label || ''));
 
-  var addTile = _viewMode ? '' :
+  var addTile =
     `<div class="platform-card pc-add" onclick="openAddModal()">
        <div class="pc-top">
          <span class="pc-icon pc-icon-add">+</span>
@@ -86,9 +81,9 @@ function platformCard(p, conn) {
   const on = conn?.url;
   const initials = p.label.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const urlDisplay = on ? conn.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
-  var clickAttr = _viewMode ? '' : (on ? `onclick="openEditModal('${p.id}')"` : `onclick="openConnectModal('${p.id}')"`);
+  var clickAttr = on ? `onclick="openEditModal('${p.id}')"` : `onclick="openConnectModal('${p.id}')"`;
   return `
-    <div class="platform-card${on ? ' pc-on' : ''}${_viewMode ? ' pc-view' : ''}" ${clickAttr}>
+    <div class="platform-card${on ? ' pc-on' : ''}" ${clickAttr}>
       <div class="pc-top">
         <span class="pc-icon">${escHtml(initials)}</span>
         <div class="pc-info">
@@ -108,7 +103,7 @@ function customCard(id, conn) {
   const initials = label.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const urlDisplay = conn.url ? conn.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
   return `
-    <div class="platform-card pc-on${_viewMode ? ' pc-view' : ''}" ${_viewMode ? '' : `onclick="openEditModal('${escHtml(id)}')"`}>
+    <div class="platform-card pc-on" onclick="openEditModal('${escHtml(id)}')">
       <div class="pc-top">
         <span class="pc-icon">${escHtml(initials)}</span>
         <div class="pc-info">
@@ -121,10 +116,6 @@ function customCard(id, conn) {
                       <a class="btn pc-visit" href="${safeUrl(conn.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>
                     </div>` : ''}
     </div>`;
-}
-
-function safeUrl(url) {
-  return /^https?:\/\//i.test(url || '') ? url : '#';
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────

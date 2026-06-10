@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS artists (
   id            SERIAL PRIMARY KEY,
   slug          TEXT UNIQUE NOT NULL,             -- URL-safe identifier, e.g. "myband"
   name          TEXT NOT NULL,                    -- display name, e.g. "My Band"
-  password_hash TEXT,                             -- bcrypt hash; NULL for OAuth/signup-created artists
+  password_hash TEXT,                             -- bcrypt hash, NULL for OAuth/signup-created artists
   config        JSONB NOT NULL DEFAULT '{}',
   social_links  JSONB NOT NULL DEFAULT '{}'
 );
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS songs (
   artist_id           INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
   title               TEXT NOT NULL,
   active              BOOLEAN NOT NULL DEFAULT true,
-  heart               BOOLEAN NOT NULL DEFAULT false,  -- favourite; always included in auto-generation
+  heart               BOOLEAN NOT NULL DEFAULT false,  -- favourite, always included in auto-generation
   key                 TEXT,             -- musical key, e.g. "G", "Am"
   genre               TEXT,             -- genre or style grouping
   energy              TEXT,             -- descriptive energy level, e.g. "Slow", "Medium", "Fast"
@@ -317,12 +317,15 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash     TEXT,                    -- NULL until invite accepted
   role              TEXT NOT NULL DEFAULT 'member'
                     CHECK (role IN ('admin', 'member', 'viewer')),
-  invite_token_hash TEXT,                    -- SHA256(raw token); NULL after accepted
+  invite_token_hash TEXT,                    -- SHA256(raw token), NULL after accepted
   invite_expires_at TIMESTAMPTZ,
   invited_by        INTEGER REFERENCES users(id),
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (artist_id, email)
 );
+-- Membership resolution in requireAuth joins users on email (multi-workspace
+-- users share an email across rows) — runs on every authenticated request.
+CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
 
 -- ── Future migrations ────────────────────────────────────────────────────────
 -- Add ALTER TABLE … ADD COLUMN IF NOT EXISTS blocks here when the schema evolves.

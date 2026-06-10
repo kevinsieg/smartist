@@ -1,6 +1,6 @@
 const crypto = require('crypto');
-const { getDb, getArtist, getSlug } = require('../../_db');
-const { requireAuth } = require('../../_auth');
+const { getDb, getSlug } = require('../../_db');
+const { requireAuth, getAccess, isPrivate } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { validateStr } = require('../../_validate');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../../_r2');
@@ -16,9 +16,11 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const artist = await getArtist(slug);
+    const { artist, user } = await getAccess(req, slug);
     if (!artist) return res.status(404).json({ error: 'Artist not found' });
-    const [gig] = await sql`
+    if (!user && isPrivate(artist))
+      return res.status(401).json({ error: 'This workspace is private' });
+    let [gig] = await sql`
       SELECT g.*, v.name AS venue_name, o.name AS organizer_name
       FROM gigs g
       LEFT JOIN venues v ON v.id = g.venue_id
@@ -26,6 +28,8 @@ module.exports = wrap(async function handler(req, res) {
       WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
     `;
     if (!gig) return res.status(404).json({ error: 'Gig not found' });
+    // Public visitors never see the private gig comment.
+    if (!user) { const { comment: _, ...rest } = gig; gig = rest; }
     if (req.query.refs) {
       const setlists = await sql`
         SELECT id, title FROM setlists

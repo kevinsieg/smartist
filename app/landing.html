@@ -34,10 +34,13 @@
   .site-header .wordmark { font-size: 1rem; font-weight: 700; letter-spacing: 0.12em; }
   .site-header nav a { font-size: 0.68rem; color: #999; text-decoration: none; letter-spacing: 0.1em; margin-left: 18px; }
   .site-header nav a:hover { color: #b06a2a; }
+  .site-nav-signin { color: #b06a2a !important; border: 1px solid #b06a2a; border-radius: 2px; padding: 4px 10px; }
+  .site-nav-signin:hover { background: #b06a2a; color: #f5f0ea !important; }
   @media (min-width: 640px) {
     .site-header { padding: 20px 40px; }
     .site-header .wordmark { font-size: 1.1rem; }
     .site-header nav a { font-size: 0.72rem; margin-left: 24px; }
+    .site-nav-signin { padding: 5px 12px; }
   }
 
   /* ── Hero ── */
@@ -149,6 +152,7 @@
   <nav>
     <a href="https://github.com/kevinsieg/smartist">github</a>
     <a href="mailto:hi@smartist.studio">contact</a>
+    <a href="/login" class="site-nav-signin">sign in</a>
   </nav>
 </header>
 

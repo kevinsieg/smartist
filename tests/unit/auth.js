@@ -85,10 +85,14 @@ async function run(r) {
 
   const FAKE_ARTIST = { id: 1, slug: 'testband', name: 'Test Band', password_hash: '$2b$12$fakehash' };
 
-  function stubAuthDeps(tokenClaim) {
+  // memberRows: what the membership query returns — defaults to a row matching
+  // the token claim (user belongs to the artist with that role).
+  function stubAuthDeps(tokenClaim, memberRows) {
+    const rows = memberRows !== undefined ? memberRows
+      : (tokenClaim ? [{ id: tokenClaim.userId, role: tokenClaim.role }] : []);
     require.cache[dbPath2] = {
       id: dbPath2, filename: dbPath2, loaded: true,
-      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => null },
+      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => async () => rows },
     };
     require.cache[tokenPath2] = {
       id: tokenPath2, filename: tokenPath2, loaded: true,
@@ -147,6 +151,25 @@ async function run(r) {
     const req = { headers: { authorization: 'Bearer faketoken' } };
     const result = await requireAuth(req, res, 'testband');
     assert(result !== null, 'expected artist');
+  });
+
+  await r.testAsync('valid token but no membership in this workspace → null + 401', async () => {
+    const { requireAuth } = stubAuthDeps({ userId: 99, role: 'admin' }, []);
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 401);
+  });
+
+  await r.testAsync('role comes from the membership row, not the token', async () => {
+    // Token claims admin, but the user is only a viewer in this workspace.
+    const { requireAuth } = stubAuthDeps({ userId: 1, role: 'admin' }, [{ id: 1, role: 'viewer' }]);
+    const res = mockRes();
+    const req = { headers: { authorization: 'Bearer faketoken' } };
+    const result = await requireAuth(req, res, 'testband', 'member');
+    assertEq(result, null);
+    assertEq(res.statusCode(), 403);
   });
 
   // ── login response includes artists list ─────────────────────────────────

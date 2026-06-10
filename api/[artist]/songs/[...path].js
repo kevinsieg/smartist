@@ -1,5 +1,5 @@
-const { getDb, getArtist, insertAuditLog, getSlug } = require('../../_db');
-const { requireAuth } = require('../../_auth');
+const { getDb, insertAuditLog, getSlug } = require('../../_db');
+const { requireAuth, getAccess, isPrivate } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { checkRateLimit, clientIp } = require('../../_ratelimit');
 const { suggestLyricsWithAI } = require('../../_ai');
@@ -427,8 +427,10 @@ module.exports = wrap(async function handler(req, res) {
   // ── GET /api/:artist/songs/:id/arrangements ───────────────────────────────
   // Public — no auth required; arrangements are read-only display data (used by stage view)
   if (action === 'arrangements' && !arrId && req.method === 'GET') {
-    const band = await getArtist(slug);
+    const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!user && isPrivate(band))
+      return res.status(401).json({ error: 'This workspace is private' });
     const sql = getDb();
     const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
@@ -527,8 +529,10 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── GET single song (used by stage view); includes arrangements ─────────────
   if (!action && req.method === 'GET') {
-    const band = await getArtist(slug);
+    const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!user && isPrivate(band))
+      return res.status(401).json({ error: 'This workspace is private' });
     const sql = getDb();
     const [song] = await sql`
       SELECT s.*,
@@ -618,8 +622,10 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'setlists') {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await getArtist(slug);
+    const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!user && isPrivate(band))
+      return res.status(401).json({ error: 'This workspace is private' });
 
     const sql = getDb();
     const setlists = await sql`
@@ -639,8 +645,10 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'gema') {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-    const band = await getArtist(slug);
+    const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!user && isPrivate(band))
+      return res.status(401).json({ error: 'This workspace is private' });
 
     const sql = getDb();
     const works = await sql`

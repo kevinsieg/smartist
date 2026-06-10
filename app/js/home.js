@@ -1,14 +1,20 @@
 var artistSlug = '';
+var _loginNext = '';
 
 async function init() {
+  // Auth params arrive in the URL fragment (never sent to servers or logged);
+  // query params still work for older emailed links.
   const params       = new URLSearchParams(window.location.search);
-  const magic        = params.get('magic') || new URLSearchParams(window.location.hash.slice(1)).get('magic');
-  const hint         = params.get('hint');
-  const invite       = params.get('invite');
-  const oauthError   = params.get('oauth_error');
+  const hashParams   = new URLSearchParams(window.location.hash.slice(1));
+  const qp           = function(k) { return hashParams.get(k) || params.get(k); };
+  const magic        = qp('magic');
+  const hint         = qp('hint');
+  const invite       = qp('invite');
+  const oauthError   = qp('oauth_error');
   const path         = window.location.pathname.replace(/\/+$/, '') || '/';
-  const next         = params.get('next') || '';
+  const next         = qp('next') || '';
   const slugFromNext = next.split('/').filter(Boolean)[0] || '';
+  _loginNext = next; // survives the URL strip below
 
   const hasToken = !!(sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY));
   if (path === '/' && !magic && !oauthError && !invite && !hasToken) {
@@ -78,7 +84,7 @@ async function verifyToken(token, hint) {
 // ── Logged-in state ───────────────────────────────────────────────────────────
 
 function renderLoggedIn(cfg, artists) {
-  const next = new URLSearchParams(window.location.search).get('next');
+  const next = _loginNext || new URLSearchParams(window.location.search).get('next');
   if (next && next.startsWith('/') && !next.startsWith('//')) {
     window.location.href = next;
     return;
@@ -149,7 +155,7 @@ function renderLogin(errorMsg, cfg) {
         '<div class="auth-error" id="reset-msg"></div>' +
         '<button class="btn auth-submit" id="reset-btn">Send link</button>' +
       '</div>' +
-      '<div class="auth-view-hint">No account? <a href="/songs">Browse in view mode →</a></div>' +
+      '<p class="auth-hint">No account? <a href="/signup">Sign up free →</a></p>' +
     '</div>';
 
   if (showGoogle)   document.getElementById('google-btn').addEventListener('click', () => startOAuth('google'));

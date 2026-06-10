@@ -438,57 +438,26 @@ async function testVenues(slug) {
 
 async function testOrganizers(slug) {
   console.log(B(`\n/api/${slug}/organizers`));
-  let firstOrg = null;
 
-  await test('GET returns paginated shape', async () => {
+  // Organizer records are private CRM data — every read requires auth.
+  await test('GET without token → 401', async () => {
     const { res, json } = await GET(`/api/${slug}/organizers`);
-    assertStatus(res, json, 200);
-    assert(Array.isArray(json.rows), 'json.rows not an array');
-    assert(typeof json.total === 'number', 'json.total not a number');
-    if (json.rows.length) firstOrg = json.rows[0];
+    assertStatus(res, json, 401);
   });
 
-  await test('GET ?slim=1 still returns plain array', async () => {
+  await test('GET ?slim=1 without token → 401', async () => {
     const { res, json } = await GET(`/api/${slug}/organizers?slim=1`);
-    assertStatus(res, json, 200);
-    assert(Array.isArray(json), 'slim should return plain array');
+    assertStatus(res, json, 401);
   });
 
-  await test('GET ?q= filters results', async () => {
-    const { res, json } = await GET(`/api/${slug}/organizers?q=zzznomatch`);
-    assertStatus(res, json, 200);
-    assert(json.rows.length === 0, 'expected 0 rows for non-matching query');
-    assert(json.total === 0, 'expected total 0 for non-matching query');
+  await test('GET /:id without token → 401', async () => {
+    const { res, json } = await GET(`/api/${slug}/organizers/999999999`);
+    assertStatus(res, json, 401);
   });
-
-  if (firstOrg) {
-    await test('GET /:id returns organizer', async () => {
-      const { res, json } = await GET(`/api/${slug}/organizers/${firstOrg.id}`);
-      assertStatus(res, json, 200);
-      assert(json.id === firstOrg.id, 'id mismatch');
-      assert('name' in json, 'missing name');
-    });
-
-    await test('GET /:id?refs=1 returns organizer with refs', async () => {
-      const { res, json } = await GET(`/api/${slug}/organizers/${firstOrg.id}?refs=1`);
-      assertStatus(res, json, 200);
-      assert('organizer' in json && 'refs' in json, 'missing organizer or refs');
-      assert(Array.isArray(json.refs.gigs), 'refs.gigs should be an array');
-      if (json.refs.gigs.length > 0) {
-        const g = json.refs.gigs[0];
-        assert('id' in g && 'title' in g && 'date' in g, 'gig missing id/title/date');
-      }
-    });
-  }
 
   await test('GET /:id with id=0 → 400', async () => {
     const { res, json } = await GET(`/api/${slug}/organizers/0`);
     assertStatus(res, json, 400);
-  });
-
-  await test('GET /:id not found → 404', async () => {
-    const { res, json } = await GET(`/api/${slug}/organizers/999999999`);
-    assertStatus(res, json, 404);
   });
 }
 

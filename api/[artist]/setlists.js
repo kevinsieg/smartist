@@ -1,5 +1,5 @@
-const { getDb, getArtist, getSlug } = require('../_db');
-const { requireAuth } = require('../_auth');
+const { getDb, getSlug } = require('../_db');
+const { requireAuth, getAccess, isPrivate } = require('../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../_validate');
 const { buildSetlistPdf, setlistTitle } = require('../_pdf');
 const { sendEmail } = require('../_email');
@@ -11,7 +11,11 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const viewMode = !req.headers.authorization;
+    const { artist, user } = await getAccess(req, slug);
+    if (!artist) return res.status(404).json({ error: 'Band not found' });
+    const viewMode = !user;
+    if (viewMode && isPrivate(artist))
+      return res.status(401).json({ error: 'This workspace is private' });
     const setlists = await sql`
       SELECT
         s.*,
@@ -23,7 +27,7 @@ module.exports = wrap(async function handler(req, res) {
       LEFT JOIN gigs g ON s.gig_id = g.id
       LEFT JOIN venues v ON v.id = g.venue_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
-      WHERE s.artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+      WHERE s.artist_id = ${artist.id}
       GROUP BY s.id, g.title, g.date, v.name
       ORDER BY s.created_at DESC
     `;
