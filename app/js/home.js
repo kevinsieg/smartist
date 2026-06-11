@@ -90,6 +90,12 @@ function renderLoggedIn(cfg, artists) {
     return;
   }
   if (!artists || artists.length === 0) {
+    // Single-tenant installs (ARTIST_SLUG set) use legacy bootstrap auth with
+    // no users rows — the workspace is fixed by the deployment, never onboarding.
+    if (cfg?.singleTenant && cfg.slug) {
+      window.location.href = '/' + cfg.slug + '/dashboard';
+      return;
+    }
     window.location.href = '/onboarding';
     return;
   }

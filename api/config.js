@@ -359,7 +359,7 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return fail('band_not_found');
     await logger.info('oauth_login', { provider, email });
     const token = generateMagicToken(band.password_hash);
-    return res.redirect(302, `${origin}/#magic=${encodeURIComponent(token)}`);
+    return res.redirect(302, `${origin}/login#magic=${encodeURIComponent(token)}`);
   }
 
   // ── GET — public config (songs, counts, feature flags) ───────────────────
@@ -408,5 +408,6 @@ module.exports = wrap(async function handler(req, res) {
     counts,
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
+    singleTenant:  !!process.env.ARTIST_SLUG,
   });
 });
