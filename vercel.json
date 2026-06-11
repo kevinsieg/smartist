@@ -23,6 +23,7 @@
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
     { "source": "/impressum",       "destination": "/app/impressum.html" },
     { "source": "/demo",            "destination": "/app/demo.html" },
+    { "source": "/stage",           "destination": "/app/stage.html" },
 
     { "source": "/:slug/dashboard",        "destination": "/app/dashboard.html" },
     { "source": "/:slug/songs",            "destination": "/app/songs.html" },

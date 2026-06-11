@@ -1541,7 +1541,7 @@ function _openSongPanel(setlistSid, songId) {
 }
 
 function _histStage(sid) {
-  window.open('/stage?id=' + sid, '_blank');
+  window.open('/' + _artistSlug + '/stage?id=' + sid, '_blank');
 }
 
 async function _histExportPdf(sid) {
@@ -1592,7 +1592,7 @@ function _histShareMenu(sid, btn) {
 }
 
 function _histCopyLink(sid) {
-  var url = location.origin + '/stage?id=' + sid;
+  var url = location.origin + '/' + _artistSlug + '/stage?id=' + sid;
   var menu = document.getElementById('share-menu-popup');
   var item = menu && menu.querySelectorAll('.share-menu-item')[1];
   if (item) item.innerHTML = '<span class="share-menu-icon">✓</span><span class="share-menu-label">Copied!</span>';
