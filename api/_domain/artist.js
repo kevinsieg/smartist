@@ -1,6 +1,6 @@
 const RESERVED_SLUGS = new Set([
   'login', 'signup', 'onboarding', 'home', 'demo', 'impressum', 'api', 'app',
-  'auth', 'callback', 'static', 'favicon_io',
+  'auth', 'callback', 'static', 'favicon_io', 'stage',
 ]);
 
 async function resolveArtist(slug, sql) {
