@@ -89,12 +89,13 @@ function _navHtml(setlistId, songs, idx) {
   var listIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
   var prevIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="15 18 9 12 15 6"/></svg>';
   var nextIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="9 18 15 12 9 6"/></svg>';
-  var backBtn = `<a class="stage-share-btn" href="/stage?id=${setlistId}" title="Back to setlist">${listIcon}</a>`;
+  var base    = '/' + _shareSlug + '/stage';
+  var backBtn = `<a class="stage-share-btn" href="${base}?id=${setlistId}" title="Back to setlist">${listIcon}</a>`;
   var prevBtn = prevSong
-    ? `<a class="stage-share-btn" href="/stage?song=${prevSong.id}&from=${setlistId}" title="${escHtml(prevSong.title)}">${prevIcon}</a>`
+    ? `<a class="stage-share-btn" href="${base}?song=${prevSong.id}&from=${setlistId}" title="${escHtml(prevSong.title)}">${prevIcon}</a>`
     : `<button class="stage-share-btn" disabled title="No previous song">${prevIcon}</button>`;
   var nextBtn = nextSong
-    ? `<a class="stage-share-btn" href="/stage?song=${nextSong.id}&from=${setlistId}" title="${escHtml(nextSong.title)}">${nextIcon}</a>`
+    ? `<a class="stage-share-btn" href="${base}?song=${nextSong.id}&from=${setlistId}" title="${escHtml(nextSong.title)}">${nextIcon}</a>`
     : `<button class="stage-share-btn" disabled title="No next song">${nextIcon}</button>`;
   return `${backBtn}${prevBtn}${nextBtn}<span class="stage-nav-sep"></span>`;
 }
@@ -126,7 +127,10 @@ async function init() {
   try {
     // Start network fetch immediately, but use cached config if available so
     // the slug is known synchronously and data fetches don't have to wait.
-    const _stageSlug = window.location.pathname.split('/').filter(Boolean)[0] || '';
+    // Legacy single-tenant links use /stage without a slug — the empty slug
+    // lets /api/config fall back to the deployment's ARTIST_SLUG.
+    const _stageSeg  = window.location.pathname.split('/').filter(Boolean)[0] || '';
+    const _stageSlug = _stageSeg === 'stage' ? '' : _stageSeg;
     var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default');
     const cfgFetch = fetch('/api/config' + (_stageSlug ? '?slug=' + encodeURIComponent(_stageSlug) : ''),
       { headers: _stageAuthHeaders() }
@@ -180,7 +184,7 @@ async function initSetlist(params, el, cfg) {
     const bjCapo  = song.extra && song.extra.banjoCapo != null ? song.extra.banjoCapo : null;
     return `<li class="stage-song">
       <span class="stage-num">${i + 1}.</span>
-      <a class="stage-song-title stage-song-link" href="/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
+      <a class="stage-song-title stage-song-link" href="/${cfg.slug}/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
       ${song.key     ? `<span class="stage-key">${escHtml(song.key)}</span>`    : ''}
       ${gitCapo !== null ? `<span class="stage-capo">Git: ${gitCapo}</span>` : ''}
       ${bjCapo  !== null ? `<span class="stage-capo">Bj: ${bjCapo}</span>`   : ''}

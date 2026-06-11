@@ -437,7 +437,7 @@ function _openSongPanelContent(item, panelEl) {
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
     '</svg></button>';
-  actions += '<a class="btn icon-btn" data-tooltip="Stage view (full-screen)" href="/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
+  actions += '<a class="btn icon-btn" data-tooltip="Stage view (full-screen)" href="/' + _artistSlug + '/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>' +
     '</svg></a>';
