@@ -151,8 +151,17 @@ module.exports = wrap(async function handler(req, res) {
         AND email = ${String(email).trim().toLowerCase()}
         AND password_hash IS NOT NULL
     `;
-    if (!user || !await bcrypt.compare(password, user.password_hash))
+    if (!user || !await bcrypt.compare(password, user.password_hash)) {
+      // Bootstrap fallback: legacy single-tenant installs have no users rows —
+      // accept ARTIST_ADMIN_EMAIL with the artist password.
+      const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
+      if (!user && adminEmail
+          && String(email).trim().toLowerCase() === adminEmail.toLowerCase()
+          && await checkCredentials(password, band)) {
+        return res.json({ ok: true, adminEmail });
+      }
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
 
     const ttl     = rememberMe ? TTL_30D : TTL_8H;
     const token   = generateUserToken(user.id, user.role, ttl);
