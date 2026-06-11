@@ -25,6 +25,21 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication","name":"smartist","url":"https://smartist.studio","description":"smartist studio for musicians — open source. Setlists, song catalogue, PRO reporting, gig management.","applicationCategory":"MusicApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"author":{"@type":"Person","name":"Kevin Sieg"},"license":"https://opensource.org/licenses/MIT"}
 </script>
+<script>
+// Single-tenant deployments (ARTIST_SLUG set) skip the marketing landing and
+// go straight to login. The flag is cached so repeat visits redirect before
+// paint; on multi-tenant installs /api/config without a slug 404s → no-op.
+(function () {
+  function toLogin() { location.replace('/login' + location.search + location.hash); }
+  if (localStorage.getItem('smartist_single_tenant') === '1') { toLogin(); return; }
+  fetch('/api/config?light=1')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (cfg) {
+      if (cfg && cfg.singleTenant) { localStorage.setItem('smartist_single_tenant', '1'); toLogin(); }
+    })
+    .catch(function () {});
+}());
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Courier New', Courier, monospace; background: #f5f0ea; color: #1a1a1a; -webkit-text-size-adjust: 100%; }
