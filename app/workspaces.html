@@ -28,10 +28,12 @@
     </div>
     <div class="brand-label">smartist studio for musicians</div>
     <h1 class="landing-title">Your workspaces</h1>
+    <p class="ws-explain">A workspace is the home of one band or artist &mdash; its songs, setlists, gigs and members all live inside it. Pick a workspace to continue, or create a new one for another band or project.</p>
     <div id="workspaces-content"></div>
   </div>
 </main>
-<footer class="brand-foot">smartist · open source · <a href="/impressum">Impressum</a></footer>
+<footer class="brand-foot">&copy; <span class="foot-year"></span> smartist &middot; powered by <a href="https://smartist.studio" target="_blank" rel="noopener">smartist.studio</a> &middot; <a href="/contact">Contact</a></footer>
+<script>document.querySelectorAll('.foot-year').forEach(function(el){ el.textContent = new Date().getFullYear(); });</script>
 <script src="/app/js/services/identity.js"></script>
 <script src="/app/js/workspaces.js"></script>
 </body>

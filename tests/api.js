@@ -109,6 +109,21 @@ async function testConfig() {
     result = json;
   });
 
+  await test('unauthenticated config reports role null', async () => {
+    const { res, json } = await GET('/api/config');
+    assertStatus(res, json, 200);
+    assert('role' in json, 'role field missing');
+    assert(json.role === null, `expected role null, got ${JSON.stringify(json.role)}`);
+  });
+
+  if (PASSWORD) {
+    await test('bootstrap-token config reports role null (no users row)', async () => {
+      const { res, json } = await GET('/api/config', { token: PASSWORD });
+      assertStatus(res, json, 200);
+      assert(json.role === null, `expected bootstrap role null, got ${JSON.stringify(json.role)}`);
+    });
+  }
+
   return result;
 }
 
@@ -677,6 +692,66 @@ async function testMultiUserAuth(slug, token) {
       assert(json.user?.role === 'viewer', 'role updated');
     });
   }
+
+  if (_testUserId) {
+    await test('PUT updates user email → 200', async () => {
+      const newEmail = '[TEST]renamed_' + Date.now() + '@example.com';
+      const { res, json } = await PUT(`/api/${slug}/auth`,
+        { userId: _testUserId, email: newEmail }, { token });
+      assertStatus(res, json, 200);
+      assert(json.user?.email === newEmail.toLowerCase(), 'email updated');
+    });
+
+    await test('PUT email duplicate of existing user → 409', async () => {
+      // First user in the list is some other account; reusing its email must conflict.
+      const { json: list } = await GET(`/api/${slug}/auth`, { token });
+      const other = (list.users || []).find(u => u.id !== _testUserId);
+      if (!other) { console.log('    (skipped — only one user)'); return; }
+      const { res, json } = await PUT(`/api/${slug}/auth`,
+        { userId: _testUserId, email: other.email }, { token });
+      assertStatus(res, json, 409);
+    });
+
+    await test('PUT invalid email → 400', async () => {
+      const { res, json } = await PUT(`/api/${slug}/auth`,
+        { userId: _testUserId, email: 'not-an-email' }, { token });
+      assertStatus(res, json, 400);
+    });
+  }
+
+  await test('PUT with neither role nor email → 400', async () => {
+    const { res, json } = await PUT(`/api/${slug}/auth`,
+      { userId: 999999 }, { token });
+    assertStatus(res, json, 400);
+  });
+
+  // POST ?action=change-password
+  await test('POST change-password without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
+      { currentPassword: 'a'.repeat(8), newPassword: 'b'.repeat(8) });
+    assertStatus(res, json, 401);
+  });
+
+  await test('POST change-password with bootstrap token → 400', async () => {
+    // Valid fields, but bootstrap login has no users row — rejected by the bootstrap guard.
+    const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
+      { currentPassword: 'a'.repeat(8), newPassword: 'b'.repeat(8) }, { token });
+    assertStatus(res, json, 400);
+  });
+
+  await test('POST change-password short newPassword → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
+      { currentPassword: 'a'.repeat(8), newPassword: 'short' }, { token });
+    assertStatus(res, json, 400);
+  });
+
+  await test('POST change-password missing fields → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
+      {}, { token });
+    assertStatus(res, json, 400);
+  });
+
+  skip('POST change-password success path', 'needs a named-user token; invite flow is email-gated locally');
 
   // POST login with email — wrong password → 401
   await test('POST email login rejects bad credentials → 401', async () => {

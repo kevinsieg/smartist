@@ -30,7 +30,8 @@
     <div id="onboarding-content"></div>
   </div>
 </main>
-<footer class="brand-foot">smartist · open source · <a href="/impressum">Impressum</a></footer>
+<footer class="brand-foot">&copy; <span class="foot-year"></span> smartist &middot; powered by <a href="https://smartist.studio" target="_blank" rel="noopener">smartist.studio</a> &middot; <a href="/contact">Contact</a></footer>
+<script>document.querySelectorAll('.foot-year').forEach(function(el){ el.textContent = new Date().getFullYear(); });</script>
 <script src="/app/js/services/registration.js"></script>
 <script src="/app/js/services/artist.js"></script>
 <script src="/app/js/onboarding.js"></script>

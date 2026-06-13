@@ -45,6 +45,8 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/venues` | `app/js/venues.js` |
 | `/organizers` | `app/js/organizers.js` |
 | `/hub` | `app/js/hub.js` |
+| `/profile` | inline script in `profile.html` — personal (email, change password) |
+| `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
 | `/stage?id=N` | `app/js/stage.js` — **no `common.js`; no nav** |
 
 `app/js/common.js` is loaded by every page except `stage.html`. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `common.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()` (which lives in `common.js`).
@@ -61,7 +63,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | File | Routes |
 |------|--------|
 | `api/config.js` | `GET /api/config`; `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (via `/auth/callback` rewrite); `GET ?action=photo-url` (presigned upload) |
-| `api/[artist]/auth.js` | `POST /api/:artist/auth`; `POST /api/:artist/request-reset` (via rewrite) |
+| `api/[artist]/auth.js` | `POST /api/:artist/auth` (login); `POST ?action=invite\|resend-invite\|accept-invite\|change-password`; `GET` (list users), `PUT` (role/email), `DELETE` — admin; `POST /api/:artist/request-reset` (via rewrite) |
 | `api/[artist]/gigs.js` | `GET/POST /api/:artist/gigs` |
 | `api/[artist]/gigs/[id].js` | `GET/PUT/DELETE /api/:artist/gigs/:id` |
 | `api/[artist]/organizers.js` | `GET/POST /api/:artist/organizers` |

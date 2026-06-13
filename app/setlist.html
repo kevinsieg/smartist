@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <title>Setlist Generator</title>
+    <title>Setlists</title>
     <meta charset="utf-8"/>
     <meta name="description" content="Setlist generator"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -51,14 +51,10 @@
   .hist-song-edit-btn { background:none; border:none; cursor:pointer; font-size:0.75rem; color:var(--third-color); padding:0 0.2rem; flex-shrink:0; opacity:0.6; }
   .hist-song-edit-btn:hover { opacity:1; color:var(--secondary-ink); }
   .hist-song-row:hover .hist-song-edit-btn { color:var(--secondary-ink); opacity:1; }
-
-  /* Share menu popover */
-  .share-menu { background:#fff; border:1px solid var(--border-color); border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.14); min-width:190px; overflow:hidden; animation:share-menu-in 60ms ease-out; z-index:200; }
-  @keyframes share-menu-in { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
-  .share-menu-item { display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; font-size:0.84rem; cursor:pointer; color:var(--secondary-ink); border-bottom:1px solid var(--border-color); }
-  .share-menu-item:last-child { border-bottom:none; }
-  .share-menu-item:hover { background:var(--secondary-color); }
-  .share-menu-icon { font-size:1rem; flex-shrink:0; }
+  /* Touch: no hover — keep the edit pencil fully visible and easy to tap */
+  @media (hover:none) {
+    .hist-song-edit-btn { opacity:1; color:var(--secondary-ink); padding:0.3rem 0.5rem; }
+  }
 
   /* Tab bar — id-specific positioning */
   #setlist-tabs {
@@ -84,11 +80,11 @@
 <main>
     <section class="app-page setlist-page-wrap">
         <div id="setlist-tabs" class="page-tabs" style="display:none">
-            <button class="setlist-tab setlist-tab--active" data-tab="generator" onclick="switchTab('generator')">Generator</button>
-            <button class="setlist-tab" data-tab="history" onclick="switchTab('history')">History</button>
+            <button class="setlist-tab setlist-tab--active" data-tab="generator" onclick="switchTab('generator')">Build setlist</button>
+            <button class="setlist-tab" data-tab="history" onclick="switchTab('history')">Saved setlists</button>
         </div>
         <div class="app-wrap">
-            <h1 id="setlist-page-title">Setlist Generator</h1>
+            <h1 id="setlist-page-title">Build a setlist</h1>
             <div id="setlist-content">
                 <p style="text-align:center;color:var(--third-color);">Loading songs…</p>
             </div>

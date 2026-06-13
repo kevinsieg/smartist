@@ -125,7 +125,11 @@ function createListView(opts) {
     if (!body) return;
 
     if (!_items.length) {
-      body.innerHTML = '<p style="text-align:center;color:var(--third-color);padding:2rem;">No results.</p>';
+      // Truly no data (not just filtered to zero) → page-specific empty-state CTA
+      var _isEmpty = typeof opts.getTotal === 'function' && opts.getTotal() === 0;
+      body.innerHTML = (_isEmpty && opts.emptyHtml)
+        ? opts.emptyHtml
+        : '<p style="text-align:center;color:var(--third-color);padding:2rem;">No results.</p>';
       return;
     }
 
@@ -295,7 +299,7 @@ function createListView(opts) {
         if (!btn) return;
         var label = btn.dataset.lvAction;
         var action = (opts.actions || []).find(function(a) { return a.label === label; });
-        if (action && action.onClick) action.onClick();
+        if (action && action.onClick) action.onClick(btn);
       });
     }
   }
