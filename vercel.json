@@ -22,6 +22,7 @@
     { "source": "/home",            "destination": "/app/workspaces.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
     { "source": "/impressum",       "destination": "/app/impressum.html" },
+    { "source": "/contact",         "destination": "/app/contact.html" },
     { "source": "/demo",            "destination": "/app/demo.html" },
     { "source": "/stage",           "destination": "/app/stage.html" },
 
@@ -36,8 +37,10 @@
     { "source": "/:slug/pro-import",       "destination": "/app/pro-import.html" },
     { "source": "/:slug/gema-import",      "destination": "/app/pro-import.html" },
     { "source": "/:slug/profile",          "destination": "/app/profile.html" },
-    { "source": "/:slug/users",            "destination": "/app/users.html" },
+    { "source": "/:slug/settings",         "destination": "/app/settings.html" },
+    { "source": "/:slug/users",            "destination": "/app/settings.html" },
     { "source": "/:slug/stage",            "destination": "/app/stage.html" },
+    { "source": "/:slug/contact",          "destination": "/app/contact.html" },
 
     { "source": "/:slug",           "destination": "/app/dashboard.html" }
   ],

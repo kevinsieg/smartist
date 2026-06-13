@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Settings</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#f9bf8f">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css?v=27">
+  <style>
+    .settings-wrap { max-width: 680px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
+    .invite-bar { display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;padding:1rem 1.1rem;background:var(--surface-color);border:1px solid var(--border-color);border-radius:4px; }
+    .invite-field { display:flex;flex-direction:column;gap:0.3rem;flex:1 1 180px;min-width:0; }
+    .invite-field label { font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color); }
+    .invite-input { padding:0.45rem 0.65rem;border:1px solid var(--border-color);border-radius:3px;font-family:'Courier New',monospace;font-size:0.88rem;background:var(--bg-color);color:var(--black);outline:none; }
+    .invite-input:focus { border-color:var(--secondary-color); }
+    .invite-role { padding:0.45rem 0.55rem;border:1px solid var(--border-color);border-radius:3px;font-family:'Courier New',monospace;font-size:0.88rem;background:var(--bg-color);color:var(--black);cursor:pointer;min-width:110px; }
+    .user-section-label { font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color);margin:1.25rem 0 0.5rem; }
+    .user-list { border:1px solid var(--border-color);border-radius:4px;overflow:hidden; }
+    .user-row { display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:0.75rem;padding:0.7rem 1rem;border-bottom:1px solid #f0ebe3;background:var(--bg-color); }
+    .user-row:last-child { border-bottom:none; }
+    .user-row.header { background:var(--surface-color);padding:0.4rem 1rem;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color); }
+    .user-email { font-size:0.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .you-badge { font-size:0.7rem;color:var(--third-color);margin-left:0.4rem; }
+    .status-badge { font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;white-space:nowrap; }
+    .status-active  { background:#dcfce7;color:#166534; }
+    .status-pending { background:#fef9c3;color:#854d0e; }
+    .role-select-inline { padding:0.15rem 0.35rem;border:1px solid var(--border-color);border-radius:3px;font-family:inherit;font-size:0.75rem;background:var(--bg-color);cursor:pointer; }
+    .user-action-btn { background:none;border:1px solid var(--border-color);border-radius:3px;padding:0.2rem 0.5rem;font-family:inherit;font-size:0.72rem;color:var(--third-color);cursor:pointer;white-space:nowrap; }
+    .user-action-btn:hover { border-color:var(--secondary-ink);color:var(--secondary-ink); }
+    .user-action-btn.danger:hover { border-color:#e55;color:#e55; }
+    .users-status { font-size:0.8rem;color:var(--third-color);margin-top:0.75rem;min-height:1.2em; }
+    .users-status.error { color:#e55; }
+    .empty-users { padding:1.5rem 1rem;text-align:center;font-size:0.85rem;color:var(--third-color); }
+
+    /* Photo / monogram */
+    .photo-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+    .photo-frame {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      border-radius: 4px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .photo-frame:hover .photo-overlay { opacity: 1; }
+    .photo-monogram {
+      width: 100%;
+      height: 100%;
+      background: var(--secondary-color);
+      color: var(--white);
+      font-size: 2.4rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+    }
+    .photo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .photo-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .photo-hint {
+      font-size: 0.68rem;
+      color: var(--third-color);
+      letter-spacing: 0.06em;
+      cursor: pointer;
+    }
+    .photo-hint:hover { color: var(--secondary-ink); }
+    .photo-progress {
+      font-size: 0.68rem;
+      color: var(--third-color);
+      letter-spacing: 0.06em;
+      min-height: 1.2em;
+    }
+
+    /* Favicon */
+    .favicon-block {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    .favicon-preview {
+      width: 32px;
+      height: 32px;
+      border-radius: 3px;
+      border: 1px solid var(--border-color);
+      background: var(--surface-color);
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .favicon-preview--empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      color: var(--third-color);
+      letter-spacing: 0.04em;
+    }
+    .favicon-meta { display: flex; flex-direction: column; gap: 0.25rem; }
+    .favicon-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--third-color);
+    }
+    .favicon-hint {
+      font-size: 0.75rem;
+      color: var(--secondary-ink);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .favicon-hint:hover { opacity: 0.75; }
+    .favicon-progress {
+      font-size: 0.68rem;
+      color: var(--third-color);
+      min-height: 1.1em;
+    }
+
+    /* Fields */
+    .profile-section { margin-bottom: 2rem; }
+    .profile-section label {
+      display: block;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--third-color);
+      margin-bottom: 0.4rem;
+    }
+    .profile-section input[type="text"] {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: var(--black);
+      background: var(--white);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .profile-section input[type="text"]:focus { border-color: var(--secondary-color); }
+    .profile-section input[type="text"]:disabled { background: var(--primary-color); color: var(--third-color); cursor: default; }
+    .slug-value {
+      font-size: 0.88rem;
+      color: var(--third-color);
+      padding: 0.4rem 0;
+      font-family: 'Courier New', monospace;
+    }
+
+    .save-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.6rem; }
+    .save-msg { font-size: 0.72rem; color: var(--third-color); min-height: 1.2em; }
+    .save-msg.ok { color: #4a9a6a; }
+    .save-msg.err { color: var(--danger-color); }
+
+    .config-section-header { display: flex; align-items: baseline; gap: 0.75rem; }
+    .config-section-header label { flex: 1; }
+    .config-edit-btn { background: none; border: none; font-size: 0.72rem; color: var(--secondary-ink); cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit; }
+    .config-edit-btn:hover { color: var(--black); }
+    .config-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.3rem; }
+    .config-tag { font-size: 0.72rem; font-family: 'Courier New', monospace; background: var(--primary-color); border: 1px solid var(--border-color); border-radius: 3px; padding: 0.2rem 0.5rem; color: var(--black); }
+    .config-hint { font-size: 0.65rem; color: var(--third-color); margin-top: 0.5rem; }
+    .config-hint code { font-family: 'Courier New', monospace; }
+    .config-editor { margin-top: 0.75rem; }
+    .config-check-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem; }
+    .config-check-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
+    .config-check-row.required { opacity: 0.5; }
+    .config-custom-row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.35rem; }
+    .config-custom-row input { padding: 0.3rem 0.5rem; border: 1px solid #ddd; border-radius: 3px; font-size: 0.78rem; font-family: 'Courier New', monospace; }
+    .config-custom-row .lbl-input { font-family: inherit; }
+    .config-remove-btn { background: none; border: none; color: #e55; cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 0.2rem; }
+    .config-add-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
+    .config-editor-actions { display: flex; gap: 0.5rem; margin-top: 0.85rem; }
+
+    .arr-cfg-sub { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.4rem; }
+    .arr-cfg-list { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.5rem; }
+    .arr-member-row { display: flex; align-items: center; gap: 0.4rem; }
+    .arr-cfg-input { flex: 1; padding: 0.3rem 0.5rem; border: 1px solid var(--border-color); border-radius: 3px; font-size: 0.85rem; font-family: inherit; background: var(--bg-color); color: inherit; }
+    .arr-cfg-abbr { width: 48px; text-align: center; }
+    .arr-cfg-remove { background: none; border: none; color: var(--third-color); cursor: pointer; font-size: 1rem; padding: 0 3px; line-height: 1; }
+    .arr-cfg-remove:hover { color: #e55; }
+    .arr-instrument-card { border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 0.3rem; }
+    .arr-instrument-hdr { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; background: var(--secondary-color-light, #fdf6ef); border-bottom: 1px solid var(--border-color); }
+    .arr-instrument-key { flex: 1; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.82rem; font-weight: 600; font-family: inherit; background: var(--bg-color); color: inherit; }
+    .arr-instrument-label { flex: 1.5; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.82rem; font-family: inherit; background: var(--bg-color); color: inherit; }
+    .arr-techniques { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.4rem 0.6rem; align-items: center; }
+    .arr-tech-chip { display: flex; align-items: center; gap: 0.2rem; background: var(--border-color); border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.78rem; }
+    .arr-tech-chip button { background: none; border: none; color: var(--third-color); cursor: pointer; padding: 0; font-size: 0.85rem; line-height: 1; }
+    .arr-tech-chip button:hover { color: #e55; }
+    .arr-tech-add { border: 1px dashed var(--border-color); border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.78rem; width: 90px; font-family: inherit; background: transparent; color: inherit; outline: none; }
+    .arr-cfg-add-btn { font-size: 0.8rem; border: 1px dashed var(--border-color); background: none; color: var(--third-color); }
+    .arr-save-row { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+    .arr-save-msg { font-size: 0.72rem; color: var(--third-color); min-height: 1.2em; }
+    .arr-save-msg.ok { color: #4a9a6a; }
+    .arr-save-msg.err { color: var(--danger-color); }
+
+    .settings-card { border:1px solid var(--border-color); border-radius:6px; background:var(--bg-color); padding:1.25rem 1.25rem 1.5rem; margin-bottom:1.75rem; }
+    .settings-card-title { font-size:0.78rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--third-color); margin:0 0 1.25rem; border-bottom:1px solid var(--border-color); padding-bottom:0.6rem; }
+    .photo-block { margin-bottom:1.5rem; }
+    .arr-member-card { border:1px solid var(--border-color); border-radius:4px; padding:0.5rem 0.6rem; margin-bottom:0.4rem; }
+    .member-inst-row { display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.45rem; }
+    .member-inst-chip { border:1px solid var(--border-color); background:none; border-radius:12px; padding:0.15rem 0.6rem; font-size:0.75rem; font-family:inherit; color:var(--third-color); cursor:pointer; }
+    .member-inst-chip.on { background:var(--secondary-color); border-color:var(--secondary-color); color:var(--white); }
+    .member-inst-empty { font-size:0.72rem; color:var(--third-color); }
+    .member-account-row { display:flex; align-items:center; gap:0.5rem; margin-top:0.45rem; }
+    .member-account-row label { font-size:0.65rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--third-color); }
+    .member-account-select { padding:0.2rem 0.4rem; border:1px solid var(--border-color); border-radius:3px; font-size:0.78rem; font-family:inherit; background:var(--bg-color); }
+  </style>
+</head>
+<body>
+<script src="/app/js/common.js?v=12"></script>
+
+<div class="app-wrap settings-wrap">
+  <h1>Settings</h1>
+  <div id="settings-loading" style="text-align:center;color:var(--third-color);padding:2rem 0;">Loading…</div>
+
+  <div id="settings-content" style="display:none;">
+
+    <section class="settings-card">
+      <h2 class="settings-card-title">Band</h2>
+
+      <!-- Photo -->
+      <div class="photo-block">
+        <div class="photo-frame" id="photo-frame" title="Click to upload a photo">
+          <div class="photo-monogram" id="photo-monogram"></div>
+          <img class="photo-img" id="photo-img" src="" alt="" style="display:none;">
+          <div class="photo-overlay">Change photo</div>
+        </div>
+        <span class="photo-hint" id="photo-hint">Click to upload a photo</span>
+        <div class="photo-progress" id="photo-progress"></div>
+        <input type="file" id="photo-input" accept="image/*" style="display:none;">
+      </div>
+
+      <!-- Favicon -->
+      <div class="favicon-block auth-only">
+        <div class="favicon-preview favicon-preview--empty" id="favicon-preview-wrap">
+          <img id="favicon-img" src="" alt="" style="display:none;width:32px;height:32px;object-fit:contain;">
+          <span id="favicon-empty-label">ICO</span>
+        </div>
+        <div class="favicon-meta">
+          <span class="favicon-label">Favicon</span>
+          <span class="favicon-hint" id="favicon-hint">Upload favicon (PNG, 32×32)</span>
+          <div class="favicon-progress" id="favicon-progress"></div>
+        </div>
+        <input type="file" id="favicon-input" accept="image/png,image/x-icon,image/svg+xml" style="display:none;">
+      </div>
+
+      <!-- Band name -->
+      <div class="profile-section">
+        <label for="band-name-input">Band / Artist name</label>
+        <input type="text" id="band-name-input" class="auth-action" maxlength="200" disabled>
+        <div class="save-row auth-only">
+          <button class="btn auth-action" id="save-name-btn" disabled>Save</button>
+          <span class="save-msg" id="save-name-msg"></span>
+        </div>
+      </div>
+
+      <!-- Slug (read-only) -->
+      <div class="profile-section">
+        <label>Slug (URL identifier)</label>
+        <div class="slug-value" id="slug-value"></div>
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="settings-card-title">App settings</h2>
+
+      <!-- Privacy -->
+      <div class="profile-section">
+        <label>Privacy</label>
+        <label class="config-check-row" style="margin-top:0.4rem;">
+          <input type="checkbox" id="private-toggle" disabled>
+          Private workspace — only logged-in members can see songs, setlists, gigs and venues
+        </label>
+        <span class="save-msg" id="private-msg"></span>
+      </div>
+
+      <!-- Song table fields -->
+      <div class="profile-section" id="display-fields-section" style="display:none;">
+        <div class="config-section-header">
+          <label>Song table columns</label>
+          <button class="config-edit-btn auth-action" disabled onclick="openDisplayFieldsEditor()">Edit</button>
+        </div>
+        <div class="config-tags" id="display-fields-tags"></div>
+        <div id="display-fields-editor" style="display:none;"></div>
+        <div class="config-hint">Controls which columns appear in the songs table — <code>displayFields</code></div>
+      </div>
+
+      <!-- Setlist filter fields -->
+      <div class="profile-section" id="filter-fields-section" style="display:none;">
+        <div class="config-section-header">
+          <label>Setlist filter buttons</label>
+          <button class="config-edit-btn auth-action" disabled onclick="openFilterFieldsEditor()">Edit</button>
+        </div>
+        <div class="config-tags" id="filter-fields-tags"></div>
+        <div id="filter-fields-editor" style="display:none;"></div>
+        <div class="config-hint">Controls which filter buttons appear in the setlist generator — <code>filterFields</code></div>
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="settings-card-title">Members</h2>
+      <div class="invite-bar">
+        <div class="invite-field">
+          <label for="invite-email">Email</label>
+          <input type="email" id="invite-email" class="invite-input" placeholder="bandmate@example.com">
+        </div>
+        <div class="invite-field" style="flex:0 0 auto">
+          <label for="invite-role">Role</label>
+          <select id="invite-role" class="invite-role">
+            <option value="member">member</option>
+            <option value="viewer">viewer</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+        <button class="btn active" id="invite-btn" onclick="sendInvite()">Send invite</button>
+      </div>
+      <div id="users-status" class="users-status"></div>
+      <div class="user-section-label">Active</div>
+      <div class="user-list" id="active-list"><p class="empty-users">Loading…</p></div>
+      <div id="pending-section" style="display:none">
+        <div class="user-section-label">Pending invites</div>
+        <div class="user-list" id="pending-list"></div>
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="settings-card-title">Instruments</h2>
+      <!-- Arrangement config -->
+      <div class="profile-section" id="arrangement-section">
+        <label>Instruments &amp; Techniques</label>
+        <div id="arr-instruments-list" class="arr-cfg-list"></div>
+        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddInstrument()">+ Add instrument</button>
+
+        <label style="margin-top:1.25rem;">Band members</label>
+        <div id="arr-members-list" class="arr-cfg-list"></div>
+        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddMember()">+ Add member</button>
+
+        <div class="arr-save-row">
+          <button class="btn active auth-action" disabled onclick="saveArrangementConfig()">Save arrangement config</button>
+          <span class="arr-save-msg" id="arr-save-msg"></span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+<script src="/app/js/settings.js"></script>
+</body>
+</html>
