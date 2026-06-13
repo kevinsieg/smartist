@@ -3,7 +3,7 @@ const { getArtist, getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateEmail, validateStr } = require('./_validate');
 const { checkRateLimit, clientIp } = require('./_ratelimit');
-const { requireAuth, getAccess, isPrivate } = require('./_auth');
+const { requireAuth, getAccess, isPrivate, checkCredentials } = require('./_auth');
 const { createPresignedUrl } = require('./_r2');
 const { sendEmail } = require('./_email');
 const { generateMagicToken, generateUserToken, verifyUserToken, TTL_8H } = require('./_token');
@@ -226,10 +226,20 @@ module.exports = wrap(async function handler(req, res) {
   if (req.query.action === 'my-artists') {
     const authHeader = (req.headers.authorization || '').replace(/^Bearer /, '');
     const claim = verifyUserToken(authHeader);
-    if (!claim) return res.status(401).json({ error: 'Unauthorised' });
     const sql = getDb();
-    const artists = await getArtistsForUser(claim.userId, sql);
-    return res.json({ artists });
+    if (claim) {
+      const artists = await getArtistsForUser(claim.userId, sql);
+      return res.json({ artists });
+    }
+    // Legacy bootstrap sessions (artist password as bearer) have no users row —
+    // on single-tenant installs their only workspace is the deployment's.
+    if (authHeader && process.env.ARTIST_SLUG) {
+      const band = await resolveArtist('', sql);
+      if (band && await checkCredentials(authHeader, band)) {
+        return res.json({ artists: [{ slug: band.slug, name: band.name, role: 'admin' }] });
+      }
+    }
+    return res.status(401).json({ error: 'Unauthorised' });
   }
 
   const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
@@ -404,6 +414,12 @@ module.exports = wrap(async function handler(req, res) {
     slug:          band.slug,
     name:          band.name,
     config:        band.config,
+    // Per-workspace role of the authenticated caller (the session token's own
+    // role claim is only valid for the workspace it was issued for, so the
+    // client must read this instead of decoding the token). Bootstrap
+    // password sessions (user.id === null) report null — the client treats
+    // null as "legacy admin" and uses it to detect bootstrap logins.
+    role:          (user && user.id != null) ? user.role : null,
     songs:         light ? undefined : songs,
     counts,
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),

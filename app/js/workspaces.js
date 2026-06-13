@@ -68,8 +68,10 @@
       headers: { Authorization: 'Bearer ' + authTok },
     });
     if (r.status === 401) {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+      // Do NOT clear the stored token here: a 401 can mean "this token type
+      // can't list workspaces" (legacy bootstrap session), not "logged out".
+      // Stray navigation must never destroy a valid session; truly expired
+      // tokens get cleaned up by the login page itself.
       _renderUnauth();
       return;
     }

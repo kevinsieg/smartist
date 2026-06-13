@@ -175,8 +175,8 @@
         @media (min-width: 1025px) {
             .song-card--selected { box-shadow: 0 0 0 2px var(--secondary-color); }
 
-            /* Darken muted text in list/filter/panel — override the global #A09C93 */
-            .filter-bar, .lv-body, #view-side-panel { --third-color: #7a7570; }
+            /* Soften muted text in list/filter/panel — same tone as .sl-cell--muted */
+            .filter-bar, .lv-body, #view-side-panel { --third-color: var(--muted-ink); }
 
             /* Genre chips (songs-only) */
             .filter-bar-row2 {
@@ -233,9 +233,9 @@
       <input type="file" id="player-file-input" accept="audio/*" style="display:none" onchange="handleReplaceFile(this)">
       <button class="btn auth-only" id="player-delete-btn" onclick="showDeleteConfirm()">Remove file</button>
       <div id="player-delete-confirm" class="player-delete-confirm" style="display:none">
-        <span>Delete audio?</span>
-        <button class="btn btn-danger" onclick="confirmDeleteAudio()">Yes, delete</button>
-        <button class="btn" onclick="cancelDeleteAudio()">No</button>
+        <span>This removes the audio file permanently.</span>
+        <button class="btn btn-danger" onclick="confirmDeleteAudio()">Delete</button>
+        <button class="btn" onclick="cancelDeleteAudio()">Keep it</button>
       </div>
       <button class="btn" onclick="closePlayer()">Close</button>
     </div>
@@ -253,9 +253,9 @@
       <input type="file" id="sheet-file-input" accept=".pdf,application/pdf" style="display:none" onchange="handleReplaceSheet(this)">
       <button class="btn auth-only" id="sheet-delete-btn" onclick="showSheetDeleteConfirm()">Remove</button>
       <div id="sheet-delete-confirm" class="player-delete-confirm" style="display:none">
-        <span>Delete sheet?</span>
-        <button class="btn btn-danger" onclick="confirmDeleteSheet()">Yes, delete</button>
-        <button class="btn" onclick="cancelDeleteSheet()">No</button>
+        <span>This removes the sheet file permanently.</span>
+        <button class="btn btn-danger" onclick="confirmDeleteSheet()">Delete</button>
+        <button class="btn" onclick="cancelDeleteSheet()">Keep it</button>
       </div>
       <button class="btn" onclick="closeSheet()">Close</button>
     </div>
@@ -272,9 +272,9 @@
       <input type="file" id="playback-file-input" accept="audio/*" style="display:none" onchange="handleReplacePlayback(this)">
       <button class="btn auth-only" id="playback-delete-btn" onclick="showPlaybackDeleteConfirm()">Remove</button>
       <div id="playback-delete-confirm" class="player-delete-confirm" style="display:none">
-        <span>Delete playback?</span>
-        <button class="btn btn-danger" onclick="confirmDeletePlayback()">Yes, delete</button>
-        <button class="btn" onclick="cancelDeletePlayback()">No</button>
+        <span>This removes the playback file permanently.</span>
+        <button class="btn btn-danger" onclick="confirmDeletePlayback()">Delete</button>
+        <button class="btn" onclick="cancelDeletePlayback()">Keep it</button>
       </div>
       <button class="btn" onclick="closePlayback()">Close</button>
     </div>
@@ -298,9 +298,9 @@
       <button class="btn auth-only" onclick="startEditLyrics()">Edit</button>
       <button class="btn auth-only" id="lyrics-delete-btn" onclick="showLyricsDeleteConfirm()">Delete</button>
       <div id="lyrics-delete-confirm" class="player-delete-confirm" style="display:none">
-        <span>Delete lyrics?</span>
-        <button class="btn btn-danger" onclick="confirmDeleteLyrics()">Yes, delete</button>
-        <button class="btn" onclick="cancelDeleteLyrics()">No</button>
+        <span>This deletes the saved lyrics permanently.</span>
+        <button class="btn btn-danger" onclick="confirmDeleteLyrics()">Delete</button>
+        <button class="btn" onclick="cancelDeleteLyrics()">Keep it</button>
       </div>
       <button class="btn" onclick="closeLyrics()">Close</button>
     </div>

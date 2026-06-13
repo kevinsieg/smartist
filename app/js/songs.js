@@ -15,6 +15,7 @@ var _lyricsSuggestAbort = null;
 
 var _pendingSetlistId = 0;
 var _pendingSongId    = '';
+var _pendingNewSong   = false;
 var _newPanelEscapeHandler = null;
 var SONGS_BULK_EDIT_KEY = 'songs_bulk_edit';
 var _viewMode = false;
@@ -157,6 +158,7 @@ async function loadAndRender(viewMode) {
     var _qp = new URLSearchParams(location.search);
     _pendingSetlistId = Number(_qp.get('setlist_id'));
     _pendingSongId    = String(_qp.get('id') || '');
+    _pendingNewSong   = _qp.get('new') === '1';
     _viewMode = viewMode || false;
     _songsCfg          = cfg;
     window._arrSlug    = cfg.slug;
@@ -380,13 +382,17 @@ function _renderSongsListView() {
         title: 'Bulk Edit',
         onClick: toggleBulkEdit,
         desktopOnly: true },
-      { label: 'Export CSV', onClick: exportCsv },
+      { label: 'Share', icon: SHARE_ICON, title: 'Share', onClick: _songsShareMenu },
     ],
     getData:   _getSongsForFactory,
     getTotal:  function() { return getToken() ? songs.length : _songsTotal; },
     getItemId: function(s) { return s.id; },
     renderRow: renderListRowHtml,
     onOpen:    _openSongPanelContent,
+    emptyHtml: '<div style="text-align:center;padding:2.5rem 1rem;color:var(--third-color);">' +
+      '<p style="margin-bottom:1rem;">No songs yet.</p>' +
+      (getToken() && !isViewMode() ? '<button class="btn active" onclick="_openNewSongPanel()">+ Add your first song</button>' : '') +
+      '</div>',
   });
 
   requestAnimationFrame(function() {
@@ -403,7 +409,14 @@ function _renderSongsListView() {
   } else if (_pendingSongId) {
     _songsView.select(_pendingSongId);
     _pendingSongId = '';
+  } else if (_pendingNewSong && getToken() && !_viewMode) {
+    _openNewSongPanel();
+  } else if (!isMobile()) {
+    // Desktop: looking up a song is the #1 task — search is ready to type.
+    var _searchEl = document.getElementById('lv-f-title');
+    if (_searchEl) _searchEl.focus();
   }
+  _pendingNewSong = false;
 
   loadLogs();
 }
@@ -628,47 +641,43 @@ function _openSongEditForm(sid, panelEl) {
       (!isNew ? '<button class="vsp-close" onclick="_openSongPanelContent({id:' + sid + '}, document.getElementById(\'view-side-panel-inner\'))" aria-label="Cancel">&#215;</button>' : '') +
     '</div>' +
     '<div style="padding:0 0.5rem;" data-sid="' + id + '">' +
-      '<details class="edit-section" open><summary class="edit-section-summary">General</summary>' +
+      '<details class="edit-section" open><summary class="edit-section-summary">Basics</summary>' +
         '<div class="edit-section-body">' +
           _editField('Title', '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="Song title">') +
+          _editField('Key', inp('key', key)) +
+          _editField('Guitar capo', num('extra.gitCapo', gitCapo)) +
+          _editField('Banjo capo', num('extra.banjoCapo', bjCapo)) +
+          _editField('Length (MM:SS)', '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
+          _editField('Lyrics', '<textarea class="edit-textarea edit-input" data-id="' + id + '" data-key="extra.lyrics" oninput="markPanelEditDirty()" placeholder="Enter lyrics…">' + lyrics + '</textarea>') +
+          _editField('Listen', '<div class="panel-file-row">' + inp('extra.listenUrl', listen) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-audio-' + id + '\')">&#8593;</button><input type="file" id="pf-audio-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'audio\')">' : '') + '</div>') +
+        '</div>' +
+      '</details>' +
+      '<details class="edit-section"><summary class="edit-section-summary">Recordings &amp; sheet music</summary>' +
+        '<div class="edit-section-body">' +
+          _editField('Sheet', '<div class="panel-file-row">' + inp('extra.sheetUrl', sheet) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-sheet-' + id + '\')">&#8593;</button><input type="file" id="pf-sheet-' + id + '" style="display:none" accept=".pdf,application/pdf" onchange="_panelUploadHandler(this,\'' + id + '\',\'sheet\')">' : '') + '</div>') +
+          _editField('Playback', '<div class="panel-file-row">' + inp('extra.playbackUrl', playback) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-playback-' + id + '\')">&#8593;</button><input type="file" id="pf-playback-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'playback\')">' : '') + '</div>') +
+          _editField('Reference URL', inp('extra.referenceUrl', refUrl, 'url')) +
+        '</div>' +
+      '</details>' +
+      '<details class="edit-section"><summary class="edit-section-summary">Song info</summary>' +
+        '<div class="edit-section-body">' +
           _editField('', '<div class="edit-toggle-row"><span>Active</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
           _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; Favourite (always in auto-generation)</span></div>') +
           _editField('Genre', inp('genre', genre)) +
           _editField('Energy', inp('energy', energy)) +
           _editField('Time signature', '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
           _editField('BPM', num('bpm', bpm)) +
-          _editField('Length (MM:SS)', '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
-        '</div>' +
-      '</details>' +
-      '<details class="edit-section"><summary class="edit-section-summary">Performance</summary>' +
-        '<div class="edit-section-body">' +
-          _editField('Key', inp('key', key)) +
           _editField('Lead', inp('extra.lead', lead)) +
           _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>2nd guitar</span></div>') +
-          _editField('Guitar capo', num('extra.gitCapo', gitCapo)) +
-          _editField('Banjo capo', num('extra.banjoCapo', bjCapo)) +
           _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>Harmonica</span></div>') +
-        '</div>' +
-      '</details>' +
-      '<details class="edit-section"><summary class="edit-section-summary">Files & Lyrics</summary>' +
-        '<div class="edit-section-body">' +
-          _editField('Listen', '<div class="panel-file-row">' + inp('extra.listenUrl', listen) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-audio-' + id + '\')">&#8593;</button><input type="file" id="pf-audio-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'audio\')">' : '') + '</div>') +
-          _editField('Sheet', '<div class="panel-file-row">' + inp('extra.sheetUrl', sheet) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-sheet-' + id + '\')">&#8593;</button><input type="file" id="pf-sheet-' + id + '" style="display:none" accept=".pdf,application/pdf" onchange="_panelUploadHandler(this,\'' + id + '\',\'sheet\')">' : '') + '</div>') +
-          _editField('Playback', '<div class="panel-file-row">' + inp('extra.playbackUrl', playback) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-playback-' + id + '\')">&#8593;</button><input type="file" id="pf-playback-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'playback\')">' : '') + '</div>') +
-          _editField('Lyrics', '<textarea class="edit-textarea edit-input" data-id="' + id + '" data-key="extra.lyrics" oninput="markPanelEditDirty()" placeholder="Enter lyrics…">' + lyrics + '</textarea>') +
-        '</div>' +
-      '</details>' +
-      '<details class="edit-section"><summary class="edit-section-summary">Metadata</summary>' +
-        '<div class="edit-section-body">' +
           _editField('Author', inp('extra.author', author)) +
           _editField('Interpret', inp('interpret', interp)) +
           _editField('Reference interpret', inp('reference_interpret', refInt)) +
-          _editField('Reference URL', inp('extra.referenceUrl', refUrl, 'url')) +
           _editField('Song info URL', inp('extra.songinfoUrl', infoUrl, 'url')) +
           _editField('Comment', inp('comment', comment)) +
         '</div>' +
       '</details>' +
-      '<details class="edit-section"><summary class="edit-section-summary">GEMA / Rights</summary>' +
+      '<details class="edit-section"><summary class="edit-section-summary">Rights &amp; reporting</summary>' +
         '<div class="edit-section-body">' +
           _editField('Language', '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
           (iswc   ? _editField('ISWC',    '<div class="edit-readonly">' + escHtml(iswc)   + '</div>') : '') +
@@ -826,7 +835,7 @@ function _renderBulkEditTable() {
       <span class="status" id="status"></span>
       <span class="filter-count" id="filter-count">${visible.length} / ${songs.length}</span>
       <button class="btn" onclick="toggleBulkEdit()">← List</button>
-      <button class="btn auth-action" onclick="exportCsv()">Export CSV</button>
+      <button class="btn icon-btn auth-action" title="Share" onclick="_songsShareMenu(this)">${SHARE_ICON}</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -974,6 +983,34 @@ function exportCsv() {
     }),
     'songs'
   );
+}
+
+// Share menu on the toolbar — same popover pattern as setlist history.
+function _songsShareMenu(btn) {
+  var existing = document.getElementById('share-menu-popup');
+  if (existing) { existing.remove(); return; }
+
+  var menu = document.createElement('div');
+  menu.id = 'share-menu-popup';
+  menu.className = 'share-menu';
+  menu.innerHTML =
+    '<div class="share-menu-item" onclick="exportCsv();var m=document.getElementById(\'share-menu-popup\');if(m)m.remove()">' +
+      '<span class="share-menu-icon">&#10515;</span><span class="share-menu-label">Export CSV</span>' +
+    '</div>';
+
+  var rect = btn.getBoundingClientRect();
+  menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;left:' + rect.left + 'px';
+  document.body.appendChild(menu);
+  var overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
+  if (overflow > 0) menu.style.left = Math.max(8, rect.left - overflow) + 'px';
+
+  function closeMenu(e) {
+    if (!menu.contains(e.target) && e.target !== btn) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+  }
+  setTimeout(function() { document.addEventListener('click', closeMenu); }, 0);
 }
 
 function initResizableColumns() {
