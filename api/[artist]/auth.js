@@ -265,16 +265,59 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true });
   }
 
-  // PUT — update user role (admin)
+  // POST ?action=change-password — caller changes their own password
+  if (req.method === 'POST' && action === 'change-password') {
+    const { currentPassword, newPassword } = req.body ?? {};
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ error: 'currentPassword and newPassword required' });
+    if (String(newPassword).length < 8)
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (String(newPassword).length > 1000 || String(currentPassword).length > 1000)
+      return res.status(400).json({ error: 'Password too long' });
+    if (req.user.id === null)
+      return res.status(400).json({ error: 'Password change is not available for this account' });
+    if (await checkRateLimit(`chpw:${clientIp(req)}`, 5, 600))
+      return res.status(429).json({ error: 'Too many attempts — try again later' });
+
+    const [user] = await sql`SELECT * FROM users WHERE id = ${req.user.id}`;
+    if (!user || !user.password_hash || !await bcrypt.compare(String(currentPassword), user.password_hash))
+      return res.status(401).json({ error: 'Current password is incorrect' });
+
+    const hash = await bcrypt.hash(String(newPassword), 12);
+    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${user.id}`;
+    return res.json({ ok: true });
+  }
+
+  // PUT — update user role and/or email (admin)
   if (req.method === 'PUT') {
     if (!requireRole(req, res, 'admin')) return;
-    const { userId, role } = req.body ?? {};
+    const { userId, role, email } = req.body ?? {};
     if (!userId) return res.status(400).json({ error: 'userId required' });
-    if (!['admin', 'member', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
-    if (req.user.id !== null && req.user.id === Number(userId)) return res.status(400).json({ error: 'Cannot change your own role' });
+    if (role === undefined && email === undefined)
+      return res.status(400).json({ error: 'role or email required' });
+
+    const updates = {};
+    if (role !== undefined) {
+      if (!['admin', 'member', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+      if (req.user.id !== null && req.user.id === Number(userId))
+        return res.status(400).json({ error: 'Cannot change your own role' });
+      updates.role = role;
+    }
+    if (email !== undefined) {
+      const cleanEmail = validateStr(email, 200);
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail))
+        return res.status(400).json({ error: 'Invalid email address' });
+      const lower = cleanEmail.toLowerCase();
+      const [conflict] = await sql`
+        SELECT id FROM users
+        WHERE artist_id = ${artist.id} AND email = ${lower} AND id <> ${Number(userId)}
+      `;
+      if (conflict) return res.status(409).json({ error: 'A user with this email already exists' });
+      updates.email = lower;
+    }
 
     const [updated] = await sql`
-      UPDATE users SET role = ${role}
+      UPDATE users SET ${sql(updates)}
       WHERE id = ${Number(userId)} AND artist_id = ${artist.id}
       RETURNING id, email, role
     `;

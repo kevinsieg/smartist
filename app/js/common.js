@@ -1,7 +1,7 @@
 // Shared utilities for all app pages
 
 const AUTH_TOKEN_KEY = 'smartist_token';
-var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','demo','impressum']);
+var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','demo','impressum','contact']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
 // artist's dashboard).
@@ -39,6 +39,15 @@ function goToLogin(e) {
 }
 window.goToLogin = goToLogin;
 
+// Share icon (same glyph as the stage view's share button, which keeps its own
+// copy because stage.html deliberately does not load common.js).
+var SHARE_ICON =
+  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
+    '<path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>' +
+    '<polyline points="16 6 12 2 8 6"/>' +
+    '<line x1="12" y1="2" x2="12" y2="15"/>' +
+  '</svg>';
+
 function getInitials(name) {
   if (!name) return '?';
   const words = name.trim().split(/\s+/);
@@ -70,11 +79,16 @@ function getInitials(name) {
           '<a href="' + _base + '/songs">Songs</a>' +
           '<a href="' + _base + '/setlist">Setlists</a>' +
           '<a href="' + _base + '/gigs">Gigs</a>' +
-          '<a href="' + _base + '/venues">Venues</a>' +
-          '<a href="' + _base + '/organizers" class="auth-only">Organizers</a>' +
-          '<a href="' + _base + '/hub">Hub</a>' +
-          '<a href="' + _base + '/pro-import" class="auth-only">PRO</a>' +
-          '<a href="' + _base + '/users" class="admin-only">Users</a>'
+          '<div class="nav-more">' +
+            '<a href="#" class="nav-more-toggle" id="nav-more-toggle" aria-expanded="false">More &#9662;</a>' +
+            '<div class="nav-more-menu" id="nav-more-menu">' +
+              '<a href="' + _base + '/venues">Venues</a>' +
+              '<a href="' + _base + '/organizers" class="auth-only">Organizers</a>' +
+              '<a href="' + _base + '/hub">Hub</a>' +
+              '<a href="' + _base + '/pro-import" class="auth-only">PRO</a>' +
+              '<a href="' + _base + '/settings" class="admin-only">Settings</a>' +
+            '</div>' +
+          '</div>'
         ) : '') +
         '<a href="/signup" class="nav-links-signup">Sign up &#8594;</a>' +
         '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login</a>' +
@@ -90,7 +104,9 @@ function getInitials(name) {
 
   const footer = document.createElement('footer');
   footer.innerHTML =
-    '<p>&copy; <span id="currentYear"></span> <span class="band-name"></span></p>';
+    '<p>&copy; <span id="currentYear"></span> <span class="band-name"></span>' +
+    ' &middot; powered by <a href="https://smartist.studio" target="_blank" rel="noopener" class="footer-backlink">smartist.studio</a>' +
+    ' &middot; <a href="' + _base + '/contact" class="footer-backlink">Contact</a></p>';
   document.body.insertBefore(footer, document.currentScript);
 
   document.getElementById('currentYear').textContent = new Date().getFullYear();
@@ -149,6 +165,27 @@ function getInitials(name) {
       doLogout();
       return;
     }
+    // "More" dropdown toggle
+    if (e.target.closest('#nav-more-toggle')) {
+      e.preventDefault();
+      var moreEl = document.querySelector('.nav-more');
+      var moreOpen = moreEl.classList.toggle('nav-more-open');
+      document.getElementById('nav-more-toggle').setAttribute('aria-expanded', moreOpen ? 'true' : 'false');
+      // Top edge sits on the nav bar's bottom border (same line as the auth menu).
+      var moreMenuEl = document.getElementById('nav-more-menu');
+      var hdrEl = document.querySelector('.app-header');
+      if (moreOpen && moreMenuEl && hdrEl) {
+        moreMenuEl.style.top = (hdrEl.getBoundingClientRect().bottom - moreEl.getBoundingClientRect().top) + 'px';
+      }
+      return;
+    }
+    if (!e.target.closest('.nav-more')) {
+      var openMore = document.querySelector('.nav-more.nav-more-open');
+      if (openMore) {
+        openMore.classList.remove('nav-more-open');
+        document.getElementById('nav-more-toggle').setAttribute('aria-expanded', 'false');
+      }
+    }
     // Burger toggle
     if (e.target.closest('#nav-burger')) {
       var appHdr = document.querySelector('.app-header');
@@ -171,11 +208,17 @@ function getInitials(name) {
     if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (a.href === window.location.href) return;
     e.preventDefault();
-    // Close burger menu before navigating
+    // Close burger menu and More dropdown before navigating
     var navHdr = document.querySelector('.app-header');
     if (navHdr) navHdr.classList.remove('nav-open');
     var bgr3 = document.getElementById('nav-burger');
     if (bgr3) bgr3.setAttribute('aria-expanded', 'false');
+    var moreHdr = document.querySelector('.nav-more.nav-more-open');
+    if (moreHdr) {
+      moreHdr.classList.remove('nav-more-open');
+      var moreToggle = document.getElementById('nav-more-toggle');
+      if (moreToggle) moreToggle.setAttribute('aria-expanded', 'false');
+    }
     navigate(a.href);
   });
 
@@ -569,10 +612,26 @@ function doLogout() {
   if (typeof refreshAllActionBtns === 'function') refreshAllActionBtns();
 }
 
+// Go to the workspace picker. The skip-autoredirect flag stops workspaces.js
+// from bouncing single-workspace users straight back into their dashboard, so
+// the list (and the "New workspace" action) is always reachable.
+function switchWorkspace() {
+  try { sessionStorage.setItem('ws_skip_autoredirect', '1'); } catch {}
+  var _menu = document.getElementById('nav-auth-menu');
+  if (_menu) _menu.remove();
+  window.location.assign('/home');
+}
+window.switchWorkspace = switchWorkspace;
+
 function _openAuthMenu(btn) {
   var existing = document.getElementById('nav-auth-menu');
   if (existing) { existing.remove(); return; }
   var _profilePath = _artistSlug ? '/' + _artistSlug + '/profile' : '/profile';
+  // Switch-workspace only makes sense for real (token) logins: bootstrap
+  // password sessions (role null) are bound to one fixed workspace. We don't
+  // gate on singleTenant — local dev sets ARTIST_SLUG (→ singleTenant) purely
+  // as a default-slug convenience while still serving multiple workspaces.
+  var _showSwitch = getAuthRole() !== null;
   var menu = document.createElement('div');
   menu.id = 'nav-auth-menu';
   menu.className = 'nav-auth-menu';
@@ -580,11 +639,17 @@ function _openAuthMenu(btn) {
     '<div class="nav-auth-menu-item" onclick="navigate(\'' + _profilePath + '\');document.getElementById(\'nav-auth-menu\')&&document.getElementById(\'nav-auth-menu\').remove()">' +
       'Profile' +
     '</div>' +
+    (_showSwitch
+      ? '<div class="nav-auth-menu-item" onclick="switchWorkspace()">Switch workspace</div>'
+      : '') +
     '<div class="nav-auth-menu-item" onclick="doLogout()">' +
       'Logout' +
     '</div>';
   var rect = btn.getBoundingClientRect();
-  menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;right:' + (window.innerWidth - rect.right) + 'px';
+  // Top edge sits on the nav bar's bottom border (same line as the More dropdown).
+  var _hdrEl = document.querySelector('.app-header');
+  var _menuTop = _hdrEl ? _hdrEl.getBoundingClientRect().bottom : rect.bottom + 6;
+  menu.style.cssText = 'position:fixed;top:' + _menuTop + 'px;right:' + (window.innerWidth - rect.right) + 'px';
   document.body.appendChild(menu);
   var overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
   if (overflow > 0) menu.style.right = '8px';
@@ -616,6 +681,13 @@ function getToken() {
 function getAuthRole() {
   var tok = getToken();
   if (!tok) return null;
+  // The session token's role claim is only valid for the workspace it was
+  // issued for. Once this workspace's config is loaded it carries the caller's
+  // per-workspace role — prefer it so a user who is admin of workspace A but a
+  // member of workspace B sees member UI on B. Falls back to the token claim
+  // only before config has loaded (the value self-corrects on the next render).
+  var cfg = _readCachedConfig();
+  if (cfg && Object.prototype.hasOwnProperty.call(cfg, 'role')) return cfg.role;
   try {
     var b64 = tok.replace(/-/g, '+').replace(/_/g, '/');
     while (b64.length % 4) b64 += '=';

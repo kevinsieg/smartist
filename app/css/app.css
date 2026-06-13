@@ -13,6 +13,7 @@
     --secondary-color: #f9bf8f;
     --secondary-ink:   #9e5e20;
     --third-color:     #28261f;
+    --muted-ink:       #7a7570; /* softer secondary text — same tone the songs list uses */
     --white:           #fff;
     --black:           #0d0c0b;
     --danger-color:    #a03030;
@@ -418,6 +419,8 @@ footer {
     color: var(--third-color);
     text-align: center;
 }
+.footer-backlink { color: var(--muted-ink); text-decoration: none; }
+.footer-backlink:hover { color: var(--secondary-ink); text-decoration: underline; }
 
 /* ── Status messages ────────────────────────────────────────────────────────── */
 @keyframes status-in {
@@ -1523,7 +1526,7 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 .sort-btn {
     font-size: 0.78rem; padding: 0.25rem 0.6rem;
     border: 1px solid var(--border-color); border-radius: 3px;
-    background: var(--primary-color); cursor: pointer; color: var(--third-color);
+    background: var(--primary-color); cursor: pointer; color: var(--muted-ink);
     touch-action: manipulation;
 }
 .sort-btn.active { border-color: var(--secondary-ink); color: var(--secondary-ink); font-weight: 600; }
@@ -1537,7 +1540,7 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 .sl-row:hover { border-color: var(--secondary-ink); }
 .sl-row.deleted { opacity: 0.45; cursor: default; }
 .sl-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sl-cell--muted { color: var(--third-color); font-size: 0.82rem; }
+.sl-cell--muted { color: var(--muted-ink); font-size: 0.82rem; }
 @media (max-width: 767px) {
     .sl-row { font-size: 0.95rem; }
     .sl-cell--muted { font-size: 0.88rem; }
@@ -1545,7 +1548,7 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 .sl-cell--actions { display: flex; gap: 0.4rem; justify-content: flex-end; overflow: visible; }
 .sl-badge {
     display: inline-block; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
-    padding: 2px 7px; border-radius: 3px; border: 1px solid var(--border-color); color: var(--third-color);
+    padding: 2px 7px; border-radius: 3px; border: 1px solid var(--border-color); color: var(--muted-ink);
 }
 .sl-deleted-badge {
     font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
@@ -2108,3 +2111,86 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 }
 .stage-arr-print { display: none; }
 
+/* ── Nav "More" dropdown ── */
+.nav-more-toggle { cursor: pointer; }
+.nav-more-menu { display: none; }
+/* Burger (<768px): group renders flat — toggle hidden, links use plain .nav-links a styles */
+.app-header.nav-open .nav-more-toggle { display: none; }
+.app-header.nav-open .nav-more-menu { display: block; }
+/* Desktop (≥768px, burger never open): dropdown under the toggle.
+   Styled like .nav-auth-menu (profile/logout); the doubled selectors out-rank
+   the .app-header--authed .nav-links a[:hover] color rules. */
+@media (min-width: 768px) {
+  .nav-more { position: relative; display: flex; align-items: center; }
+  .nav-more-open .nav-more-menu {
+    display: block; position: absolute; right: 0; top: calc(100% + 6px);
+    background: #fff; border: 1px solid var(--border-color);
+    border-radius: 8px; min-width: 130px; overflow: hidden; z-index: 200;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+    animation: navAuthMenuIn 60ms ease-out;
+  }
+  .nav-links .nav-more-menu a,
+  .app-header--authed .nav-links .nav-more-menu a {
+    display: block; padding: 0.55rem 1rem; font-size: 0.8rem;
+    color: var(--secondary-ink); font-weight: 400;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .nav-links .nav-more-menu a:last-child,
+  .app-header--authed .nav-links .nav-more-menu a:last-child { border-bottom: none; }
+  .nav-links .nav-more-menu a:hover,
+  .app-header--authed .nav-links .nav-more-menu a:hover {
+    background: var(--secondary-color); color: var(--secondary-ink); text-decoration: none;
+  }
+  .nav-links .nav-more-menu a.current,
+  .app-header--authed .nav-links .nav-more-menu a.current {
+    color: var(--secondary-ink); font-weight: 700; background: none;
+  }
+}
+
+
+/* ── Touch devices: no hover — dimmed controls must be fully visible & tappable ── */
+@media (hover: none) {
+  .gig-edit-btn,
+  .arr-col-btn,
+  .arr-delete-btn,
+  .listen-play-btn, .listen-upload-btn,
+  .sheet-open-btn, .sheet-upload-btn,
+  .playback-open-btn, .playback-upload-btn,
+  .lyrics-open-btn, .lyrics-add-btn { opacity: 1; }
+  .arr-col-btn--empty { opacity: 0.45; }
+  .song-card-icon-btn, .icon-btn {
+    min-width: 42px; min-height: 42px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+}
+
+/* ── Dashboard task buttons ── */
+.dash-tasks { display: flex; gap: 0.6rem; margin-bottom: 1.2rem; }
+.dash-task-btn {
+  flex: 1; text-align: center; padding: 0.9rem 0.4rem;
+  border: 1px solid rgba(249, 191, 143, 0.3); border-radius: 3px;
+  font-size: 0.95rem; color: var(--black); text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+  touch-action: manipulation;
+}
+.dash-task-btn:hover { border-color: var(--secondary-color); text-decoration: none; }
+@media (max-width: 640px) { .dash-tasks { flex-direction: column; } }
+.dash-task-btn--disabled { opacity: 0.45; cursor: not-allowed; }
+.dash-task-btn--disabled:hover { border-color: rgba(249, 191, 143, 0.3); }
+
+/* ── Share menu popover (setlist history, songs toolbar) ── */
+.share-menu { background:#fff; border:1px solid var(--border-color); border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.14); min-width:190px; overflow:hidden; animation:share-menu-in 60ms ease-out; z-index:200; }
+@keyframes share-menu-in { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+.share-menu-item { display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; font-size:0.84rem; cursor:pointer; color:var(--secondary-ink); border-bottom:1px solid var(--border-color); }
+.share-menu-item:last-child { border-bottom:none; }
+.share-menu-item:hover { background:var(--secondary-color); }
+.share-menu-icon { font-size:1rem; flex-shrink:0; }
+
+/* ── Dashboard help ── */
+.dash-help { margin: 0.5rem 0 1.2rem; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--third-color); text-align: left; }
+.dash-help summary { cursor: pointer; color: var(--secondary-ink); font-weight: 700; -webkit-tap-highlight-color: transparent; }
+.dash-help ol { margin: 0.75rem 0 0.5rem 1.2rem; padding: 0; display: grid; gap: 0.45rem; }
+.dash-help p { margin: 0.4rem 0 0; color: var(--muted-ink); }
+
+/* ── Workspaces page explanation ── */
+.ws-explain { font-size: 0.85rem; color: var(--muted-ink); margin: -0.5rem 0 1.25rem; line-height: 1.55; }

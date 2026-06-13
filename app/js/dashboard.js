@@ -12,7 +12,7 @@ function _nextAction(cfg) {
   var sets   = c.setlists  || 0;
   var gigs   = c.gigs      || 0;
   var venues = c.venues    || 0;
-  if (songs  === 0) return { href: '/songs',  label: 'Add your first songs',     hint: 'Songs are the foundation — everything else builds from them.' };
+  if (songs  === 0) return null; // covered by the "Add a song" task button
   if (sets   === 0) return { href: '/setlist', label: 'Build your first setlist', hint: 'You have ' + songs + ' song' + (songs !== 1 ? 's' : '') + '. Group them into a setlist.' };
   if (gigs   === 0) return { href: '/gigs',   label: 'Log a gig',                hint: 'Track where and when you\'ve performed.' };
   if (venues === 0) return { href: '/venues', label: 'Add your venues',           hint: 'Link gigs to venues to build your performance map.' };
@@ -25,11 +25,39 @@ function renderDashboard(cfg) {
 
   var b = '/' + artistSlug;
   var next = _nextAction(cfg);
-  var actionRow =
-    '<a href="' + b + next.href + '" class="dash-cta">' + next.label + '</a>' +
-    (next.hint ? '<p class="dash-next-hint">' + next.hint + '</p>' : '');
+  var actionRow = next
+    ? '<a href="' + b + next.href + '" class="dash-cta">' + next.label + '</a>' +
+      (next.hint ? '<p class="dash-next-hint">' + next.hint + '</p>' : '')
+    : '';
+
+  var hasSongs = ((cfg.counts || {}).songs || 0) > 0;
+  var taskRow =
+    '<div class="dash-tasks">' +
+      (hasSongs
+        ? '<a href="' + b + '/songs" class="dash-task-btn">&#128269; Find a song</a>'
+        : '<span class="dash-task-btn dash-task-btn--disabled" aria-disabled="true" title="Add songs first">&#128269; Find a song</span>') +
+      '<a href="' + b + '/songs?new=1" class="dash-task-btn auth-action">&#65291; Add a song</a>' +
+      (hasSongs
+        ? '<a href="' + b + '/setlist" class="dash-task-btn auth-action">&#9776; Build a setlist</a>'
+        : '<span class="dash-task-btn dash-task-btn--disabled auth-action" aria-disabled="true" title="Add songs first">&#9776; Build a setlist</span>') +
+    '</div>';
+
+  // Open by default while the workspace is empty — first thing new users see.
+  var helpHtml =
+    '<details class="dash-help"' + (hasSongs ? '' : ' open') + '>' +
+      '<summary>New here? How smartist works</summary>' +
+      '<ol>' +
+        '<li><strong>Add your songs</strong> — keys, capos, lyrics and recordings live in <a href="' + b + '/songs">Songs</a>. Start with just a title; details can come later.</li>' +
+        '<li><strong>Build a setlist</strong> — pick songs for your next show in <a href="' + b + '/setlist">Setlists</a>, then print it or share it with the band.</li>' +
+        '<li><strong>Plan your gigs</strong> — dates and places go in <a href="' + b + '/gigs">Gigs</a>; you can link a setlist to each gig.</li>' +
+        '<li><strong>On stage &amp; practice</strong> — every setlist and song has a full-screen stage view with lyrics and recordings, made for the phone on your mic stand. Share its link with band mates, new members or fans so they can work on the songs.</li>' +
+      '</ol>' +
+      '<p>Venues, organizers, your streaming links and PRO reporting live under <em>More</em> in the menu.</p>' +
+    '</details>';
 
   el.innerHTML =
+    helpHtml +
+    taskRow +
     actionRow +
     '<div class="dash-grid">' +
       '<a href="' + b + '/setlist" class="dash-card">' +
@@ -64,8 +92,7 @@ function renderDashboard(cfg) {
         '<span class="dash-card-label">Profile</span>' +
         '<span class="dash-card-count--muted">settings · photo</span>' +
       '</a>' +
-    '</div>' +
-    '<button class="reset-link landing-logout" onclick="handleLogout()">logout</button>';
+    '</div>';
 
   var set = function(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; };
   var c = cfg.counts || {};
@@ -74,9 +101,4 @@ function renderDashboard(cfg) {
   set('dc-gigs',       c.gigs       !== undefined ? c.gigs       : '—');
   set('dc-venues',     c.venues     !== undefined ? c.venues     : '—');
   set('dc-organizers', c.organizers !== undefined ? c.organizers : '—');
-}
-
-function handleLogout() {
-  doLogout();
-  goToLogin();
 }

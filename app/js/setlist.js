@@ -353,6 +353,14 @@ function refreshFilterOptions() {
 }
 
 function renderControls() {
+  if (!allSongs.length) {
+    document.getElementById('setlist-content').innerHTML =
+      '<div style="text-align:center;padding:2.5rem 1rem;color:var(--third-color);">' +
+        '<p style="margin-bottom:1rem;">You need songs in your catalogue before you can build a setlist.</p>' +
+        '<a class="btn active" href="/' + artistSlug + '/songs?new=1">+ Add your first song</a>' +
+      '</div>';
+    return;
+  }
   const fields = (bandConfig.filterFields ?? []).filter(f => !EXCLUDED_FILTER_FIELDS.has(f.field));
   for (const f of fields) activeFilters.set(f.field, new Set());
 
@@ -821,7 +829,8 @@ function _updateTabBar() {
 
 function switchTab(view) {
   _activeView = view;
-  history.pushState(null, '', view === 'history' ? '/setlist?view=history' : '/setlist');
+  var _tabBase = '/' + _artistSlug + '/setlist';
+  history.pushState(null, '', view === 'history' ? _tabBase + '?view=history' : _tabBase);
   _updateTabBar();
   _closeSongPanel();
   if (_histView) _histView.deselect();
@@ -941,11 +950,7 @@ function _openHistPanelContent(item, panelEl) {
       '<button class="btn" onclick="_histStage(\'' + escHtml(sid) + '\')">Stage</button>' +
       (_viewMode ? '' :
         '<button class="btn share-btn" onclick="_histShareMenu(\'' + escHtml(sid) + '\', this)">' +
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px">' +
-            '<path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>' +
-            '<polyline points="16 6 12 2 8 6"/>' +
-            '<line x1="12" y1="2" x2="12" y2="15"/>' +
-          '</svg>Share' +
+          SHARE_ICON + '<span style="margin-left:4px">Share</span>' +
         '</button>') +
     '</div>' +
     gigBlock + venueBlock + orgBlock + commentBlock +
@@ -997,6 +1002,10 @@ async function _renderHistoryTab() {
     getTotal:  function() { return _histSets.length; },
     getItemId: function(s) { return s.id; },
     renderRow: _renderHistRow,
+    emptyHtml: '<div style="text-align:center;padding:2.5rem 1rem;color:var(--third-color);">' +
+      '<p style="margin-bottom:1rem;">No setlists saved yet.</p>' +
+      '<button class="btn active" onclick="switchTab(\'generator\')">Build your first setlist</button>' +
+      '</div>',
     groupBy:   _getSetYear,
     groupSort: function(a, b) { return b > a ? 1 : -1; },
     onOpen:    _openHistPanelContent,
@@ -1406,8 +1415,8 @@ function _promptDeleteSetlist(sid) {
     '<p style="font-size:0.85rem;margin:0;">Delete <strong>' + escHtml(s.title || 'this setlist') + '</strong>? This cannot be undone.</p>' +
     gigNote +
     '<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">' +
-      '<button class="btn active" style="background:#e55;border-color:#e55;" onclick="_confirmDeleteSetlist(\'' + escHtml(sid) + '\')">Yes, delete</button>' +
-      '<button class="btn" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">Cancel</button>' +
+      '<button class="btn active" style="background:#e55;border-color:#e55;" onclick="_confirmDeleteSetlist(\'' + escHtml(sid) + '\')">Delete</button>' +
+      '<button class="btn" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">Keep it</button>' +
     '</div>';
 }
 

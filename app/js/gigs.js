@@ -408,6 +408,20 @@ if (f.setlist) {
   _insertYearDividers('past-list');
   var countEl = document.getElementById('gig-filter-count');
   if (countEl) countEl.textContent = visible.length + ' / ' + allGigs.length;
+
+  var emptyCta = document.getElementById('gigs-empty-cta');
+  if (emptyCta) emptyCta.remove();
+  if (!allGigs.length) {
+    var upList = document.getElementById('upcoming-list');
+    if (upList) {
+      var ctaDiv = document.createElement('div');
+      ctaDiv.id = 'gigs-empty-cta';
+      ctaDiv.style.cssText = 'text-align:center;padding:1.5rem 1rem;color:var(--third-color);';
+      ctaDiv.innerHTML = '<p style="margin-bottom:1rem;">No gigs yet.</p>' +
+        (getToken() ? '<button class="btn active" onclick="openAddModal()">+ Add your first gig</button>' : '');
+      upList.appendChild(ctaDiv);
+    }
+  }
 }
 
 async function _runGigSongFilter(q) {
