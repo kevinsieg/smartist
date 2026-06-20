@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getArtist, getDb, getSlug }            = require('../_db');
-const { checkCredentials, requireAuth, requireRole } = require('../_auth');
+const { checkCredentials, requireAuth, requireRole, isBootstrapAuthEnabled } = require('../_auth');
 const { generateUserToken, generateMagicToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('../_domain/artist');
 const { sendEmail }    = require('../_email');
@@ -66,8 +66,9 @@ module.exports = wrap(async function handler(req, res) {
       resetEmail = user.email;
       tokenSeed  = user.password_hash;
     } else {
-      // Bootstrap fallback: match ARTIST_ADMIN_EMAIL
+      // Bootstrap fallback: match ARTIST_ADMIN_EMAIL (only before a named user exists)
       const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
+      if (!await isBootstrapAuthEnabled(sql, band.id)) return res.json({ ok: true });
       if (!adminEmail || cleanEmail !== adminEmail.toLowerCase()) return res.json({ ok: true });
       resetEmail = adminEmail;
       tokenSeed  = band.password_hash;
@@ -120,8 +121,8 @@ module.exports = wrap(async function handler(req, res) {
         }
         return res.status(401).json({ error: 'Invalid or expired login link' });
       }
-      // Bootstrap magic token (no hint → single-user install)
-      if (await checkCredentials(magic, band)) {
+      // Bootstrap magic token (no hint → single-user install, no named users yet)
+      if (await isBootstrapAuthEnabled(sql, band.id) && await checkCredentials(magic, band)) {
         return res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
       }
       return res.status(401).json({ error: 'Invalid or expired login link' });
@@ -134,6 +135,7 @@ module.exports = wrap(async function handler(req, res) {
         return res.status(429).json({ error: 'Too many attempts — try again later' });
       const band = await getArtist(slug);
       if (!band) return res.status(404).json({ error: 'Artist not found' });
+      if (!await isBootstrapAuthEnabled(sql, band.id)) return res.status(401).json({ error: 'Invalid password' });
       if (!await checkCredentials(password, band)) return res.status(401).json({ error: 'Invalid password' });
       return res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
     }
@@ -157,6 +159,7 @@ module.exports = wrap(async function handler(req, res) {
       const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
       if (!user && adminEmail
           && String(email).trim().toLowerCase() === adminEmail.toLowerCase()
+          && await isBootstrapAuthEnabled(sql, band.id)
           && await checkCredentials(password, band)) {
         return res.json({ ok: true, adminEmail });
       }
