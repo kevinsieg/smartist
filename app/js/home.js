@@ -51,7 +51,7 @@ async function init() {
 
   const token = sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
   if (token) {
-    const { ok, artists } = await verifyToken(token);
+    const { ok, artists } = await verifySession(token);
     if (ok) { renderLoggedIn(cfg, artists); return; }
   }
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -77,6 +77,22 @@ async function verifyToken(token, hint) {
     } else if (data.adminEmail) {
       sessionStorage.setItem('smartist_admin_email', data.adminEmail);
     }
+    return { ok: true, artists: data.artists || [] };
+  } catch { return { ok: false, artists: [] }; }
+}
+
+// Validate a stored session token on page load. The token may be a named-user
+// JWT or a legacy bootstrap password; the Bearer-authenticated my-artists
+// endpoint accepts both and returns the user's workspaces. Posting it to the
+// password-login endpoint (as the magic flow does) would reject a valid JWT and
+// silently log the user out — defeating "Remember me".
+async function verifySession(token) {
+  try {
+    const r = await fetch('/api/config?action=my-artists', {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    if (!r.ok) return { ok: false, artists: [] };
+    const data = await r.json();
     return { ok: true, artists: data.artists || [] };
   } catch { return { ok: false, artists: [] }; }
 }

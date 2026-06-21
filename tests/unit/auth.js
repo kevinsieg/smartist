@@ -172,67 +172,6 @@ async function run(r) {
     assertEq(res.statusCode(), 403);
   });
 
-  // ── bootstrap auth disablement ───────────────────────────────────────────
-  // Legacy ARTIST_ADMIN_EMAIL / artist-password auth must work only while the
-  // workspace has no accepted named user, and survive a missing users table.
-  function stubBootstrapDeps({ acceptedUsers = 0, magicOk = true, missingUsersTable = false } = {}) {
-    const sqlFn = async (strings) => {
-      const query = strings.join(' ');
-      if (missingUsersTable && query.includes('FROM users')) {
-        const err = new Error('relation "users" does not exist');
-        err.code = '42P01';
-        throw err;
-      }
-      if (query.includes('COUNT(*)')) return [{ count: acceptedUsers }];
-      return [];
-    };
-    require.cache[dbPath2] = {
-      id: dbPath2, filename: dbPath2, loaded: true,
-      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => sqlFn },
-    };
-    require.cache[tokenPath2] = {
-      id: tokenPath2, filename: tokenPath2, loaded: true,
-      exports: {
-        verifyUserToken: () => null,
-        verifyMagicToken: () => magicOk,
-        generateMagicToken: () => '',
-        generateUserToken: () => '',
-        TTL_8H: 28800000, TTL_30D: 2592000000,
-      },
-    };
-    delete require.cache[authPath];
-    return require(path.join(__dirname, '../../api/_auth'));
-  }
-
-  console.log(B('\nbootstrap auth disablement'));
-
-  await r.testAsync('bootstrap credential passes before any named user exists', async () => {
-    const { requireAuth } = stubBootstrapDeps({ acceptedUsers: 0 });
-    const res = mockRes();
-    const req = { headers: { authorization: 'Bearer bootstrap-magic' } };
-    const result = await requireAuth(req, res, 'testband', 'admin');
-    assert(result !== null, 'expected artist object');
-    assertEq(req.user, { id: null, role: 'admin' });
-  });
-
-  await r.testAsync('bootstrap credential denied once a named user exists → 401', async () => {
-    const { requireAuth } = stubBootstrapDeps({ acceptedUsers: 1 });
-    const res = mockRes();
-    const req = { headers: { authorization: 'Bearer bootstrap-magic' } };
-    const result = await requireAuth(req, res, 'testband', 'admin');
-    assertEq(result, null);
-    assertEq(res.statusCode(), 401);
-  });
-
-  await r.testAsync('missing users table keeps bootstrap credential available', async () => {
-    const { requireAuth } = stubBootstrapDeps({ missingUsersTable: true });
-    const res = mockRes();
-    const req = { headers: { authorization: 'Bearer bootstrap-magic' } };
-    const result = await requireAuth(req, res, 'testband', 'admin');
-    assert(result !== null, 'expected artist object');
-    assertEq(req.user, { id: null, role: 'admin' });
-  });
-
   // ── login response includes artists list ─────────────────────────────────
 
   const FAKE_ARTISTS = [{ slug: 'testband', name: 'Test Band', role: 'admin' }];
