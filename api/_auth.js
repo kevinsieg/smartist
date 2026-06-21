@@ -10,38 +10,15 @@ async function checkCredentials(token, artist) {
          await bcrypt.compare(token, artist.password_hash);
 }
 
-function isMissingUsersTable(err) {
-  return err?.code === '42P01'
-    || /relation ["']?users["']? does not exist/i.test(err?.message || '');
-}
-
-// Legacy bootstrap auth (ARTIST_ADMIN_EMAIL + the artist-level password) is a
-// fallback for workspaces that have no named accounts yet. Once any user has
-// accepted an invite and set a password, the env-var admin backdoor is disabled
-// so a stale ARTIST_ADMIN_EMAIL can no longer access the workspace. Installs
-// predating the users table keep bootstrap access (migration fallback).
-async function isBootstrapAuthEnabled(sql, artistId) {
-  try {
-    const [row] = await sql`
-      SELECT COUNT(*)::int AS count FROM users
-      WHERE artist_id = ${artistId} AND password_hash IS NOT NULL
-    `;
-    return Number(row?.count || 0) === 0;
-  } catch (err) {
-    if (isMissingUsersTable(err)) return true;
-    throw err;
-  }
-}
-
 // Resolve a bearer token to { id, role } for THIS artist, or null.
 // User tokens carry only userId — membership in the artist is checked via the
 // email-linked users rows, so a token issued for one workspace never grants
 // access to a workspace the user does not belong to. Role comes from the DB
 // row (per-workspace, revocable), not from the token.
 async function resolveUser(token, artist) {
-  const sql = getDb();
   const claim = verifyUserToken(token);
   if (claim) {
+    const sql = getDb();
     const [member] = await sql`
       SELECT u2.id, u2.role
       FROM users u1
@@ -51,8 +28,7 @@ async function resolveUser(token, artist) {
     `;
     return member ? { id: member.id, role: member.role } : null;
   }
-  if (await isBootstrapAuthEnabled(sql, artist.id) && await checkCredentials(token, artist))
-    return { id: null, role: 'admin' };
+  if (await checkCredentials(token, artist)) return { id: null, role: 'admin' };
   return null;
 }
 
@@ -102,4 +78,4 @@ function isPrivate(artist) {
   return !!(artist.config && artist.config.private);
 }
 
-module.exports = { requireAuth, requireRole, checkCredentials, getAccess, isPrivate, isBootstrapAuthEnabled };
+module.exports = { requireAuth, requireRole, checkCredentials, getAccess, isPrivate };
