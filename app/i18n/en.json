@@ -123,5 +123,22 @@
   "demo.legalLink": "Legal notice",
   "demo.errInvalidEmail": "Please enter a valid email address.",
   "demo.errGeneric": "Something went wrong — try again.",
-  "demo.errNetwork": "Network error — try again."
+  "demo.errNetwork": "Network error — try again.",
+  "onboarding.brandLabel": "smartist studio for musicians",
+  "onboarding.title": "Set up your workspace",
+  "onboarding.expiredTitle": "Link expired",
+  "onboarding.expiredMsg": "This sign-up link has expired or already been used.",
+  "onboarding.expiredCta": "Request a new link",
+  "onboarding.settingUpFor": "Setting up workspace for {email}",
+  "onboarding.nameLabel": "Band / project name",
+  "onboarding.namePlaceholder": "My Band",
+  "onboarding.slugLabel": "Workspace URL",
+  "onboarding.createBtn": "Create workspace",
+  "onboarding.slugFormatHint": "Use 3–50 lowercase letters, numbers, or hyphens",
+  "onboarding.slugChecking": "Checking…",
+  "onboarding.slugAvailable": "✓ Available",
+  "onboarding.slugTaken": "Already taken — try another",
+  "onboarding.creating": "Creating…",
+  "onboarding.errFallback": "Sign-up failed",
+  "onboarding.errGeneric": "Something went wrong"
 }

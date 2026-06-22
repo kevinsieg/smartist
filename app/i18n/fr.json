@@ -123,5 +123,22 @@
   "demo.legalLink": "Mentions légales",
   "demo.errInvalidEmail": "Veuillez entrer une adresse e-mail valide.",
   "demo.errGeneric": "Une erreur est survenue — réessayez.",
-  "demo.errNetwork": "Erreur réseau — réessayez."
+  "demo.errNetwork": "Erreur réseau — réessayez.",
+  "onboarding.brandLabel": "smartist studio pour musiciens",
+  "onboarding.title": "Configurez votre espace",
+  "onboarding.expiredTitle": "Lien expiré",
+  "onboarding.expiredMsg": "Ce lien d'inscription a expiré ou a déjà été utilisé.",
+  "onboarding.expiredCta": "Demander un nouveau lien",
+  "onboarding.settingUpFor": "Configuration de l'espace pour {email}",
+  "onboarding.nameLabel": "Nom du groupe / projet",
+  "onboarding.namePlaceholder": "Mon groupe",
+  "onboarding.slugLabel": "URL de l'espace",
+  "onboarding.createBtn": "Créer l'espace",
+  "onboarding.slugFormatHint": "Utilisez 3 à 50 lettres minuscules, chiffres ou tirets",
+  "onboarding.slugChecking": "Vérification…",
+  "onboarding.slugAvailable": "✓ Disponible",
+  "onboarding.slugTaken": "Déjà pris — essayez un autre",
+  "onboarding.creating": "Création…",
+  "onboarding.errFallback": "Inscription échouée",
+  "onboarding.errGeneric": "Une erreur est survenue"
 }
