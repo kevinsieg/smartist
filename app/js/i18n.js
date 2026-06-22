@@ -128,6 +128,16 @@
   };
   var ENDONYMS = { en: 'English', fr: 'Français', de: 'Deutsch' };
 
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('.lang-switcher.open').forEach(function (w) {
+      if (!w.contains(e.target)) {
+        w.classList.remove('open');
+        var tgl = w.querySelector('.lang-switcher-toggle');
+        if (tgl) tgl.setAttribute('aria-expanded', 'false');
+      }
+    });
+  });
+
   function mountLangSwitcher(target) {
     var wrap = document.createElement('div');
     wrap.className = 'lang-switcher';
@@ -152,9 +162,6 @@
       e.preventDefault();
       var open = wrap.classList.toggle('open');
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
-    document.addEventListener('click', function (e) {
-      if (!wrap.contains(e.target)) { wrap.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
     });
     wrap.appendChild(btn);
     wrap.appendChild(menu);
