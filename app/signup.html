@@ -11,11 +11,12 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=27">
+  <script src="/app/js/i18n.js?v=1"></script>
 </head>
 <body class="brand-page">
 <header class="brand-bar">
   <a class="brand-wordmark" href="/">smartist</a>
-  <nav><a href="/login" class="brand-signin">sign in</a></nav>
+  <nav><a href="/login" class="brand-signin" data-i18n="signup.signin">sign in</a></nav>
 </header>
 <main class="landing-main landing-main--no-nav">
   <div class="landing-card">
@@ -26,15 +27,15 @@
       <span style="height:24px"></span><span style="height:12px"></span><span style="height:18px"></span>
       <span style="height:8px"></span>
     </div>
-    <div class="brand-label">smartist studio for musicians</div>
-    <h1 class="landing-title">Create your workspace</h1>
+    <div class="brand-label" data-i18n="signup.brandLabel">smartist studio for musicians</div>
+    <h1 class="landing-title" data-i18n="signup.heading">Create your workspace</h1>
     <div id="signup-content"></div>
   </div>
 </main>
-<footer class="brand-foot">&copy; <span class="foot-year"></span> smartist &middot; powered by <a href="https://smartist.studio" target="_blank" rel="noopener">smartist.studio</a> &middot; <a href="/contact">Contact</a></footer>
+<footer class="brand-foot">&copy; <span class="foot-year"></span> smartist &middot; powered by <a href="https://smartist.studio" target="_blank" rel="noopener">smartist.studio</a> &middot; <a href="/contact">Contact</a> &middot; <span data-lang-switcher></span></footer>
 <script>document.querySelectorAll('.foot-year').forEach(function(el){ el.textContent = new Date().getFullYear(); });</script>
 <script src="/app/js/services/registration.js"></script>
 <script src="/app/js/services/identity.js"></script>
-<script src="/app/js/signup.js"></script>
+<script src="/app/js/signup.js?v=2"></script>
 </body>
 </html>
