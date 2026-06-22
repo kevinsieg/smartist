@@ -140,5 +140,18 @@
   "onboarding.slugTaken": "Déjà pris — essayez un autre",
   "onboarding.creating": "Création…",
   "onboarding.errFallback": "Inscription échouée",
-  "onboarding.errGeneric": "Une erreur est survenue"
+  "onboarding.errGeneric": "Une erreur est survenue",
+  "workspaces.logOut": "se déconnecter",
+  "workspaces.brandLabel": "smartist studio pour musiciens",
+  "workspaces.title": "Vos espaces",
+  "workspaces.explain": "Un espace est le foyer d'un groupe ou d'un artiste — ses chansons, setlists, concerts et membres y sont réunis. Choisissez un espace pour continuer, ou créez-en un nouveau pour un autre groupe ou projet.",
+  "workspaces.noWorkspacesHint": "Vous n'avez pas encore d'espaces.",
+  "workspaces.createFirst": "Créer votre premier espace",
+  "workspaces.newWorkspace": "+ Nouvel espace",
+  "workspaces.unauthHint": "Vous devez être connecté pour voir vos espaces.",
+  "workspaces.loginBtn": "Se connecter",
+  "workspaces.roleAdmin": "Admin",
+  "workspaces.roleMember": "Membre",
+  "workspaces.roleViewer": "Lecteur",
+  "workspaces.loadError": "Impossible de charger les espaces. Veuillez réessayer."
 }
