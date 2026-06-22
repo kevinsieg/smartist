@@ -232,7 +232,8 @@ async function testArrangementWrite(slug, token, song) {
     assertStatus(res, json, 201);
     assert(json.id > 0, 'missing id');
     assert(json.name === 'Test version', 'name mismatch');
-    assert(Array.isArray(json.rows), 'rows not array');
+    assert(Array.isArray(json.rows),
+      `rows not array — typeof=${typeof json.rows} value=${JSON.stringify(json.rows)} full=${JSON.stringify(json)}`);
     assert(typeof json.is_active === 'boolean', 'missing is_active');
     arr = json;
   });
@@ -1249,7 +1250,9 @@ async function testCrudLifecycle(slug, token, { resource, createBody, invalidBod
   });
 
   await test(`GET /${resource}/:id reflects update → 200`, async () => {
-    const { res, json } = await GET(`/api/${slug}/${resource}/${item.id}`);
+    // Authenticated read: venue/organizer GET-by-id is owner-scoped (CRM data),
+    // and public venue reads require a public status the [TEST] row doesn't set.
+    const { res, json } = await GET(`/api/${slug}/${resource}/${item.id}`, { token });
     assertStatus(res, json, 200);
     assert(json[labelField] === updateBody[labelField], `${labelField} not reflected`);
   });
