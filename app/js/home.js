@@ -39,13 +39,13 @@ async function init() {
     return;
   }
 
-  if (oauthError) { renderLogin('Sign-in failed — the account email does not match the configured admin address.', cfg); return; }
+  if (oauthError) { renderLogin(t('home.oauthErrorMsg'), cfg); return; }
   if (invite)     { renderSetPassword(invite, cfg); return; }
 
   if (magic) {
     const { ok, artists } = await verifyToken(magic, hint || null);
     if (ok) renderLoggedIn(cfg, artists);
-    else    renderLogin('Invalid or expired login link.', cfg);
+    else    renderLogin(t('home.invalidLink'), cfg);
     return;
   }
 
@@ -144,40 +144,40 @@ function renderLogin(errorMsg, cfg) {
 
   const oauthHtml = !showOAuth ? '' :
     '<div class="oauth-btns">' +
-      (showGoogle   ? '<button class="btn oauth-btn" id="google-btn">Continue with Google</button>'   : '') +
-      (showFacebook ? '<button class="btn oauth-btn" id="facebook-btn">Continue with Facebook</button>' : '') +
+      (showGoogle   ? '<button class="btn oauth-btn" id="google-btn">' + t('home.continueWithGoogle') + '</button>'   : '') +
+      (showFacebook ? '<button class="btn oauth-btn" id="facebook-btn">' + t('home.continueWithFacebook') + '</button>' : '') +
     '</div>' +
-    '<div class="auth-divider"><span>or</span></div>';
+    '<div class="auth-divider"><span>' + t('home.orDivider') + '</span></div>';
 
   el.innerHTML =
     '<div class="landing-login">' +
       oauthHtml +
       '<div class="auth-field">' +
-        '<label class="auth-label" for="email-input">Email</label>' +
-        '<input type="email" id="email-input" placeholder="you@band.com" autocomplete="email">' +
+        '<label class="auth-label" for="email-input">' + t('home.emailLabel') + '</label>' +
+        '<input type="email" id="email-input" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
       '</div>' +
       '<div class="auth-field">' +
-        '<label class="auth-label" for="pw-input">Password</label>' +
+        '<label class="auth-label" for="pw-input">' + t('home.passwordLabel') + '</label>' +
         '<div class="pw-wrapper">' +
           '<input type="password" id="pw-input" placeholder="••••••••" autocomplete="current-password">' +
-          '<button type="button" class="pw-toggle" id="pw-toggle">show</button>' +
+          '<button type="button" class="pw-toggle" id="pw-toggle">' + t('home.showPw') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="auth-remember">' +
-        '<label class="auth-remember-label"><input type="checkbox" id="remember-me"> Remember me</label>' +
+        '<label class="auth-remember-label"><input type="checkbox" id="remember-me"> ' + t('home.rememberMe') + '</label>' +
       '</div>' +
       '<div class="auth-error" id="auth-error">' + (errorMsg || '') + '</div>' +
-      '<button class="btn active auth-submit" id="pw-btn">Sign in</button>' +
-      '<button class="reset-link" id="reset-toggle">Forgot password?</button>' +
+      '<button class="btn active auth-submit" id="pw-btn">' + t('home.signIn') + '</button>' +
+      '<button class="reset-link" id="reset-toggle">' + t('home.forgotPassword') + '</button>' +
       '<div class="reset-form" id="reset-form" style="display:none">' +
         '<div class="auth-field">' +
-          '<label class="auth-label" for="reset-email">Email address</label>' +
-          '<input type="email" id="reset-email" placeholder="you@band.com" autocomplete="email">' +
+          '<label class="auth-label" for="reset-email">' + t('home.emailAddressLabel') + '</label>' +
+          '<input type="email" id="reset-email" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
         '</div>' +
         '<div class="auth-error" id="reset-msg"></div>' +
-        '<button class="btn auth-submit" id="reset-btn">Send link</button>' +
+        '<button class="btn auth-submit" id="reset-btn">' + t('home.sendLink') + '</button>' +
       '</div>' +
-      '<p class="auth-hint">No account? <a href="/signup">Sign up free →</a></p>' +
+      '<p class="auth-hint">' + t('home.noAccount') + ' <a href="/signup">' + t('home.signUpFree') + '</a></p>' +
     '</div>';
 
   if (showGoogle)   document.getElementById('google-btn').addEventListener('click', () => startOAuth('google'));
@@ -190,7 +190,7 @@ function renderLogin(errorMsg, cfg) {
     const btn   = document.getElementById('pw-toggle');
     const show  = input.type === 'password';
     input.type      = show ? 'text' : 'password';
-    btn.textContent = show ? 'hide' : 'show';
+    btn.textContent = show ? t('home.hidePw') : t('home.showPw');
   });
   document.getElementById('reset-toggle').addEventListener('click', () => {
     const form = document.getElementById('reset-form');
@@ -208,21 +208,21 @@ function renderSetPassword(inviteToken, cfg) {
   el.innerHTML =
     '<div class="landing-login">' +
       '<div class="auth-field">' +
-        '<label class="auth-label" for="pw-new">Choose a password</label>' +
+        '<label class="auth-label" for="pw-new">' + t('home.choosePassword') + '</label>' +
         '<div class="pw-wrapper">' +
-          '<input type="password" id="pw-new" placeholder="8 or more characters" autocomplete="new-password">' +
-          '<button type="button" class="pw-toggle" id="pw-toggle-new">show</button>' +
+          '<input type="password" id="pw-new" placeholder="' + t('home.pwPlaceholder') + '" autocomplete="new-password">' +
+          '<button type="button" class="pw-toggle" id="pw-toggle-new">' + t('home.showPw') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="auth-error" id="auth-error"></div>' +
-      '<button class="btn active auth-submit" id="accept-btn">Create account</button>' +
+      '<button class="btn active auth-submit" id="accept-btn">' + t('home.createAccount') + '</button>' +
     '</div>';
   document.getElementById('pw-toggle-new').addEventListener('click', () => {
     const input = document.getElementById('pw-new');
     const btn   = document.getElementById('pw-toggle-new');
     const show  = input.type === 'password';
     input.type      = show ? 'text' : 'password';
-    btn.textContent = show ? 'hide' : 'show';
+    btn.textContent = show ? t('home.hidePw') : t('home.showPw');
   });
   document.getElementById('accept-btn').addEventListener('click', () => doAcceptInvite(inviteToken, cfg));
   document.getElementById('pw-new').addEventListener('keydown', e => { if (e.key === 'Enter') doAcceptInvite(inviteToken, cfg); });
@@ -233,7 +233,7 @@ async function doAcceptInvite(inviteToken, cfg) {
   const pw  = document.getElementById('pw-new').value;
   const btn = document.getElementById('accept-btn');
   const err = document.getElementById('auth-error');
-  if (!pw) { err.textContent = 'Enter a password.'; return; }
+  if (!pw) { err.textContent = t('home.enterPassword'); return; }
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
     const slug = cfg?.slug || artistSlug;
@@ -243,13 +243,13 @@ async function doAcceptInvite(inviteToken, cfg) {
       body: JSON.stringify({ token: inviteToken, password: pw }),
     });
     const data = await r.json();
-    if (!r.ok) { err.textContent = data.error || 'Failed to create account.'; btn.disabled = false; btn.textContent = 'Create account'; return; }
+    if (!r.ok) { err.textContent = data.error || t('home.failedCreateAccount'); btn.disabled = false; btn.textContent = t('home.createAccount'); return; }
     storeToken(data.token, false);
     sessionStorage.setItem('smartist_admin_email', data.email || '');
     renderLoggedIn(cfg, data.artists || []);
   } catch {
-    err.textContent = 'Connection error. Try again.';
-    btn.disabled = false; btn.textContent = 'Create account';
+    err.textContent = t('home.connError');
+    btn.disabled = false; btn.textContent = t('home.createAccount');
   }
 }
 
@@ -273,7 +273,7 @@ async function doLogin() {
       body: JSON.stringify(body),
     });
     const data = await r.json();
-    if (!r.ok) { err.textContent = data.error || 'Sign in failed.'; btn.disabled = false; btn.textContent = 'Sign in'; return; }
+    if (!r.ok) { err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); return; }
     if (data.token) {
       storeToken(data.token, remember);
       sessionStorage.setItem('smartist_admin_email', data.email || '');
@@ -285,8 +285,8 @@ async function doLogin() {
     applyNav(cfg.name, cfg.config);
     renderLoggedIn(cfg, data.artists || []);
   } catch {
-    err.textContent = 'Connection error. Try again.';
-    btn.disabled = false; btn.textContent = 'Sign in';
+    err.textContent = t('home.connError');
+    btn.disabled = false; btn.textContent = t('home.signIn');
   }
 }
 
@@ -300,13 +300,13 @@ async function startOAuth(provider) {
       window.location.href = data.url;
     } else {
       const err = document.getElementById('auth-error');
-      if (err) err.textContent = data.error || `${provider} login is not configured`;
-      if (btn) { btn.disabled = false; btn.textContent = `Continue with ${provider[0].toUpperCase() + provider.slice(1)}`; }
+      if (err) err.textContent = data.error || t('home.oauthNotConfigured', { provider: provider });
+      if (btn) { btn.disabled = false; btn.textContent = t('home.continueWith', { provider: provider[0].toUpperCase() + provider.slice(1) }); }
     }
   } catch {
     const err = document.getElementById('auth-error');
-    if (err) err.textContent = 'Connection error. Try again.';
-    if (btn) { btn.disabled = false; btn.textContent = `Continue with ${provider[0].toUpperCase() + provider.slice(1)}`; }
+    if (err) err.textContent = t('home.connError');
+    if (btn) { btn.disabled = false; btn.textContent = t('home.continueWith', { provider: provider[0].toUpperCase() + provider.slice(1) }); }
   }
 }
 
@@ -324,12 +324,12 @@ async function doRequestReset() {
       body: JSON.stringify({ email }),
     });
     msg.style.color = 'var(--secondary-color)';
-    msg.textContent = 'If that email is correct, a login link has been sent.';
+    msg.textContent = t('home.resetSent');
   } catch {
     msg.style.color = '';
-    msg.textContent = 'Failed to send. Try again.';
+    msg.textContent = t('home.resetFailed');
   } finally {
-    btn.disabled = false; btn.textContent = 'Send link';
+    btn.disabled = false; btn.textContent = t('home.sendLink');
   }
 }
 
