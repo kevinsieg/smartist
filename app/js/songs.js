@@ -118,7 +118,7 @@ function updateSongsFooter() {
   var btn = document.getElementById('songs-load-more-btn');
   if (!footer || !counter) return;
   var total = getToken() ? songs.length : _songsTotal;
-  counter.textContent = 'Showing ' + songs.length + ' of ' + total + ' song' + (total !== 1 ? 's' : '');
+  counter.textContent = t('songs.showing', { shown: songs.length, total: total });
   footer.style.display = total > 0 ? '' : 'none';
   if (btn) btn.style.display = (!getToken() && songs.length < total) ? '' : 'none';
 }
@@ -130,7 +130,7 @@ function _ensureSongsFooter() {
   footer.style.cssText = 'display:none;text-align:center;margin-top:1.5rem;';
   footer.innerHTML =
     '<p id="songs-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>' +
-    '<button id="songs-load-more-btn" class="btn" onclick="loadMoreSongs()">Load more</button>';
+    '<button id="songs-load-more-btn" class="btn" onclick="loadMoreSongs()">' + t('songs.loadMore') + '</button>';
   var container = document.getElementById('page-content');
   if (container) container.appendChild(footer);
 }
@@ -167,7 +167,7 @@ async function loadAndRender(viewMode) {
     if (viewMode) applyViewMode();
   } catch {
     const el = document.getElementById('page-content');
-    if (el) el.innerHTML = '<p style="color:var(--third-color);text-align:center;">Failed to load songs.</p>';
+    if (el) el.innerHTML = '<p style="color:var(--third-color);text-align:center;">' + t('songs.loadFailed') + '</p>';
   }
 }
 
@@ -176,12 +176,12 @@ async function loadAndRender(viewMode) {
 var COLS = [
   { key: 'title',               label: 'title',              type: 'text',   cls: 'col-title',   width: 180 },
   { key: 'active',              label: 'active',             type: 'bool',   cls: 'col-active',  width: 48  },
-  { key: 'heart',               label: '♥',                  type: 'bool',   cls: 'col-heart',   width: 40, title: 'Favourite — always included in auto-generation' },
-  { key: 'extra.listenUrl',    label: '▶',                  type: 'listen',   cls: 'col-listen',   width: 52, title: 'Listen — reference recording'  },
-  { key: 'extra.sheetUrl',     label: '≡',                  type: 'sheet',    cls: 'col-sheet',    width: 52, title: 'Sheet — chords & lyrics PDF'   },
-  { key: 'extra.playbackUrl',  label: '▷',                  type: 'playback', cls: 'col-playback', width: 52, title: 'Playback — backing track'       },
-  { key: 'extra.lyrics',       label: '¶',                  type: 'lyrics',   cls: 'col-lyrics',   width: 52, title: 'Lyrics'                          },
-  { key: 'has_arrangement',    label: '&#8862;',            type: 'arr',      cls: 'col-arr',      width: 44, title: 'Arrangement'                      },
+  { key: 'heart',               label: '♥',                  type: 'bool',   cls: 'col-heart',   width: 40, get title() { return t('songs.colTitleHeart'); } },
+  { key: 'extra.listenUrl',    label: '▶',                  type: 'listen',   cls: 'col-listen',   width: 52, get title() { return t('songs.colTitleListen'); }  },
+  { key: 'extra.sheetUrl',     label: '≡',                  type: 'sheet',    cls: 'col-sheet',    width: 52, get title() { return t('songs.colTitleSheet'); }   },
+  { key: 'extra.playbackUrl',  label: '▷',                  type: 'playback', cls: 'col-playback', width: 52, get title() { return t('songs.colTitlePlayback'); }       },
+  { key: 'extra.lyrics',       label: '¶',                  type: 'lyrics',   cls: 'col-lyrics',   width: 52, get title() { return t('songs.colTitleLyrics'); }                          },
+  { key: 'has_arrangement',    label: '&#8862;',            type: 'arr',      cls: 'col-arr',      width: 44, get title() { return t('songs.colTitleArrangement'); }                      },
   { key: 'play_count',          label: 'plays',              type: 'stat',   cls: 'col-plays',   width: 50  },
   { key: 'last_played_at',      label: 'last live',          type: 'stat',   cls: 'col-last',    width: 86  },
   { key: 'iswc',                label: 'ISWC',               type: 'stat',   cls: 'col-iswc',    width: 110, title: 'ISWC (GEMA/SACEM)' },
@@ -310,11 +310,11 @@ function applyFilter() {
 }
 
 var FILTER_COLS = {
-  'title':      () => `<input type="text" id="filter-text" class="col-filter" placeholder="Search…" value="${escHtml(filters.text)}" autocomplete="off">`,
-  'active':     () => `<input type="checkbox" id="filter-active" class="col-filter-check" title="Active only" ${filters.active ? 'checked' : ''}>`,
-  'heart':      () => `<input type="checkbox" id="filter-heart"  class="col-filter-check" title="Favourites only" ${filters.heart ? 'checked' : ''}>`,
-  'extra.lead': () => `<input type="text" id="filter-lead" class="col-filter" placeholder="…" value="${escHtml(filters.lead)}" autocomplete="off">`,
-  'genre':   () => `<input type="text" id="filter-cat" class="col-filter" placeholder="…" value="${escHtml(filters.genre)}" autocomplete="off">`,
+  'title':      function() { return '<input type="text" id="filter-text" class="col-filter" placeholder="' + t('songs.filterSearchPlaceholder') + '" value="' + escHtml(filters.text) + '" autocomplete="off">'; },
+  'active':     function() { return '<input type="checkbox" id="filter-active" class="col-filter-check" title="' + t('songs.filterActiveOnly') + '" ' + (filters.active ? 'checked' : '') + '>'; },
+  'heart':      function() { return '<input type="checkbox" id="filter-heart"  class="col-filter-check" title="' + t('songs.filterFavouritesOnly') + '" ' + (filters.heart ? 'checked' : '') + '>'; },
+  'extra.lead': function() { return '<input type="text" id="filter-lead" class="col-filter" placeholder="…" value="' + escHtml(filters.lead) + '" autocomplete="off">'; },
+  'genre':      function() { return '<input type="text" id="filter-cat" class="col-filter" placeholder="…" value="' + escHtml(filters.genre) + '" autocomplete="off">'; },
 };
 
 function renderTable() {
@@ -362,27 +362,27 @@ function _renderSongsListView() {
   _songsView = createListView({
     container: document.getElementById('page-content'),
     filters: isViewMode() ? [
-      { id: 'title',     label: 'Title',     type: FILTER_TYPES.TEXT, field: 'title'     },
-      { id: 'interpret', label: 'Interpret', type: FILTER_TYPES.TEXT, field: 'interpret' },
+      { id: 'title',     label: t('songs.filterTitle'),     type: FILTER_TYPES.TEXT, field: 'title'     },
+      { id: 'interpret', label: t('songs.filterInterpret'), type: FILTER_TYPES.TEXT, field: 'interpret' },
     ] : [
-      { id: 'title',     label: 'Title',       type: FILTER_TYPES.TEXT,       field: 'title'     },
-      { id: 'interpret', label: 'Interpret',    type: FILTER_TYPES.TEXT,       field: 'interpret' },
-      { id: 'setlist',   label: 'Setlist',      type: FILTER_TYPES.ASYNC_TEXT,
+      { id: 'title',     label: t('songs.filterTitle'),       type: FILTER_TYPES.TEXT,       field: 'title'     },
+      { id: 'interpret', label: t('songs.filterInterpret'),    type: FILTER_TYPES.TEXT,       field: 'interpret' },
+      { id: 'setlist',   label: t('songs.filterSetlist'),      type: FILTER_TYPES.ASYNC_TEXT,
         resolve: _resolveSetlistFilter },
-      { id: 'active',    label: 'Active only',  type: FILTER_TYPES.CHECKBOX,   field: 'active', 'default': true },
-      { id: 'genre',     label: 'Genre',        type: FILTER_TYPES.CHIPS,      field: 'genre',
+      { id: 'active',    label: t('songs.filterActiveOnly'),   type: FILTER_TYPES.CHECKBOX,   field: 'active', 'default': true },
+      { id: 'genre',     label: t('songs.filterGenre'),        type: FILTER_TYPES.CHIPS,      field: 'genre',
         getValues: function() {
           return Array.from(new Set(songs.map(function(s) { return s.genre; }).filter(Boolean))).sort();
         }},
     ],
     actions: isViewMode() ? [] : [
-      { label: '+ Add song', onClick: _openNewSongPanel },
-      { label: 'Bulk Edit',
+      { label: t('songs.addSong'), onClick: _openNewSongPanel },
+      { label: t('songs.bulkEdit'),
         icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg>',
-        title: 'Bulk Edit',
+        title: t('songs.bulkEdit'),
         onClick: toggleBulkEdit,
         desktopOnly: true },
-      { label: 'Share', icon: SHARE_ICON, title: 'Share', onClick: _songsShareMenu },
+      { label: t('songs.share'), icon: SHARE_ICON, title: t('songs.share'), onClick: _songsShareMenu },
     ],
     getData:   _getSongsForFactory,
     getTotal:  function() { return getToken() ? songs.length : _songsTotal; },
@@ -390,8 +390,8 @@ function _renderSongsListView() {
     renderRow: renderListRowHtml,
     onOpen:    _openSongPanelContent,
     emptyHtml: '<div style="text-align:center;padding:2.5rem 1rem;color:var(--third-color);">' +
-      '<p style="margin-bottom:1rem;">No songs yet.</p>' +
-      (getToken() && !isViewMode() ? '<button class="btn active" onclick="_openNewSongPanel()">+ Add your first song</button>' : '') +
+      '<p style="margin-bottom:1rem;">' + t('songs.noSongs') + '</p>' +
+      (getToken() && !isViewMode() ? '<button class="btn active" onclick="_openNewSongPanel()">' + t('songs.addFirstSong') + '</button>' : '') +
       '</div>',
   });
 
@@ -426,10 +426,10 @@ function _openSongPanelContent(item, panelEl) {
   if (!song) return;
   var sid = String(song.id);
 
-  var title = escHtml(song.title || '(untitled)');
+  var title = escHtml(song.title || t('songs.untitled'));
   var activeDot = song.active
-    ? '<span class="vsp-active-dot vsp-active-dot--on">&#9679; active</span>'
-    : '<span class="vsp-active-dot vsp-active-dot--off">&#9679; inactive</span>';
+    ? '<span class="vsp-active-dot vsp-active-dot--on">&#9679; ' + t('songs.active') + '</span>'
+    : '<span class="vsp-active-dot vsp-active-dot--off">&#9679; ' + t('songs.inactive') + '</span>';
 
   var listenUrl   = getVal(song, 'extra.listenUrl');
   var playbackUrl = getVal(song, 'extra.playbackUrl');
@@ -441,27 +441,27 @@ function _openSongPanelContent(item, panelEl) {
   var _spd = '<div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
   var audioHtml = '';
   if (listenUrl  && audioRe.test(listenUrl))
-    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; Listen</div><audio class="vsp-audio" controls src="' + escHtml(listenUrl) + '"></audio>' + _spd + '</div>';
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(listenUrl) + '"></audio>' + _spd + '</div>';
   if (playbackUrl && audioRe.test(playbackUrl))
-    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; Playback</div><audio class="vsp-audio" controls src="' + escHtml(playbackUrl) + '"></audio>' + _spd + '</div>';
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(playbackUrl) + '"></audio>' + _spd + '</div>';
 
   var actions = '';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="Edit song" onclick="_openSongEditForm(\'' + sidEsc + '\', document.getElementById(\'view-side-panel-inner\'))">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" onclick="_openSongEditForm(\'' + sidEsc + '\', document.getElementById(\'view-side-panel-inner\'))">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
     '</svg></button>';
-  actions += '<a class="btn icon-btn" data-tooltip="Stage view (full-screen)" href="/' + _artistSlug + '/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
+  actions += '<a class="btn icon-btn" data-tooltip="' + t('songs.stageView') + '" href="/' + _artistSlug + '/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>' +
     '</svg></a>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="Lyrics" onclick="openLyrics(\'' + sidEsc + '\')">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" onclick="openLyrics(\'' + sidEsc + '\')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/>' +
     '</svg></button>';
-  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" onclick="openPlayer(\'' + sidEsc + '\')">&#9654; Listen</button>';
-  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" onclick="openPlayback(\'' + sidEsc + '\')">&#9655; Playback</button>';
-  if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; Sheet</button>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="Arrangement" onclick="_openSongArrangement(' + Number(sid) + ')">' +
+  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" onclick="openPlayer(\'' + sidEsc + '\')">&#9654; ' + t('songs.listen') + '</button>';
+  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" onclick="openPlayback(\'' + sidEsc + '\')">&#9655; ' + t('songs.playback') + '</button>';
+  if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; ' + t('songs.sheet') + '</button>';
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" onclick="_openSongArrangement(' + Number(sid) + ')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>' +
     '</svg></button>';
@@ -477,17 +477,17 @@ function _openSongPanelContent(item, panelEl) {
   var git2    = getVal(song, 'extra.git2');
   var harp    = getVal(song, 'extra.harp');
   var perfCells =
-    (key     ? _vspCell('Key',        escHtml(String(key)))     : '') +
-    (energy  ? _vspCell('Energy',     escHtml(String(energy)))  : '') +
-    (timeSig ? _vspCell('Time sig',   escHtml(String(timeSig))) : '') +
-    (bpm     ? _vspCell('BPM',        escHtml(String(bpm)))     : '') +
-    (len     ? _vspCell('Length',     escHtml(len))             : '') +
-    (lead    ? _vspCell('Lead',       escHtml(String(lead)))    : '') +
-    (gitCapo ? _vspCell('Git capo',   escHtml(String(gitCapo))) : '') +
-    (bjCapo  ? _vspCell('Banjo capo', escHtml(String(bjCapo)))  : '') +
-    (git2    ? _vspCell('2nd guitar', '&#10003;')               : '') +
-    (harp    ? _vspCell('Harmonica',  '&#10003;')               : '');
-  var perfHtml = perfCells ? _vspSection('Performance', perfCells) : '';
+    (key     ? _vspCell(t('songs.fieldKey'),        escHtml(String(key)))     : '') +
+    (energy  ? _vspCell(t('songs.fieldEnergy'),     escHtml(String(energy)))  : '') +
+    (timeSig ? _vspCell(t('songs.fieldTimeSig'),    escHtml(String(timeSig))) : '') +
+    (bpm     ? _vspCell(t('songs.fieldBpm'),        escHtml(String(bpm)))     : '') +
+    (len     ? _vspCell(t('songs.fieldLength'),     escHtml(len))             : '') +
+    (lead    ? _vspCell(t('songs.fieldLead'),       escHtml(String(lead)))    : '') +
+    (gitCapo ? _vspCell(t('songs.fieldGitCapo'),    escHtml(String(gitCapo))) : '') +
+    (bjCapo  ? _vspCell(t('songs.fieldBanjoCapo'),  escHtml(String(bjCapo)))  : '') +
+    (git2    ? _vspCell(t('songs.fieldGuitar2'),    '&#10003;')               : '') +
+    (harp    ? _vspCell(t('songs.fieldHarmonica'),  '&#10003;')               : '');
+  var perfHtml = perfCells ? _vspSection(t('songs.sectionPerformance'), perfCells) : '';
 
   var genre   = getVal(song, 'genre');
   var interp  = getVal(song, 'interpret');
@@ -497,35 +497,35 @@ function _openSongPanelContent(item, panelEl) {
   var refUrl  = getVal(song, 'extra.referenceUrl');
   var infoUrl = getVal(song, 'extra.songinfoUrl');
   var aboutCells =
-    (genre   ? _vspCell('Genre',          escHtml(String(genre)))  : '') +
-    (interp  ? _vspCell('Interpret',      escHtml(String(interp))) : '') +
-    (refInt  ? _vspCell('Ref. interpret', escHtml(String(refInt))) : '') +
-    (author  ? _vspCell('Author',         escHtml(String(author))) : '') +
-    (comment ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Comment</div><div class="vsp-cell-value">' + escHtml(String(comment)) + '</div></div>' : '') +
-    (refUrl  ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Reference</div><div class="vsp-cell-value"><a href="' + escHtml(safeUrl(String(refUrl)))  + '" target="_blank" rel="noopener">' + escHtml(String(refUrl))  + '</a></div></div>' : '') +
-    (infoUrl ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">Song info</div><div class="vsp-cell-value"><a href="' + escHtml(safeUrl(String(infoUrl))) + '" target="_blank" rel="noopener">' + escHtml(String(infoUrl)) + '</a></div></div>' : '');
-  var aboutHtml = aboutCells ? _vspSection('About', aboutCells) : '';
+    (genre   ? _vspCell(t('songs.fieldGenre'),         escHtml(String(genre)))  : '') +
+    (interp  ? _vspCell(t('songs.fieldInterpret'),     escHtml(String(interp))) : '') +
+    (refInt  ? _vspCell(t('songs.fieldRefInterpret'),  escHtml(String(refInt))) : '') +
+    (author  ? _vspCell(t('songs.fieldAuthor'),        escHtml(String(author))) : '') +
+    (comment ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">' + t('songs.fieldComment') + '</div><div class="vsp-cell-value">' + escHtml(String(comment)) + '</div></div>' : '') +
+    (refUrl  ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">' + t('songs.fieldReference') + '</div><div class="vsp-cell-value"><a href="' + escHtml(safeUrl(String(refUrl)))  + '" target="_blank" rel="noopener">' + escHtml(String(refUrl))  + '</a></div></div>' : '') +
+    (infoUrl ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-label">' + t('songs.fieldSongInfo') + '</div><div class="vsp-cell-value"><a href="' + escHtml(safeUrl(String(infoUrl))) + '" target="_blank" rel="noopener">' + escHtml(String(infoUrl)) + '</a></div></div>' : '');
+  var aboutHtml = aboutCells ? _vspSection(t('songs.sectionAbout'), aboutCells) : '';
 
   var plays    = getVal(song, 'play_count');
   var lastLive = getVal(song, 'last_played_at');
   var statsCells =
-    (plays    ? _vspCell('Plays',     escHtml(String(plays))) : '') +
-    (lastLive ? _vspCell('Last live', escHtml(String(lastLive).slice(0, 10))) : '');
-  var statsHtml = statsCells ? _vspSection('Stats', statsCells) : '';
+    (plays    ? _vspCell(t('songs.fieldPlays'),    escHtml(String(plays))) : '') +
+    (lastLive ? _vspCell(t('songs.fieldLastLive'), escHtml(String(lastLive).slice(0, 10))) : '');
+  var statsHtml = statsCells ? _vspSection(t('songs.sectionStats'), statsCells) : '';
 
   var lang   = getVal(song, 'gema_language') || (song.extra && song.extra.language) || '';
   var gemaNr = getVal(song, 'gema_work_number');
   var iswc   = song.iswc || (song.extra && song.extra.iswc) || '';
   var isrc   = (song.extra && song.extra.isrc) || '';
   var rightsCells =
-    (lang   ? _vspCell('Lang',    escHtml(String(lang)))   : '') +
-    (gemaNr ? _vspCell('GEMA-Nr', escHtml(String(gemaNr))) : '') +
-    (iswc   ? _vspCell('ISWC',   escHtml(String(iswc)))   : '') +
-    (isrc   ? _vspCell('ISRC',   escHtml(String(isrc)))   : '');
-  var rightsHtml = rightsCells ? _vspSection('Rights', rightsCells) : '';
+    (lang   ? _vspCell(t('songs.fieldLang'),    escHtml(String(lang)))   : '') +
+    (gemaNr ? _vspCell(t('songs.fieldGemaNr'),  escHtml(String(gemaNr))) : '') +
+    (iswc   ? _vspCell('ISWC',                  escHtml(String(iswc)))   : '') +
+    (isrc   ? _vspCell('ISRC',                  escHtml(String(isrc)))   : '');
+  var rightsHtml = rightsCells ? _vspSection(t('songs.sectionRights'), rightsCells) : '';
 
   var lyricsHtml = lyricsVal
-    ? '<div class="vsp-section-label">Lyrics</div><div class="vsp-lyrics">' + escHtml(lyricsVal) + '</div>'
+    ? '<div class="vsp-section-label">' + t('songs.lyricsTitle') + '</div><div class="vsp-lyrics">' + escHtml(lyricsVal) + '</div>'
     : '';
 
   panelEl.innerHTML =
@@ -534,7 +534,7 @@ function _openSongPanelContent(item, panelEl) {
       '<div class="vsp-header-text">' +
         '<h3 class="vsp-title">' + title + '</h3>' + activeDot +
       '</div>' +
-      '<button class="vsp-close" onclick="_songsView && _songsView.deselect()" aria-label="Close">&#215;</button>' +
+      '<button class="vsp-close" onclick="_songsView && _songsView.deselect()" aria-label="' + t('songs.close') + '">&#215;</button>' +
     '</div>' +
     (audioHtml || actions ? audioHtml + '<div class="vsp-actions">' + actions + '</div>' : '') +
     perfHtml + aboutHtml + statsHtml + rightsHtml +
@@ -557,7 +557,7 @@ function _openSongPanelContent(item, panelEl) {
         var sec = document.createElement('div');
         sec.className = 'vsp-section';
         sec.innerHTML =
-          '<div class="vsp-section-label">Arrangement' +
+          '<div class="vsp-section-label">' + t('songs.colTitleArrangement') +
           (active.name && active.name !== 'Default'
             ? ' <span style="color:var(--third-color);font-size:0.72rem">' + escHtml(active.name) + '</span>'
             : '') +
@@ -574,9 +574,9 @@ function _openSongPanelContent(item, panelEl) {
     .then(function(ids) {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (!linkEl) return;
-      if (!ids || !ids.length) { linkEl.textContent = 'Not in any setlist'; return; }
+      if (!ids || !ids.length) { linkEl.textContent = t('songs.notInAnySetlist'); return; }
       var songTitle = song.title || '';
-      linkEl.innerHTML = '<a href="#" onclick="event.preventDefault();openAppearances(' + Number(sid) + ')" style="color:var(--secondary-ink)">&#8594; ' + ids.length + ' setlist' + (ids.length !== 1 ? 's' : '') + ' with this song</a>';
+      linkEl.innerHTML = '<a href="#" onclick="event.preventDefault();openAppearances(' + Number(sid) + ')" style="color:var(--secondary-ink)">&#8594; ' + t('songs.setlistCount', { count: ids.length }) + '</a>';
     })
     .catch(function() {
       var linkEl = document.getElementById('vsp-setlist-link');
@@ -637,66 +637,66 @@ function _openSongEditForm(sid, panelEl) {
 
   panelEl.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h3 class="vsp-title">' + (isNew ? 'New song' : escHtml(song.title || 'Edit song')) + '</h3></div>' +
-      (!isNew ? '<button class="vsp-close" onclick="_openSongPanelContent({id:' + sid + '}, document.getElementById(\'view-side-panel-inner\'))" aria-label="Cancel">&#215;</button>' : '') +
+      '<div class="vsp-header-text"><h3 class="vsp-title">' + (isNew ? t('songs.newSong') : escHtml(song.title || t('songs.editSong'))) + '</h3></div>' +
+      (!isNew ? '<button class="vsp-close" onclick="_openSongPanelContent({id:' + sid + '}, document.getElementById(\'view-side-panel-inner\'))" aria-label="' + t('songs.cancel') + '">&#215;</button>' : '') +
     '</div>' +
     '<div style="padding:0 0.5rem;" data-sid="' + id + '">' +
-      '<details class="edit-section" open><summary class="edit-section-summary">Basics</summary>' +
+      '<details class="edit-section" open><summary class="edit-section-summary">' + t('songs.sectionBasics') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField('Title', '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="Song title">') +
-          _editField('Key', inp('key', key)) +
-          _editField('Guitar capo', num('extra.gitCapo', gitCapo)) +
-          _editField('Banjo capo', num('extra.banjoCapo', bjCapo)) +
-          _editField('Length (MM:SS)', '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
-          _editField('Lyrics', '<textarea class="edit-textarea edit-input" data-id="' + id + '" data-key="extra.lyrics" oninput="markPanelEditDirty()" placeholder="Enter lyrics…">' + lyrics + '</textarea>') +
-          _editField('Listen', '<div class="panel-file-row">' + inp('extra.listenUrl', listen) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-audio-' + id + '\')">&#8593;</button><input type="file" id="pf-audio-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'audio\')">' : '') + '</div>') +
+          _editField(t('songs.fieldTitle'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="' + t('songs.songTitlePlaceholder') + '">') +
+          _editField(t('songs.fieldKey'), inp('key', key)) +
+          _editField(t('songs.fieldGitCapo'), num('extra.gitCapo', gitCapo)) +
+          _editField(t('songs.fieldBanjoCapo'), num('extra.banjoCapo', bjCapo)) +
+          _editField(t('songs.fieldLengthMmss'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
+          _editField(t('songs.lyricsTitle'), '<textarea class="edit-textarea edit-input" data-id="' + id + '" data-key="extra.lyrics" oninput="markPanelEditDirty()" placeholder="' + t('songs.lyricsPlaceholder') + '">' + lyrics + '</textarea>') +
+          _editField(t('songs.listen'), '<div class="panel-file-row">' + inp('extra.listenUrl', listen) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-audio-' + id + '\')">&#8593;</button><input type="file" id="pf-audio-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'audio\')">' : '') + '</div>') +
         '</div>' +
       '</details>' +
-      '<details class="edit-section"><summary class="edit-section-summary">Recordings &amp; sheet music</summary>' +
+      '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionRecordings') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField('Sheet', '<div class="panel-file-row">' + inp('extra.sheetUrl', sheet) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-sheet-' + id + '\')">&#8593;</button><input type="file" id="pf-sheet-' + id + '" style="display:none" accept=".pdf,application/pdf" onchange="_panelUploadHandler(this,\'' + id + '\',\'sheet\')">' : '') + '</div>') +
-          _editField('Playback', '<div class="panel-file-row">' + inp('extra.playbackUrl', playback) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-playback-' + id + '\')">&#8593;</button><input type="file" id="pf-playback-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'playback\')">' : '') + '</div>') +
-          _editField('Reference URL', inp('extra.referenceUrl', refUrl, 'url')) +
+          _editField(t('songs.sheet'), '<div class="panel-file-row">' + inp('extra.sheetUrl', sheet) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-sheet-' + id + '\')">&#8593;</button><input type="file" id="pf-sheet-' + id + '" style="display:none" accept=".pdf,application/pdf" onchange="_panelUploadHandler(this,\'' + id + '\',\'sheet\')">' : '') + '</div>') +
+          _editField(t('songs.playback'), '<div class="panel-file-row">' + inp('extra.playbackUrl', playback) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-playback-' + id + '\')">&#8593;</button><input type="file" id="pf-playback-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'playback\')">' : '') + '</div>') +
+          _editField(t('songs.fieldRefUrl'), inp('extra.referenceUrl', refUrl, 'url')) +
         '</div>' +
       '</details>' +
-      '<details class="edit-section"><summary class="edit-section-summary">Song info</summary>' +
+      '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionSongInfo') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField('', '<div class="edit-toggle-row"><span>Active</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
-          _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; Favourite (always in auto-generation)</span></div>') +
-          _editField('Genre', inp('genre', genre)) +
-          _editField('Energy', inp('energy', energy)) +
-          _editField('Time signature', '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
-          _editField('BPM', num('bpm', bpm)) +
-          _editField('Lead', inp('extra.lead', lead)) +
-          _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>2nd guitar</span></div>') +
-          _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>Harmonica</span></div>') +
-          _editField('Author', inp('extra.author', author)) +
-          _editField('Interpret', inp('interpret', interp)) +
-          _editField('Reference interpret', inp('reference_interpret', refInt)) +
-          _editField('Song info URL', inp('extra.songinfoUrl', infoUrl, 'url')) +
-          _editField('Comment', inp('comment', comment)) +
+          _editField('', '<div class="edit-toggle-row"><span>' + t('songs.active') + '</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
+          _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; ' + t('songs.favouriteHint') + '</span></div>') +
+          _editField(t('songs.fieldGenre'), inp('genre', genre)) +
+          _editField(t('songs.fieldEnergy'), inp('energy', energy)) +
+          _editField(t('songs.fieldTimeSig'), '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
+          _editField(t('songs.fieldBpm'), num('bpm', bpm)) +
+          _editField(t('songs.fieldLead'), inp('extra.lead', lead)) +
+          _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>') +
+          _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>' + t('songs.fieldHarmonica') + '</span></div>') +
+          _editField(t('songs.fieldAuthor'), inp('extra.author', author)) +
+          _editField(t('songs.fieldInterpret'), inp('interpret', interp)) +
+          _editField(t('songs.fieldRefInterpret'), inp('reference_interpret', refInt)) +
+          _editField(t('songs.fieldSongInfoUrl'), inp('extra.songinfoUrl', infoUrl, 'url')) +
+          _editField(t('songs.fieldComment'), inp('comment', comment)) +
         '</div>' +
       '</details>' +
-      '<details class="edit-section"><summary class="edit-section-summary">Rights &amp; reporting</summary>' +
+      '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionRights') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField('Language', '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
+          _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
           (iswc   ? _editField('ISWC',    '<div class="edit-readonly">' + escHtml(iswc)   + '</div>') : '') +
           (gemaNr ? _editField('GEMA-Nr', '<div class="edit-readonly">' + escHtml(gemaNr) + '</div>') : '') +
           (isrc   ? _editField('ISRC',    '<div class="edit-readonly">' + escHtml(isrc)   + '</div>') : '') +
         '</div>' +
       '</details>' +
       (!isNew ? (
-        '<details class="edit-section"><summary class="edit-section-summary">Arrangement</summary>' +
+        '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.colTitleArrangement') + '</summary>' +
           '<div class="edit-section-body">' +
             '<div id="edit-arr-preview"></div>' +
-            '<button class="btn" style="margin-top:0.4rem" onclick="_openSongArrangement(' + Number(sid) + ')">Open arrangement editor</button>' +
+            '<button class="btn" style="margin-top:0.4rem" onclick="_openSongArrangement(' + Number(sid) + ')">' + t('songs.openArrEditor') + '</button>' +
           '</div>' +
         '</details>'
       ) : '') +
       '<div class="status-msg" id="song-panel-edit-error"></div>' +
       '<div class="modal-actions">' +
-        '<button class="btn active auth-action" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? 'Add' : 'Save') + '</button>' +
-        (!isNew ? '<button class="btn" onclick="_songsView && _songsView.select(\'' + sid + '\')">Cancel</button>' : '') +
+        '<button class="btn active auth-action" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? t('songs.add') : t('songs.save')) + '</button>' +
+        (!isNew ? '<button class="btn" onclick="_songsView && _songsView.select(\'' + sid + '\')">' + t('songs.cancel') + '</button>' : '') +
       '</div>' +
     '</div>';
 
@@ -724,7 +724,7 @@ async function _savePanelSong(formId, isNew, realSid) {
   if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   var btn = document.getElementById('song-panel-save-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('songs.saving'); }
 
   var data = collectRow(formId);
 
@@ -732,7 +732,7 @@ async function _savePanelSong(formId, isNew, realSid) {
     var r;
     if (isNew) {
       if (!data.title) {
-        if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+        if (btn) { btn.disabled = false; btn.textContent = t('songs.add'); }
         return;
       }
       r = await fetch('/api/' + artistSlug + '/songs', {
@@ -761,8 +761,8 @@ async function _savePanelSong(formId, isNew, realSid) {
     loadLogs();
   } catch {
     var errEl = document.getElementById('song-panel-edit-error');
-    if (errEl) { errEl.textContent = 'Save failed — try again.'; errEl.className = 'status-msg error'; }
-    if (btn) { btn.disabled = false; btn.textContent = isNew ? 'Add' : 'Save'; }
+    if (errEl) { errEl.textContent = t('songs.saveFailed'); errEl.className = 'status-msg error'; }
+    if (btn) { btn.disabled = false; btn.textContent = isNew ? t('songs.add') : t('songs.save'); }
   }
 }
 
@@ -829,13 +829,13 @@ function _renderBulkEditTable() {
 
   document.getElementById('page-content').innerHTML = `
     <div class="toolbar">
-      <button class="btn active auth-action" id="save-btn" disabled>Save</button>
-      <button class="btn auth-action" id="discard-btn" disabled>Discard</button>
-      <button class="btn" id="add-btn">+ Add song</button>
+      <button class="btn active auth-action" id="save-btn" disabled>${t('songs.save')}</button>
+      <button class="btn auth-action" id="discard-btn" disabled>${t('songs.discard')}</button>
+      <button class="btn" id="add-btn">${t('songs.addSong')}</button>
       <span class="status" id="status"></span>
       <span class="filter-count" id="filter-count">${visible.length} / ${songs.length}</span>
-      <button class="btn" onclick="toggleBulkEdit()">← List</button>
-      <button class="btn icon-btn auth-action" title="Share" onclick="_songsShareMenu(this)">${SHARE_ICON}</button>
+      <button class="btn" onclick="toggleBulkEdit()">← ${t('songs.list')}</button>
+      <button class="btn icon-btn auth-action" title="${t('songs.share')}" onclick="_songsShareMenu(this)">${SHARE_ICON}</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -912,10 +912,10 @@ function renderListRowHtml(s) {
   var titleCls  = s.active ? '' : ' songs-list-row-title--inactive';
 
   var icons = '';
-  if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="Listen">&#9654;</button>';
-  if (hasLyrics) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="Lyrics">&#182;</button>';
+  if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
+  if (hasLyrics) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '">&#182;</button>';
   var hasArrangement = !_viewMode && !!s.has_arrangement;
-  if (hasArrangement) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="Arrangement">&#8862;</button>';
+  if (hasArrangement) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
     '<div class="songs-list-row-stack">' +
@@ -995,7 +995,7 @@ function _songsShareMenu(btn) {
   menu.className = 'share-menu';
   menu.innerHTML =
     '<div class="share-menu-item" onclick="exportCsv();var m=document.getElementById(\'share-menu-popup\');if(m)m.remove()">' +
-      '<span class="share-menu-icon">&#10515;</span><span class="share-menu-label">Export CSV</span>' +
+      '<span class="share-menu-icon">&#10515;</span><span class="share-menu-label">' + t('songs.exportCsv') + '</span>' +
     '</div>';
 
   var rect = btn.getBoundingClientRect();
@@ -1080,8 +1080,8 @@ function renderRow(song) {
     if (c.type === 'listen') {
       const hasUrl = !!val;
       const actionBtn = hasUrl
-        ? `<button class="listen-play-btn" onclick="openPlayer('${sid}')" title="Play">▶</button>`
-        : `<button class="listen-upload-btn" onclick="triggerAudioUpload('${sid}')" title="Upload audio">↑</button>`;
+        ? `<button class="listen-play-btn" onclick="openPlayer('${sid}')" title="${t('songs.play')}">▶</button>`
+        : `<button class="listen-upload-btn" onclick="triggerAudioUpload('${sid}')" title="${t('songs.uploadAudio')}">↑</button>`;
       return `<td class="${c.cls}${sticky} listen-cell">
         <input type="text" data-id="${sid}" data-key="${c.key}"
           value="${escHtml(String(val))}" style="display:none">
@@ -1093,8 +1093,8 @@ function renderRow(song) {
     if (c.type === 'sheet') {
       const hasUrl = !!val;
       const actionBtn = hasUrl
-        ? `<button class="sheet-open-btn" onclick="openSheet('${sid}')" title="Open sheet">≡</button>`
-        : `<button class="sheet-upload-btn" onclick="triggerSheetUpload('${sid}')" title="Upload PDF">↑</button>`;
+        ? `<button class="sheet-open-btn" onclick="openSheet('${sid}')" title="${t('songs.openSheet')}">≡</button>`
+        : `<button class="sheet-upload-btn" onclick="triggerSheetUpload('${sid}')" title="${t('songs.uploadPdf')}">↑</button>`;
       return `<td class="${c.cls}${sticky} sheet-cell">
         <input type="text" data-id="${sid}" data-key="${c.key}"
           value="${escHtml(String(val))}" style="display:none">
@@ -1106,8 +1106,8 @@ function renderRow(song) {
     if (c.type === 'playback') {
       const hasUrl = !!val;
       const actionBtn = hasUrl
-        ? `<button class="playback-open-btn" onclick="openPlayback('${sid}')" title="Play playback">▷</button>`
-        : `<button class="playback-upload-btn" onclick="triggerPlaybackUpload('${sid}')" title="Upload playback">↑</button>`;
+        ? `<button class="playback-open-btn" onclick="openPlayback('${sid}')" title="${t('songs.playPlayback')}">▷</button>`
+        : `<button class="playback-upload-btn" onclick="triggerPlaybackUpload('${sid}')" title="${t('songs.uploadPlayback')}">↑</button>`;
       return `<td class="${c.cls}${sticky} playback-cell">
         <input type="text" data-id="${sid}" data-key="${c.key}"
           value="${escHtml(String(val))}" style="display:none">
@@ -1119,8 +1119,8 @@ function renderRow(song) {
     if (c.type === 'lyrics') {
       const hasLyrics = !!(val && String(val).trim());
       const actionBtn = hasLyrics
-        ? `<button class="lyrics-open-btn" onclick="openLyrics('${sid}')" title="View lyrics">¶</button>`
-        : (_viewMode ? '' : `<button class="lyrics-add-btn"  onclick="openLyricsEdit('${sid}')" title="Add lyrics">+</button>`);
+        ? `<button class="lyrics-open-btn" onclick="openLyrics('${sid}')" title="${t('songs.viewLyrics')}">¶</button>`
+        : (_viewMode ? '' : `<button class="lyrics-add-btn"  onclick="openLyricsEdit('${sid}')" title="${t('songs.addLyrics')}">+</button>`);
       return `<td class="${c.cls}${sticky} lyrics-cell">
         <textarea data-id="${sid}" data-key="${c.key}" style="display:none">${escHtml(String(val ?? ''))}</textarea>
         ${actionBtn}
@@ -1131,7 +1131,7 @@ function renderRow(song) {
       const btn = (hasArr || !_viewMode)
         ? `<button class="arr-col-btn${hasArr ? '' : ' arr-col-btn--empty'}"
              onclick="_openSongArrangement(${Number(song.id)})"
-             title="${hasArr ? 'Open arrangement' : 'No arrangement'}">&#8862;</button>`
+             title="${hasArr ? t('songs.openArrangement') : t('songs.noArrangement')}">&#8862;</button>`
         : '';
       return `<td class="${c.cls}${sticky} arr-cell">${btn}</td>`;
     }
@@ -1186,7 +1186,7 @@ function renderRow(song) {
 
   return `<tr id="row-${sid}" data-id="${sid}">${cells}
     <td class="col-del">
-      <button class="del-btn" onclick="deleteRow('${sid}')" title="Delete">&#215;</button>
+      <button class="del-btn" onclick="deleteRow('${sid}')" title="${t('songs.delete')}">&#215;</button>
     </td>
   </tr>`;
 }
@@ -1197,7 +1197,7 @@ function markDirty(sid) {
   dirty.add(String(sid));
   const row = document.getElementById(`row-${sid}`);
   if (row) row.classList.add('dirty');
-  _setBulkStatus('unsaved', 'Unsaved changes');
+  _setBulkStatus('unsaved', t('songs.unsavedChanges'));
   document.getElementById('save-btn')?.removeAttribute('disabled');
   document.getElementById('discard-btn')?.removeAttribute('disabled');
 }
@@ -1246,7 +1246,7 @@ function addRow() {
   dirty.add(tempId);
   tr.classList.add('dirty');
   tr.querySelector('input[type="text"]')?.focus();
-  _setBulkStatus('unsaved', 'Unsaved changes');
+  _setBulkStatus('unsaved', t('songs.unsavedChanges'));
 }
 
 async function deleteRow(sid) {
@@ -1258,7 +1258,7 @@ async function deleteRow(sid) {
     return;
   }
 
-  if (!confirm('Delete this song? It will also be removed from any saved setlists.')) return;
+  if (!confirm(t('songs.confirmDeleteSong'))) return;
 
   const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
   const r = await fetch(`/api/${artistSlug}/songs/${sid}`, {
@@ -1274,7 +1274,7 @@ async function deleteRow(sid) {
   } else if (r.status === 401) {
     if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); }
   } else {
-    _setBulkStatus('error', 'Could not delete song — try again');
+    _setBulkStatus('error', t('songs.couldNotDeleteSong'));
   }
 }
 
@@ -1291,8 +1291,8 @@ async function saveAll() {
   if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   const btn = document.getElementById('save-btn');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  _setBulkStatus('', 'Saving…');
+  btn.disabled = true; btn.textContent = t('songs.saving');
+  _setBulkStatus('', t('songs.saving'));
 
   try {
     const allRows  = [...document.querySelectorAll('#tbody tr')];
@@ -1329,14 +1329,14 @@ async function saveAll() {
 
     dirty.clear();
     await loadAndRender();
-    _setBulkStatus('saved', 'All changes saved');
+    _setBulkStatus('saved', t('songs.allChangesSaved'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
 
   } catch {
-    _setBulkStatus('error', 'Save failed — try again');
+    _setBulkStatus('error', t('songs.saveFailed'));
   } finally {
     const b = document.getElementById('save-btn');
-    if (b) { b.disabled = false; b.textContent = 'Save'; }
+    if (b) { b.disabled = false; b.textContent = t('songs.save'); }
   }
 }
 
@@ -1355,10 +1355,10 @@ async function loadLogs() {
 
 function timeAgo(iso) {
   const secs = Math.floor((Date.now() - new Date(iso)) / 1000);
-  if (secs < 60)   return 'just now';
-  if (secs < 3600) return Math.floor(secs / 60) + ' min ago';
-  if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
-  return Math.floor(secs / 86400) + 'd ago';
+  if (secs < 60)    return t('songs.timeJustNow');
+  if (secs < 3600)  return t('songs.timeMinAgo', { n: Math.floor(secs / 60) });
+  if (secs < 86400) return t('songs.timeHAgo',   { n: Math.floor(secs / 3600) });
+  return t('songs.timeDAgo', { n: Math.floor(secs / 86400) });
 }
 
 function renderLogs(logs) {
@@ -1372,11 +1372,11 @@ function renderLogs(logs) {
     const badge = log.action === 'create' ? 'log-create'
                 : log.action === 'delete' ? 'log-delete'
                 : 'log-update';
-    const label = log.action === 'create' ? 'added'
-                : log.action === 'delete' ? 'deleted'
-                : 'updated';
+    const label = log.action === 'create' ? t('songs.logAdded')
+                : log.action === 'delete' ? t('songs.logDeleted')
+                : t('songs.logUpdated');
     const restore = (log.action === 'delete' && token)
-      ? `<button class="log-restore-btn" onclick="restoreSong(${log.song_id})">Restore</button>`
+      ? `<button class="log-restore-btn" onclick="restoreSong(${log.song_id})">${t('songs.restore')}</button>`
       : '';
     return `<div class="log-row">
       <span class="log-badge ${badge}">${label}</span>
@@ -1386,7 +1386,7 @@ function renderLogs(logs) {
     </div>`;
   }).join('');
 
-  el.innerHTML = `<div class="logs-wrap"><h2 class="logs-heading">Change log</h2>${items}</div>`;
+  el.innerHTML = `<div class="logs-wrap"><h2 class="logs-heading">${t('songs.changeLog')}</h2>${items}</div>`;
 }
 
 async function restoreSong(songId) {
@@ -1400,7 +1400,7 @@ async function restoreSong(songId) {
   if (r.ok) {
     await loadAndRender();
   } else {
-    _setBulkStatus('error', 'Could not restore song — try again');
+    _setBulkStatus('error', t('songs.couldNotRestore'));
   }
 }
 
@@ -1410,15 +1410,15 @@ async function openAppearances(songId) {
   const song  = songs.find(s => s.id === songId);
   const modal = document.getElementById('appearances-modal');
   document.getElementById('appearances-title').textContent =
-    song ? `"${song.title}"` : 'Song appearances';
+    song ? `"${song.title}"` : t('songs.appearancesTitle');
   const list = document.getElementById('appearances-list');
-  list.innerHTML = '<p class="appearance-loading">Loading…</p>';
+  list.innerHTML = '<p class="appearance-loading">' + t('songs.loading') + '</p>';
   modal.classList.add('open');
 
   try {
     const data = await fetch(`/api/${artistSlug}/songs?setlists=${songId}`).then(r => r.json());
     if (!data.length) {
-      list.innerHTML = '<p class="appearance-empty">Not in any setlist yet.</p>';
+      list.innerHTML = '<p class="appearance-empty">' + t('songs.notInAnySetlist') + '</p>';
       return;
     }
     list.innerHTML = data.map(sl => {
@@ -1433,7 +1433,7 @@ async function openAppearances(songId) {
       </div>`;
     }).join('');
   } catch {
-    list.innerHTML = '<p class="appearance-empty">Failed to load.</p>';
+    list.innerHTML = '<p class="appearance-empty">' + t('songs.failedToLoad') + '</p>';
   }
 }
 
@@ -1453,14 +1453,14 @@ async function openGema(songId) {
   const content = document.getElementById('gema-content');
   const song    = songs.find(s => s.id === songId);
   title.textContent = song?.title ?? 'GEMA';
-  content.innerHTML = '<p class="gema-loading">Loading…</p>';
+  content.innerHTML = '<p class="gema-loading">' + t('songs.loading') + '</p>';
   modal.classList.add('open');
   try {
     const r = await fetch(`/api/${artistSlug}/songs/${songId}/gema`);
     const { works, rightholders } = await r.json();
-    content.innerHTML = works.length ? renderGemaContent(works, rightholders) : '<p class="gema-loading">No GEMA registration linked.</p>';
+    content.innerHTML = works.length ? renderGemaContent(works, rightholders) : '<p class="gema-loading">' + t('songs.noGemaLinked') + '</p>';
   } catch {
-    content.innerHTML = '<p class="gema-loading">Failed to load.</p>';
+    content.innerHTML = '<p class="gema-loading">' + t('songs.failedToLoad') + '</p>';
   }
 }
 
@@ -1471,14 +1471,14 @@ function renderGemaContent(works, rightholders) {
       ? `${Math.floor(work.duration_sec / 60)}:${String(work.duration_sec % 60).padStart(2, '0')}`
       : null;
     const details = [
-      ['ISWC',             work.iswc],
-      ['ISRC',             work.isrc],
-      ['Language',         work.language],
-      ['Performers',       work.performers],
-      ['Genre',            work.gema_genre],
-      ['Duration',         dur],
-      ['First registered', work.first_registered_at],
-      ['Last updated',     work.last_updated_at],
+      ['ISWC',                              work.iswc],
+      ['ISRC',                              work.isrc],
+      [t('songs.gemaLabelLanguage'),        work.language],
+      [t('songs.gemaLabelPerformers'),      work.performers],
+      [t('songs.gemaLabelGenre'),           work.gema_genre],
+      [t('songs.gemaLabelDuration'),        dur],
+      [t('songs.gemaLabelFirstRegistered'), work.first_registered_at],
+      [t('songs.gemaLabelLastUpdated'),     work.last_updated_at],
     ].filter(([, v]) => v);
 
     const dlHtml = details.map(([k, v]) =>
@@ -1487,7 +1487,7 @@ function renderGemaContent(works, rightholders) {
 
     const rhHtml = rh.length ? `
       <table class="gema-rh-table">
-        <thead><tr><th>Name</th><th>Role</th><th>AR %</th><th>VR %</th><th>Society</th><th>Represents</th></tr></thead>
+        <thead><tr><th>${t('songs.gemaColName')}</th><th>${t('songs.gemaColRole')}</th><th>AR %</th><th>VR %</th><th>${t('songs.gemaColSociety')}</th><th>${t('songs.gemaColRepresents')}</th></tr></thead>
         <tbody>${rh.map(r => `<tr>
           <td>${escHtml(r.name)}</td>
           <td>${escHtml(r.role)}</td>
@@ -1527,7 +1527,7 @@ async function _panelUploadHandler(input, sid, mediaType) {
   if (!file) return;
 
   var maxBytes = mediaType === 'sheet' ? 20 * 1024 * 1024 : 50 * 1024 * 1024;
-  if (file.size > maxBytes) { _setBulkStatus('error', 'File too large'); return; }
+  if (file.size > maxBytes) { _setBulkStatus('error', t('songs.fileTooLarge')); return; }
 
   var btn = input.previousElementSibling;
   var origText = btn ? btn.textContent : '';
@@ -1541,11 +1541,11 @@ async function _panelUploadHandler(input, sid, mediaType) {
     var song = songs.find(function(s) { return String(s.id) === String(sid); });
     var extraKeyMap = { audio: 'listenUrl', sheet: 'sheetUrl', playback: 'playbackUrl' };
     if (song) song.extra = Object.assign({}, song.extra, { [extraKeyMap[mediaType]]: publicUrl });
-    _setBulkStatus('saved', 'File uploaded');
+    _setBulkStatus('saved', t('songs.fileUploaded'));
     setTimeout(function() { _setBulkStatus('', ''); }, 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
   } finally {
     if (btn) { btn.textContent = origText; btn.disabled = false; }
   }
@@ -1595,7 +1595,7 @@ async function handleAudioFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', t('songs.fileTooLargeMax', { max: '50 MB' })); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .listen-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
@@ -1610,16 +1610,16 @@ async function handleAudioFile(input, sid) {
       td.querySelector('.listen-upload-btn')?.remove();
       if (!td.querySelector('.listen-play-btn')) {
         const btn = document.createElement('button');
-        btn.className = 'listen-play-btn'; btn.title = 'Play'; btn.textContent = '▶';
+        btn.className = 'listen-play-btn'; btn.title = t('songs.play'); btn.textContent = '▶';
         btn.setAttribute('onclick', `openPlayer('${sid}')`);
         td.prepend(btn);
       }
     }
-    _setBulkStatus('saved', 'Audio uploaded');
+    _setBulkStatus('saved', t('songs.audioUploaded'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -1704,7 +1704,7 @@ async function confirmDeleteAudio() {
       body: JSON.stringify({ media_delete_id: sid, media_type: 'audio' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { _setBulkStatus('error', 'Could not remove audio file'); return; }
+    if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveAudio')); return; }
 
     // Update local cache and swap ▶ back to ↑ in the table cell
     const song = songs.find(s => String(s.id) === String(sid));
@@ -1716,16 +1716,16 @@ async function confirmDeleteAudio() {
       if (!td.querySelector('.listen-upload-btn')) {
         const btn = document.createElement('button');
         btn.className = 'listen-upload-btn';
-        btn.title = 'Upload audio';
+        btn.title = t('songs.uploadAudio');
         btn.textContent = '↑';
         btn.setAttribute('onclick', `triggerAudioUpload('${sid}')`);
         td.appendChild(btn);
       }
     }
-    _setBulkStatus('saved', 'Audio removed');
+    _setBulkStatus('saved', t('songs.audioRemoved'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    _setBulkStatus('error', 'Could not remove audio file');
+    _setBulkStatus('error', t('songs.couldNotRemoveAudio'));
   }
 }
 
@@ -1739,7 +1739,7 @@ async function handleReplaceFile(input) {
   input.value = '';
   const sid = currentPlayerSid;
   if (!sid) return;
-  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', t('songs.fileTooLargeMax', { max: '50 MB' })); return; }
 
   const replaceBtn = document.getElementById('player-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
@@ -1761,12 +1761,12 @@ async function handleReplaceFile(input) {
       content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
     }
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
-    _setBulkStatus('saved', 'Audio replaced');
+    _setBulkStatus('saved', t('songs.audioReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
   } finally {
-    if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
+    if (replaceBtn) { replaceBtn.textContent = t('songs.replace'); replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
 }
 
@@ -1786,7 +1786,7 @@ function renderPlayerHistory(logs) {
     </div>`;
   }).join('');
 
-  el.innerHTML = `<h3 class="player-history-heading">History</h3>${items}`;
+  el.innerHTML = `<h3 class="player-history-heading">${t('songs.history')}</h3>${items}`;
 }
 
 // --- Sheet (PDF) column ---
@@ -1801,7 +1801,7 @@ async function handleSheetFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  if (file.size > 20 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 20 MB'); return; }
+  if (file.size > 20 * 1024 * 1024) { _setBulkStatus('error', t('songs.fileTooLargeMax', { max: '20 MB' })); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .sheet-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
@@ -1816,16 +1816,16 @@ async function handleSheetFile(input, sid) {
       td.querySelector('.sheet-upload-btn')?.remove();
       if (!td.querySelector('.sheet-open-btn')) {
         const btn = document.createElement('button');
-        btn.className = 'sheet-open-btn'; btn.title = 'Open sheet'; btn.textContent = '≡';
+        btn.className = 'sheet-open-btn'; btn.title = t('songs.openSheet'); btn.textContent = '≡';
         btn.setAttribute('onclick', `openSheet('${sid}')`);
         td.prepend(btn);
       }
     }
-    _setBulkStatus('saved', 'Sheet uploaded');
+    _setBulkStatus('saved', t('songs.sheetUploaded'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -1889,7 +1889,7 @@ async function confirmDeleteSheet() {
       body: JSON.stringify({ media_delete_id: sid, media_type: 'sheet' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { _setBulkStatus('error', 'Could not remove sheet'); return; }
+    if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveSheet')); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.sheetUrl;
@@ -1900,16 +1900,16 @@ async function confirmDeleteSheet() {
       if (!td.querySelector('.sheet-upload-btn')) {
         const btn = document.createElement('button');
         btn.className = 'sheet-upload-btn';
-        btn.title = 'Upload PDF';
+        btn.title = t('songs.uploadPdf');
         btn.textContent = '↑';
         btn.setAttribute('onclick', `triggerSheetUpload('${sid}')`);
         td.appendChild(btn);
       }
     }
-    _setBulkStatus('saved', 'Sheet removed');
+    _setBulkStatus('saved', t('songs.sheetRemoved'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    _setBulkStatus('error', 'Could not remove sheet');
+    _setBulkStatus('error', t('songs.couldNotRemoveSheet'));
   }
 }
 
@@ -1923,7 +1923,7 @@ async function handleReplaceSheet(input) {
   input.value = '';
   const sid = currentSheetSid;
   if (!sid) return;
-  if (file.size > 20 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 20 MB'); return; }
+  if (file.size > 20 * 1024 * 1024) { _setBulkStatus('error', t('songs.fileTooLargeMax', { max: '20 MB' })); return; }
 
   const replaceBtn = document.getElementById('sheet-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
@@ -1936,12 +1936,12 @@ async function handleReplaceSheet(input) {
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
-    _setBulkStatus('saved', 'Sheet replaced');
+    _setBulkStatus('saved', t('songs.sheetReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
   } finally {
-    if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
+    if (replaceBtn) { replaceBtn.textContent = t('songs.replace'); replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
 }
 
@@ -1961,7 +1961,7 @@ function renderSheetHistory(logs) {
     </div>`;
   }).join('');
 
-  el.innerHTML = `<h3 class="player-history-heading">History</h3>${items}`;
+  el.innerHTML = `<h3 class="player-history-heading">${t('songs.history')}</h3>${items}`;
 }
 
 document.getElementById('player-modal').addEventListener('click', e => {
@@ -1982,7 +1982,7 @@ async function handlePlaybackFile(input, sid) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', t('songs.fileTooLargeMax', { max: '50 MB' })); return; }
 
   const uploadBtn = document.querySelector(`#row-${sid} .playback-upload-btn`);
   if (uploadBtn) { uploadBtn.dataset.orig = uploadBtn.textContent; uploadBtn.textContent = '…'; uploadBtn.classList.add('listen-uploading'); uploadBtn.disabled = true; }
@@ -1997,16 +1997,16 @@ async function handlePlaybackFile(input, sid) {
       td.querySelector('.playback-upload-btn')?.remove();
       if (!td.querySelector('.playback-open-btn')) {
         const btn = document.createElement('button');
-        btn.className = 'playback-open-btn'; btn.title = 'Play playback'; btn.textContent = '▷';
+        btn.className = 'playback-open-btn'; btn.title = t('songs.playPlayback'); btn.textContent = '▷';
         btn.setAttribute('onclick', `openPlayback('${sid}')`);
         td.prepend(btn);
       }
     }
-    _setBulkStatus('saved', 'Playback uploaded');
+    _setBulkStatus('saved', t('songs.playbackUploaded'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -2078,7 +2078,7 @@ async function confirmDeletePlayback() {
       body: JSON.stringify({ media_delete_id: sid, media_type: 'playback' }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { _setBulkStatus('error', 'Could not remove playback file'); return; }
+    if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemovePlayback')); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.playbackUrl;
@@ -2089,16 +2089,16 @@ async function confirmDeletePlayback() {
       if (!td.querySelector('.playback-upload-btn')) {
         const btn = document.createElement('button');
         btn.className = 'playback-upload-btn';
-        btn.title = 'Upload playback';
+        btn.title = t('songs.uploadPlayback');
         btn.textContent = '↑';
         btn.setAttribute('onclick', `triggerPlaybackUpload('${sid}')`);
         td.appendChild(btn);
       }
     }
-    _setBulkStatus('saved', 'Playback removed');
+    _setBulkStatus('saved', t('songs.playbackRemoved'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    _setBulkStatus('error', 'Could not remove playback file');
+    _setBulkStatus('error', t('songs.couldNotRemovePlayback'));
   }
 }
 
@@ -2112,7 +2112,7 @@ async function handleReplacePlayback(input) {
   input.value = '';
   const sid = currentPlaybackSid;
   if (!sid) return;
-  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', 'File too large — max 50 MB'); return; }
+  if (file.size > 50 * 1024 * 1024) { _setBulkStatus('error', t('songs.fileTooLargeMax', { max: '50 MB' })); return; }
 
   const replaceBtn = document.getElementById('playback-replace-btn');
   if (replaceBtn) { replaceBtn.textContent = '…'; replaceBtn.classList.add('listen-uploading'); replaceBtn.disabled = true; }
@@ -2126,12 +2126,12 @@ async function handleReplacePlayback(input) {
     document.getElementById('playback-content').innerHTML =
       `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
-    _setBulkStatus('saved', 'Playback replaced');
+    _setBulkStatus('saved', t('songs.playbackReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', 'Upload failed — check your connection');
+    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
   } finally {
-    if (replaceBtn) { replaceBtn.textContent = 'Replace'; replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
+    if (replaceBtn) { replaceBtn.textContent = t('songs.replace'); replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
 }
 
@@ -2141,7 +2141,7 @@ function renderPlaybackHistory(logs) {
   const items = logs.filter(l => l.action === 'playback_replace' || l.action === 'playback_delete');
   if (!items.length) { el.innerHTML = ''; return; }
 
-  el.innerHTML = `<h3 class="player-history-heading">History</h3>` + items.map(log => {
+  el.innerHTML = `<h3 class="player-history-heading">${t('songs.history')}</h3>` + items.map(log => {
     const desc = log.action === 'playback_replace'
       ? `replaced — ${escHtml(log.song_data?.previousFilename ?? '?')}`
       : `removed — ${escHtml(log.song_data?.filename ?? '?')}`;
@@ -2213,7 +2213,7 @@ async function suggestLyrics() {
   const btn = document.getElementById('lyrics-suggest-btn');
   if (!btn) return;
   btn.textContent = '…'; btn.disabled = true;
-  _lyricsShowSuggestState('Searching lyrics.ovh, lrclib, AI…', '', false);
+  _lyricsShowSuggestState(t('songs.lyricsSearching'), '', false);
   _lyricsSuggestAbort = new AbortController();
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
@@ -2227,21 +2227,21 @@ async function suggestLyrics() {
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      _lyricsShowSuggestState(body.error ?? 'Could not fetch lyrics', '', false);
+      _lyricsShowSuggestState(body.error ?? t('songs.lyricsCouldNotFetch'), '', false);
       return;
     }
     const data = await r.json();
-    const sourcesList = data.sources ? data.sources.join(', ') : 'all sources';
+    const sourcesList = data.sources ? data.sources.join(', ') : t('songs.lyricsAllSources');
     if (!data.lyrics) {
-      const aiNote = data.aiSkipped ? ' (AI quota exhausted — try again tomorrow)' : '';
-      _lyricsShowSuggestState(`No lyrics found (tried: ${sourcesList})${aiNote}`, '', false);
+      const aiNote = data.aiSkipped ? ' ' + t('songs.lyricsAiQuota') : '';
+      _lyricsShowSuggestState(t('songs.lyricsNotFound', { sources: sourcesList }) + aiNote, '', false);
       return;
     }
-    _lyricsShowSuggestState(`Suggested via ${data.source}`, data.lyrics, true);
+    _lyricsShowSuggestState(t('songs.lyricsSuggestedVia', { source: data.source }), data.lyrics, true);
   } catch (e) {
-    if (e.name !== 'AbortError') _lyricsShowSuggestState('Could not fetch lyrics', '', false);
+    if (e.name !== 'AbortError') _lyricsShowSuggestState(t('songs.lyricsCouldNotFetch'), '', false);
   } finally {
-    btn.textContent = 'AI ✦'; btn.disabled = false;
+    btn.textContent = t('songs.aiBtn'); btn.disabled = false;
     _lyricsSuggestAbort = null;
   }
 }
@@ -2285,7 +2285,7 @@ async function saveLyrics() {
   const text = document.getElementById('lyrics-edit').value;
 
   const saveBtn = document.getElementById('lyrics-save-btn');
-  if (saveBtn) { saveBtn.textContent = '…'; saveBtn.disabled = true; }
+  if (saveBtn) { saveBtn.textContent = t('songs.savingDot'); saveBtn.disabled = true; }
   _lyricsSaveStatus('', false);
 
   try {
@@ -2297,7 +2297,7 @@ async function saveLyrics() {
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closeLyrics(); return; }
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      const msg = body.error ?? `Save failed (${r.status})`;
+      const msg = body.error ?? t('songs.saveFailedStatus', { status: r.status });
       _lyricsSaveStatus(msg, true);
       console.error('saveLyrics failed', r.status, body);
       return;
@@ -2315,12 +2315,12 @@ async function saveLyrics() {
       if (trimmed && existing?.classList.contains('lyrics-add-btn')) {
         existing.className = 'lyrics-open-btn';
         existing.textContent = '¶';
-        existing.title = 'View lyrics';
+        existing.title = t('songs.viewLyrics');
         existing.setAttribute('onclick', `openLyrics('${sid}')`);
       } else if (!trimmed && existing?.classList.contains('lyrics-open-btn')) {
         existing.className = 'lyrics-add-btn';
         existing.textContent = '+';
-        existing.title = 'Add lyrics';
+        existing.title = t('songs.addLyrics');
         existing.setAttribute('onclick', `openLyricsEdit('${sid}')`);
       }
     }
@@ -2331,13 +2331,13 @@ async function saveLyrics() {
     } else {
       closeLyrics();
     }
-    _setBulkStatus('saved', 'Lyrics saved');
+    _setBulkStatus('saved', t('songs.lyricsSaved'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (e) {
-    _lyricsSaveStatus('Network error — could not save', true);
+    _lyricsSaveStatus(t('songs.networkErrorSave'), true);
     console.error('saveLyrics network error', e);
   } finally {
-    if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; }
+    if (saveBtn) { saveBtn.textContent = t('songs.save'); saveBtn.disabled = false; }
   }
 }
 
@@ -2363,7 +2363,7 @@ async function confirmDeleteLyrics() {
       body: JSON.stringify({ lyrics_delete_id: sid }),
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) { _setBulkStatus('error', 'Could not delete lyrics'); return; }
+    if (!r.ok) { _setBulkStatus('error', t('songs.couldNotDeleteLyrics')); return; }
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.lyrics;
@@ -2375,14 +2375,14 @@ async function confirmDeleteLyrics() {
       if (btn) {
         btn.className = 'lyrics-add-btn';
         btn.textContent = '+';
-        btn.title = 'Add lyrics';
+        btn.title = t('songs.addLyrics');
         btn.setAttribute('onclick', `openLyricsEdit('${sid}')`);
       }
     }
-    _setBulkStatus('saved', 'Lyrics deleted');
+    _setBulkStatus('saved', t('songs.lyricsDeleted'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch {
-    _setBulkStatus('error', 'Could not delete lyrics');
+    _setBulkStatus('error', t('songs.couldNotDeleteLyrics'));
   }
 }
 
