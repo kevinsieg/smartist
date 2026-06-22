@@ -60,7 +60,11 @@
   document.documentElement.lang = locale;
   if (locale !== 'en') document.documentElement.style.opacity = '0';
 
-  var dict = {};
+  var DICT_KEY = 'smartist_i18n_' + locale;
+  function readLS(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  // Prime synchronously from the localStorage cache (all locales incl. en) so
+  // t() returns correct strings before page scripts run on repeat visits.
+  var dict = readCachedDict(readLS(DICT_KEY), I18N_VERSION) || null;
 
   function getLocale() { return locale; }
   function t(key, vars) { return translate(dict, key, vars); }
@@ -89,16 +93,13 @@
   }
 
   function loadDict() {
-    if (locale === 'en') return Promise.resolve({});
-    var cached = readCachedDict(
-      (function () { try { return localStorage.getItem('smartist_i18n_' + locale); } catch (e) { return null; } })(),
-      I18N_VERSION
-    );
-    if (cached) return Promise.resolve(cached);
+    // en is the source of truth but its strings still live in en.json — JS
+    // t() calls have no inline fallback, so every locale (incl. en) loads a dict.
+    if (dict) return Promise.resolve(dict);
     return fetch('/app/i18n/' + locale + '.json?v=' + I18N_VERSION)
       .then(function (r) { return r.ok ? r.json() : {}; })
       .then(function (d) {
-        try { localStorage.setItem('smartist_i18n_' + locale, JSON.stringify({ v: I18N_VERSION, dict: d })); } catch (e) {}
+        try { localStorage.setItem(DICT_KEY, JSON.stringify({ v: I18N_VERSION, dict: d })); } catch (e) {}
         return d;
       })
       .catch(function () { return {}; });

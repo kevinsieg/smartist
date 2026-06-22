@@ -728,6 +728,8 @@ async function apiFetch(url, method = 'GET', body) {
 // Loads the light config (no songs payload) unless opts.fullConfig is set.
 async function initPage(onReady, opts) {
   if (isViewMode()) { goToLogin(); return; }
+  // Ensure the i18n dictionary is loaded before any page renders via t().
+  if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
   var cfg;
   try {
     cfg = await loadConfig(undefined, { light: !(opts && opts.fullConfig) });
