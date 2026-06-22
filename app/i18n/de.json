@@ -98,5 +98,19 @@
   "landing.subscribe_done": "Fertig",
   "landing.subscribe_err_duplicate": "Diese Adresse ist bereits eingetragen.",
   "landing.subscribe_err_generic": "Ein Fehler ist aufgetreten — bitte erneut versuchen.",
-  "landing.subscribe_err_network": "Netzwerkfehler — bitte erneut versuchen."
+  "landing.subscribe_err_network": "Netzwerkfehler — bitte erneut versuchen.",
+  "signup.signin": "anmelden",
+  "signup.brandLabel": "smartist studio für Musiker",
+  "signup.heading": "Workspace erstellen",
+  "signup.oauthGoogle": "Mit Google fortfahren",
+  "signup.oauthFacebook": "Mit Facebook fortfahren",
+  "signup.sentMsg": "Prüfen Sie Ihr Postfach — wir haben Ihnen einen Registrierungslink gesendet.",
+  "signup.sentDifferent": "Andere E-Mail-Adresse verwenden",
+  "signup.emailLabel": "E-Mail",
+  "signup.emailPlaceholder": "sie@beispiel.de",
+  "signup.sendBtn": "Registrierungslink senden",
+  "signup.alreadyHave": "Bereits ein Konto?",
+  "signup.loginLink": "Anmelden",
+  "signup.sending": "Senden…",
+  "signup.errFallback": "Etwas ist schiefgelaufen"
 }
