@@ -43,8 +43,11 @@ function renderDashboard(cfg) {
     '</div>';
 
   // Open by default while the workspace is empty — first thing new users see.
-  var helpHtml =
+  var helpDismissed = false;
+  try { helpDismissed = localStorage.getItem('smartist_help_dismissed') === '1'; } catch (_) {}
+  var helpHtml = helpDismissed ? '' :
     '<details class="dash-help"' + (hasSongs ? '' : ' open') + '>' +
+      '<button type="button" class="dash-help-close" id="dash-help-close" aria-label="Dismiss and don\'t show again">&times;</button>' +
       '<summary>New here? How smartist works</summary>' +
       '<ol>' +
         '<li><strong>Add your songs</strong> — keys, capos, lyrics and recordings live in <a href="' + b + '/songs">Songs</a>. Start with just a title; details can come later.</li>' +
@@ -93,6 +96,15 @@ function renderDashboard(cfg) {
         '<span class="dash-card-count--muted">settings · photo</span>' +
       '</a>' +
     '</div>';
+
+  var closeBtn = document.getElementById('dash-help-close');
+  if (closeBtn) closeBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    try { localStorage.setItem('smartist_help_dismissed', '1'); } catch (_) {}
+    var help = document.querySelector('.dash-help');
+    if (help) help.remove();
+  });
 
   var set = function(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; };
   var c = cfg.counts || {};

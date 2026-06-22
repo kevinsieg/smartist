@@ -2187,8 +2187,10 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 .share-menu-icon { font-size:1rem; flex-shrink:0; }
 
 /* ── Dashboard help ── */
-.dash-help { margin: 0.5rem 0 1.2rem; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--third-color); text-align: left; }
-.dash-help summary { cursor: pointer; color: var(--secondary-ink); font-weight: 700; -webkit-tap-highlight-color: transparent; }
+.dash-help { position: relative; margin: 0.5rem 0 1.2rem; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--third-color); text-align: left; }
+.dash-help summary { cursor: pointer; color: var(--secondary-ink); font-weight: 700; padding-right: 1.5rem; -webkit-tap-highlight-color: transparent; }
+.dash-help-close { position: absolute; top: 0.35rem; right: 0.5rem; background: none; border: 0; padding: 0.2rem 0.35rem; font-size: 1.2rem; line-height: 1; cursor: pointer; color: var(--muted-ink); -webkit-tap-highlight-color: transparent; }
+.dash-help-close:hover { color: var(--secondary-ink); }
 .dash-help ol { margin: 0.75rem 0 0.5rem 1.2rem; padding: 0; display: grid; gap: 0.45rem; }
 .dash-help p { margin: 0.4rem 0 0; color: var(--muted-ink); }
 
