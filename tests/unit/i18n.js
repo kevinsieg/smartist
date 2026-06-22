@@ -53,6 +53,14 @@ function run(r) {
   test('de has identical key set to en', () => assertEq(Object.keys(de).sort(), enKeys));
   test('no empty values in en', () =>
     assert(enKeys.every(k => typeof en[k] === 'string' && en[k].length > 0)));
+
+  // EN is loaded as a real dict (not an empty {}): translate must return
+  // English, never the raw key. Guards the loadDict fix for the default locale.
+  console.log(B('\nen dictionary drives English'));
+  test('translate(en, nav.songs) → Songs', () => assertEq(translate(en, 'nav.songs'), 'Songs'));
+  test('translate(en, profile.title) → Profile', () => assertEq(translate(en, 'profile.title'), 'Profile'));
+  test('translate(en, key) is never the key itself', () =>
+    assert(enKeys.every(k => translate(en, k) !== k)));
 }
 
 module.exports = run;
