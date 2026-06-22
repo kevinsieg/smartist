@@ -15,6 +15,7 @@ const suites = [
   require('./unit/handler'),
   require('./unit/subscribe'),
   require('./unit/contact'),
+  require('./unit/i18n'),
   require('./unit/arrangement'),
   require('./unit/user_token'),
   require('./unit/auth'),
