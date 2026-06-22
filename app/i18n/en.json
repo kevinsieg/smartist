@@ -98,5 +98,19 @@
   "landing.subscribe_done": "Done",
   "landing.subscribe_err_duplicate": "That address is already subscribed.",
   "landing.subscribe_err_generic": "Something went wrong — try again.",
-  "landing.subscribe_err_network": "Network error — try again."
+  "landing.subscribe_err_network": "Network error — try again.",
+  "signup.signin": "sign in",
+  "signup.brandLabel": "smartist studio for musicians",
+  "signup.heading": "Create your workspace",
+  "signup.oauthGoogle": "Continue with Google",
+  "signup.oauthFacebook": "Continue with Facebook",
+  "signup.sentMsg": "Check your email — we sent you a sign-up link.",
+  "signup.sentDifferent": "Use a different email",
+  "signup.emailLabel": "Email",
+  "signup.emailPlaceholder": "you@example.com",
+  "signup.sendBtn": "Send sign-up link",
+  "signup.alreadyHave": "Already have an account?",
+  "signup.loginLink": "Log in",
+  "signup.sending": "Sending…",
+  "signup.errFallback": "Something went wrong"
 }

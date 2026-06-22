@@ -98,5 +98,19 @@
   "landing.subscribe_done": "OK",
   "landing.subscribe_err_duplicate": "Cette adresse est déjà inscrite.",
   "landing.subscribe_err_generic": "Une erreur est survenue — réessayez.",
-  "landing.subscribe_err_network": "Erreur réseau — réessayez."
+  "landing.subscribe_err_network": "Erreur réseau — réessayez.",
+  "signup.signin": "connexion",
+  "signup.brandLabel": "smartist studio pour musiciens",
+  "signup.heading": "Créez votre espace",
+  "signup.oauthGoogle": "Continuer avec Google",
+  "signup.oauthFacebook": "Continuer avec Facebook",
+  "signup.sentMsg": "Vérifiez vos e-mails — nous vous avons envoyé un lien d'inscription.",
+  "signup.sentDifferent": "Utiliser une autre adresse e-mail",
+  "signup.emailLabel": "E-mail",
+  "signup.emailPlaceholder": "vous@exemple.com",
+  "signup.sendBtn": "Envoyer le lien d'inscription",
+  "signup.alreadyHave": "Vous avez déjà un compte ?",
+  "signup.loginLink": "Se connecter",
+  "signup.sending": "Envoi…",
+  "signup.errFallback": "Une erreur est survenue"
 }
