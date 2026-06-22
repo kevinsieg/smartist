@@ -153,5 +153,22 @@
   "workspaces.roleAdmin": "Admin",
   "workspaces.roleMember": "Mitglied",
   "workspaces.roleViewer": "Betrachter",
-  "workspaces.loadError": "Workspaces konnten nicht geladen werden. Bitte erneut versuchen."
+  "workspaces.loadError": "Workspaces konnten nicht geladen werden. Bitte erneut versuchen.",
+  "impressum.contentLabel": "Impressum",
+  "impressum.h1": "Impressum",
+  "impressum.publisherHeading": "Verantwortlich",
+  "impressum.contactHeading": "Kontakt",
+  "impressum.contactIntro": "Bug gefunden, Funktion vermisst oder eine Idee? Schreiben Sie uns — wir lesen alles.",
+  "impressum.namePlaceholder": "Ihr Name",
+  "impressum.emailPlaceholder": "Ihre E-Mail",
+  "impressum.messagePlaceholder": "Nachricht",
+  "impressum.sendBtn": "Nachricht senden",
+  "impressum.liabilityContentHeading": "Haftung für Inhalte",
+  "impressum.liabilityContentBody": "Die Inhalte dieser Seite wurden mit Sorgfalt erstellt. Es kann jedoch keine Gewähr für Richtigkeit, Vollständigkeit oder Aktualität der bereitgestellten Informationen übernommen werden.",
+  "impressum.liabilityLinksHeading": "Haftung für Links",
+  "impressum.liabilityLinksBody": "Diese Seite enthält Links zu externen Webseiten Dritter. Wir haben keinen Einfluss auf deren Inhalte und übernehmen keine Haftung dafür. Der jeweilige Anbieter oder Betreiber der verlinkten Seite ist allein für deren Inhalte verantwortlich.",
+  "impressum.successMsg": "Nachricht gesendet — wir melden uns bald.",
+  "impressum.errGeneric": "Ein Fehler ist aufgetreten — bitte erneut versuchen.",
+  "impressum.errNetwork": "Netzwerkfehler — bitte erneut versuchen.",
+  "impressum.footerTagline": "open source · MIT · von einem Musiker gebaut · 2026"
 }
