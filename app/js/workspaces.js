@@ -10,9 +10,9 @@
   }
 
   function _roleLabel(role) {
-    if (role === 'admin')  return 'Admin';
-    if (role === 'member') return 'Member';
-    return 'Viewer';
+    if (role === 'admin')  return t('workspaces.roleAdmin');
+    if (role === 'member') return t('workspaces.roleMember');
+    return t('workspaces.roleViewer');
   }
 
   function _renderList(artists) {
@@ -20,8 +20,8 @@
     if (!artists || artists.length === 0) {
       el.innerHTML =
         '<div class="landing-login">' +
-          '<p class="auth-hint" style="margin-bottom:0.75rem">You don\'t have any workspaces yet.</p>' +
-          '<a href="/onboarding" class="btn active auth-submit">Create your first workspace</a>' +
+          '<p class="auth-hint" style="margin-bottom:0.75rem">' + t('workspaces.noWorkspacesHint') + '</p>' +
+          '<a href="/onboarding" class="btn active auth-submit">' + t('workspaces.createFirst') + '</a>' +
         '</div>';
       return;
     }
@@ -35,15 +35,15 @@
 
     el.innerHTML =
       '<div class="workspace-list">' + cards + '</div>' +
-      '<a href="/onboarding" class="btn auth-submit" style="margin-top:0.5rem">+ New workspace</a>';
+      '<a href="/onboarding" class="btn auth-submit" style="margin-top:0.5rem">' + t('workspaces.newWorkspace') + '</a>';
   }
 
   function _renderUnauth() {
     var el = document.getElementById('workspaces-content');
     el.innerHTML =
       '<div class="landing-login">' +
-        '<p class="auth-hint" style="margin-bottom:0.75rem">You need to be logged in to see your workspaces.</p>' +
-        '<a href="/login" class="btn active auth-submit">Log in</a>' +
+        '<p class="auth-hint" style="margin-bottom:0.75rem">' + t('workspaces.unauthHint') + '</p>' +
+        '<a href="/login" class="btn active auth-submit">' + t('workspaces.loginBtn') + '</a>' +
       '</div>';
   }
 
@@ -78,7 +78,7 @@
     d = await r.json();
   } catch {
     document.getElementById('workspaces-content').innerHTML =
-      '<p class="auth-error">Could not load workspaces. Please try again.</p>';
+      '<p class="auth-error">' + t('workspaces.loadError') + '</p>';
     return;
   }
   var artists = d.artists || [];
