@@ -2196,3 +2196,13 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 
 /* ── Workspaces page explanation ── */
 .ws-explain { font-size: 0.85rem; color: var(--muted-ink); margin: -0.5rem 0 1.25rem; line-height: 1.55; }
+
+/* ── Language switcher ── */
+.lang-switcher { position: relative; display: inline-block; }
+.lang-switcher-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; font: inherit; color: inherit; padding: 4px 6px; }
+.lang-switcher-toggle svg { border-radius: 2px; }
+.lang-switcher-menu { position: absolute; bottom: 100%; right: 0; display: none; flex-direction: column; background: var(--white); border: 1px solid #ddd; border-radius: 4px; min-width: 140px; z-index: 50; }
+.lang-switcher.open .lang-switcher-menu { display: flex; }
+.lang-switcher-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: none; border: none; cursor: pointer; font: inherit; text-align: left; color: var(--black); }
+.lang-switcher-item:hover { background: #f3f3f3; }
+.lang-switcher-item.current { font-weight: 700; }
