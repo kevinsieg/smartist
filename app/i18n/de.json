@@ -123,5 +123,22 @@
   "demo.legalLink": "Impressum",
   "demo.errInvalidEmail": "Bitte eine gültige E-Mail-Adresse eingeben.",
   "demo.errGeneric": "Ein Fehler ist aufgetreten — bitte erneut versuchen.",
-  "demo.errNetwork": "Netzwerkfehler — bitte erneut versuchen."
+  "demo.errNetwork": "Netzwerkfehler — bitte erneut versuchen.",
+  "onboarding.brandLabel": "smartist studio für Musiker",
+  "onboarding.title": "Workspace einrichten",
+  "onboarding.expiredTitle": "Link abgelaufen",
+  "onboarding.expiredMsg": "Dieser Registrierungslink ist abgelaufen oder wurde bereits verwendet.",
+  "onboarding.expiredCta": "Neuen Link anfordern",
+  "onboarding.settingUpFor": "Workspace wird eingerichtet für {email}",
+  "onboarding.nameLabel": "Band- / Projektname",
+  "onboarding.namePlaceholder": "Meine Band",
+  "onboarding.slugLabel": "Workspace-URL",
+  "onboarding.createBtn": "Workspace erstellen",
+  "onboarding.slugFormatHint": "3–50 Kleinbuchstaben, Ziffern oder Bindestriche verwenden",
+  "onboarding.slugChecking": "Wird geprüft…",
+  "onboarding.slugAvailable": "✓ Verfügbar",
+  "onboarding.slugTaken": "Bereits vergeben — anderen Namen versuchen",
+  "onboarding.creating": "Wird erstellt…",
+  "onboarding.errFallback": "Registrierung fehlgeschlagen",
+  "onboarding.errGeneric": "Etwas ist schiefgelaufen"
 }
