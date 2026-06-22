@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Try the demo — smartist</title>
 <meta name="robots" content="noindex">
+<script src="/app/js/i18n.js?v=1"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Courier New', Courier, monospace; background: #f5f0ea; color: #1a1a1a; -webkit-text-size-adjust: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
@@ -55,26 +56,26 @@
 <header class="site-header">
   <a class="wordmark" href="/">smartist</a>
   <nav>
-    <a href="https://github.com/kevinsieg/smartist">github</a>
-    <a href="mailto:hi@smartist.studio">contact</a>
+    <a href="https://github.com/kevinsieg/smartist" data-i18n="landing.nav_github">github</a>
+    <a href="mailto:hi@smartist.studio" data-i18n="landing.nav_contact">contact</a>
   </nav>
 </header>
 
 <main class="gate">
   <div class="gate-inner">
     <div class="step-panel active" id="step-1">
-      <div class="step-label">Demo access</div>
-      <h1>See smartist in <em>action.</em></h1>
+      <div class="step-label" data-i18n="demo.stepLabel">Demo access</div>
+      <h1><span data-i18n="demo.h1Pre">See smartist in </span><em data-i18n="demo.h1Em">action.</em></h1>
       <div class="divider"></div>
-      <p>Enter your email to access a live demo workspace — real setlists, song catalogue, and gig management.</p>
+      <p data-i18n="demo.body">Enter your email to access a live demo workspace — real setlists, song catalogue, and gig management.</p>
       <div class="field">
-        <input id="s1-email" type="email" placeholder="your@email.com" autocomplete="email">
+        <input id="s1-email" type="email" placeholder="your@email.com" autocomplete="email" data-i18n-attr="placeholder:demo.emailPlaceholder">
       </div>
       <div class="btn-row">
-        <button class="btn-primary" id="s1-next">Next →</button>
+        <button class="btn-primary" id="s1-next" data-i18n="demo.nextBtn">Next →</button>
       </div>
       <div class="gate-msg" id="s1-msg"></div>
-      <p class="gate-note">No spam — unsubscribe anytime. <a href="/impressum">Legal notice</a></p>
+      <p class="gate-note"><span data-i18n="demo.noSpam">No spam — unsubscribe anytime.</span> <a href="/impressum" data-i18n="demo.legalLink">Legal notice</a></p>
     </div>
   </div>
 </main>
@@ -82,6 +83,7 @@
 <footer class="site-footer">
   <span>smartist</span>
   <p>open source · MIT · 2026</p>
+  <span data-lang-switcher></span>
 </footer>
 
 <script>
@@ -92,7 +94,7 @@
     var val = document.getElementById('s1-email').value.trim();
     var msg = document.getElementById('s1-msg');
     if (!val || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-      msg.textContent = 'Please enter a valid email address.';
+      msg.textContent = t('demo.errInvalidEmail');
       return;
     }
     msg.textContent = '';
@@ -116,13 +118,13 @@
           // to the public songs view.
           window.location.href = tok ? '/' + slug + '/dashboard' : '/' + slug + '/songs';
         } else {
-          msg.textContent = (r.data && r.data.error) || 'Something went wrong — try again.';
-          btn.disabled = false; btn.textContent = 'Next →';
+          msg.textContent = (r.data && r.data.error) || t('demo.errGeneric');
+          btn.disabled = false; btn.textContent = t('demo.nextBtn');
         }
       })
       .catch(function () {
-        msg.textContent = 'Network error — try again.';
-        btn.disabled = false; btn.textContent = 'Next →';
+        msg.textContent = t('demo.errNetwork');
+        btn.disabled = false; btn.textContent = t('demo.nextBtn');
       });
   });
 

@@ -112,5 +112,16 @@
   "signup.alreadyHave": "Already have an account?",
   "signup.loginLink": "Log in",
   "signup.sending": "Sending…",
-  "signup.errFallback": "Something went wrong"
+  "signup.errFallback": "Something went wrong",
+  "demo.stepLabel": "Demo access",
+  "demo.h1Pre": "See smartist in ",
+  "demo.h1Em": "action.",
+  "demo.body": "Enter your email to access a live demo workspace — real setlists, song catalogue, and gig management.",
+  "demo.emailPlaceholder": "your@email.com",
+  "demo.nextBtn": "Next →",
+  "demo.noSpam": "No spam — unsubscribe anytime.",
+  "demo.legalLink": "Legal notice",
+  "demo.errInvalidEmail": "Please enter a valid email address.",
+  "demo.errGeneric": "Something went wrong — try again.",
+  "demo.errNetwork": "Network error — try again."
 }
