@@ -32,11 +32,11 @@
   }
 
   function _renderExpired() {
-    document.getElementById('onboarding-title').textContent = 'Link expired';
+    document.getElementById('onboarding-title').textContent = t('onboarding.expiredTitle');
     document.getElementById('onboarding-content').innerHTML =
       '<div class="landing-login">' +
-        '<p class="auth-hint" style="margin-bottom:0.75rem">This sign-up link has expired or already been used.</p>' +
-        '<a href="/signup" class="btn active auth-submit">Request a new link</a>' +
+        '<p class="auth-hint" style="margin-bottom:0.75rem">' + t('onboarding.expiredMsg') + '</p>' +
+        '<a href="/signup" class="btn active auth-submit">' + t('onboarding.expiredCta') + '</a>' +
       '</div>';
   }
 
@@ -44,13 +44,13 @@
     var el = document.getElementById('onboarding-content');
     el.innerHTML =
       '<div class="landing-login">' +
-        (email ? '<p class="auth-hint" style="margin-bottom:0.75rem">Setting up workspace for <strong>' + _esc(email) + '</strong></p>' : '') +
+        (email ? '<p class="auth-hint" style="margin-bottom:0.75rem">' + t('onboarding.settingUpFor', { email: '<strong>' + _esc(email) + '</strong>' }) + '</p>' : '') +
         '<div class="auth-field">' +
-          '<label class="auth-label" for="ob-name">Band / project name</label>' +
-          '<input id="ob-name" type="text" autocomplete="organization" autocapitalize="words" autocorrect="off" placeholder="My Band" maxlength="200">' +
+          '<label class="auth-label" for="ob-name">' + t('onboarding.nameLabel') + '</label>' +
+          '<input id="ob-name" type="text" autocomplete="organization" autocapitalize="words" autocorrect="off" placeholder="' + _esc(t('onboarding.namePlaceholder')) + '" maxlength="200">' +
         '</div>' +
         '<div class="auth-field">' +
-          '<label class="auth-label" for="ob-slug">Workspace URL</label>' +
+          '<label class="auth-label" for="ob-slug">' + t('onboarding.slugLabel') + '</label>' +
           '<div class="slug-wrap">' +
             '<span class="slug-prefix">smartist.studio/</span>' +
             '<input id="ob-slug" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="my-band" maxlength="50">' +
@@ -58,7 +58,7 @@
           '<p class="slug-status" id="slug-status"></p>' +
         '</div>' +
         '<div class="auth-error" id="onboarding-error"></div>' +
-        '<button type="button" id="ob-submit" class="btn active auth-submit" disabled>Create workspace</button>' +
+        '<button type="button" id="ob-submit" class="btn active auth-submit" disabled>' + t('onboarding.createBtn') + '</button>' +
       '</div>';
 
     var nameInput = document.getElementById('ob-name');
@@ -70,18 +70,18 @@
       var slug = slugInput.value.trim();
       if (!slug) { slugStatus.textContent = ''; submitBtn.disabled = true; return; }
       if (!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)) {
-        slugStatus.textContent = 'Use 3–50 lowercase letters, numbers, or hyphens';
+        slugStatus.textContent = t('onboarding.slugFormatHint');
         submitBtn.disabled = true;
         return;
       }
-      slugStatus.textContent = 'Checking…';
+      slugStatus.textContent = t('onboarding.slugChecking');
       try {
         const avail = await _checkSlug(slug);
         if (avail) {
-          slugStatus.textContent = '✓ Available';
+          slugStatus.textContent = t('onboarding.slugAvailable');
           submitBtn.disabled = false;
         } else {
-          slugStatus.textContent = 'Already taken — try another';
+          slugStatus.textContent = t('onboarding.slugTaken');
           submitBtn.disabled = true;
         }
       } catch {
@@ -112,7 +112,7 @@
       var name = nameInput.value.trim();
       var slug = slugInput.value.trim();
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Creating…';
+      submitBtn.textContent = t('onboarding.creating');
       _showError('');
       try {
         const r = await fetch('/api/config', {
@@ -126,21 +126,21 @@
         const d = await r.json();
         if (!r.ok) {
           if (r.status === 409) {
-            slugStatus.textContent = 'Already taken — try another';
+            slugStatus.textContent = t('onboarding.slugTaken');
             submitBtn.disabled = true;
           } else {
-            _showError(d.error || 'Sign-up failed');
+            _showError(d.error || t('onboarding.errFallback'));
             submitBtn.disabled = false;
           }
-          submitBtn.textContent = 'Create workspace';
+          submitBtn.textContent = t('onboarding.createBtn');
           return;
         }
         sessionStorage.setItem(AUTH_TOKEN_KEY, d.token);
         window.location.href = '/' + slug + '/dashboard';
       } catch (err) {
-        _showError(err.message || 'Something went wrong');
+        _showError(err.message || t('onboarding.errGeneric'));
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Create workspace';
+        submitBtn.textContent = t('onboarding.createBtn');
       }
     });
   }
