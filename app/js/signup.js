@@ -20,8 +20,8 @@
   function _oauthHtml() {
     if (!_googleUrl && !_facebookUrl) return '';
     var html = '<div class="oauth-btns">';
-    if (_googleUrl)   html += '<a class="btn oauth-btn" href="' + _esc(_googleUrl)   + '">Continue with Google</a>';
-    if (_facebookUrl) html += '<a class="btn oauth-btn" href="' + _esc(_facebookUrl) + '">Continue with Facebook</a>';
+    if (_googleUrl)   html += '<a class="btn oauth-btn" href="' + _esc(_googleUrl)   + '">' + _esc(t('signup.oauthGoogle'))   + '</a>';
+    if (_facebookUrl) html += '<a class="btn oauth-btn" href="' + _esc(_facebookUrl) + '">' + _esc(t('signup.oauthFacebook')) + '</a>';
     return html + '</div>';
   }
 
@@ -37,27 +37,27 @@
     if (state === 'sent') {
       el.innerHTML =
         '<div class="landing-login">' +
-          '<p class="auth-hint" style="margin-bottom:0.5rem">Check your email — we sent you a sign-up link.</p>' +
-          '<p class="auth-hint"><a href="/signup">Use a different email</a></p>' +
+          '<p class="auth-hint" style="margin-bottom:0.5rem">' + _esc(t('signup.sentMsg')) + '</p>' +
+          '<p class="auth-hint"><a href="/signup">' + _esc(t('signup.sentDifferent')) + '</a></p>' +
         '</div>';
       return;
     }
 
     var errorMsg = (typeof state === 'object' && state.type === 'error')
-      ? _esc(state.msg || 'Something went wrong') : '';
+      ? _esc(state.msg || t('signup.errFallback')) : '';
 
     el.innerHTML =
       '<div class="landing-login">' +
         '<div id="signup-oauth">' + _oauthHtml() + '</div>' +
         '<div class="auth-field">' +
-          '<label class="auth-label" for="signup-email">Email</label>' +
-          '<input id="signup-email" type="email" autocomplete="email" placeholder="you@example.com">' +
+          '<label class="auth-label" for="signup-email">' + _esc(t('signup.emailLabel')) + '</label>' +
+          '<input id="signup-email" type="email" autocomplete="email" placeholder="' + _esc(t('signup.emailPlaceholder')) + '">' +
         '</div>' +
         // Honeypot — visually hidden, bots fill it, server then skips the email
         '<input id="signup-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">' +
         '<div class="auth-error" id="signup-error">' + errorMsg + '</div>' +
-        '<button type="button" class="btn active auth-submit" id="signup-btn">Send sign-up link</button>' +
-        '<p class="auth-hint">Already have an account? <a href="/login">Log in</a></p>' +
+        '<button type="button" class="btn active auth-submit" id="signup-btn">' + _esc(t('signup.sendBtn')) + '</button>' +
+        '<p class="auth-hint">' + _esc(t('signup.alreadyHave')) + ' <a href="/login">' + _esc(t('signup.loginLink')) + '</a></p>' +
       '</div>';
 
     document.getElementById('signup-btn').addEventListener('click', async function() {
@@ -65,13 +65,13 @@
       if (!email) return;
       var btn = document.getElementById('signup-btn');
       btn.disabled    = true;
-      btn.textContent = 'Sending…';
+      btn.textContent = t('signup.sending');
       try {
         await sendSignupLink(email, document.getElementById('signup-hp').value);
         _render('sent');
       } catch (err) {
         btn.disabled    = false;
-        btn.textContent = 'Send sign-up link';
+        btn.textContent = t('signup.sendBtn');
         _render({ type: 'error', msg: err.message });
       }
     });
