@@ -140,5 +140,18 @@
   "onboarding.slugTaken": "Bereits vergeben — anderen Namen versuchen",
   "onboarding.creating": "Wird erstellt…",
   "onboarding.errFallback": "Registrierung fehlgeschlagen",
-  "onboarding.errGeneric": "Etwas ist schiefgelaufen"
+  "onboarding.errGeneric": "Etwas ist schiefgelaufen",
+  "workspaces.logOut": "abmelden",
+  "workspaces.brandLabel": "smartist studio für Musiker",
+  "workspaces.title": "Ihre Workspaces",
+  "workspaces.explain": "Ein Workspace ist die Heimat einer Band oder eines Künstlers — Songs, Setlists, Auftritte und Mitglieder leben darin. Wählen Sie einen Workspace aus oder erstellen Sie einen neuen für ein anderes Projekt.",
+  "workspaces.noWorkspacesHint": "Sie haben noch keine Workspaces.",
+  "workspaces.createFirst": "Ersten Workspace erstellen",
+  "workspaces.newWorkspace": "+ Neuer Workspace",
+  "workspaces.unauthHint": "Sie müssen angemeldet sein, um Ihre Workspaces zu sehen.",
+  "workspaces.loginBtn": "Anmelden",
+  "workspaces.roleAdmin": "Admin",
+  "workspaces.roleMember": "Mitglied",
+  "workspaces.roleViewer": "Betrachter",
+  "workspaces.loadError": "Workspaces konnten nicht geladen werden. Bitte erneut versuchen."
 }
