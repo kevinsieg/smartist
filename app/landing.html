@@ -25,6 +25,7 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication","name":"smartist","url":"https://smartist.studio","description":"smartist studio for musicians — open source. Setlists, song catalogue, PRO reporting, gig management.","applicationCategory":"MusicApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"author":{"@type":"Person","name":"Kevin Sieg"},"license":"https://opensource.org/licenses/MIT"}
 </script>
+<script src="/app/js/i18n.js?v=1"></script>
 <script>
 // Single-tenant deployments (ARTIST_SLUG set) skip the marketing landing and
 // go straight to login. The flag is cached so repeat visits redirect before
@@ -165,9 +166,9 @@
 <header class="site-header">
   <span class="wordmark">smartist</span>
   <nav>
-    <a href="https://github.com/kevinsieg/smartist">github</a>
-    <a href="mailto:hi@smartist.studio">contact</a>
-    <a href="/login" class="site-nav-signin">sign in</a>
+    <a href="https://github.com/kevinsieg/smartist" data-i18n="landing.nav_github">github</a>
+    <a href="mailto:hi@smartist.studio" data-i18n="landing.nav_contact">contact</a>
+    <a href="/login" class="site-nav-signin" data-i18n="landing.nav_signin">sign in</a>
   </nav>
 </header>
 
@@ -186,104 +187,103 @@
     <span style="height:26px"></span><span style="height:12px"></span><span style="height:20px"></span>
     <span style="height:8px"></span><span style="height:14px"></span><span style="height:6px"></span>
   </div>
-  <div class="hero-label">smartist studio for musicians</div>
-  <h1>The toolkit independent musicians <em>actually</em> need.</h1>
+  <div class="hero-label" data-i18n="landing.hero_label">smartist studio for musicians</div>
+  <h1><span data-i18n="landing.hero_h1_pre">The toolkit independent musicians </span><em data-i18n="landing.hero_h1_em">actually</em><span data-i18n="landing.hero_h1_post"> need.</span></h1>
   <div class="divider"></div>
-  <p>Streamline your artist organisation and keep the full overview — setlists, song catalogue, PRO reporting, social reach, platform availability. Built by a musician, for musicians. No subscriptions. No bloat.</p>
+  <p data-i18n="landing.hero_body">Streamline your artist organisation and keep the full overview — setlists, song catalogue, PRO reporting, social reach, platform availability. Built by a musician, for musicians. No subscriptions. No bloat.</p>
   <div class="hero-cta">
-    <a class="cta-btn cta-btn--filled" href="/signup">Sign up free →</a>
-    <a class="cta-btn" href="/demo">Open demo →</a>
+    <a class="cta-btn cta-btn--filled" href="/signup" data-i18n="landing.cta_signup">Sign up free →</a>
+    <a class="cta-btn" href="/demo" data-i18n="landing.cta_demo">Open demo →</a>
   </div>
 </section>
 
 <div class="features-wrap">
-<button class="scroll-arrow scroll-arrow--prev" aria-label="Scroll left" hidden>&#8592;</button>
+<button class="scroll-arrow scroll-arrow--prev" aria-label="Scroll left" hidden data-i18n-attr="aria-label:landing.scroll_left">&#8592;</button>
 <section class="features">
-  <h2 class="sr-only">Features</h2>
+  <h2 class="sr-only" data-i18n="landing.features_heading">Features</h2>
   <div class="features-inner">
     <div class="feature-tile">
-      <span class="badge">sets</span>
-      <h3>Setlists</h3>
-      <p>Generate by energy, duration, and feel. Drag-and-drop reorder. Save to gigs. Share as PDF.</p>
+      <span class="badge" data-i18n="landing.badge_sets">sets</span>
+      <h3 data-i18n="landing.feat_setlists_title">Setlists</h3>
+      <p data-i18n="landing.feat_setlists_body">Generate by energy, duration, and feel. Drag-and-drop reorder. Save to gigs. Share as PDF.</p>
     </div>
     <div class="feature-tile">
-      <span class="badge">library</span>
-      <h3>Songs</h3>
-      <p>Full catalogue with play count, AI lyrics, audio and sheet music attachments, full change log.</p>
+      <span class="badge" data-i18n="landing.badge_library">library</span>
+      <h3 data-i18n="landing.feat_songs_title">Songs</h3>
+      <p data-i18n="landing.feat_songs_body">Full catalogue with play count, AI lyrics, audio and sheet music attachments, full change log.</p>
     </div>
     <div class="feature-tile">
-      <span class="badge">rights</span>
-      <h3>PRO</h3>
-      <p>Import performing rights organisation data — CSV with dry-run preview and catalogue auto-matching.</p>
+      <span class="badge" data-i18n="landing.badge_rights">rights</span>
+      <h3 data-i18n="landing.feat_pro_title">PRO</h3>
+      <p data-i18n="landing.feat_pro_body">Import performing rights organisation data — CSV with dry-run preview and catalogue auto-matching.</p>
     </div>
     <div class="feature-tile">
-      <span class="badge">gigs</span>
-      <h3>Gig management</h3>
-      <p>Venues, contracts, set times, contacts, and finances — linked to your setlists.</p>
+      <span class="badge" data-i18n="landing.badge_gigs">gigs</span>
+      <h3 data-i18n="landing.feat_gigs_title">Gig management</h3>
+      <p data-i18n="landing.feat_gigs_body">Venues, contracts, set times, contacts, and finances — linked to your setlists.</p>
     </div>
     <div class="feature-tile">
-      <span class="badge">venues</span>
-      <h3>Venue database</h3>
-      <p>Searchable profiles with capacity, genre fit, booking contacts, and fee history.</p>
+      <span class="badge" data-i18n="landing.badge_venues">venues</span>
+      <h3 data-i18n="landing.feat_venues_title">Venue database</h3>
+      <p data-i18n="landing.feat_venues_body">Searchable profiles with capacity, genre fit, booking contacts, and fee history.</p>
     </div>
     <div class="feature-tile">
-      <span class="badge">AI</span>
-      <h3>Tour planning</h3>
-      <p>AI-optimised routing, booking outreach, revenue forecast, conflict detection.</p>
+      <span class="badge" data-i18n="landing.badge_ai">AI</span>
+      <h3 data-i18n="landing.feat_tour_title">Tour planning</h3>
+      <p data-i18n="landing.feat_tour_body">AI-optimised routing, booking outreach, revenue forecast, conflict detection.</p>
     </div>
     <div class="feature-tile">
-      <span class="badge">insights</span>
-      <h3>Artist Hub</h3>
-      <p>Song availability across platforms, social media reach, physical sales, and streaming integrations.</p>
+      <span class="badge" data-i18n="landing.badge_insights">insights</span>
+      <h3 data-i18n="landing.feat_hub_title">Artist Hub</h3>
+      <p data-i18n="landing.feat_hub_body">Song availability across platforms, social media reach, physical sales, and streaming integrations.</p>
     </div>
     <div class="feature-tile">
-      <span class="badge">live</span>
-      <h3>Stage view</h3>
-      <p>Full-screen setlist display built for the stage. Song, key, capo, and notes — nothing else.</p>
+      <span class="badge" data-i18n="landing.badge_live">live</span>
+      <h3 data-i18n="landing.feat_stage_title">Stage view</h3>
+      <p data-i18n="landing.feat_stage_body">Full-screen setlist display built for the stage. Song, key, capo, and notes — nothing else.</p>
     </div>
   </div>
 </section>
-<button class="scroll-arrow scroll-arrow--next" aria-label="Scroll right">&#8594;</button>
+<button class="scroll-arrow scroll-arrow--next" aria-label="Scroll right" data-i18n-attr="aria-label:landing.scroll_right">&#8594;</button>
 </div>
 
 <section class="bottom">
   <div class="bottom-inner">
-    <h2 class="bottom-label">open source · self-hosted · managed</h2>
+    <h2 class="bottom-label" data-i18n="landing.bottom_label">open source · self-hosted · managed</h2>
     <p class="bottom-intro">
-      smartist is open source. Run it yourself for free —
-      full source on <a href="https://github.com/kevinsieg/smartist">GitHub</a> — or let us handle hosting, updates, and integrations with a managed subscription.
+      <span data-i18n="landing.bottom_intro_pre">smartist is open source. Run it yourself for free — full source on </span><a href="https://github.com/kevinsieg/smartist">GitHub</a><span data-i18n="landing.bottom_intro_post"> — or let us handle hosting, updates, and integrations with a managed subscription.</span>
     </p>
     <div class="plans">
       <div class="plan">
-        <h3>Self-hosted</h3>
-        <div class="plan-headline">Free forever.</div>
-        <p>Deploy to your own Vercel account. Full source, MIT licensed. One band, one database, yours to own.</p>
+        <h3 data-i18n="landing.plan_self_title">Self-hosted</h3>
+        <div class="plan-headline" data-i18n="landing.plan_self_headline">Free forever.</div>
+        <p data-i18n="landing.plan_self_body">Deploy to your own Vercel account. Full source, MIT licensed. One band, one database, yours to own.</p>
         <ul>
-          <li>Full source on GitHub</li>
-          <li>Vercel + Neon setup</li>
-          <li>Community support</li>
-          <li>MIT licence</li>
+          <li data-i18n="landing.plan_self_li1">Full source on GitHub</li>
+          <li data-i18n="landing.plan_self_li2">Vercel + Neon setup</li>
+          <li data-i18n="landing.plan_self_li3">Community support</li>
+          <li data-i18n="landing.plan_self_li4">MIT licence</li>
         </ul>
-        <a class="plan-cta" href="https://github.com/kevinsieg/smartist">View on GitHub →</a>
+        <a class="plan-cta" href="https://github.com/kevinsieg/smartist" data-i18n="landing.plan_self_cta">View on GitHub →</a>
       </div>
       <div class="plan featured">
-        <h3>Managed</h3>
-        <div class="plan-headline">We handle everything.</div>
-        <p>Your band is live in 24 hours. Hosting, backups, domain, integrations — all included. Cancel anytime.</p>
+        <h3 data-i18n="landing.plan_managed_title">Managed</h3>
+        <div class="plan-headline" data-i18n="landing.plan_managed_headline">We handle everything.</div>
+        <p data-i18n="landing.plan_managed_body">Your band is live in 24 hours. Hosting, backups, domain, integrations — all included. Cancel anytime.</p>
         <ul>
-          <li>Hosted on your domain</li>
-          <li>Backups &amp; uptime monitoring</li>
-          <li>PRO &amp; R2 integration setup</li>
-          <li>Priority support</li>
+          <li data-i18n="landing.plan_managed_li1">Hosted on your domain</li>
+          <li data-i18n="landing.plan_managed_li2">Backups &amp; uptime monitoring</li>
+          <li data-i18n="landing.plan_managed_li3">PRO &amp; R2 integration setup</li>
+          <li data-i18n="landing.plan_managed_li4">Priority support</li>
         </ul>
-        <a class="plan-cta" href="mailto:hi@smartist.studio">Get in touch →</a>
+        <a class="plan-cta" href="mailto:hi@smartist.studio" data-i18n="landing.plan_managed_cta">Get in touch →</a>
       </div>
     </div>
     <div class="subscribe">
-      <p>Stay in the loop — early access, feature releases, and launch news.</p>
+      <p data-i18n="landing.subscribe_blurb">Stay in the loop — early access, feature releases, and launch news.</p>
       <div class="subscribe-row">
-        <input id="sub-email" type="email" placeholder="your@email.com" autocomplete="email">
-        <button id="sub-btn" type="button">Subscribe</button>
+        <input id="sub-email" type="email" placeholder="your@email.com" autocomplete="email" data-i18n-attr="placeholder:landing.subscribe_placeholder">
+        <button id="sub-btn" type="button" data-i18n="landing.subscribe_btn">Subscribe</button>
       </div>
       <div class="subscribe-msg" id="sub-msg" aria-live="polite"></div>
     </div>
@@ -292,12 +292,13 @@
 
 <footer class="site-footer">
   <span class="wordmark">smartist</span>
-  <p>open source · MIT · built by a working musician · 2026 · <a href="/impressum" style="color:inherit;text-decoration:underline;">Impressum</a></p>
+  <p><span data-i18n="landing.footer_text">open source · MIT · built by a working musician · 2026 · </span><a href="/impressum" style="color:inherit;text-decoration:underline;">Impressum</a></p>
+  <span data-lang-switcher></span>
 </footer>
 
 <div class="cookie-bar" id="cookie-bar" style="display:none">
-  <p>This site stores no tracking cookies. The demo uses session storage for functionality only — cleared when you close the tab.</p>
-  <button id="cookie-ok">Got it</button>
+  <p data-i18n="landing.cookie_text">This site stores no tracking cookies. The demo uses session storage for functionality only — cleared when you close the tab.</p>
+  <button id="cookie-ok" data-i18n="landing.cookie_btn">Got it</button>
 </div>
 
 <script>
@@ -317,7 +318,7 @@
 
   btn.addEventListener('click', function () {
     var email = input.value.trim();
-    if (!email) { msg.textContent = 'Enter your email address.'; return; }
+    if (!email) { msg.textContent = t('landing.subscribe_err_empty'); return; }
     btn.disabled = true;
     msg.textContent = '';
     fetch('/api/config', {
@@ -329,18 +330,18 @@
       .then(function (r) {
         if (r.ok) {
           input.value = '';
-          msg.textContent = "You're in — we'll be in touch.";
-          btn.textContent = 'Done';
+          msg.textContent = t('landing.subscribe_success');
+          btn.textContent = t('landing.subscribe_done');
         } else if (r.status === 409) {
-          msg.textContent = 'That address is already subscribed.';
+          msg.textContent = t('landing.subscribe_err_duplicate');
           btn.disabled = false;
         } else {
-          msg.textContent = (r.data && r.data.error) || 'Something went wrong — try again.';
+          msg.textContent = (r.data && r.data.error) || t('landing.subscribe_err_generic');
           btn.disabled = false;
         }
       })
       .catch(function () {
-        msg.textContent = 'Network error — try again.';
+        msg.textContent = t('landing.subscribe_err_network');
         btn.disabled = false;
       });
   });
