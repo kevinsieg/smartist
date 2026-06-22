@@ -453,17 +453,17 @@ module.exports = wrap(async function handler(req, res) {
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
     const rawName = req.body?.name;
     const name = rawName === undefined ? 'Default' : (validateStr(rawName, 200) || 'Default');
-    let sourceRows = JSON.stringify(rows);
-    let sourceHidden = JSON.stringify(hidden_instruments);
+    let sourceRows = rows;
+    let sourceHidden = hidden_instruments;
     if (copy_from) {
       const [src] = await sql`SELECT rows, hidden_instruments FROM song_arrangements WHERE id = ${Number(copy_from)} AND song_id = ${songId} AND artist_id = ${band.id}`;
       if (!src) return res.status(400).json({ error: 'copy_from arrangement not found' });
-      sourceRows = JSON.stringify(src.rows);
-      sourceHidden = JSON.stringify(src.hidden_instruments);
+      sourceRows = src.rows;
+      sourceHidden = src.hidden_instruments;
     }
     const [created] = await sql`
       INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
-      VALUES (${songId}, ${band.id}, ${name}, ${sourceRows}::jsonb, ${sourceHidden}::jsonb)
+      VALUES (${songId}, ${band.id}, ${name}, ${sql.json(sourceRows)}::jsonb, ${sql.json(sourceHidden)}::jsonb)
       RETURNING *
     `;
     return res.status(201).json(created);
@@ -482,8 +482,8 @@ module.exports = wrap(async function handler(req, res) {
       if (validatedName === false) return res.status(400).json({ error: 'name too long' });
       if (validatedName) updates.name = validatedName;
     }
-    if (rows !== undefined)               updates.rows               = JSON.stringify(rows);
-    if (hidden_instruments !== undefined) updates.hidden_instruments = JSON.stringify(hidden_instruments);
+    if (rows !== undefined)               updates.rows               = sql.json(rows);
+    if (hidden_instruments !== undefined) updates.hidden_instruments = sql.json(hidden_instruments);
     if (!Object.keys(updates).length)     return res.status(400).json({ error: 'Nothing to update' });
     const [updated] = await sql`
       UPDATE song_arrangements
@@ -507,10 +507,10 @@ module.exports = wrap(async function handler(req, res) {
     const sql = getDb();
     const [target] = await sql`SELECT id FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
     if (!target) return res.status(404).json({ error: 'Arrangement not found' });
-    await sql.transaction([
-      sql`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${band.id}`,
-      sql`UPDATE song_arrangements SET is_active = true, updated_at = NOW() WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`,
-    ]);
+    await sql.begin(async tx => {
+      await tx`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${band.id}`;
+      await tx`UPDATE song_arrangements SET is_active = true, updated_at = NOW() WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
+    });
     const [updated] = await sql`SELECT * FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
     return res.json(updated);
   }
