@@ -112,5 +112,16 @@
   "signup.alreadyHave": "Vous avez déjà un compte ?",
   "signup.loginLink": "Se connecter",
   "signup.sending": "Envoi…",
-  "signup.errFallback": "Une erreur est survenue"
+  "signup.errFallback": "Une erreur est survenue",
+  "demo.stepLabel": "Accès démo",
+  "demo.h1Pre": "Découvrez smartist en ",
+  "demo.h1Em": "action.",
+  "demo.body": "Entrez votre e-mail pour accéder à un espace de démonstration — setlists, catalogue de chansons et gestion des concerts.",
+  "demo.emailPlaceholder": "votre@email.com",
+  "demo.nextBtn": "Suivant →",
+  "demo.noSpam": "Pas de spam — désabonnement à tout moment.",
+  "demo.legalLink": "Mentions légales",
+  "demo.errInvalidEmail": "Veuillez entrer une adresse e-mail valide.",
+  "demo.errGeneric": "Une erreur est survenue — réessayez.",
+  "demo.errNetwork": "Erreur réseau — réessayez."
 }
