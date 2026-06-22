@@ -13,10 +13,10 @@ function _nextAction(cfg) {
   var gigs   = c.gigs      || 0;
   var venues = c.venues    || 0;
   if (songs  === 0) return null; // covered by the "Add a song" task button
-  if (sets   === 0) return { href: '/setlist', label: 'Build your first setlist', hint: 'You have ' + songs + ' song' + (songs !== 1 ? 's' : '') + '. Group them into a setlist.' };
-  if (gigs   === 0) return { href: '/gigs',   label: 'Log a gig',                hint: 'Track where and when you\'ve performed.' };
-  if (venues === 0) return { href: '/venues', label: 'Add your venues',           hint: 'Link gigs to venues to build your performance map.' };
-  return               { href: '/setlist', label: '+ Create setlist',             hint: null };
+  if (sets   === 0) return { href: '/setlist', label: t('dashboard.ctaBuildFirstSetlist'), hint: t('dashboard.hintSongs' + (songs !== 1 ? '_other' : '_one'), { count: songs }) };
+  if (gigs   === 0) return { href: '/gigs',   label: t('dashboard.ctaLogGig'),             hint: t('dashboard.hintGig') };
+  if (venues === 0) return { href: '/venues', label: t('dashboard.ctaAddVenues'),           hint: t('dashboard.hintVenues') };
+  return               { href: '/setlist', label: t('dashboard.ctaCreateSetlist'),          hint: null };
 }
 
 function renderDashboard(cfg) {
@@ -31,15 +31,16 @@ function renderDashboard(cfg) {
     : '';
 
   var hasSongs = ((cfg.counts || {}).songs || 0) > 0;
+  var addSongsFirst = t('dashboard.addSongsFirst');
   var taskRow =
     '<div class="dash-tasks">' +
       (hasSongs
-        ? '<a href="' + b + '/songs" class="dash-task-btn">&#128269; Find a song</a>'
-        : '<span class="dash-task-btn dash-task-btn--disabled" aria-disabled="true" title="Add songs first">&#128269; Find a song</span>') +
-      '<a href="' + b + '/songs?new=1" class="dash-task-btn auth-action">&#65291; Add a song</a>' +
+        ? '<a href="' + b + '/songs" class="dash-task-btn">&#128269; ' + t('dashboard.taskFindSong') + '</a>'
+        : '<span class="dash-task-btn dash-task-btn--disabled" aria-disabled="true" title="' + addSongsFirst + '">&#128269; ' + t('dashboard.taskFindSong') + '</span>') +
+      '<a href="' + b + '/songs?new=1" class="dash-task-btn auth-action">&#65291; ' + t('dashboard.taskAddSong') + '</a>' +
       (hasSongs
-        ? '<a href="' + b + '/setlist" class="dash-task-btn auth-action">&#9776; Build a setlist</a>'
-        : '<span class="dash-task-btn dash-task-btn--disabled auth-action" aria-disabled="true" title="Add songs first">&#9776; Build a setlist</span>') +
+        ? '<a href="' + b + '/setlist" class="dash-task-btn auth-action">&#9776; ' + t('dashboard.taskBuildSetlist') + '</a>'
+        : '<span class="dash-task-btn dash-task-btn--disabled auth-action" aria-disabled="true" title="' + addSongsFirst + '">&#9776; ' + t('dashboard.taskBuildSetlist') + '</span>') +
     '</div>';
 
   // Open by default while the workspace is empty — first thing new users see.
@@ -47,15 +48,15 @@ function renderDashboard(cfg) {
   try { helpDismissed = localStorage.getItem('smartist_help_dismissed') === '1'; } catch (_) {}
   var helpHtml = helpDismissed ? '' :
     '<details class="dash-help"' + (hasSongs ? '' : ' open') + '>' +
-      '<button type="button" class="dash-help-close" id="dash-help-close" aria-label="Dismiss and don\'t show again">&times;</button>' +
-      '<summary>New here? How smartist works</summary>' +
+      '<button type="button" class="dash-help-close" id="dash-help-close" aria-label="' + t('dashboard.helpDismiss') + '">&times;</button>' +
+      '<summary>' + t('dashboard.helpTitle') + '</summary>' +
       '<ol>' +
-        '<li><strong>Add your songs</strong> — keys, capos, lyrics and recordings live in <a href="' + b + '/songs">Songs</a>. Start with just a title; details can come later.</li>' +
-        '<li><strong>Build a setlist</strong> — pick songs for your next show in <a href="' + b + '/setlist">Setlists</a>, then print it or share it with the band.</li>' +
-        '<li><strong>Plan your gigs</strong> — dates and places go in <a href="' + b + '/gigs">Gigs</a>; you can link a setlist to each gig.</li>' +
-        '<li><strong>On stage &amp; practice</strong> — every setlist and song has a full-screen stage view with lyrics and recordings, made for the phone on your mic stand. Share its link with band mates, new members or fans so they can work on the songs.</li>' +
+        '<li>' + t('dashboard.helpLi1', { songsLink: '<a href="' + b + '/songs">' + t('nav.songs') + '</a>' }) + '</li>' +
+        '<li>' + t('dashboard.helpLi2', { setlistsLink: '<a href="' + b + '/setlist">' + t('nav.setlists') + '</a>' }) + '</li>' +
+        '<li>' + t('dashboard.helpLi3', { gigsLink: '<a href="' + b + '/gigs">' + t('nav.gigs') + '</a>' }) + '</li>' +
+        '<li>' + t('dashboard.helpLi4') + '</li>' +
       '</ol>' +
-      '<p>Venues, organizers, your streaming links and PRO reporting live under <em>More</em> in the menu.</p>' +
+      '<p>' + t('dashboard.helpMore') + '</p>' +
     '</details>';
 
   el.innerHTML =
@@ -64,36 +65,36 @@ function renderDashboard(cfg) {
     actionRow +
     '<div class="dash-grid">' +
       '<a href="' + b + '/setlist" class="dash-card">' +
-        '<span class="dash-card-label">Setlists</span>' +
+        '<span class="dash-card-label">' + t('nav.setlists') + '</span>' +
         '<span class="dash-card-count" id="dc-setlists">—</span>' +
       '</a>' +
       '<a href="' + b + '/songs" class="dash-card">' +
-        '<span class="dash-card-label">Songs</span>' +
+        '<span class="dash-card-label">' + t('nav.songs') + '</span>' +
         '<span class="dash-card-count" id="dc-songs">—</span>' +
       '</a>' +
       '<a href="' + b + '/gigs" class="dash-card">' +
-        '<span class="dash-card-label">Gigs</span>' +
+        '<span class="dash-card-label">' + t('nav.gigs') + '</span>' +
         '<span class="dash-card-count" id="dc-gigs">—</span>' +
       '</a>' +
       '<a href="' + b + '/venues" class="dash-card">' +
-        '<span class="dash-card-label">Venues</span>' +
+        '<span class="dash-card-label">' + t('nav.venues') + '</span>' +
         '<span class="dash-card-count" id="dc-venues">—</span>' +
       '</a>' +
       '<a href="' + b + '/organizers" class="dash-card">' +
-        '<span class="dash-card-label">Organizers</span>' +
+        '<span class="dash-card-label">' + t('nav.organizers') + '</span>' +
         '<span class="dash-card-count" id="dc-organizers">—</span>' +
       '</a>' +
       '<a href="' + b + '/pro-import" class="dash-card">' +
-        '<span class="dash-card-label">PRO</span>' +
-        '<span class="dash-card-count--muted">GEMA · Suisa · …</span>' +
+        '<span class="dash-card-label">' + t('nav.pro') + '</span>' +
+        '<span class="dash-card-count--muted">' + t('dashboard.cardProMuted') + '</span>' +
       '</a>' +
       '<a href="' + b + '/hub" class="dash-card">' +
-        '<span class="dash-card-label">Hub</span>' +
-        '<span class="dash-card-count--muted">streaming · socials</span>' +
+        '<span class="dash-card-label">' + t('nav.hub') + '</span>' +
+        '<span class="dash-card-count--muted">' + t('dashboard.cardHubMuted') + '</span>' +
       '</a>' +
       '<a href="' + b + '/profile" class="dash-card">' +
-        '<span class="dash-card-label">Profile</span>' +
-        '<span class="dash-card-count--muted">settings · photo</span>' +
+        '<span class="dash-card-label">' + t('nav.profile') + '</span>' +
+        '<span class="dash-card-count--muted">' + t('dashboard.cardProfileMuted') + '</span>' +
       '</a>' +
     '</div>';
 
