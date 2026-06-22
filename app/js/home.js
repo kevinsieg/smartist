@@ -2,6 +2,8 @@ var artistSlug = '';
 var _loginNext = '';
 
 async function init() {
+  // Ensure the i18n dictionary is loaded before rendering via t().
+  if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
   // Auth params arrive in the URL fragment (never sent to servers or logged);
   // query params still work for older emailed links.
   const params       = new URLSearchParams(window.location.search);
