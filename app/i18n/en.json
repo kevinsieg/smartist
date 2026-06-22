@@ -153,5 +153,22 @@
   "workspaces.roleAdmin": "Admin",
   "workspaces.roleMember": "Member",
   "workspaces.roleViewer": "Viewer",
-  "workspaces.loadError": "Could not load workspaces. Please try again."
+  "workspaces.loadError": "Could not load workspaces. Please try again.",
+  "impressum.contentLabel": "Legal",
+  "impressum.h1": "Legal Notice",
+  "impressum.publisherHeading": "Publisher",
+  "impressum.contactHeading": "Contact",
+  "impressum.contactIntro": "Found a bug, missing a feature, or have an idea? Write us — we read everything.",
+  "impressum.namePlaceholder": "Your name",
+  "impressum.emailPlaceholder": "Your email",
+  "impressum.messagePlaceholder": "Message",
+  "impressum.sendBtn": "Send message",
+  "impressum.liabilityContentHeading": "Liability for content",
+  "impressum.liabilityContentBody": "The contents of this site have been created with care. However, no guarantee can be given for the accuracy, completeness, or timeliness of the information provided.",
+  "impressum.liabilityLinksHeading": "Liability for links",
+  "impressum.liabilityLinksBody": "This site contains links to external third-party websites. We have no influence over their content and accept no liability for it. The respective provider or operator of each linked page is solely responsible for its content.",
+  "impressum.successMsg": "Message sent — we'll be in touch soon.",
+  "impressum.errGeneric": "Something went wrong — try again.",
+  "impressum.errNetwork": "Network error — try again.",
+  "impressum.footerTagline": "open source · MIT · built by a working musician · 2026"
 }

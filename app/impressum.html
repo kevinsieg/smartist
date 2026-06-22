@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Legal Notice — smartist</title>
 <meta name="robots" content="noindex">
+<script src="/app/js/i18n.js?v=1"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Courier New', Courier, monospace; background: #f5f0ea; color: #1a1a1a; -webkit-text-size-adjust: 100%; }
@@ -44,15 +45,15 @@
   <a class="wordmark" href="/">smartist</a>
   <nav>
     <a href="https://github.com/kevinsieg/smartist">github</a>
-    <a href="mailto:hi@smartist.studio">contact</a>
+    <a href="mailto:hi@smartist.studio" data-i18n="footer.contact">contact</a>
   </nav>
 </header>
 
 <main class="content">
-  <div class="content-label">Legal</div>
-  <h1>Legal Notice</h1>
+  <div class="content-label" data-i18n="impressum.contentLabel">Legal</div>
+  <h1 data-i18n="impressum.h1">Legal Notice</h1>
 
-  <h2>Publisher</h2>
+  <h2 data-i18n="impressum.publisherHeading">Publisher</h2>
   <p>
     Kevin Sieg<br>
     5 Place Saint Etienne<br>
@@ -60,26 +61,27 @@
     France
   </p>
 
-  <h2 id="contact">Contact</h2>
-  <p style="font-size:0.85rem;color:#7a7570;margin-bottom:6px;">Found a bug, missing a feature, or have an idea? Write us — we read everything.</p>
+  <h2 id="contact" data-i18n="impressum.contactHeading">Contact</h2>
+  <p style="font-size:0.85rem;color:#7a7570;margin-bottom:6px;" data-i18n="impressum.contactIntro">Found a bug, missing a feature, or have an idea? Write us — we read everything.</p>
   <form class="contact-form" id="cf">
-    <input type="text" id="cf-name" placeholder="Your name" required autocomplete="name">
-    <input type="email" id="cf-email" placeholder="Your email" required autocomplete="email">
-    <textarea id="cf-msg" placeholder="Message" required></textarea>
-    <button type="submit">Send message</button>
+    <input type="text" id="cf-name" data-i18n-attr="placeholder:impressum.namePlaceholder" placeholder="Your name" required autocomplete="name">
+    <input type="email" id="cf-email" data-i18n-attr="placeholder:impressum.emailPlaceholder" placeholder="Your email" required autocomplete="email">
+    <textarea id="cf-msg" data-i18n-attr="placeholder:impressum.messagePlaceholder" placeholder="Message" required></textarea>
+    <button type="submit" data-i18n="impressum.sendBtn">Send message</button>
   </form>
   <p id="cf-status" style="font-size:0.82rem;min-height:1.4em;margin-top:4px;"></p>
 
-  <h2>Liability for content</h2>
-  <p>The contents of this site have been created with care. However, no guarantee can be given for the accuracy, completeness, or timeliness of the information provided.</p>
+  <h2 data-i18n="impressum.liabilityContentHeading">Liability for content</h2>
+  <p data-i18n="impressum.liabilityContentBody">The contents of this site have been created with care. However, no guarantee can be given for the accuracy, completeness, or timeliness of the information provided.</p>
 
-  <h2>Liability for links</h2>
-  <p>This site contains links to external third-party websites. We have no influence over their content and accept no liability for it. The respective provider or operator of each linked page is solely responsible for its content.</p>
+  <h2 data-i18n="impressum.liabilityLinksHeading">Liability for links</h2>
+  <p data-i18n="impressum.liabilityLinksBody">This site contains links to external third-party websites. We have no influence over their content and accept no liability for it. The respective provider or operator of each linked page is solely responsible for its content.</p>
 </main>
 
 <footer class="site-footer">
   <span class="wordmark">smartist</span>
-  <p>open source · MIT · built by a working musician · 2026</p>
+  <p data-i18n="impressum.footerTagline">open source · MIT · built by a working musician · 2026</p>
+  <span data-lang-switcher></span>
 </footer>
 
 <script>
@@ -108,16 +110,16 @@
       .then(function (r) {
         if (r.ok) {
           form.reset();
-          status.textContent = "Message sent — we’ll be in touch soon.";
+          status.textContent = window.t ? t('impressum.successMsg') : "Message sent — we'll be in touch soon.";
           status.style.color = '#b06a2a';
         } else {
-          status.textContent = (r.data && r.data.error) || 'Something went wrong — try again.';
+          status.textContent = (r.data && r.data.error) || (window.t ? t('impressum.errGeneric') : 'Something went wrong — try again.');
           status.style.color = '#c0392b';
           btn.disabled = false;
         }
       })
       .catch(function () {
-        status.textContent = 'Network error — try again.';
+        status.textContent = window.t ? t('impressum.errNetwork') : 'Network error — try again.';
         status.style.color = '#c0392b';
         btn.disabled = false;
       });
