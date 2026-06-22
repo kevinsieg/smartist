@@ -112,5 +112,16 @@
   "signup.alreadyHave": "Bereits ein Konto?",
   "signup.loginLink": "Anmelden",
   "signup.sending": "Senden…",
-  "signup.errFallback": "Etwas ist schiefgelaufen"
+  "signup.errFallback": "Etwas ist schiefgelaufen",
+  "demo.stepLabel": "Demo-Zugang",
+  "demo.h1Pre": "Erleben Sie smartist in ",
+  "demo.h1Em": "Aktion.",
+  "demo.body": "Geben Sie Ihre E-Mail ein, um auf einen Live-Demo-Workspace zuzugreifen — mit echten Setlists, Songkatalog und Auftrittsverwaltung.",
+  "demo.emailPlaceholder": "ihre@email.de",
+  "demo.nextBtn": "Weiter →",
+  "demo.noSpam": "Kein Spam — jederzeit abmeldbar.",
+  "demo.legalLink": "Impressum",
+  "demo.errInvalidEmail": "Bitte eine gültige E-Mail-Adresse eingeben.",
+  "demo.errGeneric": "Ein Fehler ist aufgetreten — bitte erneut versuchen.",
+  "demo.errNetwork": "Netzwerkfehler — bitte erneut versuchen."
 }
