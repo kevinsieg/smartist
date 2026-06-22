@@ -140,5 +140,18 @@
   "onboarding.slugTaken": "Already taken — try another",
   "onboarding.creating": "Creating…",
   "onboarding.errFallback": "Sign-up failed",
-  "onboarding.errGeneric": "Something went wrong"
+  "onboarding.errGeneric": "Something went wrong",
+  "workspaces.logOut": "log out",
+  "workspaces.brandLabel": "smartist studio for musicians",
+  "workspaces.title": "Your workspaces",
+  "workspaces.explain": "A workspace is the home of one band or artist — its songs, setlists, gigs and members all live inside it. Pick a workspace to continue, or create a new one for another band or project.",
+  "workspaces.noWorkspacesHint": "You don't have any workspaces yet.",
+  "workspaces.createFirst": "Create your first workspace",
+  "workspaces.newWorkspace": "+ New workspace",
+  "workspaces.unauthHint": "You need to be logged in to see your workspaces.",
+  "workspaces.loginBtn": "Log in",
+  "workspaces.roleAdmin": "Admin",
+  "workspaces.roleMember": "Member",
+  "workspaces.roleViewer": "Viewer",
+  "workspaces.loadError": "Could not load workspaces. Please try again."
 }
