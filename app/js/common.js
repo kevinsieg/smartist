@@ -76,26 +76,26 @@ function getInitials(name) {
       '</a>' +
       '<div class="nav-links">' +
         (_artistSlug ? (
-          '<a href="' + _base + '/songs">Songs</a>' +
-          '<a href="' + _base + '/setlist">Setlists</a>' +
-          '<a href="' + _base + '/gigs">Gigs</a>' +
+          '<a href="' + _base + '/songs" data-i18n="nav.songs">Songs</a>' +
+          '<a href="' + _base + '/setlist" data-i18n="nav.setlists">Setlists</a>' +
+          '<a href="' + _base + '/gigs" data-i18n="nav.gigs">Gigs</a>' +
           '<div class="nav-more">' +
-            '<a href="#" class="nav-more-toggle" id="nav-more-toggle" aria-expanded="false">More &#9662;</a>' +
+            '<a href="#" class="nav-more-toggle" id="nav-more-toggle" aria-expanded="false"><span data-i18n="nav.more">More</span> &#9662;</a>' +
             '<div class="nav-more-menu" id="nav-more-menu">' +
-              '<a href="' + _base + '/venues">Venues</a>' +
-              '<a href="' + _base + '/organizers" class="auth-only">Organizers</a>' +
-              '<a href="' + _base + '/hub">Hub</a>' +
-              '<a href="' + _base + '/pro-import" class="auth-only">PRO</a>' +
-              '<a href="' + _base + '/settings" class="admin-only">Settings</a>' +
+              '<a href="' + _base + '/venues" data-i18n="nav.venues">Venues</a>' +
+              '<a href="' + _base + '/organizers" class="auth-only" data-i18n="nav.organizers">Organizers</a>' +
+              '<a href="' + _base + '/hub" data-i18n="nav.hub">Hub</a>' +
+              '<a href="' + _base + '/pro-import" class="auth-only" data-i18n="nav.pro">PRO</a>' +
+              '<a href="' + _base + '/settings" class="admin-only" data-i18n="nav.settings">Settings</a>' +
             '</div>' +
           '</div>'
         ) : '') +
-        '<a href="/signup" class="nav-links-signup">Sign up &#8594;</a>' +
-        '<a href="#" class="nav-links-login go-login" id="nav-links-login">Login</a>' +
-        (_artistSlug ? '<a href="' + _base + '/profile" class="nav-links-profile" id="nav-links-profile">Profile</a>' : '') +
-        '<a href="#" class="nav-links-logout" id="nav-links-logout">Logout</a>' +
+        '<a href="/signup" class="nav-links-signup"><span data-i18n="nav.signup">Sign up</span> &#8594;</a>' +
+        '<a href="#" class="nav-links-login go-login" id="nav-links-login" data-i18n="nav.login">Login</a>' +
+        (_artistSlug ? '<a href="' + _base + '/profile" class="nav-links-profile" id="nav-links-profile" data-i18n="nav.profile">Profile</a>' : '') +
+        '<a href="#" class="nav-links-logout" id="nav-links-logout" data-i18n="nav.logout">Logout</a>' +
       '</div>' +
-      '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false">' +
+      '<button class="nav-burger" id="nav-burger" aria-label="Open menu" aria-expanded="false" data-i18n-attr="aria-label:nav.openMenu">' +
         '<svg class="nav-burger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>' +
         '<svg class="nav-close-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
       '</button>' +
@@ -105,8 +105,9 @@ function getInitials(name) {
   const footer = document.createElement('footer');
   footer.innerHTML =
     '<p>&copy; <span id="currentYear"></span> <span class="band-name"></span>' +
-    ' &middot; powered by <a href="https://smartist.studio" target="_blank" rel="noopener" class="footer-backlink">smartist.studio</a>' +
-    ' &middot; <a href="' + _base + '/contact" class="footer-backlink">Contact</a></p>';
+    ' &middot; <span data-i18n="footer.poweredBy">powered by</span> <a href="https://smartist.studio" target="_blank" rel="noopener" class="footer-backlink">smartist.studio</a>' +
+    ' &middot; <a href="' + _base + '/contact" class="footer-backlink" data-i18n="footer.contact">Contact</a>' +
+    ' &middot; <span data-lang-switcher></span></p>';
   document.body.insertBefore(footer, document.currentScript);
 
   document.getElementById('currentYear').textContent = new Date().getFullYear();
@@ -143,11 +144,13 @@ function getInitials(name) {
     }
   } catch {}
 
-  // Fade in once the DOM is fully parsed.
+  // Fade in once the DOM is fully parsed (and translations are applied, if i18n loaded).
   window.addEventListener('DOMContentLoaded', function() {
-    requestAnimationFrame(function() {
+    (window.i18n && window.i18n.ready ? window.i18n.ready : Promise.resolve()).then(function() {
       requestAnimationFrame(function() {
-        document.documentElement.style.opacity = '1';
+        requestAnimationFrame(function() {
+          document.documentElement.style.opacity = '1';
+        });
       });
     });
   });
