@@ -10,6 +10,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <script src="/app/js/i18n.js?v=2"></script>
   <link rel="stylesheet" href="/app/css/app.css?v=27">
   <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
@@ -118,40 +119,41 @@
 </head>
 <body>
 <div id="venues-tabs" class="page-tabs" style="display:none">
-  <button class="setlist-tab setlist-tab--active" data-tab="list" onclick="switchVenueTab('list')">List</button>
-  <button class="setlist-tab" data-tab="map" onclick="switchVenueTab('map')">Map</button>
+  <button class="setlist-tab setlist-tab--active" data-tab="list" onclick="switchVenueTab('list')" data-i18n="venues.tabList">List</button>
+  <button class="setlist-tab" data-tab="map" onclick="switchVenueTab('map')" data-i18n="venues.tabMap">Map</button>
 </div>
 <div id="venues-list-view" class="app-wrap venues-wrap">
-  <h1>Venues</h1>
+  <h1 data-i18n="venues.pageTitle">Venues</h1>
   <div class="toolbar">
     <div class="venue-filter-fields">
-      <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…">
+      <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…" data-i18n-attr="placeholder:venues.searchPlaceholder">
       <select id="filter-status" class="filter-select venue-filter-desktop">
-        <option value="">All statuses</option>
+        <option value="" data-i18n="venues.allStatuses">All statuses</option>
       </select>
       <select id="filter-category" class="filter-select venue-filter-desktop">
-        <option value="">All categories</option>
+        <option value="" data-i18n="venues.allCategories">All categories</option>
       </select>
       <select id="filter-country" class="filter-select venue-filter-desktop">
-        <option value="">All countries</option>
+        <option value="" data-i18n="venues.allCountries">All countries</option>
       </select>
     </div>
-    <button class="btn active auth-action" disabled id="venue-add-btn" onclick="openAddModal()">+ Add venue</button>
+    <button class="btn active auth-action" disabled id="venue-add-btn" onclick="openAddModal()" data-i18n="venues.addVenueBtn">+ Add venue</button>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
   <div class="placeholder-section">
-    <h2>Placeholders</h2>
-    <div id="placeholder-list"><p class="empty-hint">Loading…</p></div>
+    <h2 data-i18n="venues.placeholdersSection">Placeholders</h2>
+    <div id="placeholder-list"><p class="empty-hint" data-i18n="venues.loading">Loading…</p></div>
   </div>
-  <div id="venues-list"><p class="empty-hint">Loading…</p></div>
+  <div id="venues-list"><p class="empty-hint" data-i18n="venues.loading">Loading…</p></div>
   <div id="venues-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="venues-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="venues-load-more-btn" class="btn auth-action" disabled onclick="loadMoreVenues()">Load more</button>
+    <button id="venues-load-more-btn" class="btn auth-action" disabled onclick="loadMoreVenues()" data-i18n="venues.loadMore">Load more</button>
   </div>
 </div>
 
 <div id="map-search-bar">
   <input type="text" id="map-search-top" placeholder="Search name, city, postcode…"
+    data-i18n-attr="placeholder:venues.mapSearchPlaceholder"
     oninput="window._mapFilterText(this.value)">
 </div>
 <div id="map-view" style="display:none;">
@@ -162,76 +164,76 @@
 <!-- Add/Edit modal -->
 <div class="modal-overlay" id="venue-modal">
   <div class="modal" style="max-width:480px;">
-    <h2 id="venue-modal-title">Add venue</h2>
+    <h2 id="venue-modal-title" data-i18n="venues.addVenue">Add venue</h2>
     <div class="modal-field">
-      <label>Name *</label>
-      <input type="text" id="vm-name" placeholder="Venue name" oninput="checkVenueDuplicate()">
+      <label data-i18n="venues.fieldName">Name *</label>
+      <input type="text" id="vm-name" placeholder="Venue name" data-i18n-attr="placeholder:venues.fieldNamePlaceholder" oninput="checkVenueDuplicate()">
       <div id="vm-dup-warning" style="display:none;font-size:0.8rem;color:#c80;margin-top:0.3rem;"></div>
     </div>
     <div class="modal-field" style="display:flex;gap:0.6rem;">
       <div style="flex:0 0 80px;">
-        <label>No.</label>
+        <label data-i18n="venues.fieldStreetNo">No.</label>
         <input type="text" id="vm-street-number" placeholder="63" style="width:100%;">
       </div>
       <div style="flex:1 1 auto;">
-        <label>Street</label>
+        <label data-i18n="venues.fieldStreet">Street</label>
         <input type="text" id="vm-street" placeholder="Rue Grande" style="width:100%;">
       </div>
     </div>
     <div class="modal-field" style="display:flex;gap:0.6rem;">
       <div style="flex:0 0 90px;">
-        <label>Postcode</label>
+        <label data-i18n="venues.fieldPostcode">Postcode</label>
         <input type="text" id="vm-postcode" placeholder="75001" autocomplete="postal-code" style="width:100%;">
       </div>
       <div style="flex:1 1 auto;">
-        <label>City</label>
-        <input type="text" id="vm-city" placeholder="City" autocomplete="address-level2" style="width:100%;">
+        <label data-i18n="venues.fieldCity">City</label>
+        <input type="text" id="vm-city" placeholder="City" data-i18n-attr="placeholder:venues.fieldCityPlaceholder" autocomplete="address-level2" style="width:100%;">
       </div>
     </div>
     <div class="modal-field">
-      <label>Country</label>
-      <input type="text" id="vm-country" placeholder="Country" autocomplete="country-name">
+      <label data-i18n="venues.fieldCountry">Country</label>
+      <input type="text" id="vm-country" placeholder="Country" data-i18n-attr="placeholder:venues.fieldCountryPlaceholder" autocomplete="country-name">
     </div>
     <div class="modal-field">
-      <label>Status</label>
+      <label data-i18n="venues.fieldStatus">Status</label>
       <select id="vm-status">
         <option value="">—</option>
       </select>
     </div>
     <div class="modal-field">
-      <label>Category</label>
+      <label data-i18n="venues.fieldCategory">Category</label>
       <select id="vm-category">
         <option value="">—</option>
       </select>
     </div>
     <div class="modal-field">
-      <label>Email</label>
+      <label data-i18n="venues.fieldEmail">Email</label>
       <input type="email" id="vm-email" placeholder="booking@venue.com">
     </div>
     <div class="modal-field">
-      <label>Website</label>
+      <label data-i18n="venues.fieldWebsite">Website</label>
       <input type="url" id="vm-website" placeholder="https://…">
     </div>
     <div id="vm-geocode-preview" style="display:none">
       <div id="vm-geocode-map"></div>
       <div class="vm-geocode-actions">
-        <button type="button" class="btn" onclick="reGeocodeVenue()">Re-geocode</button>
-        <button type="button" class="btn" onclick="discardGeocode()">Don't use these coordinates</button>
+        <button type="button" class="btn" onclick="reGeocodeVenue()" data-i18n="venues.reGeocodeBtn">Re-geocode</button>
+        <button type="button" class="btn" onclick="discardGeocode()" data-i18n="venues.discardGeocodeBtn">Don't use these coordinates</button>
       </div>
     </div>
     <div class="modal-field">
-      <label>Comment</label>
-      <textarea id="vm-comment" placeholder="Notes…" rows="2"></textarea>
+      <label data-i18n="venues.fieldComment">Comment</label>
+      <textarea id="vm-comment" placeholder="Notes…" data-i18n-attr="placeholder:venues.commentPlaceholder" rows="2"></textarea>
     </div>
       <div class="related-section" id="vm-gigs-section" style="display:none;">
-        <h4>Gigs at this venue</h4>
+        <h4 data-i18n="venues.gigsAtVenueTitle">Gigs at this venue</h4>
         <div id="vm-gigs-list"></div>
       </div>
     <div class="status-msg" id="vm-status-msg"></div>
     <div class="modal-actions">
-      <button class="btn active" type="button" id="vm-save-btn" onclick="saveVenue()">Save</button>
-      <button class="btn" type="button" onclick="closeVenueModal()">Cancel</button>
-      <button class="btn" type="button" id="vm-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteVenueFromPopup()">Delete</button>
+      <button class="btn active" type="button" id="vm-save-btn" onclick="saveVenue()" data-i18n="venues.saveBtn">Save</button>
+      <button class="btn" type="button" onclick="closeVenueModal()" data-i18n="venues.cancelBtn">Cancel</button>
+      <button class="btn" type="button" id="vm-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteVenueFromPopup()" data-i18n="venues.deleteBtn">Delete</button>
     </div>
   </div>
 </div>
@@ -239,17 +241,17 @@
 <!-- Venue gigs popup -->
 <div class="modal-overlay" id="venue-gigs-modal">
   <div class="modal" style="max-width:400px;">
-    <h2 id="vgm-title">Gigs at this venue</h2>
+    <h2 id="vgm-title" data-i18n="venues.gigsAtVenueTitle">Gigs at this venue</h2>
     <div id="vgm-body" style="margin:0.75rem 0 0.5rem;max-height:60vh;overflow-y:auto;"></div>
     <div class="modal-actions">
-      <button class="btn" type="button" onclick="closeModal('venue-gigs-modal')">Close</button>
+      <button class="btn" type="button" onclick="closeModal('venue-gigs-modal')" data-i18n="venues.closeBtn">Close</button>
     </div>
   </div>
 </div>
 
 <script src="/app/js/common.js?v=12"></script>
 <script src="/app/js/geo.js"></script>
-<script src="/app/js/venues.js?v=4"></script>
+<script src="/app/js/venues.js?v=5"></script>
 <script src="/app/js/map.js"></script>
 </body>
 </html>
