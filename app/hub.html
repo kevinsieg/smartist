@@ -11,6 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=27">
+  <script src="/app/js/i18n.js?v=2"></script>
   <style>
     .hub-wrap { max-width: 960px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
 
@@ -68,57 +69,57 @@
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=12"></script>
+<script src="/app/js/common.js?v=13"></script>
 
 <div class="app-wrap hub-wrap">
-  <h1>Artist Hub</h1>
+  <h1 data-i18n="hub.title">Artist Hub</h1>
 
-  <div class="section-label">Streaming platforms</div>
+  <div class="section-label" data-i18n="hub.sectionStreaming">Streaming platforms</div>
   <div class="platform-grid" id="streaming-grid"></div>
 
-  <div class="section-label">Social &amp; video</div>
+  <div class="section-label" data-i18n="hub.sectionSocial">Social &amp; video</div>
   <div class="platform-grid" id="social-grid"></div>
 
-  <div class="section-label">Custom integrations</div>
+  <div class="section-label" data-i18n="hub.sectionCustom">Custom integrations</div>
   <div class="platform-grid" id="custom-grid"></div>
 
-  <div class="section-label" style="margin-top:2.5rem;">Reach &amp; tools</div>
+  <div class="section-label" style="margin-top:2.5rem;" data-i18n="hub.sectionReach">Reach &amp; tools</div>
   <div class="hub-panels">
 
     <div class="hub-panel">
-      <span class="hp-status">Soon</span>
+      <span class="hp-status" data-i18n="hub.soonBadge">Soon</span>
       <div class="hp-header">
         <div class="hp-icon">&#x1F4CA;</div>
         <div>
-          <div class="hp-title">Streaming Analytics</div>
-          <div class="hp-desc">Monthly listeners, top markets, stream counts — aggregated across connected platforms.</div>
+          <div class="hp-title" data-i18n="hub.analyticsTitle">Streaming Analytics</div>
+          <div class="hp-desc" data-i18n="hub.analyticsDesc">Monthly listeners, top markets, stream counts — aggregated across connected platforms.</div>
         </div>
       </div>
-      <div class="hp-action"><button class="btn" disabled>View analytics</button></div>
+      <div class="hp-action"><button class="btn" disabled data-i18n="hub.analyticsBtn">View analytics</button></div>
     </div>
 
     <div class="hub-panel">
-      <span class="hp-status">Soon</span>
+      <span class="hp-status" data-i18n="hub.soonBadge">Soon</span>
       <div class="hp-header">
         <div class="hp-icon">&#x1F517;</div>
         <div>
-          <div class="hp-title">Smart Link</div>
-          <div class="hp-desc">One link to all your platforms. Auto-detects the listener's preferred service.</div>
+          <div class="hp-title" data-i18n="hub.smartLinkTitle">Smart Link</div>
+          <div class="hp-desc" data-i18n="hub.smartLinkDesc">One link to all your platforms. Auto-detects the listener's preferred service.</div>
         </div>
       </div>
-      <div class="hp-action"><button class="btn" disabled>Generate link</button></div>
+      <div class="hp-action"><button class="btn" disabled data-i18n="hub.smartLinkBtn">Generate link</button></div>
     </div>
 
     <div class="hub-panel">
-      <span class="hp-status">Soon</span>
+      <span class="hp-status" data-i18n="hub.soonBadge">Soon</span>
       <div class="hp-header">
         <div class="hp-icon">&#x1F4CB;</div>
         <div>
-          <div class="hp-title">Press Kit</div>
-          <div class="hp-desc">Auto-generate an EPK with bio, streaming stats, and upcoming dates — ready to send.</div>
+          <div class="hp-title" data-i18n="hub.pressKitTitle">Press Kit</div>
+          <div class="hp-desc" data-i18n="hub.pressKitDesc">Auto-generate an EPK with bio, streaming stats, and upcoming dates — ready to send.</div>
         </div>
       </div>
-      <div class="hp-action"><button class="btn" disabled>Build EPK</button></div>
+      <div class="hp-action"><button class="btn" disabled data-i18n="hub.pressKitBtn">Build EPK</button></div>
     </div>
 
   </div>
@@ -128,28 +129,28 @@
 <!-- Platform connect / edit modal -->
 <div class="modal-overlay" id="platform-modal">
   <div class="modal" style="max-width:420px;">
-    <h2 id="pm-title">Connect platform</h2>
+    <h2 id="pm-title"></h2>
     <div class="modal-field" id="pm-label-row">
-      <label>Name *</label>
-      <input type="text" id="pm-label" placeholder="Platform name">
+      <label data-i18n="hub.modalNameLabel">Name *</label>
+      <input type="text" id="pm-label" data-i18n-attr="placeholder:hub.modalNamePlaceholder" placeholder="Platform name">
     </div>
     <div class="modal-field">
-      <label>Profile URL *</label>
+      <label data-i18n="hub.modalUrlLabel">Profile URL *</label>
       <input type="url" id="pm-url" placeholder="https://…">
     </div>
     <div class="modal-field">
-      <label>Note <span style="font-weight:400;color:var(--third-color);font-size:0.78rem;">(optional)</span></label>
-      <input type="text" id="pm-note" placeholder="e.g. main account">
+      <label><span data-i18n="hub.modalNoteLabel">Note</span> <span style="font-weight:400;color:var(--third-color);font-size:0.78rem;" data-i18n="hub.modalNoteOptional">(optional)</span></label>
+      <input type="text" id="pm-note" data-i18n-attr="placeholder:hub.modalNotePlaceholder" placeholder="e.g. main account">
     </div>
     <div class="status-msg" id="pm-status"></div>
     <div class="modal-actions">
-      <button class="btn active auth-action" disabled onclick="savePlatform()">Save</button>
-      <button class="btn" onclick="closePlatformModal()">Cancel</button>
-      <button class="btn auth-action" disabled id="pm-disconnect" style="margin-left:auto;color:#e55;" onclick="disconnectPlatform()">Disconnect</button>
+      <button class="btn active auth-action" disabled onclick="savePlatform()" data-i18n="hub.saveBtn">Save</button>
+      <button class="btn" onclick="closePlatformModal()" data-i18n="hub.cancelBtn">Cancel</button>
+      <button class="btn auth-action" disabled id="pm-disconnect" style="margin-left:auto;color:#e55;" onclick="disconnectPlatform()" data-i18n="hub.disconnectBtn">Disconnect</button>
     </div>
   </div>
 </div>
 
-<script src="/app/js/hub.js"></script>
+<script src="/app/js/hub.js?v=2"></script>
 </body>
 </html>
