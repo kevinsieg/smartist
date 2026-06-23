@@ -12,6 +12,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
     <link rel="stylesheet" href="/app/css/app.css?v=27">
+    <script src="/app/js/i18n.js?v=2"></script>
 <style>
   .setlist-page-wrap { position: relative; }
 
@@ -80,20 +81,20 @@
 <main>
     <section class="app-page setlist-page-wrap">
         <div id="setlist-tabs" class="page-tabs" style="display:none">
-            <button class="setlist-tab setlist-tab--active" data-tab="generator" onclick="switchTab('generator')">Build setlist</button>
-            <button class="setlist-tab" data-tab="history" onclick="switchTab('history')">Saved setlists</button>
+            <button class="setlist-tab setlist-tab--active" data-tab="generator" onclick="switchTab('generator')" data-i18n="setlist.tabBuild">Build setlist</button>
+            <button class="setlist-tab" data-tab="history" onclick="switchTab('history')" data-i18n="setlist.tabSaved">Saved setlists</button>
         </div>
         <div class="app-wrap">
-            <h1 id="setlist-page-title">Build a setlist</h1>
+            <h1 id="setlist-page-title" data-i18n="setlist.pageTitle">Build a setlist</h1>
             <div id="setlist-content">
-                <p style="text-align:center;color:var(--third-color);">Loading songs…</p>
+                <p style="text-align:center;color:var(--third-color);" data-i18n="setlist.loading">Loading songs…</p>
             </div>
         </div>
     </section>
 </main>
 
 <!-- History tab: desktop side panel -->
-<div id="view-side-panel" role="complementary" aria-label="Setlist details">
+<div id="view-side-panel" role="complementary" data-i18n-attr="aria-label:setlist.sidePanelLabel" aria-label="Setlist details">
   <div class="panel-resize-handle"></div>
   <div id="view-side-panel-inner"></div>
 </div>
@@ -101,62 +102,62 @@
 <!-- Accept / save modal -->
 <div class="modal-overlay" id="accept-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal">
-        <h2 id="modal-title">Save Setlist</h2>
+        <h2 id="modal-title" data-i18n="setlist.modalTitle">Save Setlist</h2>
 
         <div id="auth-step">
             <div class="modal-field">
-                <label for="password-input">Password</label>
-                <input type="password" id="password-input" autocomplete="current-password" placeholder="Band password">
+                <label for="password-input" data-i18n="setlist.passwordLabel">Password</label>
+                <input type="password" id="password-input" autocomplete="current-password" data-i18n-attr="placeholder:setlist.passwordPlaceholder" placeholder="Band password">
             </div>
             <div class="status-msg" id="auth-error"></div>
             <div class="modal-actions">
-                <button class="btn" id="verify-btn">Verify</button>
-                <button class="btn" onclick="_closeAcceptModal()">Cancel</button>
+                <button class="btn" id="verify-btn" data-i18n="setlist.verifyBtn">Verify</button>
+                <button class="btn" onclick="_closeAcceptModal()" data-i18n="setlist.cancelBtn">Cancel</button>
             </div>
         </div>
 
         <div id="save-step" style="display:none">
             <div class="modal-field">
-                <label for="setlist-title">Name</label>
-                <input type="text" id="setlist-title" placeholder="e.g. Summer set">
+                <label for="setlist-title" data-i18n="setlist.nameLabel">Name</label>
+                <input type="text" id="setlist-title" data-i18n-attr="placeholder:setlist.namePlaceholder" placeholder="e.g. Summer set">
             </div>
             <div class="modal-field">
-                <label for="gig-select">Gig (optional)</label>
+                <label for="gig-select" data-i18n="setlist.gigLabel">Gig (optional)</label>
                 <select id="gig-select">
-                    <option value="">&mdash; no gig &mdash;</option>
+                    <option value="" data-i18n="setlist.noGig">&mdash; no gig &mdash;</option>
                 </select>
-                <button class="btn new-gig-toggle" id="new-gig-btn">+ New gig</button>
+                <button class="btn new-gig-toggle" id="new-gig-btn" data-i18n="setlist.newGigBtn">+ New gig</button>
                 <div class="new-gig-form" id="new-gig-form">
                     <div class="modal-field">
-                        <label for="gig-name">Gig name</label>
-                        <input type="text" id="gig-name" placeholder="e.g. Festival Etretat">
+                        <label for="gig-name" data-i18n="setlist.gigNameLabel">Gig name</label>
+                        <input type="text" id="gig-name" data-i18n-attr="placeholder:setlist.gigNamePlaceholder" placeholder="e.g. Festival Etretat">
                     </div>
                     <div class="modal-field">
-                        <label for="gig-date">Date</label>
+                        <label for="gig-date" data-i18n="setlist.gigDateLabel">Date</label>
                         <input type="date" id="gig-date">
                     </div>
                     <div class="modal-field">
-                        <label for="gig-venue">Venue (optional)</label>
+                        <label for="gig-venue" data-i18n="setlist.gigVenueLabel">Venue (optional)</label>
                         <input type="text" id="gig-venue">
                     </div>
-                    <button class="btn" id="create-gig-btn" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:36px">Create gig</button>
+                    <button class="btn" id="create-gig-btn" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:36px" data-i18n="setlist.createGigBtn">Create gig</button>
                 </div>
             </div>
             <div class="modal-field">
-                <label for="setlist-comment">Comment (optional)</label>
-                <textarea id="setlist-comment" placeholder="Notes about this set…"></textarea>
+                <label for="setlist-comment" data-i18n="setlist.commentLabel">Comment (optional)</label>
+                <textarea id="setlist-comment" data-i18n-attr="placeholder:setlist.commentPlaceholder" placeholder="Notes about this set…"></textarea>
             </div>
             <div class="status-msg" id="save-error"></div>
             <div class="modal-actions">
-                <button class="btn active auth-action" id="save-btn">Save</button>
-                <button class="btn" onclick="_closeAcceptModal()">Cancel</button>
+                <button class="btn active auth-action" id="save-btn" data-i18n="setlist.saveBtn">Save</button>
+                <button class="btn" onclick="_closeAcceptModal()" data-i18n="setlist.cancelBtn">Cancel</button>
             </div>
         </div>
     </div>
 </div>
 
-<script src="/app/js/common.js?v=12"></script>
+<script src="/app/js/common.js?v=13"></script>
 <script src="/app/js/list-view.js"></script>
-<script src="/app/js/setlist.js"></script>
+<script src="/app/js/setlist.js?v=2"></script>
 </body>
 </html>
