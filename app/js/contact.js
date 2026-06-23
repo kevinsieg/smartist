@@ -1,11 +1,13 @@
 // Contact page — works with and without a workspace slug in the URL.
 
 async function _contactInit() {
+  if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
+
   if (_artistSlug) {
     try {
       var cfg = await loadConfig(undefined, { light: true });
       applyNav(cfg.name, cfg.config);
-      document.title = 'Contact — ' + (cfg.name || 'smartist');
+      document.title = t('contact.heading') + ' — ' + (cfg.name || 'smartist');
     } catch (_) {}
   } else {
     document.querySelectorAll('.band-name').forEach(function(el) { el.textContent = 'smartist'; });
@@ -26,11 +28,11 @@ async function _contactSend() {
   var msg   = document.getElementById('cf-msg').value.trim();
   var btn   = document.getElementById('cf-send');
 
-  if (!name)  { setStatus('cf-status', 'Please enter your name.', true);  return; }
-  if (!email) { setStatus('cf-status', 'Please enter your email.', true); return; }
-  if (!msg)   { setStatus('cf-status', 'Please enter a message.', true);  return; }
+  if (!name)  { setStatus('cf-status', t('contact.errNameRequired'), true);  return; }
+  if (!email) { setStatus('cf-status', t('contact.errEmailRequired'), true); return; }
+  if (!msg)   { setStatus('cf-status', t('contact.errMessageRequired'), true);  return; }
 
-  btn.disabled = true; btn.textContent = 'Sending…';
+  btn.disabled = true; btn.textContent = t('contact.sending');
   setStatus('cf-status', '');
   try {
     var r = await fetch('/api/config', {
@@ -40,16 +42,16 @@ async function _contactSend() {
     });
     var d = await r.json().catch(function() { return {}; });
     if (!r.ok) {
-      setStatus('cf-status', d.error || 'Failed to send — try again later.', true);
-      btn.disabled = false; btn.textContent = 'Send message';
+      setStatus('cf-status', d.error || t('contact.errGeneric'), true);
+      btn.disabled = false; btn.textContent = t('contact.sendBtn');
       return;
     }
-    setStatus('cf-status', 'Thanks — your message was sent.');
+    setStatus('cf-status', t('contact.successMsg'));
     document.getElementById('cf-msg').value = '';
-    btn.textContent = 'Sent';
+    btn.textContent = t('contact.sent');
   } catch (_) {
-    setStatus('cf-status', 'Connection error — try again.', true);
-    btn.disabled = false; btn.textContent = 'Send message';
+    setStatus('cf-status', t('contact.errNetwork'), true);
+    btn.disabled = false; btn.textContent = t('contact.sendBtn');
   }
 }
 
