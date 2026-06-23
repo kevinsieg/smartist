@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <title>History</title>
     <meta charset="utf-8"/>
@@ -12,33 +12,34 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
     <link rel="stylesheet" href="/app/css/app.css?v=27">
+    <script src="/app/js/i18n.js?v=2"></script>
 </head>
 <body>
 
 <main>
     <section class="app-page">
         <div class="app-wrap">
-            <h1>History</h1>
+            <h1 data-i18n="slh.pageTitle">History</h1>
 
             <div class="history-subnav">
-              <span class="subnav-label" style="font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--third-color);">Gig timeline</span>
+              <span class="subnav-label" style="font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--third-color);" data-i18n="slh.gigTimeline">Gig timeline</span>
             </div>
 
             <div class="history-filterbar">
-              <input class="history-filter-input" type="text" id="filter-name" placeholder="Name…" oninput="onFilterInput()">
-              <input class="history-filter-input" type="text" id="filter-song" placeholder="Song…" oninput="onSongInput(this.value)">
-              <input class="history-filter-input" type="date" id="filter-date-from" title="From date" oninput="onFilterInput()">
-              <input class="history-filter-input" type="date" id="filter-date-to" title="To date" oninput="onFilterInput()">
-              <button class="btn" id="filter-clear-btn" onclick="clearFilters()" style="display:none">Clear</button>
+              <input class="history-filter-input" type="text" id="filter-name" placeholder="Name…" data-i18n-attr="placeholder:slh.filterNamePlaceholder" oninput="onFilterInput()">
+              <input class="history-filter-input" type="text" id="filter-song" placeholder="Song…" data-i18n-attr="placeholder:slh.filterSongPlaceholder" oninput="onSongInput(this.value)">
+              <input class="history-filter-input" type="date" id="filter-date-from" title="From date" data-i18n-attr="title:slh.filterFromDate" oninput="onFilterInput()">
+              <input class="history-filter-input" type="date" id="filter-date-to" title="To date" data-i18n-attr="title:slh.filterToDate" oninput="onFilterInput()">
+              <button class="btn" id="filter-clear-btn" onclick="clearFilters()" style="display:none" data-i18n="slh.clearBtn">Clear</button>
             </div>
 
             <div id="history-content">
-                <p style="text-align:center;color:var(--third-color);">Loading…</p>
+                <p style="text-align:center;color:var(--third-color);" data-i18n="songs.loading">Loading…</p>
             </div>
 
             <div id="history-footer" style="display:none;text-align:center;margin-top:1.5rem;">
               <p id="history-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-              <button id="history-load-more-btn" class="btn" onclick="loadMoreHistory()">Load more gigs</button>
+              <button id="history-load-more-btn" class="btn" onclick="loadMoreHistory()" data-i18n="slh.loadMoreGigs">Load more gigs</button>
             </div>
 
             <div id="unlinked-section" style="margin-top:2rem;"></div>
@@ -58,100 +59,100 @@
 
 <div class="modal-overlay" id="history-login-modal">
   <div class="modal" style="max-width:320px;">
-    <h2>Login</h2>
+    <h2 data-i18n="nav.login">Login</h2>
     <div class="modal-field">
-      <label for="history-login-pw">Password</label>
-      <input type="password" id="history-login-pw" placeholder="Band password" autocomplete="current-password">
+      <label for="history-login-pw" data-i18n="setlist.passwordLabel">Password</label>
+      <input type="password" id="history-login-pw" placeholder="Band password" data-i18n-attr="placeholder:setlist.passwordPlaceholder" autocomplete="current-password">
     </div>
     <div class="status-msg" id="history-login-status"></div>
     <div class="modal-actions">
-      <button class="btn active" onclick="doHistoryLogin()">Login</button>
-      <button class="btn" onclick="closeHistoryLogin()">Cancel</button>
+      <button class="btn active" onclick="doHistoryLogin()" data-i18n="nav.login">Login</button>
+      <button class="btn" onclick="closeHistoryLogin()" data-i18n="songs.cancel">Cancel</button>
     </div>
   </div>
 </div>
 
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
-    <h2>Edit setlist</h2>
+    <h2 data-i18n="slh.editSetlistTitle">Edit setlist</h2>
     <div class="modal-field" id="edit-auth-field" style="display:none">
-      <label for="edit-password">Password</label>
-      <input type="password" id="edit-password" placeholder="Band password" autocomplete="current-password">
+      <label for="edit-password" data-i18n="setlist.passwordLabel">Password</label>
+      <input type="password" id="edit-password" placeholder="Band password" data-i18n-attr="placeholder:setlist.passwordPlaceholder" autocomplete="current-password">
     </div>
     <div id="edit-form-body">
       <div class="modal-field">
-        <label for="edit-title">Title</label>
-        <input type="text" id="edit-title" placeholder="Set name…">
+        <label for="edit-title" data-i18n="songs.fieldTitle">Title</label>
+        <input type="text" id="edit-title" placeholder="Set name…" data-i18n-attr="placeholder:slh.editTitlePlaceholder">
       </div>
       <div class="modal-field">
-        <label for="edit-comment">Comment</label>
-        <input type="text" id="edit-comment" placeholder="Notes…">
+        <label for="edit-comment" data-i18n="songs.fieldComment">Comment</label>
+        <input type="text" id="edit-comment" placeholder="Notes…" data-i18n-attr="placeholder:slh.editCommentPlaceholder">
       </div>
       <div class="modal-field">
-        <label for="edit-gig">Gig</label>
+        <label for="edit-gig" data-i18n="slh.gigLabel">Gig</label>
         <select id="edit-gig" onchange="onGigSelect()">
-          <option value="">— no gig —</option>
+          <option value="" data-i18n="setlist.noGig">— no gig —</option>
         </select>
         <div id="gig-edit-section" style="display:none;margin-top:0.5rem;">
-          <button type="button" class="btn new-gig-toggle" id="gig-edit-toggle" onclick="toggleGigEditForm()">Edit gig details</button>
+          <button type="button" class="btn new-gig-toggle" id="gig-edit-toggle" onclick="toggleGigEditForm()" data-i18n="slh.editGigDetails">Edit gig details</button>
           <div id="gig-edit-form" class="new-gig-form">
             <div class="modal-field">
-              <label for="gig-edit-name">Name</label>
-              <input type="text" id="gig-edit-name" placeholder="Gig name">
+              <label for="gig-edit-name" data-i18n="slh.gigNameLabel">Name</label>
+              <input type="text" id="gig-edit-name" placeholder="Gig name" data-i18n-attr="placeholder:slh.gigNamePlaceholder">
             </div>
             <div class="modal-field">
-              <label for="gig-edit-date">Date</label>
+              <label for="gig-edit-date" data-i18n="slh.gigDateLabel">Date</label>
               <input type="date" id="gig-edit-date">
             </div>
             <div class="modal-field">
-              <label for="gig-edit-venue">Venue</label>
+              <label for="gig-edit-venue" data-i18n="slh.gigVenueLabel">Venue</label>
               <select id="gig-edit-venue">
-                <option value="">— no venue —</option>
+                <option value="" data-i18n="slh.noVenue">— no venue —</option>
               </select>
             </div>
             <div class="modal-field">
-              <label for="gig-edit-comment">Comment</label>
-              <textarea id="gig-edit-comment" placeholder="Comment…"></textarea>
+              <label for="gig-edit-comment" data-i18n="songs.fieldComment">Comment</label>
+              <textarea id="gig-edit-comment" placeholder="Comment…" data-i18n-attr="placeholder:slh.commentPlaceholder"></textarea>
             </div>
             <div class="status-msg" id="gig-edit-status"></div>
             <div class="modal-actions">
-              <button class="btn active" id="gig-edit-save-btn" onclick="saveGigEdit()">Save gig</button>
+              <button class="btn active" id="gig-edit-save-btn" onclick="saveGigEdit()" data-i18n="slh.saveGigBtn">Save gig</button>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-field">
-        <label>Songs</label>
+        <label data-i18n="nav.songs">Songs</label>
         <ul class="edit-song-list" id="edit-song-list"></ul>
         <select id="edit-add-song" onchange="editAddSong(this)" style="margin-top:0.4rem;width:100%;font-family:'Courier New',monospace;font-size:0.82rem;padding:0.3rem 0.5rem;border:1px dashed rgba(160,156,147,0.4);border-radius:4px;background:transparent;color:var(--third-color);cursor:pointer;">
-          <option value="">+ add a song…</option>
+          <option value="" data-i18n="setlist.addSongPlaceholder">+ add a song…</option>
         </select>
       </div>
     </div>
     <div class="status-msg" id="edit-status"></div>
     <div class="modal-actions">
-      <button class="btn active" id="edit-save-btn" onclick="doEditSave()">Save</button>
-      <button class="btn" onclick="closeEditModal()">Cancel</button>
+      <button class="btn active" id="edit-save-btn" onclick="doEditSave()" data-i18n="songs.save">Save</button>
+      <button class="btn" onclick="closeEditModal()" data-i18n="songs.cancel">Cancel</button>
     </div>
   </div>
 </div>
 
 <div class="modal-overlay" id="share-modal">
   <div class="modal">
-    <h2>Share setlist</h2>
+    <h2 data-i18n="slh.shareSetlistTitle">Share setlist</h2>
     <form onsubmit="doShareSend(); return false;" autocomplete="on">
       <div class="modal-field" id="share-auth-field" style="display:none">
-        <label for="share-password">Password</label>
-        <input type="password" id="share-password" placeholder="Band password" autocomplete="current-password">
+        <label for="share-password" data-i18n="setlist.passwordLabel">Password</label>
+        <input type="password" id="share-password" placeholder="Band password" data-i18n-attr="placeholder:setlist.passwordPlaceholder" autocomplete="current-password">
       </div>
       <div class="modal-field">
-        <label for="share-email">Recipient email</label>
-        <input type="email" id="share-email" name="email" placeholder="someone@example.com" autocomplete="email">
+        <label for="share-email" data-i18n="slh.recipientEmail">Recipient email</label>
+        <input type="email" id="share-email" name="email" placeholder="someone@example.com" data-i18n-attr="placeholder:slh.emailPlaceholder" autocomplete="email">
       </div>
       <div class="status-msg" id="share-status"></div>
       <div class="modal-actions">
-        <button type="submit" class="btn active" id="share-send-btn">Send PDF</button>
-        <button type="button" class="btn" onclick="closeShareModal()">Cancel</button>
+        <button type="submit" class="btn active" id="share-send-btn" data-i18n="setlist.shareSendBtn">Send PDF</button>
+        <button type="button" class="btn" onclick="closeShareModal()" data-i18n="songs.cancel">Cancel</button>
       </div>
     </form>
   </div>
@@ -159,38 +160,38 @@
 
 <div class="modal-overlay" id="gig-modal">
   <div class="modal" style="max-width:360px;">
-    <h2>Edit gig</h2>
+    <h2 data-i18n="slh.editGigTitle">Edit gig</h2>
     <div class="modal-field" id="gig-modal-auth-field" style="display:none">
-      <label for="gig-modal-pw">Password</label>
-      <input type="password" id="gig-modal-pw" placeholder="Band password" autocomplete="current-password">
+      <label for="gig-modal-pw" data-i18n="setlist.passwordLabel">Password</label>
+      <input type="password" id="gig-modal-pw" placeholder="Band password" data-i18n-attr="placeholder:setlist.passwordPlaceholder" autocomplete="current-password">
     </div>
     <div class="modal-field">
-      <label for="gig-modal-name">Name</label>
-      <input type="text" id="gig-modal-name" placeholder="Gig name">
+      <label for="gig-modal-name" data-i18n="slh.gigNameLabel">Name</label>
+      <input type="text" id="gig-modal-name" placeholder="Gig name" data-i18n-attr="placeholder:slh.gigNamePlaceholder">
     </div>
     <div class="modal-field">
-      <label for="gig-modal-date">Date</label>
+      <label for="gig-modal-date" data-i18n="slh.gigDateLabel">Date</label>
       <input type="date" id="gig-modal-date">
     </div>
     <div class="modal-field">
-      <label for="gig-modal-venue">Venue</label>
+      <label for="gig-modal-venue" data-i18n="slh.gigVenueLabel">Venue</label>
       <select id="gig-modal-venue">
-        <option value="">— no venue —</option>
+        <option value="" data-i18n="slh.noVenue">— no venue —</option>
       </select>
     </div>
     <div class="modal-field">
-      <label for="gig-modal-comment">Comment</label>
-      <textarea id="gig-modal-comment" placeholder="Comment…"></textarea>
+      <label for="gig-modal-comment" data-i18n="songs.fieldComment">Comment</label>
+      <textarea id="gig-modal-comment" placeholder="Comment…" data-i18n-attr="placeholder:slh.commentPlaceholder"></textarea>
     </div>
     <div class="status-msg" id="gig-modal-status"></div>
     <div class="modal-actions">
-      <button class="btn active" id="gig-modal-save-btn" onclick="doSaveGigModal()">Save</button>
-      <button class="btn" onclick="closeGigModal()">Cancel</button>
+      <button class="btn active" id="gig-modal-save-btn" onclick="doSaveGigModal()" data-i18n="songs.save">Save</button>
+      <button class="btn" onclick="closeGigModal()" data-i18n="songs.cancel">Cancel</button>
     </div>
   </div>
 </div>
 
 <script src="/app/js/common.js?v=12"></script>
-<script src="/app/js/setlist-history.js"></script>
+<script src="/app/js/setlist-history.js?v=2"></script>
 </body>
 </html>
