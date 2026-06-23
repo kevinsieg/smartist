@@ -23,6 +23,11 @@ initPage(function(cfg) {
   loadUsers();
 });
 
+function _roleLabel(role) {
+  var map = { admin: t('settings.roleAdmin'), member: t('settings.roleMember'), viewer: t('settings.roleViewer') };
+  return map[role] || escHtml(role);
+}
+
 // Local status helper — setStatus() applies .status-msg, which is display:none
 // without a .success/.error class, so success feedback would be invisible.
 function _usersStatus(msg, isError) {
@@ -64,10 +69,10 @@ function _renderUsers(users) {
       active.map(function(u) {
         var isMe     = u.id === _currentUserId;
         var roleCell = isMe
-          ? '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color)">' + escHtml(u.role) + '</span>'
+          ? '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color)">' + _roleLabel(u.role) + '</span>'
           : '<select class="role-select-inline" onchange="_changeRole(' + u.id + ',this.value)">' +
               ['admin', 'member', 'viewer'].map(function(r) {
-                return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + r + '</option>';
+                return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + _roleLabel(r) + '</option>';
               }).join('') +
             '</select>';
         var editBtn = '<button class="user-action-btn" onclick="_editEmail(' + u.id + ')">' + t('settings.editEmailBtn') + '</button>';
@@ -105,7 +110,7 @@ function _renderUsers(users) {
     return '<div class="user-row">' +
       '<span class="user-email">' + escHtml(u.email) + '</span>' +
       '<span class="status-badge" style="background:#f3ede4;color:var(--third-color)">' + t('settings.statusExpired') + '</span>' +
-      '<span style="font-size:0.72rem;color:var(--third-color)">' + escHtml(u.role) + '</span>' +
+      '<span style="font-size:0.72rem;color:var(--third-color)">' + _roleLabel(u.role) + '</span>' +
       '<button class="user-action-btn danger" onclick="_revokeInvite(' + u.id + ')">' + t('songs.remove') + '</button>' +
     '</div>';
   });
@@ -293,7 +298,7 @@ function renderArrInstruments(instruments) {
   list.innerHTML = instruments.map(function(inst, i) {
     var chips = (inst.techniques || []).map(function(t, ti) {
       return '<span class="arr-tech-chip">' + escHtml(t) +
-        '<button onclick="arrRemoveTechnique(' + i + ',' + ti + ')" title="Remove">&#215;</button></span>';
+        '<button onclick="arrRemoveTechnique(' + i + ',' + ti + ')" title="' + t('songs.remove') + '">&#215;</button></span>';
     }).join('');
     return '<div class="arr-instrument-card">' +
       '<div class="arr-instrument-hdr">' +

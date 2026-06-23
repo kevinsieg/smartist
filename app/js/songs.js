@@ -174,37 +174,37 @@ async function loadAndRender(viewMode) {
 // --- Table ---
 
 var COLS = [
-  { key: 'title',               label: 'title',              type: 'text',   cls: 'col-title',   width: 180 },
-  { key: 'active',              label: 'active',             type: 'bool',   cls: 'col-active',  width: 48  },
+  { key: 'title',               get label() { return t('songs.colLabelTitle'); },     type: 'text',   cls: 'col-title',   width: 180 },
+  { key: 'active',              get label() { return t('songs.active'); },             type: 'bool',   cls: 'col-active',  width: 48  },
   { key: 'heart',               label: '♥',                  type: 'bool',   cls: 'col-heart',   width: 40, get title() { return t('songs.colTitleHeart'); } },
   { key: 'extra.listenUrl',    label: '▶',                  type: 'listen',   cls: 'col-listen',   width: 52, get title() { return t('songs.colTitleListen'); }  },
   { key: 'extra.sheetUrl',     label: '≡',                  type: 'sheet',    cls: 'col-sheet',    width: 52, get title() { return t('songs.colTitleSheet'); }   },
   { key: 'extra.playbackUrl',  label: '▷',                  type: 'playback', cls: 'col-playback', width: 52, get title() { return t('songs.colTitlePlayback'); }       },
   { key: 'extra.lyrics',       label: '¶',                  type: 'lyrics',   cls: 'col-lyrics',   width: 52, get title() { return t('songs.colTitleLyrics'); }                          },
   { key: 'has_arrangement',    label: '&#8862;',            type: 'arr',      cls: 'col-arr',      width: 44, get title() { return t('songs.colTitleArrangement'); }                      },
-  { key: 'play_count',          label: 'plays',              type: 'stat',   cls: 'col-plays',   width: 50  },
-  { key: 'last_played_at',      label: 'last live',          type: 'stat',   cls: 'col-last',    width: 86  },
+  { key: 'play_count',          get label() { return t('songs.colLabelPlays'); },     type: 'stat',   cls: 'col-plays',   width: 50  },
+  { key: 'last_played_at',      get label() { return t('songs.colLabelLastLive'); },  type: 'stat',   cls: 'col-last',    width: 86  },
   { key: 'iswc',                label: 'ISWC',               type: 'stat',   cls: 'col-iswc',    width: 110, title: 'ISWC (GEMA/SACEM)' },
   { key: 'gema_work_number',    label: 'GEMA-Nr',            type: 'stat',   cls: 'col-gema',    width: 116, title: 'GEMA Werknummer' },
-  { key: 'gema_language',       label: 'lang',               type: 'select', cls: 'col-glang',   width: 56,  title: 'Language (GEMA)', options: GEMA_LANGUAGES, default: 'EN' },
+  { key: 'gema_language',       get label() { return t('songs.colLabelLang'); },      type: 'select', cls: 'col-glang',   width: 56,  title: 'Language (GEMA)', options: GEMA_LANGUAGES, default: 'EN' },
   { key: 'extra.isrc',          label: 'ISRC',               type: 'stat',   cls: 'col-isrc',    width: 120, title: 'ISRC (recording)' },
-  { key: 'key',                 label: 'key',                type: 'text',   cls: 'col-key',     width: 52  },
-  { key: 'extra.lead',          label: 'lead',               type: 'text',   cls: 'col-lead',    width: 80  },
+  { key: 'key',                 get label() { return t('songs.colLabelKey'); },        type: 'text',   cls: 'col-key',     width: 52  },
+  { key: 'extra.lead',          get label() { return t('songs.colLabelLead'); },       type: 'text',   cls: 'col-lead',    width: 80  },
   { key: 'extra.banjoCapo',     label: 'banjoCapo',          type: 'number', cls: 'col-bcapo',   width: 58  },
   { key: 'extra.git2',          label: 'git2',               type: 'bool',   cls: 'col-lgit',    width: 70  },
   { key: 'extra.gitCapo',       label: 'gitCapo',            type: 'number', cls: 'col-kcapo',   width: 58  },
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
-  { key: 'genre',            label: 'genre',           type: 'text',   cls: 'col-cat',     width: 100 },
-  { key: 'energy',              label: 'energy',             type: 'text',   cls: 'col-energy',  width: 70  },
-  { key: 'time_signature',      label: 'time sig',           type: 'select', cls: 'col-timesig', width: 68, options: TIME_SIGNATURES },
-  { key: 'bpm',                 label: 'bpm',                type: 'number', cls: 'col-bpm',     width: 55  },
-  { key: 'length_min',          label: 'length',             type: 'time',   cls: 'col-len',     width: 68  },
-  { key: 'extra.author',        label: 'author',             type: 'text',   cls: 'col-author',  width: 130 },
-  { key: 'interpret',           label: 'interpret',          type: 'text',   cls: 'col-interp',  width: 140 },
+  { key: 'genre',               get label() { return t('songs.colLabelGenre'); },      type: 'text',   cls: 'col-cat',     width: 100 },
+  { key: 'energy',              get label() { return t('songs.colLabelEnergy'); },     type: 'text',   cls: 'col-energy',  width: 70  },
+  { key: 'time_signature',      get label() { return t('songs.colLabelTimeSig'); },    type: 'select', cls: 'col-timesig', width: 68, options: TIME_SIGNATURES },
+  { key: 'bpm',                 get label() { return t('songs.colLabelBpm'); },        type: 'number', cls: 'col-bpm',     width: 55  },
+  { key: 'length_min',          get label() { return t('songs.colLabelLength'); },     type: 'time',   cls: 'col-len',     width: 68  },
+  { key: 'extra.author',        get label() { return t('songs.colLabelAuthor'); },     type: 'text',   cls: 'col-author',  width: 130 },
+  { key: 'interpret',           get label() { return t('songs.colLabelInterpret'); },  type: 'text',   cls: 'col-interp',  width: 140 },
   { key: 'reference_interpret', label: 'reference_interpret', type: 'text',  cls: 'col-refint',  width: 140 },
   { key: 'extra.referenceUrl',  label: 'referenceUrl',       type: 'url',    cls: 'col-refurl',  width: 120 },
   { key: 'extra.songinfoUrl',   label: 'songinfoUrl',        type: 'url',    cls: 'col-infourl', width: 120 },
-  { key: 'comment',             label: 'comment',            type: 'text',   cls: 'col-comment', width: 160 },
+  { key: 'comment',             get label() { return t('songs.colLabelComment'); },    type: 'text',   cls: 'col-comment', width: 160 },
 ];
 
 var COL_WIDTHS_KEY = 'songs_col_widths';
@@ -1656,7 +1656,7 @@ function openPlayer(sid) {
     content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}"
       allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
-    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
+    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }
 
   // Reset delete confirm state
@@ -1758,7 +1758,7 @@ async function handleReplaceFile(input) {
     } else if (embedUrl) {
       content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
     } else {
-      content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
+      content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
     }
     fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.audioReplaced'));
@@ -1778,8 +1778,8 @@ function renderPlayerHistory(logs) {
 
   const items = audio.map(log => {
     const desc = log.action === 'audio_replace'
-      ? `replaced — ${escHtml(log.song_data?.previousFilename ?? '?')}`
-      : `removed — ${escHtml(log.song_data?.filename ?? '?')}`;
+      ? t('songs.histReplaced', { file: escHtml(log.song_data?.previousFilename ?? '?') })
+      : t('songs.histRemoved', { file: escHtml(log.song_data?.filename ?? '?') });
     return `<div class="player-history-item">
       <span class="player-history-time">${timeAgo(log.changed_at)}</span>
       <span>${desc}</span>
@@ -1953,8 +1953,8 @@ function renderSheetHistory(logs) {
 
   const items = sheets.map(log => {
     const desc = log.action === 'sheet_replace'
-      ? `replaced — ${escHtml(log.song_data?.previousFilename ?? '?')}`
-      : `removed — ${escHtml(log.song_data?.filename ?? '?')}`;
+      ? t('songs.histReplaced', { file: escHtml(log.song_data?.previousFilename ?? '?') })
+      : t('songs.histRemoved', { file: escHtml(log.song_data?.filename ?? '?') });
     return `<div class="player-history-item">
       <span class="player-history-time">${timeAgo(log.changed_at)}</span>
       <span>${desc}</span>
@@ -2032,7 +2032,7 @@ function openPlayback(sid) {
   } else if (embedUrl) {
     content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
-    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">Open in new tab ↗</a></p>`;
+    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }
 
   document.getElementById('playback-delete-confirm').style.display = 'none';
@@ -2143,8 +2143,8 @@ function renderPlaybackHistory(logs) {
 
   el.innerHTML = `<h3 class="player-history-heading">${t('songs.history')}</h3>` + items.map(log => {
     const desc = log.action === 'playback_replace'
-      ? `replaced — ${escHtml(log.song_data?.previousFilename ?? '?')}`
-      : `removed — ${escHtml(log.song_data?.filename ?? '?')}`;
+      ? t('songs.histReplaced', { file: escHtml(log.song_data?.previousFilename ?? '?') })
+      : t('songs.histRemoved', { file: escHtml(log.song_data?.filename ?? '?') });
     return `<div class="player-history-item">
       <span class="player-history-time">${timeAgo(log.changed_at)}</span>
       <span>${desc}</span>
