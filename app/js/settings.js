@@ -35,7 +35,7 @@ function _usersStatus(msg, isError) {
 async function loadUsers() {
   try {
     const r = await apiFetch('/api/' + _settingsSlug + '/auth');
-    if (!r.ok) { _usersStatus('Access denied.', true); return; }
+    if (!r.ok) { _usersStatus(t('settings.accessDenied'), true); return; }
     const { users } = await r.json();
     _allUsers = users;
     _settingsUsers = users.filter(function(u) { return u.accepted; });
@@ -43,7 +43,7 @@ async function loadUsers() {
     _renderUsers(users);
   } catch (e) {
     if (String(e.message).includes('Session')) return;
-    _usersStatus('Failed to load users.', true);
+    _usersStatus(t('settings.failedToLoadUsers'), true);
   }
 }
 
@@ -57,10 +57,10 @@ function _renderUsers(users) {
   var pendingSection = document.getElementById('pending-section');
 
   if (!active.length) {
-    activeEl.innerHTML = '<p class="empty-users">No active users yet.</p>';
+    activeEl.innerHTML = '<p class="empty-users">' + t('settings.noActiveUsers') + '</p>';
   } else {
     activeEl.innerHTML =
-      '<div class="user-row header"><span>Email</span><span>Status</span><span>Role</span><span></span></div>' +
+      '<div class="user-row header"><span>' + t('settings.colEmail') + '</span><span>' + t('settings.colStatus') + '</span><span>' + t('settings.colRole') + '</span><span></span></div>' +
       active.map(function(u) {
         var isMe     = u.id === _currentUserId;
         var roleCell = isMe
@@ -70,16 +70,16 @@ function _renderUsers(users) {
                 return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + r + '</option>';
               }).join('') +
             '</select>';
-        var editBtn = '<button class="user-action-btn" onclick="_editEmail(' + u.id + ')">Edit email</button>';
+        var editBtn = '<button class="user-action-btn" onclick="_editEmail(' + u.id + ')">' + t('settings.editEmailBtn') + '</button>';
         var actionCell = isMe
           ? '<span style="display:flex;gap:0.35rem">' + editBtn + '</span>'
           : '<span style="display:flex;gap:0.35rem">' + editBtn +
-            '<button class="user-action-btn danger" onclick="_removeUser(' + u.id + ')">Remove</button></span>';
+            '<button class="user-action-btn danger" onclick="_removeUser(' + u.id + ')">' + t('songs.remove') + '</button></span>';
         return '<div class="user-row">' +
           '<span class="user-email">' + escHtml(u.email) +
-            (isMe ? '<span class="you-badge">you</span>' : '') +
+            (isMe ? '<span class="you-badge">' + t('settings.youBadge') + '</span>' : '') +
           '</span>' +
-          '<span class="status-badge status-active">active</span>' +
+          '<span class="status-badge status-active">' + t('settings.statusActive') + '</span>' +
           roleCell + actionCell +
         '</div>';
       }).join('');
@@ -92,11 +92,11 @@ function _renderUsers(users) {
       : '';
     return '<div class="user-row">' +
       '<span class="user-email">' + escHtml(u.email) + '</span>' +
-      '<span class="status-badge status-pending">invite sent</span>' +
+      '<span class="status-badge status-pending">' + t('settings.statusInviteSent') + '</span>' +
       '<span style="font-size:0.72rem;color:var(--third-color)">' + escHtml(sentDate) + '</span>' +
       '<span style="display:flex;gap:0.35rem">' +
-        '<button class="user-action-btn" onclick="_resendInvite(' + u.id + ')">Resend</button>' +
-        '<button class="user-action-btn danger" onclick="_revokeInvite(' + u.id + ')">Revoke</button>' +
+        '<button class="user-action-btn" onclick="_resendInvite(' + u.id + ')">' + t('settings.resendBtn') + '</button>' +
+        '<button class="user-action-btn danger" onclick="_revokeInvite(' + u.id + ')">' + t('settings.revokeBtn') + '</button>' +
       '</span>' +
     '</div>';
   });
@@ -104,9 +104,9 @@ function _renderUsers(users) {
   var expiredRows = expired.map(function(u) {
     return '<div class="user-row">' +
       '<span class="user-email">' + escHtml(u.email) + '</span>' +
-      '<span class="status-badge" style="background:#f3ede4;color:var(--third-color)">expired</span>' +
+      '<span class="status-badge" style="background:#f3ede4;color:var(--third-color)">' + t('settings.statusExpired') + '</span>' +
       '<span style="font-size:0.72rem;color:var(--third-color)">' + escHtml(u.role) + '</span>' +
-      '<button class="user-action-btn danger" onclick="_revokeInvite(' + u.id + ')">Remove</button>' +
+      '<button class="user-action-btn danger" onclick="_revokeInvite(' + u.id + ')">' + t('songs.remove') + '</button>' +
     '</div>';
   });
 
@@ -122,20 +122,20 @@ function _renderUsers(users) {
 async function sendInvite() {
   var email = document.getElementById('invite-email').value.trim();
   var role  = document.getElementById('invite-role').value;
-  if (!email) { _usersStatus('Enter an email address.', true); return; }
+  if (!email) { _usersStatus(t('settings.enterEmail'), true); return; }
   var btn = document.getElementById('invite-btn');
   btn.disabled = true; btn.textContent = '…'; _usersStatus('');
   try {
     const r    = await apiFetch('/api/' + _settingsSlug + '/auth?action=invite', 'POST', { email, role });
     const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || 'Failed to send invite.', true); return; }
-    _usersStatus('Invite sent to ' + email + '.');
+    if (!r.ok) { _usersStatus(data.error || t('settings.failedToSendInvite'), true); return; }
+    _usersStatus(t('settings.inviteSentTo', { email: email }));
     document.getElementById('invite-email').value = '';
     loadUsers();
   } catch (e) {
-    if (!String(e.message).includes('Session')) _usersStatus('Connection error.', true);
+    if (!String(e.message).includes('Session')) _usersStatus(t('settings.connError'), true);
   } finally {
-    btn.disabled = false; btn.textContent = 'Send invite';
+    btn.disabled = false; btn.textContent = t('settings.sendInviteBtn');
   }
 }
 
@@ -144,32 +144,32 @@ async function _changeRole(userId, role) {
   try {
     const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'PUT', { userId, role });
     const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || 'Failed to update role.', true); loadUsers(); }
+    if (!r.ok) { _usersStatus(data.error || t('settings.failedToUpdateRole'), true); loadUsers(); }
   } catch {}
 }
 
 async function _removeUser(userId) {
   var email = _userEmailById(userId);
-  if (!confirm('Remove ' + email + '? They will lose access immediately.')) return;
+  if (!confirm(t('settings.confirmRemoveUser', { email: email }))) return;
   _usersStatus('');
   try {
     const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'DELETE', { userId });
     const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || 'Failed to remove user.', true); return; }
-    _usersStatus(email + ' removed.');
+    if (!r.ok) { _usersStatus(data.error || t('settings.failedToRemoveUser'), true); return; }
+    _usersStatus(t('settings.userRemoved', { email: email }));
     loadUsers();
   } catch {}
 }
 
 async function _revokeInvite(userId) {
   var email = _userEmailById(userId);
-  if (!confirm('Revoke invite for ' + email + '? The link will stop working immediately.')) return;
+  if (!confirm(t('settings.confirmRevokeInvite', { email: email }))) return;
   _usersStatus('');
   try {
     const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'DELETE', { userId });
     const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || 'Failed to revoke invite.', true); return; }
-    _usersStatus('Invite revoked.');
+    if (!r.ok) { _usersStatus(data.error || t('settings.failedToRevokeInvite'), true); return; }
+    _usersStatus(t('settings.inviteRevoked'));
     loadUsers();
   } catch {}
 }
@@ -179,8 +179,8 @@ async function _resendInvite(userId) {
   try {
     const r    = await apiFetch('/api/' + _settingsSlug + '/auth?action=resend-invite', 'POST', { userId });
     const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || 'Failed to resend invite.', true); return; }
-    _usersStatus('Invite resent.');
+    if (!r.ok) { _usersStatus(data.error || t('settings.failedToResendInvite'), true); return; }
+    _usersStatus(t('settings.inviteResent'));
   } catch {}
 }
 
@@ -194,7 +194,7 @@ function _userEmailById(userId) {
 
 async function _editEmail(userId) {
   var currentEmail = _userEmailById(userId);
-  var next = prompt('New email for ' + currentEmail + ':', currentEmail);
+  var next = prompt(t('settings.promptNewEmail', { email: currentEmail }), currentEmail);
   if (next === null) return;
   next = next.trim();
   if (!next || next === currentEmail) return;
@@ -202,8 +202,8 @@ async function _editEmail(userId) {
   try {
     const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'PUT', { userId, email: next });
     const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || 'Failed to update email.', true); return; }
-    _usersStatus('Email updated to ' + data.user.email + '.');
+    if (!r.ok) { _usersStatus(data.error || t('settings.failedToUpdateEmail'), true); return; }
+    _usersStatus(t('settings.emailUpdatedTo', { email: data.user.email }));
     loadUsers();
   } catch {}
 }
@@ -251,21 +251,21 @@ function renderArrMembers(members) {
         'onclick="arrToggleMemberInstrument(' + i + ',' + j + ')">' +
         escHtml(inst.label || inst.key) + '</button>';
     }).join('');
-    var accountOpts = '<option value="">— no account —</option>' + _settingsUsers.map(function(u) {
+    var accountOpts = '<option value="">' + t('settings.noAccount') + '</option>' + _settingsUsers.map(function(u) {
       var sel = m.userEmail === u.email ? ' selected' : '';
       return '<option value="' + escHtml(u.email) + '"' + sel + '>' + escHtml(u.email) + '</option>';
     }).join('');
     return '<div class="arr-member-card">' +
       '<div class="arr-member-row">' +
-        '<input class="arr-cfg-input" type="text" value="' + escHtml(m.name || '') + '" placeholder="Name" oninput="arrMemberChange(' + i + ',\'name\',this.value)">' +
-        '<input class="arr-cfg-input arr-cfg-abbr" type="text" value="' + escHtml(m.abbr || '') + '" placeholder="Abbr" maxlength="4" title="Abbreviation shown in harmony chips" oninput="arrMemberChange(' + i + ',\'abbr\',this.value)">' +
-        '<button class="arr-cfg-remove" onclick="arrRemoveMember(' + i + ')" title="Remove">&#215;</button>' +
+        '<input class="arr-cfg-input" type="text" value="' + escHtml(m.name || '') + '" placeholder="' + t('settings.memberNamePlaceholder') + '" oninput="arrMemberChange(' + i + ',\'name\',this.value)">' +
+        '<input class="arr-cfg-input arr-cfg-abbr" type="text" value="' + escHtml(m.abbr || '') + '" placeholder="' + t('settings.memberAbbrPlaceholder') + '" maxlength="4" title="' + t('settings.memberAbbrTitle') + '" oninput="arrMemberChange(' + i + ',\'abbr\',this.value)">' +
+        '<button class="arr-cfg-remove" onclick="arrRemoveMember(' + i + ')" title="' + t('songs.remove') + '">&#215;</button>' +
       '</div>' +
       '<div class="member-inst-row">' +
-        (chips || '<span class="member-inst-empty">No instruments configured yet</span>') +
+        (chips || '<span class="member-inst-empty">' + t('settings.noInstrumentsYet') + '</span>') +
       '</div>' +
       '<div class="member-account-row">' +
-        '<label>Account</label>' +
+        '<label>' + t('settings.accountLabel') + '</label>' +
         '<select class="member-account-select" onchange="arrMemberChange(' + i + ',\'userEmail\',this.value || undefined)">' + accountOpts + '</select>' +
       '</div>' +
     '</div>';
@@ -297,12 +297,12 @@ function renderArrInstruments(instruments) {
     }).join('');
     return '<div class="arr-instrument-card">' +
       '<div class="arr-instrument-hdr">' +
-        '<input class="arr-instrument-key" type="text" value="' + escHtml(inst.key || '') + '" placeholder="Key (e.g. BANJO)" oninput="arrInstChange(' + i + ',\'key\',this.value)">' +
-        '<input class="arr-instrument-label" type="text" value="' + escHtml(inst.label || '') + '" placeholder="Label (e.g. Banjo)" oninput="arrInstChange(' + i + ',\'label\',this.value)">' +
-        '<button class="arr-cfg-remove" onclick="arrRemoveInstrument(' + i + ')" title="Remove">&#215;</button>' +
+        '<input class="arr-instrument-key" type="text" value="' + escHtml(inst.key || '') + '" placeholder="' + t('settings.instKeyPlaceholder') + '" oninput="arrInstChange(' + i + ',\'key\',this.value)">' +
+        '<input class="arr-instrument-label" type="text" value="' + escHtml(inst.label || '') + '" placeholder="' + t('settings.instLabelPlaceholder') + '" oninput="arrInstChange(' + i + ',\'label\',this.value)">' +
+        '<button class="arr-cfg-remove" onclick="arrRemoveInstrument(' + i + ')" title="' + t('songs.remove') + '">&#215;</button>' +
       '</div>' +
       '<div class="arr-techniques">' + chips +
-        '<input class="arr-tech-add" placeholder="+ technique" onkeydown="arrTechKeydown(event,' + i + ')">' +
+        '<input class="arr-tech-add" placeholder="' + t('settings.addTechniquePlaceholder') + '" onkeydown="arrTechKeydown(event,' + i + ')">' +
       '</div>' +
     '</div>';
   }).join('');
@@ -353,7 +353,7 @@ function arrRemoveInstrument(i) {
   var inst = cfg.instruments[i];
   if (!inst) return;
   if (inst.key) {
-    if (!confirm('Remove instrument "' + inst.key + '"?\nExisting arrangement data for this instrument will still display in saved versions.')) return;
+    if (!confirm(t('settings.confirmRemoveInstrument', { key: inst.key }))) return;
   }
   cfg.instruments.splice(i, 1);
   if (!_profileCfg.config) _profileCfg.config = {};
@@ -388,14 +388,14 @@ function arrTechKeydown(e, instIdx) {
 async function saveArrangementConfig() {
   var cfg = _arrCfg();
   var msg = document.getElementById('arr-save-msg');
-  msg.textContent = 'Saving…'; msg.className = 'arr-save-msg';
+  msg.textContent = t('settings.saving'); msg.className = 'arr-save-msg';
   var ok = await patchConfig({ arrangementConfig: cfg });
   if (ok) {
     if (!_profileCfg.config) _profileCfg.config = {};
     _profileCfg.config.arrangementConfig = cfg;
-    msg.textContent = 'Saved.'; msg.className = 'arr-save-msg ok';
+    msg.textContent = t('settings.saved'); msg.className = 'arr-save-msg ok';
   } else {
-    msg.textContent = 'Save failed.'; msg.className = 'arr-save-msg err';
+    msg.textContent = t('settings.saveFailed'); msg.className = 'arr-save-msg err';
   }
   setTimeout(function() { msg.textContent = ''; msg.className = 'arr-save-msg'; }, 2500);
 }
@@ -426,7 +426,7 @@ function renderWorkspace(cfg) {
   privToggle.disabled = false;
   privToggle.addEventListener('change', function () {
     var msg = document.getElementById('private-msg');
-    msg.textContent = 'Saving…';
+    msg.textContent = t('settings.saving');
     msg.className = 'save-msg';
     fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
       method: 'PATCH',
@@ -439,12 +439,12 @@ function renderWorkspace(cfg) {
       .then(function (r) {
         if (!r.ok) throw new Error('Failed to save');
         invalidateConfigCache();
-        msg.textContent = privToggle.checked ? 'Workspace is now private.' : 'Workspace is now public.';
+        msg.textContent = privToggle.checked ? t('settings.workspaceNowPrivate') : t('settings.workspaceNowPublic');
         setTimeout(function () { msg.textContent = ''; }, 2500);
       })
       .catch(function (err) {
         privToggle.checked = !privToggle.checked;
-        msg.textContent = err.message || 'Failed to save.';
+        msg.textContent = err.message || t('settings.failedToSave');
         msg.className = 'save-msg err';
       });
   });
@@ -466,7 +466,7 @@ function renderWorkspace(cfg) {
     var btn = this;
     var msg = document.getElementById('save-name-msg');
     var name = nameInput.value.trim();
-    if (!name) { msg.textContent = 'Name required.'; msg.className = 'save-msg err'; return; }
+    if (!name) { msg.textContent = t('settings.nameRequired'); msg.className = 'save-msg err'; return; }
     btn.disabled = true;
     msg.textContent = '';
     fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
@@ -480,18 +480,18 @@ function renderWorkspace(cfg) {
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (r) {
         if (r.ok) {
-          msg.textContent = 'Saved.';
+          msg.textContent = t('settings.saved');
           msg.className = 'save-msg ok';
           invalidateConfigCache();
           applyNav(name, null);
         } else {
-          msg.textContent = r.data.error || 'Error saving.';
+          msg.textContent = r.data.error || t('settings.errorSaving');
           msg.className = 'save-msg err';
         }
         btn.disabled = false;
       })
       .catch(function () {
-        msg.textContent = 'Network error.';
+        msg.textContent = t('settings.networkError');
         msg.className = 'save-msg err';
         btn.disabled = false;
       });
@@ -508,11 +508,11 @@ function renderWorkspace(cfg) {
     var file = photoInput.files[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      document.getElementById('photo-progress').textContent = 'Please select an image file.';
+      document.getElementById('photo-progress').textContent = t('settings.selectImageFile');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      document.getElementById('photo-progress').textContent = 'Max file size is 5 MB.';
+      document.getElementById('photo-progress').textContent = t('settings.maxFileSizeMb', { mb: 5 });
       return;
     }
     uploadPhoto(file);
@@ -526,7 +526,7 @@ function renderWorkspace(cfg) {
     var file = faviconInput.files[0];
     if (!file) return;
     if (file.size > 512 * 1024) {
-      document.getElementById('favicon-progress').textContent = 'Max file size is 512 KB.';
+      document.getElementById('favicon-progress').textContent = t('settings.maxFileSizeKb', { kb: 512 });
       return;
     }
     uploadFavicon(file);
@@ -543,25 +543,25 @@ function showFavicon(url) {
 
 function uploadFavicon(file) {
   var progress = document.getElementById('favicon-progress');
-  progress.textContent = 'Getting upload URL…';
+  progress.textContent = t('settings.gettingUploadUrl');
   fetch('/api/config?action=favicon-url&type=' + encodeURIComponent(file.type), {
     headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (!d.uploadUrl) throw new Error(d.error || 'Failed to get upload URL');
-      progress.textContent = 'Uploading…';
+      if (!d.uploadUrl) throw new Error(d.error || t('settings.failedGetUploadUrl'));
+      progress.textContent = t('settings.uploading');
       return fetch(d.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file,
       }).then(function (r) {
-        if (!r.ok) throw new Error('Upload failed');
+        if (!r.ok) throw new Error(t('settings.uploadFailed'));
         return d.publicUrl;
       });
     })
     .then(function (publicUrl) {
-      progress.textContent = 'Saving…';
+      progress.textContent = t('settings.saving');
       var versionedUrl = publicUrl + '?v=' + Date.now();
       return fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
         method: 'PATCH',
@@ -577,11 +577,11 @@ function uploadFavicon(file) {
       showFavicon(r.publicUrl);
       invalidateConfigCache();
       document.querySelectorAll('link[rel="icon"]').forEach(function(el) { el.href = r.publicUrl; });
-      progress.textContent = 'Favicon updated.';
+      progress.textContent = t('settings.faviconUpdated');
       setTimeout(function () { progress.textContent = ''; }, 2500);
     })
     .catch(function (err) {
-      progress.textContent = err.message || 'Upload failed.';
+      progress.textContent = err.message || t('settings.uploadFailed');
     });
 }
 
@@ -595,25 +595,25 @@ function showPhoto(url) {
 
 function uploadPhoto(file) {
   var progress = document.getElementById('photo-progress');
-  progress.textContent = 'Getting upload URL…';
+  progress.textContent = t('settings.gettingUploadUrl');
   fetch('/api/config?action=photo-url&type=' + encodeURIComponent(file.type), {
     headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (!d.uploadUrl) throw new Error(d.error || 'Failed to get upload URL');
-      progress.textContent = 'Uploading…';
+      if (!d.uploadUrl) throw new Error(d.error || t('settings.failedGetUploadUrl'));
+      progress.textContent = t('settings.uploading');
       return fetch(d.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file,
       }).then(function (r) {
-        if (!r.ok) throw new Error('Upload failed');
+        if (!r.ok) throw new Error(t('settings.uploadFailed'));
         return d.publicUrl;
       });
     })
     .then(function (publicUrl) {
-      progress.textContent = 'Saving…';
+      progress.textContent = t('settings.saving');
       return fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
         method: 'PATCH',
         headers: {
@@ -628,11 +628,11 @@ function uploadPhoto(file) {
       showPhoto(r.publicUrl);
       invalidateConfigCache();
       applyNav(document.getElementById('band-name-input').value || '', { logoUrl: r.publicUrl });
-      progress.textContent = 'Photo updated.';
+      progress.textContent = t('settings.photoUpdated');
       setTimeout(function () { progress.textContent = ''; }, 2500);
     })
     .catch(function (err) {
-      progress.textContent = err.message || 'Upload failed.';
+      progress.textContent = err.message || t('settings.uploadFailed');
     });
 }
 
@@ -642,7 +642,7 @@ function renderFieldTags(id, fields) {
   sec.style.display = '';
   tags.innerHTML = (fields && fields.length)
     ? fields.map(function (f) { return '<span class="config-tag">' + escHtml(f.label || f.field) + '</span>'; }).join('')
-    : '<span style="font-size:0.78rem;color:var(--third-color);">None configured</span>';
+    : '<span style="font-size:0.78rem;color:var(--third-color);">' + t('settings.noneConfigured') + '</span>';
 }
 
 function openDisplayFieldsEditor() {
@@ -665,7 +665,7 @@ function openDisplayFieldsEditor() {
   var customRows = customFields.map(function (f, i) {
     return '<div class="config-custom-row" id="df-custom-' + i + '">' +
       '<input type="text" value="' + escHtml(f.field) + '" placeholder="extra.field" style="width:120px;" readonly>' +
-      '<input class="lbl-input" type="text" value="' + escHtml(f.label) + '" placeholder="Label" style="width:80px;" data-field="' + escHtml(f.field) + '">' +
+      '<input class="lbl-input" type="text" value="' + escHtml(f.label) + '" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;" data-field="' + escHtml(f.field) + '">' +
       _typeSelect(f.type || 'text') +
       '<button class="config-remove-btn" onclick="removeCustomDisplayField(\'' + escHtml(f.field) + '\')">×</button>' +
       '</div>';
@@ -674,19 +674,19 @@ function openDisplayFieldsEditor() {
   document.getElementById('display-fields-tags').style.display = 'none';
   document.getElementById('display-fields-editor').style.display = '';
   document.getElementById('display-fields-editor').innerHTML =
-    '<div style="margin-bottom:0.5rem;font-size:0.78rem;color:var(--third-color);">Standard fields</div>' +
+    '<div style="margin-bottom:0.5rem;font-size:0.78rem;color:var(--third-color);">' + t('settings.standardFields') + '</div>' +
     rows +
-    '<div style="margin:0.75rem 0 0.4rem;font-size:0.78rem;color:var(--third-color);">Custom extra fields</div>' +
+    '<div style="margin:0.75rem 0 0.4rem;font-size:0.78rem;color:var(--third-color);">' + t('settings.customExtraFields') + '</div>' +
     '<div id="df-custom-list">' + customRows + '</div>' +
     '<div class="config-add-row">' +
       '<input type="text" id="df-new-field" placeholder="extra.myfield" style="width:130px;">' +
-      '<input type="text" id="df-new-label" placeholder="Label" style="width:80px;">' +
+      '<input type="text" id="df-new-label" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;">' +
       _typeSelect('text', 'df-new-type') +
-      '<button class="btn" onclick="addCustomDisplayField()">Add</button>' +
+      '<button class="btn" onclick="addCustomDisplayField()">' + t('songs.add') + '</button>' +
     '</div>' +
     '<div class="config-editor-actions">' +
-      '<button class="btn active" onclick="saveDisplayFields()">Save</button>' +
-      '<button class="btn" onclick="closeDisplayFieldsEditor()">Cancel</button>' +
+      '<button class="btn active" onclick="saveDisplayFields()">' + t('songs.save') + '</button>' +
+      '<button class="btn" onclick="closeDisplayFieldsEditor()">' + t('songs.cancel') + '</button>' +
     '</div>' +
     '<div class="save-msg" id="df-msg"></div>';
 }
@@ -726,7 +726,7 @@ function addCustomDisplayField() {
   div.className = 'config-custom-row';
   div.innerHTML =
     '<input type="text" value="' + escHtml(field) + '" style="width:120px;" readonly>' +
-    '<input class="lbl-input" type="text" value="' + escHtml(label || field) + '" placeholder="Label" style="width:80px;" data-field="' + escHtml(field) + '">' +
+    '<input class="lbl-input" type="text" value="' + escHtml(label || field) + '" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;" data-field="' + escHtml(field) + '">' +
     _typeSelect(type) +
     '<button class="config-remove-btn" onclick="removeCustomDisplayField(\'' + escHtml(field) + '\')">×</button>';
   list.appendChild(div);
@@ -757,14 +757,14 @@ async function saveDisplayFields() {
   });
 
   var msg = document.getElementById('df-msg');
-  msg.textContent = 'Saving…'; msg.className = 'save-msg';
+  msg.textContent = t('settings.saving'); msg.className = 'save-msg';
   var ok = await patchConfig({ displayFields: fields });
   if (ok) {
     if (_profileCfg) _profileCfg.config.displayFields = fields;
     renderFieldTags('display-fields', fields);
     closeDisplayFieldsEditor();
   } else {
-    msg.textContent = 'Save failed.'; msg.className = 'save-msg err';
+    msg.textContent = t('settings.saveFailed'); msg.className = 'save-msg err';
   }
 }
 
@@ -777,7 +777,7 @@ function openFilterFieldsEditor() {
 
   var available = displayFields.filter(function (f) { return f.field !== 'title'; });
   if (!available.length) {
-    alert('No fields configured yet. Set up song table columns first.');
+    alert(t('settings.noFieldsConfigured'));
     return;
   }
 
@@ -794,8 +794,8 @@ function openFilterFieldsEditor() {
   document.getElementById('filter-fields-editor').innerHTML =
     rows +
     '<div class="config-editor-actions">' +
-      '<button class="btn active" onclick="saveFilterFields()">Save</button>' +
-      '<button class="btn" onclick="closeFilterFieldsEditor()">Cancel</button>' +
+      '<button class="btn active" onclick="saveFilterFields()">' + t('songs.save') + '</button>' +
+      '<button class="btn" onclick="closeFilterFieldsEditor()">' + t('songs.cancel') + '</button>' +
     '</div>' +
     '<div class="save-msg" id="ff-msg"></div>';
 }
@@ -812,14 +812,14 @@ async function saveFilterFields() {
   });
 
   var msg = document.getElementById('ff-msg');
-  msg.textContent = 'Saving…'; msg.className = 'save-msg';
+  msg.textContent = t('settings.saving'); msg.className = 'save-msg';
   var ok = await patchConfig({ filterFields: fields });
   if (ok) {
     if (_profileCfg) _profileCfg.config.filterFields = fields;
     renderFieldTags('filter-fields', fields);
     closeFilterFieldsEditor();
   } else {
-    msg.textContent = 'Save failed.'; msg.className = 'save-msg err';
+    msg.textContent = t('settings.saveFailed'); msg.className = 'save-msg err';
   }
 }
 
