@@ -10,6 +10,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <script src="/app/js/i18n.js?v=2"></script>
   <link rel="stylesheet" href="/app/css/app.css?v=27">
   <style>
     .organizers-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
@@ -24,73 +25,73 @@
 <body>
 <script src="/app/js/common.js?v=12"></script>
 <div class="app-wrap organizers-wrap">
-  <h1>Organizers</h1>
+  <h1 data-i18n="organizers.pageTitle">Organizers</h1>
   <div class="toolbar">
-    <input type="text" id="filter-input" placeholder="Search name, city, country, email…">
-    <button class="btn active auth-action" disabled id="organizer-add-btn" onclick="openAddModal()">+ Add organizer</button>
+    <input type="text" id="filter-input" data-i18n-attr="placeholder:organizers.searchPlaceholder" placeholder="Search name, city, country, email…">
+    <button class="btn active auth-action" disabled id="organizer-add-btn" onclick="openAddModal()" data-i18n="organizers.addBtn">+ Add organizer</button>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
-  <div id="organizers-list"><p class="empty-hint">Loading…</p></div>
+  <div id="organizers-list"><p class="empty-hint" data-i18n="venues.loading">Loading…</p></div>
   <div id="organizers-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="organizers-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="organizers-load-more-btn" class="btn auth-action" disabled onclick="loadMoreOrganizers()">Load more</button>
+    <button id="organizers-load-more-btn" class="btn auth-action" disabled onclick="loadMoreOrganizers()" data-i18n="venues.loadMore">Load more</button>
   </div>
 </div>
 
 <!-- Add/Edit modal -->
 <div class="modal-overlay" id="organizer-modal">
   <div class="modal" style="max-width:460px;">
-    <h2 id="organizer-modal-title">Add organizer</h2>
+    <h2 id="organizer-modal-title" data-i18n="organizers.addTitle">Add organizer</h2>
     <div class="modal-field">
-      <label>Name *</label>
-      <input type="text" id="om-name" placeholder="Organizer name">
+      <label data-i18n="venues.fieldName">Name *</label>
+      <input type="text" id="om-name" data-i18n-attr="placeholder:organizers.namePlaceholder" placeholder="Organizer name">
     </div>
     <div class="modal-field">
-      <label>Type</label>
+      <label data-i18n="organizers.fieldType">Type</label>
       <select id="om-type">
         <option value="">—</option>
-        <option value="person">Person</option>
-        <option value="organization">Organization</option>
+        <option value="person" data-i18n="organizers.typePerson">Person</option>
+        <option value="organization" data-i18n="organizers.typeOrg">Organization</option>
       </select>
     </div>
     <div class="modal-field">
-      <label>Email</label>
+      <label data-i18n="venues.fieldEmail">Email</label>
       <input type="email" id="om-email" placeholder="contact@…">
     </div>
     <div class="modal-field">
-      <label>Phone</label>
-      <input type="tel" id="om-phone" placeholder="+49…">
+      <label data-i18n="organizers.fieldPhone">Phone</label>
+      <input type="tel" id="om-phone" data-i18n-attr="placeholder:organizers.phonePlaceholder" placeholder="+49…">
     </div>
     <div class="modal-field">
-      <label>Website</label>
+      <label data-i18n="venues.fieldWebsite">Website</label>
       <input type="url" id="om-website" placeholder="https://…">
     </div>
     <div class="modal-field">
-      <label>City</label>
-      <input type="text" id="om-city" placeholder="City" autocomplete="address-level2">
+      <label data-i18n="venues.fieldCity">City</label>
+      <input type="text" id="om-city" data-i18n-attr="placeholder:venues.fieldCityPlaceholder" placeholder="City" autocomplete="address-level2">
     </div>
     <div class="modal-field">
-      <label>Country</label>
-      <input type="text" id="om-country" placeholder="Country" autocomplete="country-name">
+      <label data-i18n="venues.fieldCountry">Country</label>
+      <input type="text" id="om-country" data-i18n-attr="placeholder:venues.fieldCountryPlaceholder" placeholder="Country" autocomplete="country-name">
     </div>
     <div class="modal-field">
-      <label>Comment</label>
-      <textarea id="om-comment" placeholder="Notes…" rows="2"></textarea>
+      <label data-i18n="venues.fieldComment">Comment</label>
+      <textarea id="om-comment" data-i18n-attr="placeholder:venues.commentPlaceholder" placeholder="Notes…" rows="2"></textarea>
     </div>
     <div class="related-section" id="om-gigs-section" style="display:none;">
-      <h4>Gigs with this organizer</h4>
+      <h4 data-i18n="organizers.gigsTitle">Gigs with this organizer</h4>
       <div id="om-gigs-list"></div>
     </div>
     <div class="status-msg" id="om-status-msg"></div>
     <div class="modal-actions">
-      <button class="btn active" type="button" onclick="saveOrganizer()">Save</button>
-      <button class="btn" type="button" onclick="closeOrgModal()">Cancel</button>
-      <button class="btn" type="button" id="om-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteOrgFromPopup()">Delete</button>
+      <button class="btn active" type="button" onclick="saveOrganizer()" data-i18n="venues.saveBtn">Save</button>
+      <button class="btn" type="button" onclick="closeOrgModal()" data-i18n="venues.cancelBtn">Cancel</button>
+      <button class="btn" type="button" id="om-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteOrgFromPopup()" data-i18n="venues.deleteBtn">Delete</button>
     </div>
   </div>
 </div>
 
 <script src="/app/js/geo.js"></script>
-<script src="/app/js/organizers.js"></script>
+<script src="/app/js/organizers.js?v=2"></script>
 </body>
 </html>
