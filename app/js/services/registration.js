@@ -5,7 +5,7 @@ async function sendSignupLink(email, website) {
     body: JSON.stringify({ action: 'signup-link', email, website: website || undefined }),
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error || 'Failed to send link');
+  if (!r.ok) throw new Error(data.error || t('auth.failedToSendLink'));
   return data;
 }
 
@@ -27,6 +27,6 @@ async function signup({ token, name, slug }) {
     body: JSON.stringify({ action: 'signup', token, name, slug }),
   });
   const data = await r.json();
-  if (!r.ok) throw Object.assign(new Error(data.error || 'Sign-up failed'), { status: r.status });
+  if (!r.ok) throw Object.assign(new Error(data.error || t('auth.signUpFailed')), { status: r.status });
   return data;
 }

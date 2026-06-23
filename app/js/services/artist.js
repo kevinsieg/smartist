@@ -7,6 +7,6 @@ async function checkSlug(slug) {
 async function loadArtistConfig(slug) {
   const url = slug ? '/api/config?slug=' + encodeURIComponent(slug) : '/api/config';
   const r = await fetch(url);
-  if (!r.ok) throw new Error('Config unavailable');
+  if (!r.ok) throw new Error(t('auth.configUnavailable'));
   return r.json();
 }

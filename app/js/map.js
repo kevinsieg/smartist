@@ -95,11 +95,11 @@
       : '';
     var cat  = v.category ? '<div style="color:#666;font-size:0.8rem">' + _escHtml(v.category) + '</div>' : '';
     var loc  = [v.city, v.country].filter(Boolean).map(_escHtml).join(', ');
-    var size = v.size ? '<div style="color:#666;font-size:0.8rem">Capacity: ' + _escHtml(v.size) + '</div>' : '';
+    var size = v.size ? '<div style="color:#666;font-size:0.8rem">' + t('map.popupCapacity') + ': ' + _escHtml(v.size) + '</div>' : '';
     return '<div style="min-width:140px"><strong>' + _escHtml(v.name) + '</strong>' +
       (loc ? '<div style="color:#555;font-size:0.82rem;margin:2px 0">' + loc + '</div>' : '') +
       status + cat + size +
-      '<div style="margin-top:6px"><a href="#" onclick="event.preventDefault();openVenueFromMap(' + v.id + ')" style="font-size:0.8rem">View &#8594;</a></div>' +
+      '<div style="margin-top:6px"><a href="#" onclick="event.preventDefault();openVenueFromMap(' + v.id + ')" style="font-size:0.8rem">' + t('map.popupView') + '</a></div>' +
       '</div>';
   }
 
@@ -131,7 +131,7 @@
     var msgEl = document.getElementById('map-unmapped-msg');
     var secEl = document.getElementById('map-geocode-section');
     if (msgEl) msgEl.textContent = noCoords > 0
-      ? noCoords + ' venue' + (noCoords !== 1 ? 's' : '') + ' not on map'
+      ? t(noCoords !== 1 ? 'map.notOnMap_other' : 'map.notOnMap_one', { n: noCoords })
       : '';
     if (secEl) secEl.style.display = noCoords > 0 ? '' : 'none';
   }
@@ -140,7 +140,7 @@
     var sb = document.getElementById('map-sidebar');
     if (!sb) return;
 
-    var statusHtml = '<div class="map-filter-label">Status</div>';
+    var statusHtml = '<div class="map-filter-label">' + t('map.filterStatus') + '</div>';
     window.VENUE_STATUSES.forEach(function(s) {
       _statusFilter[s.value] = true;
       statusHtml += '<label class="map-filter-row">' +
@@ -150,7 +150,7 @@
     });
     _statusFilter[''] = true;
 
-    var catHtml = '<div class="map-filter-label">Category</div>';
+    var catHtml = '<div class="map-filter-label">' + t('map.filterCategory') + '</div>';
     window.VENUE_CATEGORIES.forEach(function(c) {
       _categoryFilter[c.value] = true;
       catHtml += '<label class="map-filter-row">' +
@@ -159,9 +159,9 @@
     });
     _categoryFilter[''] = true;
 
-    var sizeHtml = '<div class="map-filter-label">Size</div>' +
+    var sizeHtml = '<div class="map-filter-label">' + t('map.filterSize') + '</div>' +
       '<div class="map-size-btns">' +
-      '<button class="map-size-btn active" data-size="any"    onclick="window._mapFilterSize(\'any\')">Any</button>' +
+      '<button class="map-size-btn active" data-size="any"    onclick="window._mapFilterSize(\'any\')">' + t('map.sizeAny') + '</button>' +
       '<button class="map-size-btn"        data-size="small"  onclick="window._mapFilterSize(\'small\')">&lt;100</button>' +
       '<button class="map-size-btn"        data-size="medium" onclick="window._mapFilterSize(\'medium\')" style="font-size:0.73rem">100–500</button>' +
       '<button class="map-size-btn"        data-size="large"  onclick="window._mapFilterSize(\'large\')">&gt;500</button>' +
@@ -169,7 +169,7 @@
 
     var geocodeHtml =
       '<div id="map-geocode-section" style="display:none;margin-top:0.75rem">' +
-      '<button id="map-geocode-btn" class="btn active" onclick="window.runBulkGeocode()">Get coordinates</button>' +
+      '<button id="map-geocode-btn" class="btn active" onclick="window.runBulkGeocode()">' + t('map.geocodeBtn') + '</button>' +
       '<div id="map-geocode-progress" style="display:none;font-size:0.75rem;color:var(--third-color);margin-top:0.3rem"></div>' +
       '<div id="map-unmapped-msg" style="font-size:0.75rem;color:var(--third-color);margin-top:0.3rem"></div>' +
       '</div>';
@@ -178,11 +178,11 @@
       '<div class="map-filter-label" style="margin-top:0">Show</div>' +
       '<div style="display:flex;flex-direction:column;gap:0.2rem;margin-bottom:0.5rem">' +
         '<label class="map-filter-row" style="cursor:pointer">' +
-          '<input type="radio" name="map-scope" value="confirmed" ' + (_confirmedOnly ? 'checked' : '') + ' onchange="window._mapScopeChange(this.value)"> Confirmed only</label>' +
+          '<input type="radio" name="map-scope" value="confirmed" ' + (_confirmedOnly ? 'checked' : '') + ' onchange="window._mapScopeChange(this.value)"> ' + t('map.scopeConfirmed') + '</label>' +
         '<label class="map-filter-row" style="cursor:pointer">' +
-          '<input type="radio" name="map-scope" value="all" ' + (!_confirmedOnly ? 'checked' : '') + ' onchange="window._mapScopeChange(this.value)"> All venues</label>' +
+          '<input type="radio" name="map-scope" value="all" ' + (!_confirmedOnly ? 'checked' : '') + ' onchange="window._mapScopeChange(this.value)"> ' + t('map.scopeAll') + '</label>' +
       '</div>' +
-      '<button id="map-load-btn" class="btn active" onclick="window._mapLoad()" style="width:100%;margin-bottom:0.75rem;font-size:0.78rem;padding:0.35rem 0.5rem">Load</button>';
+      '<button id="map-load-btn" class="btn active" onclick="window._mapLoad()" style="width:100%;margin-bottom:0.75rem;font-size:0.78rem;padding:0.35rem 0.5rem">' + t('map.loadBtn') + '</button>';
 
     sb.innerHTML = scopeHtml + statusHtml + catHtml + sizeHtml + geocodeHtml;
   }
@@ -193,7 +193,7 @@
 
   window._mapLoad = function() {
     var btn = document.getElementById('map-load-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+    if (btn) { btn.disabled = true; btn.textContent = t('map.loading'); }
     _dataReady = false;
     _allVenues = [];
     var url = '/api/' + _slug + '/venues?all=1' + (_confirmedOnly ? '&status=confirmed' : '');
@@ -208,7 +208,7 @@
         if (bounds.isValid()) _map.fitBounds(bounds.pad(0.2));
       })
       .catch(function() {
-        if (btn) { btn.disabled = false; btn.textContent = 'Load'; }
+        if (btn) { btn.disabled = false; btn.textContent = t('map.loadBtn'); }
       });
   };
 
@@ -310,18 +310,18 @@
 
     function _updateProgress() {
       if (!progress) return;
-      var msg = (done) + ' / ' + total + ' processed — ' + saved + ' saved';
-      if (failed) msg += ', ' + failed + ' failed';
+      var msg = t('map.geocodeProgress', { done: done, total: total, saved: saved });
+      if (failed) msg += t('map.geocodeFailed', { failed: failed });
       progress.textContent = msg;
     }
 
     function next() {
       if (done >= total) {
-        if (btn) { btn.disabled = false; btn.textContent = 'Get coordinates'; }
+        if (btn) { btn.disabled = false; btn.textContent = t('map.geocodeBtn'); }
         if (progress) {
-          var summary = saved + ' saved';
-          if (failed) summary += ', ' + failed + ' failed';
-          progress.textContent = 'Done: ' + summary + '.';
+          progress.textContent = failed
+            ? t('map.geocodeDoneFailed', { saved: saved, failed: failed })
+            : t('map.geocodeDone', { saved: saved });
         }
         _buildMarkers();
         return;

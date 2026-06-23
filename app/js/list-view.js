@@ -66,7 +66,7 @@ function createListView(opts) {
         return '<label class="filter-bar-field">' +
           '<span class="filter-bar-label">' + escHtml(f.label) + '</span>' +
           '<input type="text" id="lv-f-' + escHtml(f.id) + '" class="filter-bar-input"' +
-          ' placeholder="Search…" autocomplete="off">' +
+          ' placeholder="' + t('list.searchPlaceholder') + '" autocomplete="off">' +
           '</label>';
       }
       if (f.type === FILTER_TYPES.CHECKBOX) {
@@ -129,7 +129,7 @@ function createListView(opts) {
       var _isEmpty = typeof opts.getTotal === 'function' && opts.getTotal() === 0;
       body.innerHTML = (_isEmpty && opts.emptyHtml)
         ? opts.emptyHtml
-        : '<p style="text-align:center;color:var(--third-color);padding:2rem;">No results.</p>';
+        : '<p style="text-align:center;color:var(--third-color);padding:2rem;">' + t('list.noResults') + '</p>';
       return;
     }
 
@@ -212,7 +212,7 @@ function createListView(opts) {
         '<div class="list-group-heading" role="button" tabindex="0" data-lv-group="' + safeKey + '">' +
           '<span class="list-group-label">' + safeKey + '</span>' +
           '<span class="list-group-count"' + (isCollapsed ? '' : ' style="display:none"') + '>' +
-            count + ' item' + (count !== 1 ? 's' : '') +
+            t(count !== 1 ? 'list.groupCount_other' : 'list.groupCount_one', { count: count }) +
           '</span>' +
           '<span class="list-group-toggle" aria-hidden="true">' + (isCollapsed ? '&#9660;' : '&#9650;') + '</span>' +
         '</div>' +
@@ -403,7 +403,7 @@ function createListView(opts) {
       if (item) {
         Promise.resolve(opts.onOpen(item, inner)).catch(function() {
           if (_selectedId === id) {
-            inner.innerHTML = '<p style="color:var(--third-color);padding:1rem;">Could not load details.</p>';
+            inner.innerHTML = '<p style="color:var(--third-color);padding:1rem;">' + t('list.couldNotLoadDetails') + '</p>';
           }
         });
       }
