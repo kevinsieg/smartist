@@ -126,7 +126,7 @@ async function init() {
     injectModalCloseButtons();
   } catch {
     document.getElementById('setlist-content').innerHTML =
-      '<p style="text-align:center;color:var(--third-color);">Could not load songs.</p>';
+      '<p style="text-align:center;color:var(--third-color);">' + t('setlist.couldNotLoad') + '</p>';
   }
 }
 
@@ -356,8 +356,8 @@ function renderControls() {
   if (!allSongs.length) {
     document.getElementById('setlist-content').innerHTML =
       '<div style="text-align:center;padding:2.5rem 1rem;color:var(--third-color);">' +
-        '<p style="margin-bottom:1rem;">You need songs in your catalogue before you can build a setlist.</p>' +
-        '<a class="btn active" href="/' + artistSlug + '/songs?new=1">+ Add your first song</a>' +
+        '<p style="margin-bottom:1rem;">' + t('setlist.noSongs') + '</p>' +
+        '<a class="btn active" href="/' + artistSlug + '/songs?new=1">' + t('setlist.addFirstSong') + '</a>' +
       '</div>';
     return;
   }
@@ -365,9 +365,9 @@ function renderControls() {
   for (const f of fields) activeFilters.set(f.field, new Set());
 
   const sliderHtml = `<div class="tempo-slider-wrap">
-        <span class="tempo-label">🧘 Calm</span>
+        <span class="tempo-label">🧘 ${t('setlist.calm')}</span>
         <input type="range" id="tempo-slider" min="0" max="100" value="50" class="tempo-slider">
-        <span class="tempo-label">🔥 Intense</span>
+        <span class="tempo-label">🔥 ${t('setlist.intense')}</span>
       </div>`;
   const filterRows = fields.map(f =>
     `<div class="filter-row">
@@ -380,11 +380,11 @@ function renderControls() {
   document.getElementById('setlist-content').innerHTML = `
     <div class="setlist-controls">
       <div class="gen-sentence">
-        <button class="btn generate-btn" onclick="onGenerate()">Generate</button>
-        <span class="gen-prose">a setlist of</span>
+        <button class="btn generate-btn" onclick="onGenerate()">${t('setlist.generateBtn')}</button>
+        <span class="gen-prose">${t('setlist.genProseOf')}</span>
         <input type="number" id="target-min" min="0" max="300" value="45" class="gen-duration-input">
-        <span class="gen-prose">min${filterRows ? ' with' : ''}</span>
-        ${filterRows ? `<button class="controls-toggle" id="controls-toggle" onclick="toggleControls()" aria-expanded="false"><span class="toggle-arrow">▼</span> Filters</button>` : ''}
+        <span class="gen-prose">${t('setlist.genProseMin')}${filterRows ? ' ' + t('setlist.genProseWith') : ''}</span>
+        ${filterRows ? `<button class="controls-toggle" id="controls-toggle" onclick="toggleControls()" aria-expanded="false"><span class="toggle-arrow">▼</span> ${t('setlist.filtersBtn')}</button>` : ''}
       </div>
       <div id="controls-body" style="display:none">
         ${filterRows}
@@ -392,16 +392,16 @@ function renderControls() {
       <div class="gen-options">
         <label class="active-toggle">
           <input type="checkbox" id="active-only" checked onchange="refreshFilterOptions()">
-          Active only
+          ${t('setlist.activeOnly')}
         </label>
         <label class="active-toggle">
           <input type="checkbox" id="split-sets">
-          Split into 2 sets
+          ${t('setlist.splitSets')}
         </label>
         <span class="active-toggle">
-          Minimize capo changes:
-          <label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> banjo</label>
-          <label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> guitar</label>
+          ${t('setlist.minimizeCapo')}
+          <label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>
+          <label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> ${t('setlist.capoGuitar')}</label>
         </span>
       </div>
     </div>
@@ -425,7 +425,7 @@ function getFeelRange() {
 function renderResult(songs) {
   const resultArea = document.getElementById('result-area');
   if (songs.length === 0) {
-    resultArea.innerHTML = '<p style="color:var(--third-color);margin-top:1rem;">No songs match the current filters.</p>';
+    resultArea.innerHTML = '<p style="color:var(--third-color);margin-top:1rem;">' + t('setlist.noMatch') + '</p>';
     return;
   }
 
@@ -454,18 +454,18 @@ function renderResult(songs) {
       git   !== null && git   !== '0' ? `G&nbsp;${escHtml(git)}`   : '',
     ].filter(Boolean);
     const capoSpan = capoParts.length
-      ? `<span class="capo-badge${capoChanged ? ' capo-change' : ''}" title="Capo position — Banjo and Guitar${capoChanged ? ' — changed from previous song' : ''}">Capo: ${capoParts.join(' | ')}</span>`
+      ? `<span class="capo-badge${capoChanged ? ' capo-change' : ''}" title="${escHtml(capoChanged ? t('setlist.capoChanged') : t('setlist.capoTitle'))}">Capo: ${capoParts.join(' | ')}</span>`
       : '';
 
     const s = (v, field, title) => v ? `<span data-field="${escHtml(field)}" title="${escHtml(title)}">${escHtml(v)}</span>` : '';
     const metaSpans = [
-      s(song.extra?.lead || '',  'extra.lead',   'Lead vocalist / instrument'),
-      s(song.key ? formatKey(song.key) : '',  'key',           'Key'),
+      s(song.extra?.lead || '',  'extra.lead',   t('setlist.leadTitle')),
+      s(song.key ? formatKey(song.key) : '',  'key',           t('setlist.keyTitle')),
       capoSpan,
-      s(song.energy       || '',  'energy',        'Energy'),
-      s(song.genre       || '',  'genre',         'Genre'),
-      song.extra?.harp ? s('harmonica', 'extra.harp', 'Harmonica needed') : '',
-      song.extra?.git2 ? s('guitar 2',  'extra.git2', 'Second guitar') : '',
+      s(song.energy       || '',  'energy',        t('setlist.energyTitle')),
+      s(song.genre       || '',  'genre',         t('setlist.genreTitle')),
+      song.extra?.harp ? s(t('setlist.harmonica'), 'extra.harp', t('setlist.harmonicaTitle')) : '',
+      song.extra?.git2 ? s(t('setlist.guitar2'),   'extra.git2', t('setlist.guitar2Title')) : '',
     ].filter(Boolean).join('');
 
     const printLabels = song.genre ? `<span>${escHtml(song.genre)}</span>` : '';
@@ -484,9 +484,9 @@ function renderResult(songs) {
         ${metaSpans ? `<div class="song-meta">${metaSpans}</div>` : ''}
       </div>
       <div class="song-actions">
-        <button class="move-btn" onclick="moveSong(${i},-1)" ${isFirst ? 'disabled' : ''} aria-label="Move up">↑</button>
-        <button class="move-btn" onclick="moveSong(${i},1)"  ${isLast  ? 'disabled' : ''} aria-label="Move down">↓</button>
-        <button class="song-remove-btn" onclick="removeFromSet(${i})" title="Remove">&#215;</button>
+        <button class="move-btn" onclick="moveSong(${i},-1)" ${isFirst ? 'disabled' : ''} aria-label="${t('setlist.moveUp')}">↑</button>
+        <button class="move-btn" onclick="moveSong(${i},1)"  ${isLast  ? 'disabled' : ''} aria-label="${t('setlist.moveDown')}">↓</button>
+        <button class="song-remove-btn" onclick="removeFromSet(${i})" title="${t('setlist.removeTitle')}">&#215;</button>
       </div>
     </li>`;
   });
@@ -495,8 +495,8 @@ function renderResult(songs) {
     const set2Min = totalMin - set1Min;
     itemHtmls.splice(splitAt, 0,
       `<li class="set-break">
-        <span class="set-break-label">— Break —</span>
-        <span class="set-break-meta">Set 1: ${splitAt} songs &bull; ${formatLength(set1Min)} &ensp;|&ensp; Set 2: ${songs.length - splitAt} songs &bull; ${formatLength(set2Min)}</span>
+        <span class="set-break-label">${t('setlist.setBreak')}</span>
+        <span class="set-break-meta">${t('setlist.setBreakMeta', { s1: splitAt, d1: formatLength(set1Min), s2: songs.length - splitAt, d2: formatLength(set2Min) })}</span>
       </li>`
     );
   }
@@ -512,8 +512,8 @@ function renderResult(songs) {
   ).join('');
 
   const headerText = splitAt
-    ? `${songs.length} songs &bull; ${formatLength(totalMin)} &ensp;(2 sets)`
-    : `${songs.length} songs &bull; ${formatLength(totalMin)}`;
+    ? `${songs.length} ${t('setlist.songs')} &bull; ${formatLength(totalMin)} &ensp;(2 sets)`
+    : `${songs.length} ${t('setlist.songs')} &bull; ${formatLength(totalMin)}`;
 
   const feelScores = songs.map(s => songFeel(s)).filter(f => f != null);
   const avgFeel    = feelScores.length ? feelScores.reduce((a, b) => a + b) / feelScores.length : null;
@@ -526,16 +526,16 @@ function renderResult(songs) {
       <ul class="song-list">${items}</ul>
       <div class="add-song-row">
         <select id="add-song-select" onchange="addSongToSet(this)">
-          <option value="">+ add a song…</option>
+          <option value="">${t('setlist.addSongPlaceholder')}</option>
           ${options}
         </select>
       </div>
-      <p class="total-time">Total: ${formatLength(totalMin)}</p>
+      <p class="total-time">${t('setlist.total', { duration: formatLength(totalMin) })}</p>
       <div class="result-actions">
-        <button class="btn" onclick="onGenerate()" title="Pick a new random selection from the filtered songs">Re-generate</button>
-        <button class="btn" onclick="onOptimize()" title="Reorder the current songs: slow opener → build-up → dip → climax → fast closer">Optimize order</button>
-        <button class="btn" onclick="printSetlist()">Export PDF</button>
-        ${artistSlug ? `<button class="btn active" onclick="openAcceptModal()">Accept setlist</button>` : ''}
+        <button class="btn" onclick="onGenerate()" title="${t('setlist.regenTitle')}">${t('setlist.regenBtn')}</button>
+        <button class="btn" onclick="onOptimize()" title="${t('setlist.optimizeTitle')}">${t('setlist.optimizeBtn')}</button>
+        <button class="btn" onclick="printSetlist()">${t('setlist.exportPdfBtn')}</button>
+        ${artistSlug ? `<button class="btn active" onclick="openAcceptModal()">${t('setlist.acceptBtn')}</button>` : ''}
       </div>
     </div>`;
 
@@ -711,7 +711,7 @@ document.getElementById('verify-btn').addEventListener('click', async () => {
     setTimeout(() => document.getElementById('setlist-title')?.focus(), 50);
   } else {
     const err = document.getElementById('auth-error');
-    err.textContent = 'Wrong password.';
+    err.textContent = t('setlist.wrongPassword');
     err.className = 'status-msg error';
   }
 });
@@ -772,7 +772,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
 
   if (!title) {
     const err = document.getElementById('save-error');
-    err.textContent = 'Please enter a name for this setlist.';
+    err.textContent = t('setlist.nameRequired');
     err.className = 'status-msg error';
     document.getElementById('setlist-title').focus();
     return;
@@ -780,7 +780,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
 
   if (songIds.length !== currentSet.length) {
     const err = document.getElementById('save-error');
-    err.textContent = 'Cannot save — songs are missing IDs. Reload the page and try again.';
+    err.textContent = t('setlist.missingIds');
     err.className = 'status-msg error';
     return;
   }
@@ -797,7 +797,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     document.getElementById('save-step').style.display = 'none';
     document.getElementById('auth-step').style.display = 'block';
     const err = document.getElementById('auth-error');
-    err.textContent = 'Session expired. Please re-enter your password.';
+    err.textContent = t('setlist.sessionExpired');
     err.className = 'status-msg error';
     return;
   }
@@ -810,7 +810,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     switchTab('history');
   } else {
     const err = document.getElementById('save-error');
-    err.textContent = 'Failed to save. Please try again.';
+    err.textContent = t('setlist.saveFailed');
     err.className = 'status-msg error';
   }
 });
@@ -893,64 +893,64 @@ function _openHistPanelContent(item, panelEl) {
   var gig = _histGigMap[s.gig_id] || null;
 
   var gigBlock = gig
-    ? '<div class="vsp-section-label">Gig</div>' +
+    ? '<div class="vsp-section-label">' + t('setlist.panelGig') + '</div>' +
       '<div class="vsp-cell vsp-cell--full" style="display:flex;align-items:flex-start;gap:0.5rem;">' +
         '<div class="vsp-cell-value" style="flex:1">' +
           '<strong>' + escHtml(gig.title) + '</strong>' +
           (gig.date ? '<br><span style="color:var(--third-color);font-size:0.8rem">' + escHtml(String(gig.date).slice(0, 10)) + '</span>' : '') +
         '</div>' +
-        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/gigs?open=' + gig.id + '\')" title="Open in Gigs">&#8599;</button>') +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/gigs?open=' + gig.id + '\')" title="' + t('setlist.openInGigs') + '">&#8599;</button>') +
       '</div>'
-    : '<div class="vsp-section-label">Gig</div>' +
-      '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="color:var(--third-color)">No gig linked</div></div>';
+    : '<div class="vsp-section-label">' + t('setlist.panelGig') + '</div>' +
+      '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="color:var(--third-color)">' + t('setlist.panelNoGig') + '</div></div>';
 
   var venueBlock = (gig && gig.venue_id)
-    ? '<div class="vsp-section-label">Venue</div>' +
+    ? '<div class="vsp-section-label">' + t('setlist.panelVenue') + '</div>' +
       '<div class="vsp-cell vsp-cell--full" style="display:flex;align-items:center;gap:0.5rem;">' +
         '<div class="vsp-cell-value" style="flex:1">' +
           escHtml(gig.venue_name || '') +
           (gig.venue_city ? ', ' + escHtml(gig.venue_city) : '') +
         '</div>' +
-        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/venues?open=' + gig.venue_id + '\')" title="Open in Venues">&#8599;</button>') +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/venues?open=' + gig.venue_id + '\')" title="' + t('setlist.openInVenues') + '">&#8599;</button>') +
       '</div>'
     : '';
 
   var orgBlock = (gig && gig.organizer_id)
-    ? '<div class="vsp-section-label">Organizer</div>' +
+    ? '<div class="vsp-section-label">' + t('setlist.panelOrganizer') + '</div>' +
       '<div class="vsp-cell vsp-cell--full" style="display:flex;align-items:center;gap:0.5rem;">' +
         '<div class="vsp-cell-value" style="flex:1">' + escHtml(gig.organizer_name || '') + '</div>' +
-        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/organizers?open=' + gig.organizer_id + '\')" title="Open in Organizers">&#8599;</button>') +
+        (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/organizers?open=' + gig.organizer_id + '\')" title="' + t('setlist.openInOrganizers') + '">&#8599;</button>') +
       '</div>'
     : '';
 
   var commentBlock = s.comment
-    ? '<div class="vsp-section-label">Comment</div>' +
+    ? '<div class="vsp-section-label">' + t('setlist.panelComment') + '</div>' +
       '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="white-space:pre-wrap">' + escHtml(s.comment) + '</div></div>'
     : '';
 
   panelEl.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h2 class="vsp-title">' + escHtml(s.title || 'Untitled') + '</h2></div>' +
-      '<button class="vsp-close" onclick="_histView && _histView.deselect()" aria-label="Close">&#215;</button>' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + escHtml(s.title || t('setlist.untitled')) + '</h2></div>' +
+      '<button class="vsp-close" onclick="_histView && _histView.deselect()" aria-label="' + t('setlist.closeBtn') + '">&#215;</button>' +
     '</div>' +
     '<div class="vsp-actions" style="margin-bottom:1rem;">' +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="Edit setlist" onclick="_histEdit(\'' + escHtml(sid) + '\')">' +
+        '<button class="btn icon-btn" data-tooltip="' + t('setlist.editTooltip') + '" onclick="_histEdit(\'' + escHtml(sid) + '\')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
           '</svg>' +
         '</button>') +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="Duplicate" onclick="_histDuplicate(\'' + escHtml(sid) + '\')">' +
+        '<button class="btn icon-btn" data-tooltip="' + t('setlist.duplicateTooltip') + '" onclick="_histDuplicate(\'' + escHtml(sid) + '\')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
             '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
           '</svg>' +
         '</button>') +
-      '<button class="btn" onclick="_histStage(\'' + escHtml(sid) + '\')">Stage</button>' +
+      '<button class="btn" onclick="_histStage(\'' + escHtml(sid) + '\')">' + t('setlist.stageBtn') + '</button>' +
       (_viewMode ? '' :
         '<button class="btn share-btn" onclick="_histShareMenu(\'' + escHtml(sid) + '\', this)">' +
-          SHARE_ICON + '<span style="margin-left:4px">Share</span>' +
+          SHARE_ICON + '<span style="margin-left:4px">' + t('setlist.shareBtn') + '</span>' +
         '</button>') +
     '</div>' +
     gigBlock + venueBlock + orgBlock + commentBlock +
@@ -984,7 +984,7 @@ async function _renderHistoryTab() {
       _histGigs.forEach(function(g) { _histGigMap[g.id] = g; });
       _histLoaded = true;
     } catch {
-      content.innerHTML = '<p style="text-align:center;color:var(--third-color);">Could not load history.</p>';
+      content.innerHTML = '<p style="text-align:center;color:var(--third-color);">' + t('setlist.couldNotLoadHistory') + '</p>';
       return;
     }
   }
@@ -992,10 +992,10 @@ async function _renderHistoryTab() {
   _histView = createListView({
     container:  content,
     filters: [
-      { id: 'setlist', label: 'Setlist', type: FILTER_TYPES.TEXT,       field: 'title' },
-      { id: 'gig',     label: 'Gig',     type: FILTER_TYPES.TEXT,       field: 'gig.title' },
-      { id: 'venue',   label: 'Venue',   type: FILTER_TYPES.TEXT,       field: 'gig.venue_name' },
-      { id: 'song',    label: 'Song',    type: FILTER_TYPES.ASYNC_TEXT,
+      { id: 'setlist', label: t('setlist.filterSetlist'), type: FILTER_TYPES.TEXT,       field: 'title' },
+      { id: 'gig',     label: t('setlist.filterGig'),     type: FILTER_TYPES.TEXT,       field: 'gig.title' },
+      { id: 'venue',   label: t('setlist.filterVenue'),   type: FILTER_TYPES.TEXT,       field: 'gig.venue_name' },
+      { id: 'song',    label: t('setlist.filterSong'),    type: FILTER_TYPES.ASYNC_TEXT,
         resolve: _resolveHistSongFilter },
     ],
     getData:   _getVisibleSets,
@@ -1003,8 +1003,8 @@ async function _renderHistoryTab() {
     getItemId: function(s) { return s.id; },
     renderRow: _renderHistRow,
     emptyHtml: '<div style="text-align:center;padding:2.5rem 1rem;color:var(--third-color);">' +
-      '<p style="margin-bottom:1rem;">No setlists saved yet.</p>' +
-      '<button class="btn active" onclick="switchTab(\'generator\')">Build your first setlist</button>' +
+      '<p style="margin-bottom:1rem;">' + t('setlist.noSetlists') + '</p>' +
+      '<button class="btn active" onclick="switchTab(\'generator\')">' + t('setlist.buildFirst') + '</button>' +
       '</div>',
     groupBy:   _getSetYear,
     groupSort: function(a, b) { return b > a ? 1 : -1; },
@@ -1045,7 +1045,7 @@ function _renderHistRow(s) {
   var venueName = (gig && gig.venue_name) || s.gig_venue || '';
 
   var count = s.song_count != null ? Number(s.song_count) : 0;
-  var countBadge = '<span class="hist-badge hist-badge--count">' + count + ' ' + (count !== 1 ? 'songs' : 'song') + '</span>';
+  var countBadge = '<span class="hist-badge hist-badge--count">' + count + ' ' + t(count !== 1 ? 'setlist.songs' : 'setlist.song') + '</span>';
   var dateBadge  = gigDate
     ? '<span class="hist-badge hist-badge--date">' + new Date(gigDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + '</span>'
     : '';
@@ -1067,14 +1067,14 @@ function _renderHistRow(s) {
     '<div class="hist-item-header">' +
       '<div class="hist-item-main">' +
         '<div class="hist-item-titlerow">' +
-          '<span class="hist-item-title">' + escHtml(s.title || 'Untitled') + '</span>' +
+          '<span class="hist-item-title">' + escHtml(s.title || t('setlist.untitled')) + '</span>' +
           '<div class="hist-item-badges">' + countBadge + dateBadge + '</div>' +
         '</div>' +
         (s.comment ? '<div class="hist-item-comment">' + escHtml(s.comment) + '</div>' : '') +
         (headerLinks.length ? '<div class="hist-meta-links hist-meta-links--header">' + headerLinks.join('') + '</div>' : '') +
       '</div>' +
-      '<button class="hist-toggle" onclick="event.stopPropagation();_toggleHistItemBody(\'' + escHtml(sid) + '\')" title="Show songs">&#9654;</button>' +
-      '<button class="hist-details-btn" onclick="event.stopPropagation();_histView&&_histView.select(\'' + escHtml(sid) + '\')" title="Details" aria-label="Details">&#8801;</button>' +
+      '<button class="hist-toggle" onclick="event.stopPropagation();_toggleHistItemBody(\'' + escHtml(sid) + '\')" title="' + t('setlist.showSongs') + '">&#9654;</button>' +
+      '<button class="hist-details-btn" onclick="event.stopPropagation();_histView&&_histView.select(\'' + escHtml(sid) + '\')" title="' + t('setlist.detailsBtn') + '" aria-label="' + t('setlist.detailsBtn') + '">&#8801;</button>' +
     '</div>' +
   '</div>' +
   '<div class="hist-body" id="hist-body-' + escHtml(sid) + '" hidden></div>';
@@ -1121,7 +1121,7 @@ async function _loadAndRenderHistSongs(sid) {
 
   var loaded = _histLoadedSongs[sid];
   if (!loaded || !loaded.length) {
-    body.innerHTML = '<p style="color:var(--third-color);font-size:0.82rem;padding:0.5rem 0.25rem">No songs.</p>';
+    body.innerHTML = '<p style="color:var(--third-color);font-size:0.82rem;padding:0.5rem 0.25rem">' + t('setlist.noSongsInSet') + '</p>';
     return;
   }
 
@@ -1133,11 +1133,11 @@ async function _loadAndRenderHistSongs(sid) {
       '<span class="hist-song-name">' + escHtml(song.title || '') + '</span>' +
       (song.key ? '<span class="hist-song-key">' + escHtml(formatKey(song.key)) + '</span>' : '') +
       '<span class="hist-song-len">' + formatLength(song.length_min) + '</span>' +
-      (!_viewMode ? '<button class="hist-song-edit-btn" onclick="event.stopPropagation();navigate(\'/songs?id=' + Number(song.id) + '\')" title="Open in Songs" aria-label="Open in Songs">&#8599;</button>' : '') +
+      (!_viewMode ? '<button class="hist-song-edit-btn" onclick="event.stopPropagation();navigate(\'/songs?id=' + Number(song.id) + '\')" title="' + t('setlist.openInSongsShort') + '" aria-label="' + t('setlist.openInSongsShort') + '">&#8599;</button>' : '') +
     '</div>';
   }).join('');
 
-  body.innerHTML = rows + '<div class="hist-songs-total">Total: ' + formatLength(total) + '</div>';
+  body.innerHTML = rows + '<div class="hist-songs-total">' + t('setlist.total', { duration: formatLength(total) }) + '</div>';
 }
 
 function _histCancelEdit(sid) {
@@ -1150,7 +1150,7 @@ function _renderEditSongsList(sid) {
   var ul = document.getElementById('hist-edit-songs-ul');
   if (!ul) return;
   if (!_editSongs || !_editSongs.length) {
-    ul.innerHTML = '<li style="color:var(--third-color);font-size:0.82rem;padding:0.4rem 0;list-style:none;">No songs.</li>';
+    ul.innerHTML = '<li style="color:var(--third-color);font-size:0.82rem;padding:0.4rem 0;list-style:none;">' + t('setlist.noSongsInSet') + '</li>';
     _refreshEditAddDropdown(sid);
     return;
   }
@@ -1168,9 +1168,9 @@ function _renderEditSongsList(sid) {
         (song.key ? '<div class="song-meta"><span>' + escHtml(formatKey(song.key)) + '</span></div>' : '') +
       '</div>' +
       '<div class="song-actions">' +
-        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',-1,\'' + escHtml(sid) + '\')" ' + (isFirst ? 'disabled' : '') + ' aria-label="Move up">↑</button>' +
-        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',1,\'' + escHtml(sid) + '\')" ' + (isLast ? 'disabled' : '') + ' aria-label="Move down">↓</button>' +
-        '<button class="move-btn" onclick="_histEditRemoveSong(' + i + ',\'' + escHtml(sid) + '\')" title="Remove">&#215;</button>' +
+        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',-1,\'' + escHtml(sid) + '\')" ' + (isFirst ? 'disabled' : '') + ' aria-label="' + t('setlist.moveUp') + '">↑</button>' +
+        '<button class="move-btn" onclick="_histEditMoveSong(' + i + ',1,\'' + escHtml(sid) + '\')" ' + (isLast ? 'disabled' : '') + ' aria-label="' + t('setlist.moveDown') + '">↓</button>' +
+        '<button class="move-btn" onclick="_histEditRemoveSong(' + i + ',\'' + escHtml(sid) + '\')" title="' + t('setlist.removeTitle') + '">&#215;</button>' +
       '</div>' +
     '</li>';
   }).join('');
@@ -1184,7 +1184,7 @@ function _refreshEditAddDropdown(sid) {
   var available = allSongs
     .filter(function(s) { return s.active && !inSetIds.has(s.id); })
     .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
-  sel.innerHTML = '<option value="">+ add a song…</option>' +
+  sel.innerHTML = '<option value="">' + t('setlist.addSongPlaceholder') + '</option>' +
     available.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.title || '') + '</option>'; }).join('');
 }
 
@@ -1261,15 +1261,15 @@ async function _histEdit(sid) {
 
   inner.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h2 class="vsp-title">Edit Setlist</h2></div>' +
-      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="Cancel">×</button>' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + t('setlist.editPanelTitle') + '</h2></div>' +
+      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
     '</div>' +
     skeletonHtml(3);
 
   await _loadHistSongs(sid);
   _editSongs = (_histLoadedSongs[sid] || []).slice();
 
-  var gigOptions = '<option value="">— no gig —</option>' +
+  var gigOptions = '<option value="">' + t('setlist.noGig') + '</option>' +
     _histGigs.map(function(g) {
       var sel = String(g.id) === String(s.gig_id) ? ' selected' : '';
       var label = escHtml(g.title || '') + (g.date ? ' — ' + String(g.date).slice(0, 10) : '');
@@ -1278,36 +1278,36 @@ async function _histEdit(sid) {
 
   inner.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h2 class="vsp-title">Edit Setlist</h2></div>' +
-      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="Cancel">×</button>' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + t('setlist.editPanelTitle') + '</h2></div>' +
+      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
     '</div>' +
     '<div style="padding:0 1rem 1rem;">' +
       '<div class="modal-field">' +
-        '<label for="hist-edit-title">Name</label>' +
+        '<label for="hist-edit-title">' + t('setlist.nameLabel') + '</label>' +
         '<input type="text" id="hist-edit-title" value="' + escHtml(s.title || '') + '" autocomplete="off">' +
       '</div>' +
       '<div class="modal-field">' +
-        '<label for="hist-edit-gig">Gig (optional)</label>' +
+        '<label for="hist-edit-gig">' + t('setlist.editGigLabel') + '</label>' +
         '<select id="hist-edit-gig">' + gigOptions + '</select>' +
       '</div>' +
       '<div class="modal-field">' +
-        '<label for="hist-edit-comment">Comment (optional)</label>' +
-        '<textarea id="hist-edit-comment" placeholder="Notes…">' + escHtml(s.comment || '') + '</textarea>' +
+        '<label for="hist-edit-comment">' + t('setlist.editCommentLabel') + '</label>' +
+        '<textarea id="hist-edit-comment" placeholder="' + t('setlist.editCommentPlaceholder') + '">' + escHtml(s.comment || '') + '</textarea>' +
       '</div>' +
       '<div class="modal-field">' +
-        '<label>Songs</label>' +
+        '<label>' + t('setlist.editSongsLabel') + '</label>' +
         '<ul id="hist-edit-songs-ul" class="song-list" style="margin:0;padding:0;"></ul>' +
         '<div class="add-song-row" style="margin-top:0.5rem;">' +
           '<select id="hist-edit-add-select" onchange="_histEditAddSong(this,\'' + escHtml(sid) + '\')">' +
-            '<option value="">+ add a song…</option>' +
+            '<option value="">' + t('setlist.addSongPlaceholder') + '</option>' +
           '</select>' +
         '</div>' +
       '</div>' +
       '<div class="status-msg" id="hist-edit-error"></div>' +
       '<div class="modal-actions" id="hist-edit-actions">' +
-        '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">Save</button>' +
-        '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">Cancel</button>' +
-        '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">Delete</button>' +
+        '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">' + t('setlist.saveBtn') + '</button>' +
+        '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">' + t('setlist.cancelBtn') + '</button>' +
+        '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.deleteBtn') + '</button>' +
       '</div>' +
     '</div>';
 
@@ -1329,13 +1329,13 @@ async function _saveHistEdit(sid) {
 
   if (!titleVal) {
     var errEl = document.getElementById('hist-edit-error');
-    if (errEl) { errEl.textContent = 'Name is required.'; errEl.className = 'status-msg error'; }
+    if (errEl) { errEl.textContent = t('setlist.editNameRequired'); errEl.className = 'status-msg error'; }
     document.getElementById('hist-edit-title').focus();
     return;
   }
 
   var saveBtn = document.getElementById('hist-edit-save');
-  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = t('setlist.editSaving'); }
 
   var songIds = (_editSongs || []).map(function(song) { return song.id; });
 
@@ -1350,15 +1350,15 @@ async function _saveHistEdit(sid) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_TOKEN_KEY);
       var errEl3 = document.getElementById('hist-edit-error');
-      if (errEl3) { errEl3.textContent = 'Session expired. Please refresh and log in again.'; errEl3.className = 'status-msg error'; }
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+      if (errEl3) { errEl3.textContent = t('setlist.editSessionExpired'); errEl3.className = 'status-msg error'; }
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('setlist.saveBtn'); }
       return;
     }
 
     if (!r.ok) {
       var errEl4 = document.getElementById('hist-edit-error');
-      if (errEl4) { errEl4.textContent = 'Failed to save. Please try again.'; errEl4.className = 'status-msg error'; }
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+      if (errEl4) { errEl4.textContent = t('setlist.editSaveFailed'); errEl4.className = 'status-msg error'; }
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('setlist.saveBtn'); }
       return;
     }
 
@@ -1378,7 +1378,7 @@ async function _saveHistEdit(sid) {
 
     var okEl = document.getElementById('hist-edit-error');
     if (okEl) {
-      okEl.textContent = 'Saved.';
+      okEl.textContent = t('setlist.editSaved');
       okEl.className = 'status-msg success';
       okEl.style.display = 'block';
       okEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1392,8 +1392,8 @@ async function _saveHistEdit(sid) {
     }, 900);
   } catch {
     var errEl5 = document.getElementById('hist-edit-error');
-    if (errEl5) { errEl5.textContent = 'Network error. Please try again.'; errEl5.className = 'status-msg error'; }
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+    if (errEl5) { errEl5.textContent = t('setlist.editNetworkError'); errEl5.className = 'status-msg error'; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('setlist.saveBtn'); }
   }
 }
 
@@ -1406,17 +1406,17 @@ function _promptDeleteSetlist(sid) {
   if (s.gig_id && s.gig_name) {
     var gigLabel = escHtml(s.gig_name) + (s.gig_date ? ' (' + String(s.gig_date).slice(0, 10) + ')' : '');
     if (s.gig_venue) gigLabel += ' — ' + escHtml(s.gig_venue);
-    gigNote = '<p style="font-size:0.82rem;color:var(--third-color);margin:0.5rem 0 0;">Linked gig: ' + gigLabel + ' — the gig will not be deleted.</p>';
+    gigNote = '<p style="font-size:0.82rem;color:var(--third-color);margin:0.5rem 0 0;">' + t('setlist.deleteLinkedGig', { gigLabel: gigLabel }) + '</p>';
   }
 
   var actionsEl = document.getElementById('hist-edit-actions');
   if (!actionsEl) return;
   actionsEl.innerHTML =
-    '<p style="font-size:0.85rem;margin:0;">Delete <strong>' + escHtml(s.title || 'this setlist') + '</strong>? This cannot be undone.</p>' +
+    '<p style="font-size:0.85rem;margin:0;">' + t('setlist.deleteConfirmMsg', { title: escHtml(s.title || t('setlist.untitled')) }) + '</p>' +
     gigNote +
     '<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">' +
-      '<button class="btn active" style="background:#e55;border-color:#e55;" onclick="_confirmDeleteSetlist(\'' + escHtml(sid) + '\')">Delete</button>' +
-      '<button class="btn" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">Keep it</button>' +
+      '<button class="btn active" style="background:#e55;border-color:#e55;" onclick="_confirmDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.deleteBtn') + '</button>' +
+      '<button class="btn" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.keepIt') + '</button>' +
     '</div>';
 }
 
@@ -1425,9 +1425,9 @@ function _cancelDeleteSetlist(sid) {
   var actionsEl = document.getElementById('hist-edit-actions');
   if (!actionsEl) return;
   actionsEl.innerHTML =
-    '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">Save</button>' +
-    '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">Cancel</button>' +
-    '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">Delete</button>';
+    '<button class="btn active" id="hist-edit-save" onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">' + t('setlist.saveBtn') + '</button>' +
+    '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">' + t('setlist.cancelBtn') + '</button>' +
+    '<button class="btn" style="margin-left:auto;color:#e55;" onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.deleteBtn') + '</button>';
 }
 
 async function _confirmDeleteSetlist(sid) {
@@ -1437,7 +1437,7 @@ async function _confirmDeleteSetlist(sid) {
 
   var token = getToken();
   var actionsEl = document.getElementById('hist-edit-actions');
-  if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:var(--third-color);margin:0;">Deleting…</p>';
+  if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:var(--third-color);margin:0;">' + t('setlist.deleting') + '</p>';
 
   try {
     var r = await fetch('/api/' + artistSlug + '/setlists/' + sid, {
@@ -1451,8 +1451,8 @@ async function _confirmDeleteSetlist(sid) {
     _editingSid = null;
     if (_histView) _histView.refresh();
   } catch {
-    if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:#e55;margin:0;">Delete failed. Try again.</p>' +
-      '<button class="btn" style="margin-top:0.5rem;" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">Back</button>';
+    if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:#e55;margin:0;">' + t('setlist.deleteFailed') + '</p>' +
+      '<button class="btn" style="margin-top:0.5rem;" onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.backBtn') + '</button>';
   }
 }
 
@@ -1491,8 +1491,8 @@ function _openSongPanel(setlistSid, songId) {
   var s = _histSets.find(function(x) { return String(x.id) === setlistSid; });
   inner.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h2 class="vsp-title">' + escHtml((s && s.title) || 'Untitled') + '</h2></div>' +
-      '<button class="vsp-close" onclick="_closeSongPanel()" aria-label="Close">&#215;</button>' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + escHtml((s && s.title) || t('setlist.untitled')) + '</h2></div>' +
+      '<button class="vsp-close" onclick="_closeSongPanel()" aria-label="' + t('setlist.closeBtn') + '">&#215;</button>' +
     '</div>' +
     '<div id="hist-song-detail"></div>';
 
@@ -1536,7 +1536,7 @@ function _openSongPanel(setlistSid, songId) {
     : '';
 
   var lyricsBlock = (song.extra && song.extra.lyrics)
-    ? '<div class="vsp-section-label">Lyrics</div>' +
+    ? '<div class="vsp-section-label">' + t('setlist.lyricsLabel') + '</div>' +
       '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="white-space:pre-wrap;font-size:0.8rem;max-height:12rem;overflow-y:auto">' + escHtml(song.extra.lyrics) + '</div></div>'
     : '';
 
@@ -1545,7 +1545,7 @@ function _openSongPanel(setlistSid, songId) {
     (cells || '') +
     commentBlock + lyricsBlock +
     '<div class="vsp-actions" style="margin-top:0.75rem;">' +
-      '<button class="btn" onclick="navigate(\'/songs?id=' + Number(song.id) + '\')">Open in Songs &#8599;</button>' +
+      '<button class="btn" onclick="navigate(\'/songs?id=' + Number(song.id) + '\')">' + t('setlist.openInSongs') + '</button>' +
     '</div>';
 }
 
@@ -1575,13 +1575,13 @@ function _histShareMenu(sid, btn) {
   menu.dataset.sid = sid;
   menu.innerHTML =
     '<div class="share-menu-item" onclick="_histExportPdf(\'' + escHtml(sid) + '\');var m=document.getElementById(\'share-menu-popup\');if(m)m.remove()">' +
-      '<span class="share-menu-icon">⎙</span><span class="share-menu-label">Export PDF</span>' +
+      '<span class="share-menu-icon">⎙</span><span class="share-menu-label">' + t('setlist.shareMenuExportPdf') + '</span>' +
     '</div>' +
     '<div class="share-menu-item" onclick="_histCopyLink(\'' + escHtml(sid) + '\')">' +
-      '<span class="share-menu-icon">⧉</span><span class="share-menu-label">Copy link</span>' +
+      '<span class="share-menu-icon">⧉</span><span class="share-menu-label">' + t('setlist.shareMenuCopyLink') + '</span>' +
     '</div>' +
     '<div class="share-menu-item" onclick="var m=document.getElementById(\'share-menu-popup\');if(m)m.remove();_histShare(\'' + escHtml(sid) + '\')">' +
-      '<span class="share-menu-icon">✉</span><span class="share-menu-label">Share via email</span>' +
+      '<span class="share-menu-icon">✉</span><span class="share-menu-label">' + t('setlist.shareMenuEmail') + '</span>' +
     '</div>';
 
   var rect = btn.getBoundingClientRect();
@@ -1604,9 +1604,9 @@ function _histCopyLink(sid) {
   var url = location.origin + '/' + _artistSlug + '/stage?id=' + sid;
   var menu = document.getElementById('share-menu-popup');
   var item = menu && menu.querySelectorAll('.share-menu-item')[1];
-  if (item) item.innerHTML = '<span class="share-menu-icon">✓</span><span class="share-menu-label">Copied!</span>';
+  if (item) item.innerHTML = '<span class="share-menu-icon">✓</span><span class="share-menu-label">' + t('setlist.shareMenuCopied') + '</span>';
   navigator.clipboard.writeText(url).catch(function() {
-    if (item) item.innerHTML = '<span class="share-menu-icon">⧉</span><span class="share-menu-label">Copy link</span>';
+    if (item) item.innerHTML = '<span class="share-menu-icon">⧉</span><span class="share-menu-label">' + t('setlist.shareMenuCopyLink') + '</span>';
   });
   setTimeout(function() { if (menu && menu.parentNode) menu.remove(); }, 900);
 }
@@ -1619,21 +1619,21 @@ function _histShare(sid) {
 
   inner.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h2 class="vsp-title">Share Setlist</h2></div>' +
-      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="Cancel">×</button>' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + t('setlist.sharePanelTitle') + '</h2></div>' +
+      '<button class="vsp-close" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
     '</div>' +
-    '<p style="padding:0 1rem;font-size:0.84rem;color:var(--third-color);">Send a PDF of this setlist by email.</p>' +
+    '<p style="padding:0 1rem;font-size:0.84rem;color:var(--third-color);">' + t('setlist.shareSendPdf') + '</p>' +
     '<div style="padding:0 1rem;">' +
       (!hasToken
-        ? '<div class="modal-field"><label for="hist-share-pw">Password</label>' +
-          '<input type="password" id="hist-share-pw" autocomplete="current-password" placeholder="Band password"></div>'
+        ? '<div class="modal-field"><label for="hist-share-pw">' + t('setlist.sharePasswordLabel') + '</label>' +
+          '<input type="password" id="hist-share-pw" autocomplete="current-password" placeholder="' + t('setlist.passwordPlaceholder') + '"></div>'
         : '') +
-      '<div class="modal-field"><label for="hist-share-email">Email</label>' +
-        '<input type="email" id="hist-share-email" placeholder="recipient@example.com"></div>' +
+      '<div class="modal-field"><label for="hist-share-email">' + t('setlist.shareEmailLabel') + '</label>' +
+        '<input type="email" id="hist-share-email" placeholder="' + t('setlist.shareEmailPlaceholder') + '"></div>' +
       '<div class="status-msg" id="hist-share-status"></div>' +
       '<div class="modal-actions">' +
-        '<button class="btn active" id="hist-share-send" onclick="_histShareSend(\'' + escHtml(sid) + '\')">Send PDF</button>' +
-        '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">Cancel</button>' +
+        '<button class="btn active" id="hist-share-send" onclick="_histShareSend(\'' + escHtml(sid) + '\')">' + t('setlist.shareSendBtn') + '</button>' +
+        '<button class="btn" onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">' + t('setlist.cancelBtn') + '</button>' +
       '</div>' +
     '</div>';
 
@@ -1647,7 +1647,7 @@ async function _histShareSend(sid) {
   var st = document.getElementById('hist-share-status');
 
   if (!email) {
-    if (st) { st.textContent = 'Please enter an email address.'; st.className = 'status-msg error'; }
+    if (st) { st.textContent = t('setlist.shareEnterEmail'); st.className = 'status-msg error'; }
     document.getElementById('hist-share-email').focus();
     return;
   }
@@ -1657,13 +1657,13 @@ async function _histShareSend(sid) {
   if (pwEl && pwEl.value.trim()) token = pwEl.value.trim();
 
   if (!token) {
-    if (st) { st.textContent = 'Password required.'; st.className = 'status-msg error'; }
+    if (st) { st.textContent = t('setlist.sharePasswordRequired'); st.className = 'status-msg error'; }
     if (pwEl) pwEl.focus();
     return;
   }
 
   var btn = document.getElementById('hist-share-send');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('setlist.shareSending'); }
   if (st) { st.textContent = ''; st.className = 'status-msg'; }
 
   try {
@@ -1676,24 +1676,24 @@ async function _histShareSend(sid) {
     if (r.status === 401) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_TOKEN_KEY);
-      if (st) { st.textContent = 'Wrong password.'; st.className = 'status-msg error'; }
-      if (btn) { btn.disabled = false; btn.textContent = 'Send PDF'; }
+      if (st) { st.textContent = t('setlist.shareWrongPassword'); st.className = 'status-msg error'; }
+      if (btn) { btn.disabled = false; btn.textContent = t('setlist.shareSendBtn'); }
       return;
     }
 
     if (r.ok) {
       sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-      if (st) { st.textContent = 'Sent to ' + escHtml(email); st.className = 'status-msg success'; st.style.display = 'block'; }
+      if (st) { st.textContent = t('setlist.shareSentTo', { email: escHtml(email) }); st.className = 'status-msg success'; st.style.display = 'block'; }
       if (btn) btn.disabled = true;
       setTimeout(function() { _histCancelEdit(sid); }, 1800);
     } else {
       var errData = await r.json().catch(function() { return {}; });
-      if (st) { st.textContent = errData.error || 'Failed to send.'; st.className = 'status-msg error'; }
-      if (btn) { btn.disabled = false; btn.textContent = 'Send PDF'; }
+      if (st) { st.textContent = errData.error || t('setlist.shareGenericFailed'); st.className = 'status-msg error'; }
+      if (btn) { btn.disabled = false; btn.textContent = t('setlist.shareSendBtn'); }
     }
   } catch {
-    if (st) { st.textContent = 'Network error. Please try again.'; st.className = 'status-msg error'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Send PDF'; }
+    if (st) { st.textContent = t('setlist.shareNetworkError'); st.className = 'status-msg error'; }
+    if (btn) { btn.disabled = false; btn.textContent = t('setlist.shareSendBtn'); }
   }
 }
 
@@ -1705,7 +1705,7 @@ async function _histDuplicate(sid) {
 
   if (!token) {
     if (dupBtn) {
-      dupBtn.insertAdjacentHTML('afterend', '<span id="dup-status" style="font-size:0.78rem;color:var(--third-color);display:block;margin-top:0.4rem;">Log in first to duplicate.</span>');
+      dupBtn.insertAdjacentHTML('afterend', '<span id="dup-status" style="font-size:0.78rem;color:var(--third-color);display:block;margin-top:0.4rem;">' + t('setlist.dupLoginFirst') + '</span>');
     }
     return;
   }
@@ -1722,7 +1722,7 @@ async function _histDuplicate(sid) {
     if (r.status === 401) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_TOKEN_KEY);
-      if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = 'Duplicate'; }
+      if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = t('setlist.duplicateTooltip'); }
       return;
     }
 
@@ -1734,10 +1734,10 @@ async function _histDuplicate(sid) {
         _histView.select(String(created.id));
       }
     } else {
-      if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = 'Duplicate'; }
+      if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = t('setlist.duplicateTooltip'); }
     }
   } catch {
-    if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = 'Duplicate'; }
+    if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = t('setlist.duplicateTooltip'); }
   }
 }
 
