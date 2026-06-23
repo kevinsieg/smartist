@@ -17,6 +17,9 @@ window.VENUE_CATEGORIES = [
   { value: 'street',       label: 'Street' },
 ];
 
+// Status/category labels are data values stored in the DB and used as filter keys —
+// not translated. Only UI chrome (column headers, buttons, messages) is translated.
+
 var VENUE_STATUSES   = window.VENUE_STATUSES;
 var VENUE_CATEGORIES = window.VENUE_CATEGORIES;
 
@@ -162,7 +165,7 @@ function checkVenueDuplicate() {
     if (!msgEl) return;
     var match = name.length > 1 ? findVenueDuplicate(name, editingId) : null;
     if (match) {
-      msgEl.innerHTML = 'Possible duplicate: <strong>' + escHtml(match.name) + '</strong>'
+      msgEl.innerHTML = t('venues.possibleDuplicate') + ' <strong>' + escHtml(match.name) + '</strong>'
         + (match.city ? ' (' + escHtml(match.city) + ')' : '')
         + ' — <a href="#" onclick="event.preventDefault();closeVenueModal();openEditModal(' + match.id + ')">open</a>';
       msgEl.style.display = '';
@@ -317,17 +320,17 @@ function switchVenueTab(view) {
 }
 
 var VENUE_COLUMNS = [
-  { field: 'name',    label: 'Name',     width: '1.5fr', sortable: true, filterable: true },
-  { field: 'postcode',label: 'Postcode', width: '90px',  sortable: true, filterable: true, muted: true },
-  { field: 'city',    label: 'City',     width: '1fr',   sortable: true, filterable: true, muted: true },
-  { field: 'country', label: 'Country',  width: '1fr',   sortable: true, filterable: true, muted: true },
-  { field: 'size',    label: 'Capacity', width: '70px',  sortable: true, type: 'number',   muted: true },
-  { field: 'status',  label: 'Status',   width: '90px',
+  { field: 'name',    get label() { return t('venues.colName'); },     width: '1.5fr', sortable: true, filterable: true },
+  { field: 'postcode',get label() { return t('venues.colPostcode'); }, width: '90px',  sortable: true, filterable: true, muted: true },
+  { field: 'city',    get label() { return t('venues.colCity'); },     width: '1fr',   sortable: true, filterable: true, muted: true },
+  { field: 'country', get label() { return t('venues.colCountry'); },  width: '1fr',   sortable: true, filterable: true, muted: true },
+  { field: 'size',    get label() { return t('venues.colCapacity'); }, width: '70px',  sortable: true, type: 'number',   muted: true },
+  { field: 'status',  get label() { return t('venues.colStatus'); },   width: '90px',
     render: v => v.status ? `<span class="sl-badge">${escHtml(v.status)}</span>` : '' },
   { width: 'auto', actions: true, render: function(v) {
-    if (v.deleted)                    return '<span class="sl-deleted-badge">deleted</span>';
+    if (v.deleted)                    return '<span class="sl-deleted-badge">' + t('venues.deletedBadge') + '</span>';
     if (v.category === 'placeholder') return '';
-    return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + v.id + ')">' +
+    return '<button class="btn sl-edit-btn" title="' + t('venues.editTitle') + '" onclick="event.stopPropagation();openEditModal(' + v.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
@@ -364,7 +367,7 @@ initPage(async function(cfg) {
     defaultSort:    'name',
     rowClass:       v => v.deleted ? 'deleted' : '',
     onRowClick:     v => { if (!v.deleted) openVenueGigsModal(v); },
-    emptyHint:      'No venues yet. Add one above.',
+    emptyHint:      t('venues.noVenuesYet'),
   });
 
   placeholderTable = createSortableList({
@@ -373,7 +376,7 @@ initPage(async function(cfg) {
     defaultSort: 'name',
     rowClass:    v => v.deleted ? 'deleted' : '',
     onRowClick:  v => { if (!v.deleted) openVenueGigsModal(v); },
-    emptyHint:   'None.',
+    emptyHint:   t('venues.none'),
   });
 
   const filterEl   = document.getElementById('filter-input');
@@ -471,7 +474,7 @@ function _populateCountryFilter() {
   if (!el) return;
   var selected = el.value;
   var countries = [...new Set(allVenues.map(function(v) { return v.country; }).filter(Boolean))].sort();
-  el.innerHTML = '<option value="">All countries</option>' +
+  el.innerHTML = '<option value="">' + t('venues.allCountries') + '</option>' +
     countries.map(function(c) {
       return '<option value="' + escHtml(c) + '"' + (c === selected ? ' selected' : '') + '>' + escHtml(c) + '</option>';
     }).join('');
@@ -487,14 +490,15 @@ function updateVenuesFooter() {
   const counter = document.getElementById('venues-counter');
   const btn     = document.getElementById('venues-load-more-btn');
   if (!footer || !counter) return;
-  counter.textContent = `Showing ${allVenues.length} of ${_venuesTotal} venue${_venuesTotal !== 1 ? 's' : ''}`;
+  counter.textContent = t(_venuesTotal !== 1 ? 'venues.showingVenues_other' : 'venues.showingVenues_one',
+    { shown: allVenues.length, total: _venuesTotal });
   footer.style.display = _venuesTotal > 0 ? '' : 'none';
   if (btn) btn.style.display = allVenues.length < _venuesTotal ? '' : 'none';
 }
 
 function openAddModal() {
   editingId = null;
-  document.getElementById('venue-modal-title').textContent = 'Add venue';
+  document.getElementById('venue-modal-title').textContent = t('venues.addVenue');
   ['name','street-number','street','postcode','city','country','category','email','website','comment'].forEach(f => {
     const el = document.getElementById(`vm-${f}`); if (el) el.value = '';
   });
@@ -511,7 +515,7 @@ function openEditModal(id) {
   const v = allVenues.find(x => x.id === id);
   if (!v) return;
   editingId = id;
-  document.getElementById('venue-modal-title').textContent = 'Edit venue';
+  document.getElementById('venue-modal-title').textContent = t('venues.editVenue');
   document.getElementById('vm-name').value          = v.name          || '';
   document.getElementById('vm-street-number').value = v.street_number || '';
   document.getElementById('vm-street').value         = v.street        || '';
@@ -544,13 +548,13 @@ async function expandVenue(v) {
       if (!r.ok) throw new Error(r.status);
       _venueRefsCache[v.id] = await r.json();
     } catch {
-      return '<span style="color:#e55;font-size:0.82rem;">Could not load gigs.</span>';
+      return '<span style="color:#e55;font-size:0.82rem;">' + t('venues.couldNotLoadGigs') + '</span>';
     }
   }
   const refs = _venueRefsCache[v.id].refs;
   if (!refs.gigs.length) {
-    return '<div class="expansion-label">Gigs at this venue</div>' +
-      '<span style="color:var(--third-color);font-size:0.82rem;">No gigs yet.</span>';
+    return '<div class="expansion-label">' + t('venues.gigsAtVenueTitle') + '</div>' +
+      '<span style="color:var(--third-color);font-size:0.82rem;">' + t('venues.noGigsYet') + '</span>';
   }
   var n = refs.gigs.length;
   var rows = refs.gigs.slice(0, 10).map(function(g) {
@@ -558,9 +562,10 @@ async function expandVenue(v) {
       (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
       escHtml(g.title) + '</div>';
   }).join('');
+  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n }) + ' at this venue';
   var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?venue=' +
-    encodeURIComponent(v.name).replace(/'/g, '%27') + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue</a>';
-  return '<div class="expansion-label">Gigs at this venue</div>' + rows + link;
+    encodeURIComponent(v.name).replace(/'/g, '%27') + '\')">&#8594; ' + escHtml(allGigsLabel) + '</a>';
+  return '<div class="expansion-label">' + t('venues.gigsAtVenueTitle') + '</div>' + rows + link;
 }
 
 function deleteVenueFromPopup() {
@@ -606,7 +611,7 @@ async function saveVenue() {
     lat:  _geocodeAccepted ? _pendingLat : null,
     lng:  _geocodeAccepted ? _pendingLng : null,
   };
-  setStatus('vm-status-msg', 'Saving…');
+  setStatus('vm-status-msg', t('venues.savingMsg'));
   const url = editingId ? `/api/${artistSlug}/venues/${editingId}` : `/api/${artistSlug}/venues`;
   const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
   const json = await r.json();
@@ -629,18 +634,19 @@ async function renderVenueGigs(venueId, venueName) {
       if (!r.ok) throw new Error(r.status);
       _venueRefsCache[venueId] = await r.json();
     } catch {
-      list.innerHTML = '<span style="color:#e55;font-size:0.82rem;">Could not load gigs.</span>';
+      list.innerHTML = '<span style="color:#e55;font-size:0.82rem;">' + t('venues.couldNotLoadGigs') + '</span>';
       return;
     }
   }
   const { refs } = _venueRefsCache[venueId];
 
   if (!refs.gigs.length) {
-    list.innerHTML = '<span style="color:var(--third-color);font-size:0.82rem;">No gigs yet.</span>';
+    list.innerHTML = '<span style="color:var(--third-color);font-size:0.82rem;">' + t('venues.noGigsYet') + '</span>';
     return;
   }
 
   var n = refs.gigs.length;
+  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n }) + ' at this venue';
   list.innerHTML = refs.gigs.map(function(g) {
     return '<div class="related-gig-item">' +
       (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
@@ -649,7 +655,7 @@ async function renderVenueGigs(venueId, venueName) {
   }).join('') +
   '<a class="related-link" href="#" style="display:block;margin-top:0.5rem;font-size:0.82rem" ' +
     'onclick="event.preventDefault();closeVenueModal();navigate(\'/gigs?venue=' + encodeURIComponent(venueName).replace(/'/g, '%27') + '\')">' +
-    '→ All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' at this venue' +
+    '→ ' + escHtml(allGigsLabel) +
   '</a>';
 }
 
@@ -666,13 +672,13 @@ async function openVenueGigsModal(v) {
       if (!r.ok) throw new Error(r.status);
       _venueRefsCache[v.id] = await r.json();
     } catch {
-      body.innerHTML = '<span style="color:#e55;font-size:0.85rem;">Could not load gigs.</span>';
+      body.innerHTML = '<span style="color:#e55;font-size:0.85rem;">' + t('venues.couldNotLoadGigs') + '</span>';
       return;
     }
   }
   const refs = _venueRefsCache[v.id].refs;
   if (!refs.gigs.length) {
-    body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">No gigs yet.</span>';
+    body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">' + t('venues.noGigsYet') + '</span>';
     return;
   }
   body.innerHTML = refs.gigs.map(function(g) {
