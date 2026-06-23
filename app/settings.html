@@ -11,6 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=27">
+  <script src="/app/js/i18n.js?v=2"></script>
   <style>
     .settings-wrap { max-width: 680px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .invite-bar { display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;padding:1rem 1.1rem;background:var(--surface-color);border:1px solid var(--border-color);border-radius:4px; }
@@ -236,25 +237,25 @@
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=12"></script>
+<script src="/app/js/common.js?v=13"></script>
 
 <div class="app-wrap settings-wrap">
-  <h1>Settings</h1>
-  <div id="settings-loading" style="text-align:center;color:var(--third-color);padding:2rem 0;">Loading…</div>
+  <h1 data-i18n="nav.settings">Settings</h1>
+  <div id="settings-loading" style="text-align:center;color:var(--third-color);padding:2rem 0;" data-i18n="settings.loading">Loading…</div>
 
   <div id="settings-content" style="display:none;">
 
     <section class="settings-card">
-      <h2 class="settings-card-title">Band</h2>
+      <h2 class="settings-card-title" data-i18n="settings.sectionBand">Band</h2>
 
       <!-- Photo -->
       <div class="photo-block">
-        <div class="photo-frame" id="photo-frame" title="Click to upload a photo">
+        <div class="photo-frame" id="photo-frame" data-i18n-attr="title:settings.photoClickToUpload">
           <div class="photo-monogram" id="photo-monogram"></div>
           <img class="photo-img" id="photo-img" src="" alt="" style="display:none;">
-          <div class="photo-overlay">Change photo</div>
+          <div class="photo-overlay" data-i18n="settings.photoChangeOverlay">Change photo</div>
         </div>
-        <span class="photo-hint" id="photo-hint">Click to upload a photo</span>
+        <span class="photo-hint" id="photo-hint" data-i18n="settings.photoClickToUpload">Click to upload a photo</span>
         <div class="photo-progress" id="photo-progress"></div>
         <input type="file" id="photo-input" accept="image/*" style="display:none;">
       </div>
@@ -266,8 +267,8 @@
           <span id="favicon-empty-label">ICO</span>
         </div>
         <div class="favicon-meta">
-          <span class="favicon-label">Favicon</span>
-          <span class="favicon-hint" id="favicon-hint">Upload favicon (PNG, 32×32)</span>
+          <span class="favicon-label" data-i18n="settings.faviconLabel">Favicon</span>
+          <span class="favicon-hint" id="favicon-hint" data-i18n="settings.faviconUploadHint">Upload favicon (PNG, 32×32)</span>
           <div class="favicon-progress" id="favicon-progress"></div>
         </div>
         <input type="file" id="favicon-input" accept="image/png,image/x-icon,image/svg+xml" style="display:none;">
@@ -275,30 +276,30 @@
 
       <!-- Band name -->
       <div class="profile-section">
-        <label for="band-name-input">Band / Artist name</label>
+        <label for="band-name-input" data-i18n="settings.bandNameLabel">Band / Artist name</label>
         <input type="text" id="band-name-input" class="auth-action" maxlength="200" disabled>
         <div class="save-row auth-only">
-          <button class="btn auth-action" id="save-name-btn" disabled>Save</button>
+          <button class="btn auth-action" id="save-name-btn" disabled data-i18n="songs.save">Save</button>
           <span class="save-msg" id="save-name-msg"></span>
         </div>
       </div>
 
       <!-- Slug (read-only) -->
       <div class="profile-section">
-        <label>Slug (URL identifier)</label>
+        <label data-i18n="settings.slugLabel">Slug (URL identifier)</label>
         <div class="slug-value" id="slug-value"></div>
       </div>
     </section>
 
     <section class="settings-card">
-      <h2 class="settings-card-title">App settings</h2>
+      <h2 class="settings-card-title" data-i18n="settings.sectionAppSettings">App settings</h2>
 
       <!-- Privacy -->
       <div class="profile-section">
-        <label>Privacy</label>
+        <label data-i18n="settings.privacyLabel">Privacy</label>
         <label class="config-check-row" style="margin-top:0.4rem;">
           <input type="checkbox" id="private-toggle" disabled>
-          Private workspace — only logged-in members can see songs, setlists, gigs and venues
+          <span data-i18n="settings.privateWorkspaceDesc">Private workspace — only logged-in members can see songs, setlists, gigs and venues</span>
         </label>
         <span class="save-msg" id="private-msg"></span>
       </div>
@@ -306,66 +307,66 @@
       <!-- Song table fields -->
       <div class="profile-section" id="display-fields-section" style="display:none;">
         <div class="config-section-header">
-          <label>Song table columns</label>
-          <button class="config-edit-btn auth-action" disabled onclick="openDisplayFieldsEditor()">Edit</button>
+          <label data-i18n="settings.songTableColumnsLabel">Song table columns</label>
+          <button class="config-edit-btn auth-action" disabled onclick="openDisplayFieldsEditor()" data-i18n="songs.edit">Edit</button>
         </div>
         <div class="config-tags" id="display-fields-tags"></div>
         <div id="display-fields-editor" style="display:none;"></div>
-        <div class="config-hint">Controls which columns appear in the songs table — <code>displayFields</code></div>
+        <div class="config-hint"><span data-i18n="settings.displayFieldsHint">Controls which columns appear in the songs table</span> — <code>displayFields</code></div>
       </div>
 
       <!-- Setlist filter fields -->
       <div class="profile-section" id="filter-fields-section" style="display:none;">
         <div class="config-section-header">
-          <label>Setlist filter buttons</label>
-          <button class="config-edit-btn auth-action" disabled onclick="openFilterFieldsEditor()">Edit</button>
+          <label data-i18n="settings.setlistFilterBtnsLabel">Setlist filter buttons</label>
+          <button class="config-edit-btn auth-action" disabled onclick="openFilterFieldsEditor()" data-i18n="songs.edit">Edit</button>
         </div>
         <div class="config-tags" id="filter-fields-tags"></div>
         <div id="filter-fields-editor" style="display:none;"></div>
-        <div class="config-hint">Controls which filter buttons appear in the setlist generator — <code>filterFields</code></div>
+        <div class="config-hint"><span data-i18n="settings.filterFieldsHint">Controls which filter buttons appear in the setlist generator</span> — <code>filterFields</code></div>
       </div>
     </section>
 
     <section class="settings-card">
-      <h2 class="settings-card-title">Members</h2>
+      <h2 class="settings-card-title" data-i18n="settings.sectionMembers">Members</h2>
       <div class="invite-bar">
         <div class="invite-field">
-          <label for="invite-email">Email</label>
-          <input type="email" id="invite-email" class="invite-input" placeholder="bandmate@example.com">
+          <label for="invite-email" data-i18n="profile.emailLabel">Email</label>
+          <input type="email" id="invite-email" class="invite-input" placeholder="bandmate@example.com" data-i18n-attr="placeholder:settings.inviteEmailPlaceholder">
         </div>
         <div class="invite-field" style="flex:0 0 auto">
-          <label for="invite-role">Role</label>
+          <label for="invite-role" data-i18n="settings.roleLabel">Role</label>
           <select id="invite-role" class="invite-role">
-            <option value="member">member</option>
-            <option value="viewer">viewer</option>
-            <option value="admin">admin</option>
+            <option value="member" data-i18n="settings.roleMember">member</option>
+            <option value="viewer" data-i18n="settings.roleViewer">viewer</option>
+            <option value="admin" data-i18n="settings.roleAdmin">admin</option>
           </select>
         </div>
-        <button class="btn active" id="invite-btn" onclick="sendInvite()">Send invite</button>
+        <button class="btn active" id="invite-btn" onclick="sendInvite()" data-i18n="settings.sendInviteBtn">Send invite</button>
       </div>
       <div id="users-status" class="users-status"></div>
-      <div class="user-section-label">Active</div>
-      <div class="user-list" id="active-list"><p class="empty-users">Loading…</p></div>
+      <div class="user-section-label" data-i18n="settings.activeLabel">Active</div>
+      <div class="user-list" id="active-list"><p class="empty-users" data-i18n="settings.loading">Loading…</p></div>
       <div id="pending-section" style="display:none">
-        <div class="user-section-label">Pending invites</div>
+        <div class="user-section-label" data-i18n="settings.pendingInvitesLabel">Pending invites</div>
         <div class="user-list" id="pending-list"></div>
       </div>
     </section>
 
     <section class="settings-card">
-      <h2 class="settings-card-title">Instruments</h2>
+      <h2 class="settings-card-title" data-i18n="settings.sectionInstruments">Instruments</h2>
       <!-- Arrangement config -->
       <div class="profile-section" id="arrangement-section">
-        <label>Instruments &amp; Techniques</label>
+        <label data-i18n="settings.instrumentsAndTechniquesLabel">Instruments &amp; Techniques</label>
         <div id="arr-instruments-list" class="arr-cfg-list"></div>
-        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddInstrument()">+ Add instrument</button>
+        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddInstrument()" data-i18n="settings.addInstrumentBtn">+ Add instrument</button>
 
-        <label style="margin-top:1.25rem;">Band members</label>
+        <label style="margin-top:1.25rem;" data-i18n="settings.bandMembersLabel">Band members</label>
         <div id="arr-members-list" class="arr-cfg-list"></div>
-        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddMember()">+ Add member</button>
+        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddMember()" data-i18n="settings.addMemberBtn">+ Add member</button>
 
         <div class="arr-save-row">
-          <button class="btn active auth-action" disabled onclick="saveArrangementConfig()">Save arrangement config</button>
+          <button class="btn active auth-action" disabled onclick="saveArrangementConfig()" data-i18n="settings.saveArrConfigBtn">Save arrangement config</button>
           <span class="arr-save-msg" id="arr-save-msg"></span>
         </div>
       </div>
@@ -373,6 +374,6 @@
 
   </div>
 </div>
-<script src="/app/js/settings.js"></script>
+<script src="/app/js/settings.js?v=2"></script>
 </body>
 </html>
