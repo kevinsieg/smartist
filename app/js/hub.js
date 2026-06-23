@@ -69,8 +69,8 @@ function renderCustom(conn) {
        <div class="pc-top">
          <span class="pc-icon pc-icon-add">+</span>
          <div class="pc-info">
-           <div class="pc-name">Add platform</div>
-           <div class="pc-status">Custom integration</div>
+           <div class="pc-name">${t('hub.addPlatform')}</div>
+           <div class="pc-status">${t('hub.customIntegration')}</div>
          </div>
        </div>
      </div>`;
@@ -88,18 +88,18 @@ function platformCard(p, conn) {
         <span class="pc-icon">${escHtml(initials)}</span>
         <div class="pc-info">
           <div class="pc-name">${escHtml(p.label)}</div>
-          <div class="pc-status"><span class="pc-dot${on ? ' pc-dot-on' : ''}"></span>${on ? 'Connected' : 'Not connected'}</div>
+          <div class="pc-status"><span class="pc-dot${on ? ' pc-dot-on' : ''}"></span>${on ? t('hub.connected') : t('hub.notConnected')}</div>
         </div>
       </div>
       ${on ? `<div class="pc-url">${escHtml(urlDisplay)}</div>
               <div class="pc-links" onclick="event.stopPropagation()">
-                <a class="btn pc-visit" href="${safeUrl(conn.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>
+                <a class="btn pc-visit" href="${safeUrl(conn.url)}" target="_blank" rel="noopener noreferrer">${t('hub.visitLink')}</a>
               </div>` : ''}
     </div>`;
 }
 
 function customCard(id, conn) {
-  const label = conn.label || 'Custom';
+  const label = conn.label || t('hub.customFallback');
   const initials = label.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const urlDisplay = conn.url ? conn.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
   return `
@@ -108,12 +108,12 @@ function customCard(id, conn) {
         <span class="pc-icon">${escHtml(initials)}</span>
         <div class="pc-info">
           <div class="pc-name">${escHtml(label)}</div>
-          <div class="pc-status"><span class="pc-dot pc-dot-on"></span>Connected</div>
+          <div class="pc-status"><span class="pc-dot pc-dot-on"></span>${t('hub.connected')}</div>
         </div>
       </div>
       ${conn.url ? `<div class="pc-url">${escHtml(urlDisplay)}</div>
                     <div class="pc-links" onclick="event.stopPropagation()">
-                      <a class="btn pc-visit" href="${safeUrl(conn.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>
+                      <a class="btn pc-visit" href="${safeUrl(conn.url)}" target="_blank" rel="noopener noreferrer">${t('hub.visitLink')}</a>
                     </div>` : ''}
     </div>`;
 }
@@ -124,7 +124,7 @@ function openConnectModal(platformId) {
   const p = PLATFORMS.find(x => x.id === platformId);
   if (!p) return;
   _editingId = platformId;
-  document.getElementById('pm-title').textContent     = `Connect ${p.label}`;
+  document.getElementById('pm-title').textContent     = t('hub.connectTitle', { label: p.label });
   document.getElementById('pm-label-row').style.display = 'none';
   document.getElementById('pm-label').value           = p.label;
   document.getElementById('pm-url').value             = '';
@@ -142,7 +142,7 @@ function openEditModal(platformId) {
   _editingId = platformId;
   const p = PLATFORMS.find(x => x.id === platformId);
   const isCustom = platformId.startsWith('custom_');
-  document.getElementById('pm-title').textContent       = `Edit ${p ? p.label : (conn.label || 'platform')}`;
+  document.getElementById('pm-title').textContent       = t('hub.editTitle', { label: p ? p.label : (conn.label || t('hub.platformFallback')) });
   document.getElementById('pm-label-row').style.display = isCustom ? '' : 'none';
   document.getElementById('pm-label').value             = conn.label || (p?.label || '');
   document.getElementById('pm-url').value               = conn.url  || '';
@@ -156,7 +156,7 @@ function openEditModal(platformId) {
 
 function openAddModal() {
   _editingId = null;
-  document.getElementById('pm-title').textContent       = 'Add platform';
+  document.getElementById('pm-title').textContent       = t('hub.addPlatform');
   document.getElementById('pm-label-row').style.display = '';
   document.getElementById('pm-label').value             = '';
   document.getElementById('pm-url').value               = '';
@@ -175,23 +175,23 @@ async function savePlatform() {
   const label = document.getElementById('pm-label').value.trim();
   const note  = document.getElementById('pm-note').value.trim() || undefined;
 
-  if (!url) { setStatus('pm-status', 'URL is required', true); return; }
+  if (!url) { setStatus('pm-status', t('hub.urlRequired'), true); return; }
 
   const platforms = { ..._platforms() };
 
   if (_editingId === null) {
-    if (!label) { setStatus('pm-status', 'Name is required', true); return; }
+    if (!label) { setStatus('pm-status', t('hub.nameRequired'), true); return; }
     platforms[`custom_${Date.now()}`] = { url, label, note };
   } else {
     const isCustom = _editingId.startsWith('custom_');
     const entry = { url, note };
-    if (isCustom) entry.label = label || platforms[_editingId]?.label || 'Custom';
+    if (isCustom) entry.label = label || platforms[_editingId]?.label || t('hub.customFallback');
     platforms[_editingId] = entry;
   }
 
-  setStatus('pm-status', 'Saving…');
+  setStatus('pm-status', t('hub.saving'));
   const r = await apiFetch('/api/config', 'PATCH', { config: { platforms } });
-  if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || 'Error', true); return; }
+  if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || t('hub.errorFallback'), true); return; }
 
   if (!_cfg.config) _cfg.config = {};
   _cfg.config.platforms = platforms;
@@ -205,9 +205,9 @@ async function disconnectPlatform() {
   const platforms = { ..._platforms() };
   delete platforms[_editingId];
 
-  setStatus('pm-status', 'Saving…');
+  setStatus('pm-status', t('hub.saving'));
   const r = await apiFetch('/api/config', 'PATCH', { config: { platforms } });
-  if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || 'Error', true); return; }
+  if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || t('hub.errorFallback'), true); return; }
 
   if (!_cfg.config) _cfg.config = {};
   _cfg.config.platforms = platforms;
