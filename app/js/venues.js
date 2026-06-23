@@ -562,7 +562,7 @@ async function expandVenue(v) {
       (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
       escHtml(g.title) + '</div>';
   }).join('');
-  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n }) + ' at this venue';
+  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
   var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?venue=' +
     encodeURIComponent(v.name).replace(/'/g, '%27') + '\')">&#8594; ' + escHtml(allGigsLabel) + '</a>';
   return '<div class="expansion-label">' + t('venues.gigsAtVenueTitle') + '</div>' + rows + link;
@@ -572,18 +572,18 @@ function deleteVenueFromPopup() {
   var id = editingId;
   closeVenueModal();
   openHardDeleteModal({
-    title: 'Permanently delete venue?',
+    title: t('venues.deleteTitle'),
     refsUrl: '/api/' + artistSlug + '/venues/' + id + '?refs=1',
     deleteUrl: '/api/' + artistSlug + '/venues/' + id,
     buildRefsMsg: function(refs) {
       return refs.gigs.length > 0
-        ? 'This venue is linked to ' + refs.gigs.length + ' gig(s).'
-        : 'This venue has no linked gigs.';
+        ? t('venues.deleteLinkedGigs', { n: refs.gigs.length })
+        : t('venues.deleteNoGigs');
     },
     buildCascadeOpts: function(refs) {
       if (!refs.gigs.length) return '';
-      return '<label><input type="checkbox" id="hd-cascade-gigs"> Also delete ' + refs.gigs.length + ' linked gig(s)</label><br>' +
-        '<label><input type="checkbox" id="hd-cascade-setlists"> Also delete setlists linked to those gigs</label>';
+      return '<label><input type="checkbox" id="hd-cascade-gigs"> ' + t('venues.deleteCascadeGigs', { n: refs.gigs.length }) + '</label><br>' +
+        '<label><input type="checkbox" id="hd-cascade-setlists"> ' + t('venues.deleteCascadeSetlists') + '</label>';
     },
     getCascade: function() {
       var c = [];
@@ -646,7 +646,7 @@ async function renderVenueGigs(venueId, venueName) {
   }
 
   var n = refs.gigs.length;
-  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n }) + ' at this venue';
+  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
   list.innerHTML = refs.gigs.map(function(g) {
     return '<div class="related-gig-item">' +
       (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
@@ -663,7 +663,7 @@ async function openVenueGigsModal(v) {
   var titleEl = document.getElementById('vgm-title');
   var body    = document.getElementById('vgm-body');
   if (!titleEl || !body) return;
-  titleEl.textContent = v.name || 'Gigs at this venue';
+  titleEl.textContent = v.name || t('venues.gigsAtVenueTitle');
   body.innerHTML = skeletonHtml(3);
   openModal('venue-gigs-modal');
   if (!_venueRefsCache[v.id]) {
