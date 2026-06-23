@@ -1683,7 +1683,7 @@ async function _histShareSend(sid) {
 
     if (r.ok) {
       sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-      if (st) { st.textContent = t('setlist.shareSentTo', { email: escHtml(email) }); st.className = 'status-msg success'; st.style.display = 'block'; }
+      if (st) { st.textContent = t('setlist.shareSentTo', { email: email }); st.className = 'status-msg success'; st.style.display = 'block'; }
       if (btn) btn.disabled = true;
       setTimeout(function() { _histCancelEdit(sid); }, 1800);
     } else {
