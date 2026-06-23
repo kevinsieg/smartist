@@ -8,6 +8,17 @@ var pastTable;
 var _gigsTotal = 0;
 var _gigsOffset = 0;
 
+function _gigTypeLabel(type) {
+  var map = {
+    concert: t('gigs.typeConcert'),
+    festival: t('gigs.typeFestival'),
+    wedding: t('gigs.typeWedding'),
+    private: t('gigs.typePrivate'),
+    other: t('gigs.typeOther')
+  };
+  return map[type] || escHtml(type);
+}
+
 var _gigFilters = { gig: '', venue: '', setlist: '', song: '' };
 var _gigAllSetlists = [];
 var _gigSongTimer = null;
@@ -181,7 +192,7 @@ var GIG_COLUMNS = [
     render: g => { if (!g.date) return '—'; var d = String(g.date); return d.slice(8, 10) + '/' + d.slice(5, 7); } },
   { field: 'title',      get label() { return t('gigs.colTitle'); },  width: '1fr',   sortable: true, filterable: true },
   { field: 'type',       get label() { return t('gigs.colType'); },   width: '80px',
-    render: g => g.type ? `<span class="sl-badge">${escHtml(g.type)}</span>` : '' },
+    render: g => g.type ? `<span class="sl-badge">${_gigTypeLabel(g.type)}</span>` : '' },
   { field: 'venue_name', get label() { return t('gigs.colVenue'); },  width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
     if (g.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>' +
@@ -204,7 +215,7 @@ function _ensureLightbox() {
   if (_gigLightboxEl) return;
   _gigLightboxEl = document.createElement('div');
   _gigLightboxEl.className = 'gig-lightbox';
-  _gigLightboxEl.innerHTML = '<img class="gig-lightbox-img" src="" alt="Poster">';
+  _gigLightboxEl.innerHTML = '<img class="gig-lightbox-img" src="" alt="' + t('gigs.posterAlt') + '">';
   _gigLightboxEl.addEventListener('click', closeLightbox);
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
   document.body.appendChild(_gigLightboxEl);
@@ -687,7 +698,7 @@ function expandGig(g) {
   if (g.venue_name)      rows.push([t('gigs.expandVenue'),     escHtml(g.venue_name)]);
   if (!g.venue_name && g.location) rows.push([t('gigs.expandLocation'), escHtml(g.location)]);
   if (g.organizer_name) rows.push([t('gigs.expandOrganizer'), escHtml(g.organizer_name)]);
-  if (g.type)            rows.push([t('gigs.expandType'),      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
+  if (g.type)            rows.push([t('gigs.expandType'),      _gigTypeLabel(g.type)]);
   if (g.time_start)      rows.push([t('gigs.expandTime'),      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
   if (g.additional_link) rows.push([t('gigs.expandLink'),      '<a href="' + escHtml(safeUrl(g.additional_link)) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
   if (g.comment) rows.push([t('gigs.expandNotes'), escHtml(g.comment)]);
