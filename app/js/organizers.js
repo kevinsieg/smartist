@@ -10,15 +10,15 @@ var _orgsQ = '';
 var _orgsTimer = null;
 
 var ORGANIZER_COLUMNS = [
-  { field: 'name',    label: 'Name',    width: '1.5fr', sortable: true, filterable: true },
-  { field: 'type',    label: 'Type',    width: '90px',  sortable: true,
+  { field: 'name',    get label() { return t('venues.colName'); },    width: '1.5fr', sortable: true, filterable: true },
+  { field: 'type',    get label() { return t('organizers.fieldType'); },    width: '90px',  sortable: true,
     render: o => o.type ? `<span class="sl-badge">${escHtml(o.type)}</span>` : '' },
-  { field: 'city',    label: 'City',    width: '1fr',   sortable: true, filterable: true, muted: true },
-  { field: 'country', label: 'Country', width: '1fr',   sortable: true, filterable: true, muted: true },
-  { field: 'email',   label: 'Email',   width: '1fr',   sortable: true, filterable: true, muted: true },
+  { field: 'city',    get label() { return t('venues.colCity'); },    width: '1fr',   sortable: true, filterable: true, muted: true },
+  { field: 'country', get label() { return t('venues.colCountry'); }, width: '1fr',   sortable: true, filterable: true, muted: true },
+  { field: 'email',   get label() { return t('venues.fieldEmail'); }, width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(o) {
-    if (o.deleted) return '<span class="sl-deleted-badge">deleted</span>';
-    return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + o.id + ')">' +
+    if (o.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>';
+    return '<button class="btn sl-edit-btn" title="' + t('organizers.editBtnTitle') + '" onclick="event.stopPropagation();openEditModal(' + o.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
@@ -34,7 +34,7 @@ initPage(async function(cfg) {
     defaultSort:   'name',
     rowClass:      o => o.deleted ? 'deleted' : '',
     onExpand:      o => expandOrganizer(o),
-    emptyHint:     'No organizers yet. Add one above.',
+    emptyHint:     t('organizers.noOrganizersYet'),
   });
 
   const filterEl = document.getElementById('filter-input');
@@ -84,14 +84,14 @@ function updateOrgsFooter() {
   const counter = document.getElementById('organizers-counter');
   const btn     = document.getElementById('organizers-load-more-btn');
   if (!footer || !counter) return;
-  counter.textContent = `Showing ${allOrganizers.length} of ${_orgsTotal} organizer${_orgsTotal !== 1 ? 's' : ''}`;
+  counter.textContent = t(_orgsTotal !== 1 ? 'organizers.showing_other' : 'organizers.showing_one', { shown: allOrganizers.length, total: _orgsTotal });
   footer.style.display = _orgsTotal > 0 ? '' : 'none';
   if (btn) btn.style.display = allOrganizers.length < _orgsTotal ? '' : 'none';
 }
 
 function openAddModal() {
   editingId = null;
-  document.getElementById('organizer-modal-title').textContent = 'Add organizer';
+  document.getElementById('organizer-modal-title').textContent = t('organizers.addTitle');
   ['name','email','phone','website','city','country','comment'].forEach(f => {
     const el = document.getElementById(`om-${f}`); if (el) el.value = '';
   });
@@ -106,7 +106,7 @@ function openEditModal(id) {
   const o = allOrganizers.find(x => x.id === id);
   if (!o) return;
   editingId = id;
-  document.getElementById('organizer-modal-title').textContent = 'Edit organizer';
+  document.getElementById('organizer-modal-title').textContent = t('organizers.editTitle');
   document.getElementById('om-name').value    = o.name    || '';
   document.getElementById('om-type').value    = o.type    || '';
   document.getElementById('om-email').value   = o.email   || '';
@@ -132,13 +132,13 @@ async function expandOrganizer(o) {
       if (!r.ok) throw new Error(r.status);
       _orgRefsCache[o.id] = await r.json();
     } catch {
-      return '<span style="color:#e55;font-size:0.82rem;">Could not load gigs.</span>';
+      return '<span style="color:#e55;font-size:0.82rem;">' + t('venues.couldNotLoadGigs') + '</span>';
     }
   }
   const refs = _orgRefsCache[o.id].refs;
   if (!refs.gigs.length) {
-    return '<div class="expansion-label">Gigs organised</div>' +
-      '<span style="color:var(--third-color);font-size:0.82rem;">No gigs yet.</span>';
+    return '<div class="expansion-label">' + t('organizers.gigsOrganised') + '</div>' +
+      '<span style="color:var(--third-color);font-size:0.82rem;">' + t('venues.noGigsYet') + '</span>';
   }
   var n = refs.gigs.length;
   var rows = refs.gigs.slice(0, 10).map(function(g) {
@@ -150,26 +150,26 @@ async function expandOrganizer(o) {
       escHtml(g.title) + venue + '</div>';
   }).join('');
   var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?organizer=' +
-    encodeURIComponent(o.name).replace(/'/g, '%27') + '\')">&#8594; All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' by this organizer</a>';
-  return '<div class="expansion-label">Gigs organised</div>' + rows + link;
+    encodeURIComponent(o.name).replace(/'/g, '%27') + '\')">' + t(n !== 1 ? 'organizers.allGigsLink_other' : 'organizers.allGigsLink_one', { n: n }) + '</a>';
+  return '<div class="expansion-label">' + t('organizers.gigsOrganised') + '</div>' + rows + link;
 }
 
 function deleteOrgFromPopup() {
   var id = editingId;
   closeOrgModal();
   openHardDeleteModal({
-    title: 'Permanently delete organizer?',
+    title: t('organizers.deleteTitle'),
     refsUrl: '/api/' + artistSlug + '/organizers/' + id + '?refs=1',
     deleteUrl: '/api/' + artistSlug + '/organizers/' + id,
     buildRefsMsg: function(refs) {
       return refs.gigs.length > 0
-        ? 'This organizer is linked to ' + refs.gigs.length + ' gig(s).'
-        : 'This organizer has no linked gigs.';
+        ? t('organizers.linkedGigs', { n: refs.gigs.length })
+        : t('organizers.noLinkedGigs');
     },
     buildCascadeOpts: function(refs) {
       if (!refs.gigs.length) return '';
-      return '<label><input type="checkbox" id="hd-cascade-gigs"> Also delete ' + refs.gigs.length + ' linked gig(s)</label><br>' +
-        '<label><input type="checkbox" id="hd-cascade-setlists"> Also delete setlists linked to those gigs</label>';
+      return '<label><input type="checkbox" id="hd-cascade-gigs"> ' + t('organizers.deleteCascadeGigs', { n: refs.gigs.length }) + '</label><br>' +
+        '<label><input type="checkbox" id="hd-cascade-setlists"> ' + t('organizers.deleteCascadeSetlists') + '</label>';
     },
     getCascade: function() {
       var c = [];
@@ -193,14 +193,14 @@ async function renderOrganizerGigs(orgId, orgName) {
       if (!r.ok) throw new Error(r.status);
       _orgRefsCache[orgId] = await r.json();
     } catch {
-      list.innerHTML = '<span style="color:#e55;font-size:0.82rem;">Could not load gigs.</span>';
+      list.innerHTML = '<span style="color:#e55;font-size:0.82rem;">' + t('venues.couldNotLoadGigs') + '</span>';
       return;
     }
   }
   const { refs } = _orgRefsCache[orgId];
 
   if (!refs.gigs.length) {
-    list.innerHTML = '<span style="color:var(--third-color);font-size:0.82rem;">No gigs yet.</span>';
+    list.innerHTML = '<span style="color:var(--third-color);font-size:0.82rem;">' + t('venues.noGigsYet') + '</span>';
     return;
   }
 
@@ -213,7 +213,7 @@ async function renderOrganizerGigs(orgId, orgName) {
   }).join('') +
   '<a class="related-link" href="#" style="display:block;margin-top:0.5rem;font-size:0.82rem" ' +
     'onclick="event.preventDefault();closeOrgModal();navigate(\'/gigs?organizer=' + encodeURIComponent(orgName).replace(/'/g, '%27') + '\')">' +
-    '→ All ' + n + ' gig' + (n !== 1 ? 's' : '') + ' by this organizer' +
+    t(n !== 1 ? 'organizers.allGigsLink_other' : 'organizers.allGigsLink_one', { n: n }) +
   '</a>';
 }
 
@@ -228,11 +228,11 @@ async function saveOrganizer() {
     country: document.getElementById('om-country').value.trim() || null,
     comment: document.getElementById('om-comment').value.trim() || null,
   };
-  setStatus('om-status-msg', 'Saving…');
+  setStatus('om-status-msg', t('venues.savingMsg'));
   const url = editingId ? `/api/${artistSlug}/organizers/${editingId}` : `/api/${artistSlug}/organizers`;
   const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
   const json = await r.json();
-  if (!r.ok) { setStatus('om-status-msg', json.error || 'Error', true); return; }
+  if (!r.ok) { setStatus('om-status-msg', json.error || t('gigs.errorFallback'), true); return; }
   if (editingId) delete _orgRefsCache[editingId];
   closeOrgModal();
   _orgsOffset = 0;
