@@ -167,7 +167,7 @@ function checkVenueDuplicate() {
     if (match) {
       msgEl.innerHTML = t('venues.possibleDuplicate') + ' <strong>' + escHtml(match.name) + '</strong>'
         + (match.city ? ' (' + escHtml(match.city) + ')' : '')
-        + ' — <a href="#" onclick="event.preventDefault();closeVenueModal();openEditModal(' + match.id + ')">open</a>';
+        + ' — <a href="#" onclick="event.preventDefault();closeVenueModal();openEditModal(' + match.id + ')">' + t('venues.openLink') + '</a>';
       msgEl.style.display = '';
     } else {
       msgEl.style.display = 'none';
