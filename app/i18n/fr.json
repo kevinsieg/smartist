@@ -969,5 +969,39 @@
   "touring.conflictDetectionBtn": "Vérifier les conflits",
   "touring.sectionUpcoming": "Dates à venir",
   "touring.noDates": "Aucune date planifiée pour l'instant",
-  "touring.noDatesHint": "Ajoutez des concerts depuis la page Concerts ou connectez vos réservations de salles ici"
+  "touring.noDatesHint": "Ajoutez des concerts depuis la page Concerts ou connectez vos réservations de salles ici",
+
+  "map.popupCapacity": "Capacité",
+  "map.popupView": "Voir →",
+  "map.filterStatus": "Statut",
+  "map.filterCategory": "Catégorie",
+  "map.filterSize": "Taille",
+  "map.sizeAny": "Toutes",
+  "map.geocodeBtn": "Obtenir les coordonnées",
+  "map.scopeConfirmed": "Confirmées uniquement",
+  "map.scopeAll": "Toutes les salles",
+  "map.loadBtn": "Charger",
+  "map.loading": "Chargement…",
+  "map.notOnMap_one": "{n} salle absent de la carte",
+  "map.notOnMap_other": "{n} salles absentes de la carte",
+  "map.geocodeProgress": "{done} / {total} traités — {saved} enregistrés",
+  "map.geocodeFailed": ", {failed} échoués",
+  "map.geocodeDone": "Terminé : {saved} enregistrés.",
+  "map.geocodeDoneFailed": "Terminé : {saved} enregistrés, {failed} échoués.",
+
+  "list.searchPlaceholder": "Rechercher…",
+  "list.noResults": "Aucun résultat.",
+  "list.groupCount_one": "{count} élément",
+  "list.groupCount_other": "{count} éléments",
+  "list.couldNotLoadDetails": "Impossible de charger les détails.",
+
+  "share.wrongPassword": "Mot de passe incorrect.",
+  "share.failedToSend": "Échec de l'envoi.",
+  "share.networkError": "Erreur réseau. Veuillez réessayer.",
+
+  "auth.googleUnavailable": "Connexion Google indisponible",
+  "auth.facebookUnavailable": "Connexion Facebook indisponible",
+  "auth.failedToSendLink": "Échec de l'envoi du lien",
+  "auth.signUpFailed": "Échec de l'inscription",
+  "auth.configUnavailable": "Configuration indisponible"
 }
