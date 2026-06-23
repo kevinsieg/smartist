@@ -615,7 +615,7 @@ async function saveVenue() {
   const url = editingId ? `/api/${artistSlug}/venues/${editingId}` : `/api/${artistSlug}/venues`;
   const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
   const json = await r.json();
-  if (!r.ok) { setStatus('vm-status-msg', json.error || 'Error', true); return; }
+  if (!r.ok) { setStatus('vm-status-msg', json.error || t('gigs.errorFallback'), true); return; }
   if (editingId) delete _venueRefsCache[editingId];
   closeVenueModal();
   _venuesOffset = 0;
