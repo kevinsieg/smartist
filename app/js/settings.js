@@ -296,8 +296,8 @@ function renderArrInstruments(instruments) {
   var list = document.getElementById('arr-instruments-list');
   if (!list) return;
   list.innerHTML = instruments.map(function(inst, i) {
-    var chips = (inst.techniques || []).map(function(t, ti) {
-      return '<span class="arr-tech-chip">' + escHtml(t) +
+    var chips = (inst.techniques || []).map(function(_tech, ti) {
+      return '<span class="arr-tech-chip">' + escHtml(_tech) +
         '<button onclick="arrRemoveTechnique(' + i + ',' + ti + ')" title="' + t('songs.remove') + '">&#215;</button></span>';
     }).join('');
     return '<div class="arr-instrument-card">' +
