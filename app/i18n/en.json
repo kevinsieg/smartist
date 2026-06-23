@@ -969,5 +969,39 @@
   "touring.conflictDetectionBtn": "Check conflicts",
   "touring.sectionUpcoming": "Upcoming dates",
   "touring.noDates": "No dates scheduled yet",
-  "touring.noDatesHint": "Add gigs from the Gigs page or connect your venue bookings here"
+  "touring.noDatesHint": "Add gigs from the Gigs page or connect your venue bookings here",
+
+  "map.popupCapacity": "Capacity",
+  "map.popupView": "View →",
+  "map.filterStatus": "Status",
+  "map.filterCategory": "Category",
+  "map.filterSize": "Size",
+  "map.sizeAny": "Any",
+  "map.geocodeBtn": "Get coordinates",
+  "map.scopeConfirmed": "Confirmed only",
+  "map.scopeAll": "All venues",
+  "map.loadBtn": "Load",
+  "map.loading": "Loading…",
+  "map.notOnMap_one": "{n} venue not on map",
+  "map.notOnMap_other": "{n} venues not on map",
+  "map.geocodeProgress": "{done} / {total} processed — {saved} saved",
+  "map.geocodeFailed": ", {failed} failed",
+  "map.geocodeDone": "Done: {saved} saved.",
+  "map.geocodeDoneFailed": "Done: {saved} saved, {failed} failed.",
+
+  "list.searchPlaceholder": "Search…",
+  "list.noResults": "No results.",
+  "list.groupCount_one": "{count} item",
+  "list.groupCount_other": "{count} items",
+  "list.couldNotLoadDetails": "Could not load details.",
+
+  "share.wrongPassword": "Wrong password.",
+  "share.failedToSend": "Failed to send.",
+  "share.networkError": "Network error. Please try again.",
+
+  "auth.googleUnavailable": "Google login unavailable",
+  "auth.facebookUnavailable": "Facebook login unavailable",
+  "auth.failedToSendLink": "Failed to send link",
+  "auth.signUpFailed": "Sign-up failed",
+  "auth.configUnavailable": "Config unavailable"
 }
