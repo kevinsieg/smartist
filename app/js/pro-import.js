@@ -57,7 +57,7 @@ async function runValidate() {
   if (!_csvText) return;
   _csvType = document.getElementById('type-select').value;
 
-  setStatus('Validating…');
+  setStatus(t('pro.statusValidating'));
   document.getElementById('validate-btn').disabled = true;
   document.getElementById('preview-area').style.display = 'none';
 
@@ -67,7 +67,7 @@ async function runValidate() {
     renderPreview(data);
     setStatus('');
   } catch (e) {
-    setStatus('Error: ' + e.message, true);
+    setStatus(t('pro.statusError', { msg: e.message }), true);
   } finally {
     document.getElementById('validate-btn').disabled = false;
   }
@@ -77,7 +77,7 @@ async function runImport() {
   if (!_csvText || !_validationResult) return;
   _csvType = document.getElementById('type-select').value;
 
-  setStatus('Importing…');
+  setStatus(t('pro.statusImporting'));
   document.getElementById('import-btn').disabled = true;
 
   try {
@@ -89,7 +89,7 @@ async function runImport() {
     _csvType = null;
     _validationResult = null;
   } catch (e) {
-    setStatus('Error: ' + e.message, true);
+    setStatus(t('pro.statusError', { msg: e.message }), true);
     document.getElementById('import-btn').disabled = false;
   }
 }
@@ -102,7 +102,7 @@ async function callImport({ dryRun }) {
     ownerIpNameNumber: document.getElementById('owner-ip').value.trim() || undefined,
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error || 'Import failed');
+  if (!r.ok) throw new Error(data.error || t('pro.importFailed'));
   return data;
 }
 
@@ -124,38 +124,38 @@ function renderResult(data) {
 }
 
 function summaryHtml(data, isDryRun) {
-  const label = isDryRun ? 'Preview' : 'Imported';
+  const label = isDryRun ? t('pro.summaryPreview') : t('pro.summaryImported');
   if (data.type === 'beteiligte') {
     const { total, worksFound, worksMissing, errors } = data.summary;
-    const warn     = worksMissing ? `<span class="gema-badge gema-badge-warn">${worksMissing} works not in DB</span>` : '';
-    const errBadge = errors       ? `<span class="gema-badge gema-badge-err">${errors} errors</span>` : '';
+    const warn     = worksMissing ? `<span class="gema-badge gema-badge-warn">${worksMissing} ${t('pro.summaryWorksNotInDb')}</span>` : '';
+    const errBadge = errors       ? `<span class="gema-badge gema-badge-err">${errors} ${t('pro.summaryErrors')}</span>` : '';
     return `<strong>${label}:</strong>
-      <span class="gema-badge">${total} rightholders</span>
-      <span class="gema-badge gema-badge-ok">${worksFound} works updated</span>
+      <span class="gema-badge">${total} ${t('pro.summaryRightholders')}</span>
+      <span class="gema-badge gema-badge-ok">${worksFound} ${t('pro.summaryWorksUpdated')}</span>
       ${warn}${errBadge}`;
   }
   const { total, matched, matchedExact, matchedNorm, ownUnmatched, otherProject, new: newCount, existing, errors } = data.summary;
 
   const matchDetail = matchedNorm
-    ? `${matched} linked (${matchedExact} exact · ${matchedNorm} normalised)`
-    : `${matched} linked to songs`;
+    ? t('pro.summaryMatchedDetail', { matched, matchedExact, matchedNorm })
+    : t('pro.summaryLinkedToSongs', { matched });
 
   const ownBadge   = ownUnmatched != null && ownUnmatched > 0
-    ? `<span class="gema-badge gema-badge-own">${ownUnmatched} own composition${ownUnmatched > 1 ? 's' : ''}, no song match</span>`
+    ? `<span class="gema-badge gema-badge-own">${ownUnmatched > 1 ? t('pro.summaryOwnCompositions', { n: ownUnmatched }) : t('pro.summaryOwnComposition', { n: ownUnmatched })}, ${t('pro.summaryNoSongMatch')}</span>`
     : '';
   const otherBadge = otherProject != null && otherProject > 0
-    ? `<span class="gema-badge gema-badge-other">${otherProject} other-project work${otherProject > 1 ? 's' : ''}</span>`
+    ? `<span class="gema-badge gema-badge-other">${otherProject > 1 ? t('pro.summaryOtherWorks', { n: otherProject }) : t('pro.summaryOtherWork', { n: otherProject })}</span>`
     : '';
   const warnBadge  = ownUnmatched == null && (total - matched) > 0
-    ? `<span class="gema-badge gema-badge-warn">${total - matched} unmatched</span>`
+    ? `<span class="gema-badge gema-badge-warn">${total - matched} ${t('pro.summaryUnmatched')}</span>`
     : '';
-  const errBadge   = errors ? `<span class="gema-badge gema-badge-err">${errors} errors</span>` : '';
+  const errBadge   = errors ? `<span class="gema-badge gema-badge-err">${errors} ${t('pro.summaryErrors')}</span>` : '';
 
   return `<strong>${label}:</strong>
-    <span class="gema-badge">${total} works</span>
+    <span class="gema-badge">${total} ${t('pro.summaryWorks')}</span>
     <span class="gema-badge gema-badge-ok">${matchDetail}</span>
     ${ownBadge}${otherBadge}${warnBadge}
-    <span class="gema-badge">${newCount} new · ${existing} existing</span>
+    <span class="gema-badge">${newCount} ${t('pro.summaryNew')} · ${existing} ${t('pro.summaryExisting')}</span>
     ${errBadge}`;
 }
 
@@ -173,25 +173,25 @@ function tableHtml(data, isDryRun) {
 function infoTableHtml(rows, type) {
   const isIds = type === 'ids';
   const hasOwn = rows.some(r => r.isOwnWork !== null);
-  const ownTh  = hasOwn ? '<th>Own?</th>' : '';
-  const matchTh = '<th>Match</th>';
+  const ownTh  = hasOwn ? `<th>${t('pro.colOwn')}</th>` : '';
+  const matchTh = `<th>${t('pro.colMatch')}</th>`;
   const ths = isIds
-    ? `<th>Work #</th><th>Title</th><th>Linked song</th>${matchTh}${ownTh}<th>Status</th><th>ISWC</th><th>ISRC</th>`
-    : `<th>Work #</th><th>Title</th><th>Linked song</th>${matchTh}${ownTh}<th>Status</th><th>Lang</th><th>Duration</th>`;
+    ? `<th>${t('pro.colWorkNr')}</th><th>${t('pro.colTitle')}</th><th>${t('pro.colLinkedSong')}</th>${matchTh}${ownTh}<th>${t('pro.colStatus')}</th><th>ISWC</th><th>ISRC</th>`
+    : `<th>${t('pro.colWorkNr')}</th><th>${t('pro.colTitle')}</th><th>${t('pro.colLinkedSong')}</th>${matchTh}${ownTh}<th>${t('pro.colStatus')}</th><th>${t('pro.colLang')}</th><th>${t('pro.colDuration')}</th>`;
 
   const trs = rows.map(r => {
     const matchBadge = r.matchedBy === 'exact'
-      ? '<span class="gema-badge gema-badge-ok">exact</span>'
+      ? `<span class="gema-badge gema-badge-ok">${t('pro.matchExact')}</span>`
       : r.matchedBy === 'normalized'
-      ? '<span class="gema-badge gema-badge-new">~norm</span>'
+      ? `<span class="gema-badge gema-badge-new">${t('pro.matchNorm')}</span>`
       : '<span style="color:var(--third-color)">—</span>';
 
     const ownCell = hasOwn
-      ? `<td>${r.isOwnWork === true ? '<span class="gema-badge gema-badge-own">own</span>' : r.isOwnWork === false ? '<span class="gema-badge gema-badge-other">other</span>' : '—'}</td>`
+      ? `<td>${r.isOwnWork === true ? `<span class="gema-badge gema-badge-own">${t('pro.ownLabel')}</span>` : r.isOwnWork === false ? `<span class="gema-badge gema-badge-other">${t('pro.otherLabel')}</span>` : '—'}</td>`
       : '';
 
     const linked  = r.matchedSong ? escHtml(r.matchedSong) : '<span style="color:var(--third-color)">—</span>';
-    const status  = r.isNew ? '<span class="gema-badge gema-badge-new">new</span>' : '<span class="gema-badge">update</span>';
+    const status  = r.isNew ? `<span class="gema-badge gema-badge-new">${t('pro.statusNew')}</span>` : `<span class="gema-badge">${t('pro.statusUpdate')}</span>`;
     const errCell = r.error ? `<td colspan="2" style="color:var(--danger-color)">${escHtml(r.error)}</td>` : '';
     const extra   = isIds
       ? `<td>${r.iswc || '—'}</td><td>${r.isrc || '—'}</td>`
@@ -216,9 +216,9 @@ function infoTableHtml(rows, type) {
 }
 
 function beteiligteTableHtml(rows) {
-  const ths = '<th>Work #</th><th>Title</th><th>In DB</th><th>New rightholders</th><th>Replacing</th><th>Names</th>';
+  const ths = `<th>${t('pro.colWorkNr')}</th><th>${t('pro.colTitle')}</th><th>${t('pro.colInDb')}</th><th>${t('pro.colNewRightholders')}</th><th>${t('pro.colReplacing')}</th><th>${t('pro.colNames')}</th>`;
   const trs = rows.map(r => {
-    const inDb    = r.found ? '✓' : '<span style="color:var(--danger-color)">✗ missing</span>';
+    const inDb    = r.found ? '✓' : `<span style="color:var(--danger-color)">✗ ${t('pro.missing')}</span>`;
     const names   = r.rightholders.map(rh => `${escHtml(rh.name)} (${rh.role ?? '?'})`).join(', ');
     const errCell = r.error ? `<td colspan="3" style="color:var(--danger-color)">${escHtml(r.error)}</td>` : '';
     return `<tr${!r.found ? ' class="gema-row-warn"' : ''}${r.error ? ' class="gema-row-err"' : ''}>
