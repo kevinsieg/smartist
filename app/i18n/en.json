@@ -930,5 +930,23 @@
   "settings.standardFields": "Standard fields",
   "settings.customExtraFields": "Custom extra fields",
   "settings.labelPlaceholder": "Label",
-  "settings.noFieldsConfigured": "No fields configured yet. Set up song table columns first."
+  "settings.noFieldsConfigured": "No fields configured yet. Set up song table columns first.",
+
+  "contact.heading": "Contact",
+  "contact.hint": "Found a bug, missing a feature, or have an idea? Write us — we read everything.",
+  "contact.nameLabel": "Name",
+  "contact.namePlaceholder": "Your name",
+  "contact.emailLabel": "Email",
+  "contact.emailPlaceholder": "your@email.com",
+  "contact.messageLabel": "Message",
+  "contact.messagePlaceholder": "What happened, or what would make smartist better for you?",
+  "contact.sendBtn": "Send message",
+  "contact.sending": "Sending…",
+  "contact.sent": "Sent",
+  "contact.successMsg": "Thanks — your message was sent.",
+  "contact.errNameRequired": "Please enter your name.",
+  "contact.errEmailRequired": "Please enter your email.",
+  "contact.errMessageRequired": "Please enter a message.",
+  "contact.errGeneric": "Failed to send — try again later.",
+  "contact.errNetwork": "Connection error — try again."
 }
