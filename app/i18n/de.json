@@ -969,5 +969,39 @@
   "touring.conflictDetectionBtn": "Konflikte prüfen",
   "touring.sectionUpcoming": "Bevorstehende Auftritte",
   "touring.noDates": "Noch keine Termine geplant",
-  "touring.noDatesHint": "Fügen Sie Auftritte auf der Seite Auftritte hinzu oder verbinden Sie hier Ihre Locationbuchungen"
+  "touring.noDatesHint": "Fügen Sie Auftritte auf der Seite Auftritte hinzu oder verbinden Sie hier Ihre Locationbuchungen",
+
+  "map.popupCapacity": "Kapazität",
+  "map.popupView": "Ansehen →",
+  "map.filterStatus": "Status",
+  "map.filterCategory": "Kategorie",
+  "map.filterSize": "Größe",
+  "map.sizeAny": "Alle",
+  "map.geocodeBtn": "Koordinaten abrufen",
+  "map.scopeConfirmed": "Nur bestätigte",
+  "map.scopeAll": "Alle Locations",
+  "map.loadBtn": "Laden",
+  "map.loading": "Laden…",
+  "map.notOnMap_one": "{n} Location nicht auf der Karte",
+  "map.notOnMap_other": "{n} Locations nicht auf der Karte",
+  "map.geocodeProgress": "{done} / {total} verarbeitet — {saved} gespeichert",
+  "map.geocodeFailed": ", {failed} fehlgeschlagen",
+  "map.geocodeDone": "Fertig: {saved} gespeichert.",
+  "map.geocodeDoneFailed": "Fertig: {saved} gespeichert, {failed} fehlgeschlagen.",
+
+  "list.searchPlaceholder": "Suchen…",
+  "list.noResults": "Keine Ergebnisse.",
+  "list.groupCount_one": "{count} Eintrag",
+  "list.groupCount_other": "{count} Einträge",
+  "list.couldNotLoadDetails": "Details konnten nicht geladen werden.",
+
+  "share.wrongPassword": "Falsches Passwort.",
+  "share.failedToSend": "Senden fehlgeschlagen.",
+  "share.networkError": "Netzwerkfehler. Bitte erneut versuchen.",
+
+  "auth.googleUnavailable": "Google-Anmeldung nicht verfügbar",
+  "auth.facebookUnavailable": "Facebook-Anmeldung nicht verfügbar",
+  "auth.failedToSendLink": "Link konnte nicht gesendet werden",
+  "auth.signUpFailed": "Registrierung fehlgeschlagen",
+  "auth.configUnavailable": "Konfiguration nicht verfügbar"
 }

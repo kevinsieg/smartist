@@ -9,15 +9,15 @@ async function sendSetlistEmail(slug, setlistId, email, token) {
     });
     if (r.status === 401) {
       sessionStorage.removeItem('smartist_token');
-      return { ok: false, unauthorized: true, error: 'Wrong password.' };
+      return { ok: false, unauthorized: true, error: t('share.wrongPassword') };
     }
     if (r.ok) {
       sessionStorage.setItem('smartist_token', token);
       return { ok: true };
     }
     var err = await r.json().catch(function() { return {}; });
-    return { ok: false, error: err.error || 'Failed to send.' };
+    return { ok: false, error: err.error || t('share.failedToSend') };
   } catch {
-    return { ok: false, error: 'Network error. Please try again.' };
+    return { ok: false, error: t('share.networkError') };
   }
 }
