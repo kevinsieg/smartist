@@ -948,5 +948,26 @@
   "contact.errEmailRequired": "Please enter your email.",
   "contact.errMessageRequired": "Please enter a message.",
   "contact.errGeneric": "Failed to send — try again later.",
-  "contact.errNetwork": "Connection error — try again."
+  "contact.errNetwork": "Connection error — try again.",
+
+  "touring.pageTitle": "Touring",
+  "touring.wipBadge": "In development",
+  "touring.wipText": "Plan routes, track bookings, forecast revenue, and manage your tour calendar — all in one place.",
+  "touring.sectionTools": "Tools",
+  "touring.statusSoon": "Soon",
+  "touring.routePlannerTitle": "Route Planner",
+  "touring.routePlannerDesc": "AI-assisted tour routing — minimize travel, cluster nearby venues, and visualize your tour on a map.",
+  "touring.routePlannerBtn": "Plan a route",
+  "touring.bookingOutreachTitle": "Booking Outreach",
+  "touring.bookingOutreachDesc": "Draft and track booking emails for venues. Know who replied, who's pending, and who said no.",
+  "touring.bookingOutreachBtn": "Start outreach",
+  "touring.revenueForecastTitle": "Revenue Forecast",
+  "touring.revenueForecastDesc": "Estimate tour income from fees, merch, and door splits. Compare against travel and accommodation costs.",
+  "touring.revenueForecastBtn": "Open forecast",
+  "touring.conflictDetectionTitle": "Conflict Detection",
+  "touring.conflictDetectionDesc": "Automatically flag double-booked dates, tight travel windows, and scheduling gaps before they become problems.",
+  "touring.conflictDetectionBtn": "Check conflicts",
+  "touring.sectionUpcoming": "Upcoming dates",
+  "touring.noDates": "No dates scheduled yet",
+  "touring.noDatesHint": "Add gigs from the Gigs page or connect your venue bookings here"
 }
