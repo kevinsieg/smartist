@@ -11,6 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=27">
+  <script src="/app/js/i18n.js?v=2"></script>
   <style>
     .contact-wrap { max-width: 560px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .contact-hint { font-size: 0.88rem; color: var(--muted-ink); margin-bottom: 1.25rem; }
@@ -28,25 +29,25 @@
 <body>
 <main>
 <div class="app-wrap contact-wrap">
-  <h1>Contact</h1>
-  <p class="contact-hint">Found a bug, missing a feature, or have an idea? Write us &mdash; we read everything.</p>
+  <h1 data-i18n="contact.heading">Contact</h1>
+  <p class="contact-hint" data-i18n="contact.hint">Found a bug, missing a feature, or have an idea? Write us &mdash; we read everything.</p>
   <div class="contact-field">
-    <label for="cf-name">Name</label>
-    <input type="text" id="cf-name" autocomplete="name">
+    <label for="cf-name" data-i18n="contact.nameLabel">Name</label>
+    <input type="text" id="cf-name" autocomplete="name" data-i18n-attr="placeholder:contact.namePlaceholder" placeholder="Your name">
   </div>
   <div class="contact-field">
-    <label for="cf-email">Email</label>
-    <input type="email" id="cf-email" autocomplete="email">
+    <label for="cf-email" data-i18n="contact.emailLabel">Email</label>
+    <input type="email" id="cf-email" autocomplete="email" data-i18n-attr="placeholder:contact.emailPlaceholder" placeholder="your@email.com">
   </div>
   <div class="contact-field">
-    <label for="cf-msg">Message</label>
-    <textarea id="cf-msg" placeholder="What happened, or what would make smartist better for you?"></textarea>
+    <label for="cf-msg" data-i18n="contact.messageLabel">Message</label>
+    <textarea id="cf-msg" data-i18n-attr="placeholder:contact.messagePlaceholder" placeholder="What happened, or what would make smartist better for you?"></textarea>
   </div>
   <div class="status-msg" id="cf-status"></div>
-  <button class="btn active" id="cf-send">Send message</button>
+  <button class="btn active" id="cf-send" data-i18n="contact.sendBtn">Send message</button>
 </div>
 </main>
 <script src="/app/js/common.js?v=12"></script>
-<script src="/app/js/contact.js"></script>
+<script src="/app/js/contact.js?v=2"></script>
 </body>
 </html>

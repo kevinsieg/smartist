@@ -930,5 +930,23 @@
   "settings.standardFields": "Champs standard",
   "settings.customExtraFields": "Champs personnalisés",
   "settings.labelPlaceholder": "Étiquette",
-  "settings.noFieldsConfigured": "Aucun champ configuré. Configurez d'abord les colonnes du tableau des chansons."
+  "settings.noFieldsConfigured": "Aucun champ configuré. Configurez d'abord les colonnes du tableau des chansons.",
+
+  "contact.heading": "Contact",
+  "contact.hint": "Un bug, une idée ou une fonctionnalité manquante ? Écrivez-nous — nous lisons tout.",
+  "contact.nameLabel": "Nom",
+  "contact.namePlaceholder": "Votre nom",
+  "contact.emailLabel": "E-mail",
+  "contact.emailPlaceholder": "votre@email.com",
+  "contact.messageLabel": "Message",
+  "contact.messagePlaceholder": "Qu'est-il arrivé, ou qu'est-ce qui rendrait smartist meilleur pour vous ?",
+  "contact.sendBtn": "Envoyer le message",
+  "contact.sending": "Envoi…",
+  "contact.sent": "Envoyé",
+  "contact.successMsg": "Merci — votre message a été envoyé.",
+  "contact.errNameRequired": "Veuillez saisir votre nom.",
+  "contact.errEmailRequired": "Veuillez saisir votre e-mail.",
+  "contact.errMessageRequired": "Veuillez saisir un message.",
+  "contact.errGeneric": "Échec de l'envoi — réessayez plus tard.",
+  "contact.errNetwork": "Erreur de connexion — réessayez."
 }

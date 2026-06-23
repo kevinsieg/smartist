@@ -930,5 +930,23 @@
   "settings.standardFields": "Standardfelder",
   "settings.customExtraFields": "Benutzerdefinierte Felder",
   "settings.labelPlaceholder": "Bezeichnung",
-  "settings.noFieldsConfigured": "Noch keine Felder konfiguriert. Bitte zuerst die Spalten der Song-Tabelle einrichten."
+  "settings.noFieldsConfigured": "Noch keine Felder konfiguriert. Bitte zuerst die Spalten der Song-Tabelle einrichten.",
+
+  "contact.heading": "Kontakt",
+  "contact.hint": "Bug gefunden, Funktion vermisst oder eine Idee? Schreiben Sie uns — wir lesen alles.",
+  "contact.nameLabel": "Name",
+  "contact.namePlaceholder": "Ihr Name",
+  "contact.emailLabel": "E-Mail",
+  "contact.emailPlaceholder": "ihre@email.de",
+  "contact.messageLabel": "Nachricht",
+  "contact.messagePlaceholder": "Was ist passiert, oder was würde smartist für Sie besser machen?",
+  "contact.sendBtn": "Nachricht senden",
+  "contact.sending": "Senden…",
+  "contact.sent": "Gesendet",
+  "contact.successMsg": "Danke — Ihre Nachricht wurde gesendet.",
+  "contact.errNameRequired": "Bitte geben Sie Ihren Namen ein.",
+  "contact.errEmailRequired": "Bitte geben Sie Ihre E-Mail-Adresse ein.",
+  "contact.errMessageRequired": "Bitte geben Sie eine Nachricht ein.",
+  "contact.errGeneric": "Senden fehlgeschlagen — versuchen Sie es später erneut.",
+  "contact.errNetwork": "Verbindungsfehler — erneut versuchen."
 }
