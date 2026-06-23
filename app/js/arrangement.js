@@ -3,6 +3,16 @@
 // Requires: escHtml (global), apiFetch + setStatus (common.js, songs page only).
 // Caller must set window._arrSlug before calling openArrangementEditor.
 
+// Guarded translation helper — stage.html does not load i18n.js so window.t is absent there.
+// vars: optional object for {key} interpolation on the English fallback.
+function _arrT(key, en, vars) {
+  var s = (typeof window !== 'undefined' && window.t) ? window.t(key, vars) : en;
+  if (!window.t && vars) {
+    s = en.replace(/\{(\w+)\}/g, function(_, k) { return vars[k] !== undefined ? vars[k] : '{' + k + '}'; });
+  }
+  return s;
+}
+
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
 function _arrHarmDisplay(harmony, members) {
@@ -39,10 +49,16 @@ function _arrReadOnlyHtml(arrangement, arrConfig) {
   var visible     = _arrVisibleInstruments(instruments, hidden, rows);
 
   if (!rows.length) {
-    return '<p style="color:var(--third-color);font-size:0.82rem;margin:0.5rem 0">No sections yet.</p>';
+    return '<p style="color:var(--third-color);font-size:0.82rem;margin:0.5rem 0">' + _arrT('arr.noSections', 'No sections yet.') + '</p>';
   }
 
-  var thFixed = ['STRUCTURE', 'PART', 'LEAD', 'HARM', 'LICKS'].map(function(h) {
+  var thFixed = [
+    _arrT('arr.colStructure', 'STRUCTURE'),
+    _arrT('arr.colPart', 'PART'),
+    _arrT('arr.colLead', 'LEAD'),
+    _arrT('arr.colHarm', 'HARM'),
+    _arrT('arr.colLicks', 'LICKS')
+  ].map(function(h) {
     return '<th class="arr-th">' + h + '</th>';
   }).join('');
   var thInst = visible.map(function(v) {
@@ -67,7 +83,7 @@ function _arrReadOnlyHtml(arrangement, arrConfig) {
   }).join('');
 
   return '<div class="arr-table-wrap"><table class="arr-table"><thead><tr>' +
-    thFixed + thInst + '<th class="arr-th">COM</th>' +
+    thFixed + thInst + '<th class="arr-th">' + _arrT('arr.colCom', 'COM') + '</th>' +
     '</tr></thead><tbody>' + bodyRows + '</tbody></table></div>';
 }
 
@@ -101,7 +117,7 @@ function _ensureArrModal() {
       '<div class="arr-modal-header">' +
         '<span class="arr-modal-title" id="arr-modal-title"></span>' +
         '<div class="arr-modal-header-actions">' +
-          '<button class="btn active" id="arr-save-btn" onclick="arrSave()">Save</button>' +
+          '<button class="btn active" id="arr-save-btn" onclick="arrSave()">' + _arrT('arr.save', 'Save') + '</button>' +
           '<button class="btn" onclick="closeArrangementEditor()">&#215;</button>' +
         '</div>' +
       '</div>' +
@@ -109,7 +125,7 @@ function _ensureArrModal() {
       '<div class="arr-col-toggles" id="arr-col-toggles"></div>' +
       '<div class="arr-grid-wrap" id="arr-grid-wrap"></div>' +
       '<div class="arr-modal-footer">' +
-        '<span class="arr-modal-hint">Tab&nbsp;&mdash;&nbsp;next cell &nbsp;&middot;&nbsp; Enter&nbsp;&mdash;&nbsp;new row &nbsp;&middot;&nbsp; &#10021;&nbsp;drag to reorder</span>' +
+        '<span class="arr-modal-hint">' + _arrT('arr.editorHint', 'Tab — next cell  ·  Enter — new row  ·  ✥ drag to reorder') + '</span>' +
         '<div class="status-msg" id="arr-modal-status"></div>' +
       '</div>' +
     '</div>';
@@ -121,9 +137,9 @@ async function _arrLoadVersions() {
   var modal = document.getElementById('arr-modal');
   if (!modal) return;
   modal.classList.add('open');
-  document.getElementById('arr-modal-title').textContent = '⊞ Arrangement — ' + _arrEditorSongTitle;
+  document.getElementById('arr-modal-title').textContent = '⊞ ' + _arrT('arr.modalTitle', 'Arrangement — {title}', { title: _arrEditorSongTitle });
   document.getElementById('arr-grid-wrap').innerHTML =
-    '<div style="padding:1rem;color:var(--third-color)">Loading…</div>';
+    '<div style="padding:1rem;color:var(--third-color)">' + _arrT('arr.loading', 'Loading…') + '</div>';
 
   try {
     var r = await fetch('/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements');
@@ -134,7 +150,7 @@ async function _arrLoadVersions() {
       var cr = await apiFetch(
         '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements',
         'POST',
-        { name: 'Default' }
+        { name: _arrT('arr.defaultVersionName', 'Default') }
       );
       if (!cr.ok) throw new Error('Failed to create arrangement');
       var v = await cr.json();
@@ -146,7 +162,7 @@ async function _arrLoadVersions() {
     _arrRenderEditor();
   } catch (e) {
     document.getElementById('arr-grid-wrap').innerHTML =
-      '<div style="padding:1rem;color:#e55">Failed to load arrangements.</div>';
+      '<div style="padding:1rem;color:#e55">' + _arrT('arr.loadFailed', 'Failed to load arrangements.') + '</div>';
   }
 }
 
@@ -164,8 +180,8 @@ function _arrRenderVersionBar() {
   var html = _arrEditorVersions.map(function(v, i) {
     var isCurrent = i === _arrEditorActive;
     var tabCls    = 'arr-tab' + (isCurrent ? ' arr-tab--current' : '');
-    var dot       = v.is_active ? '<span class="arr-active-dot" title="Active on stage">●</span>' : '';
-    var closeBtn  = '<span class="arr-tab-close" onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="Delete version">×</span>';
+    var dot       = v.is_active ? '<span class="arr-active-dot" title="' + _arrT('arr.activeOnStage', 'Active on stage') + '">●</span>' : '';
+    var closeBtn  = '<span class="arr-tab-close" onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="' + _arrT('arr.deleteVersion', 'Delete version') + '">×</span>';
     return '<button class="' + tabCls + '" onclick="arrSwitchVersion(' + i + ')">' +
       dot +
       '<span class="arr-tab-name" ondblclick="event.stopPropagation();arrRenameVersion(' + i + ')">' +
@@ -175,14 +191,14 @@ function _arrRenderVersionBar() {
     '</button>';
   }).join('');
 
-  html += '<button class="arr-tab arr-tab--add" onclick="arrNewVersion()" title="New version">+</button>';
+  html += '<button class="arr-tab arr-tab--add" onclick="arrNewVersion()" title="' + _arrT('arr.newVersion', 'New version') + '">+</button>';
 
   var cur = _arrEditorVersions[_arrEditorActive];
   if (cur && !cur.is_active) {
-    html += '<button class="btn arr-set-active-btn" onclick="arrSetActive()">Set active</button>';
+    html += '<button class="btn arr-set-active-btn" onclick="arrSetActive()">' + _arrT('arr.setActive', 'Set active') + '</button>';
   }
 
-  var delLabel = _arrEditorVersions.length === 1 ? 'Delete arrangement' : 'Delete version';
+  var delLabel = _arrEditorVersions.length === 1 ? _arrT('arr.deleteArrangement', 'Delete arrangement') : _arrT('arr.deleteVersion', 'Delete version');
   html += '<button class="btn arr-delete-btn" onclick="arrDeleteVersion(' + _arrEditorActive + ')" title="' + delLabel + '">' + delLabel + '</button>';
 
   bar.innerHTML = html;
@@ -196,7 +212,7 @@ function _arrRenderColToggles() {
   var cur    = _arrEditorVersions[_arrEditorActive];
   var hidden = new Set((cur && cur.hidden_instruments) || []);
   el.innerHTML =
-    '<span class="arr-col-label">Columns:</span>' +
+    '<span class="arr-col-label">' + _arrT('arr.columnsLabel', 'Columns:') + '</span>' +
     instruments.map(function(inst) {
       var checked = !hidden.has(inst.key) ? ' checked' : '';
       return '<label class="arr-col-toggle">' +
@@ -233,11 +249,11 @@ function _arrRenderGrid() {
 
   var thFixed =
     '<th class="arr-th"></th>' + // drag handle
-    '<th class="arr-th">STRUCTURE</th>' +
-    '<th class="arr-th">PART</th>' +
-    '<th class="arr-th">LEAD</th>' +
-    '<th class="arr-th">HARM</th>' +
-    '<th class="arr-th">LICKS</th>';
+    '<th class="arr-th">' + _arrT('arr.colStructure', 'STRUCTURE') + '</th>' +
+    '<th class="arr-th">' + _arrT('arr.colPart', 'PART') + '</th>' +
+    '<th class="arr-th">' + _arrT('arr.colLead', 'LEAD') + '</th>' +
+    '<th class="arr-th">' + _arrT('arr.colHarm', 'HARM') + '</th>' +
+    '<th class="arr-th">' + _arrT('arr.colLicks', 'LICKS') + '</th>';
   var thInst = visible.map(function(v) {
     return '<th class="arr-th arr-th--inst">' + escHtml(v.label) + '</th>';
   }).join('');
@@ -249,7 +265,7 @@ function _arrRenderGrid() {
 
   bodyHtml +=
     '<tr><td colspan="' + (6 + visible.length + 1) + '" class="arr-add-row-cell">' +
-      '<button class="arr-add-row-btn" onclick="arrAddRow()">+ Add row</button>' +
+      '<button class="arr-add-row-btn" onclick="arrAddRow()">' + _arrT('arr.addRow', '+ Add row') + '</button>' +
     '</td></tr>';
 
   wrap.innerHTML =
@@ -278,8 +294,8 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
   var leadSel =
     '<select class="arr-sel arr-lead-sel" data-ri="' + ri + '" onchange="arrLeadChange(this)" ' + leadColor + '>' +
       '<option value="">—</option>' +
-      '<optgroup label="People">'      + membersOpts + '</optgroup>' +
-      '<optgroup label="Instruments">' + instOpts    + '</optgroup>' +
+      '<optgroup label="' + _arrT('arr.people', 'People') + '">'      + membersOpts + '</optgroup>' +
+      '<optgroup label="' + _arrT('arr.instruments', 'Instruments') + '">' + instOpts    + '</optgroup>' +
     '</select>';
 
   // HARM chip display + clickable cell
@@ -321,7 +337,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
   }).join('');
 
   return '<tr class="arr-tr" draggable="true" data-ri="' + ri + '">' +
-    '<td class="arr-td arr-td--drag" title="Drag to reorder">&#10021;</td>' +
+    '<td class="arr-td arr-td--drag" title="' + _arrT('arr.dragToReorder', 'Drag to reorder') + '">&#10021;</td>' +
     '<td class="arr-td"><input class="arr-inp" data-ri="' + ri + '" data-field="structure" value="' + escHtml(row.structure || '') + '" onchange="arrCellChange(this)" onkeydown="arrKeydown(event,' + ri + ')"></td>' +
     '<td class="arr-td"><input class="arr-inp arr-inp--sm" data-ri="' + ri + '" data-field="part" value="' + escHtml(row.part || '') + '" onchange="arrCellChange(this)" onkeydown="arrKeydown(event,' + ri + ')"></td>' +
     '<td class="arr-td">' + leadSel + '</td>' +
@@ -329,8 +345,8 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
     '<td class="arr-td">' + licksSel + '</td>' +
     instCells +
     '<td class="arr-td arr-td--actions">' +
-      '<button class="arr-row-btn" onclick="arrDuplicateRow(' + ri + ')" title="Duplicate">&#10066;</button>' +
-      '<button class="arr-row-btn arr-row-btn--del" onclick="arrDeleteRow(' + ri + ')" title="Delete">&#215;</button>' +
+      '<button class="arr-row-btn" onclick="arrDuplicateRow(' + ri + ')" title="' + _arrT('arr.duplicate', 'Duplicate') + '">&#10066;</button>' +
+      '<button class="arr-row-btn arr-row-btn--del" onclick="arrDeleteRow(' + ri + ')" title="' + _arrT('arr.deleteRow', 'Delete') + '">&#215;</button>' +
     '</td>' +
   '</tr>';
 }
@@ -456,7 +472,7 @@ function arrOpenHarmPicker(cell, ri) {
           (isSel ? '<span style="margin-left:auto;color:var(--arr-lead-person,#3d6bce)">✓</span>' : '') +
         '</div>';
       }).join('')
-    : '<div style="padding:0.5rem;color:var(--third-color);font-size:0.8rem">No members configured in Hub</div>';
+    : '<div style="padding:0.5rem;color:var(--third-color);font-size:0.8rem">' + _arrT('arr.noMembers', 'No members configured in Hub') + '</div>';
 
   picker.addEventListener('click', function(e) {
     var item = e.target.closest('.arr-harm-item');
@@ -540,7 +556,7 @@ function _arrWireDrag() {
 
 function arrSwitchVersion(i) {
   if (_arrEditorDirty) {
-    if (!confirm('You have unsaved changes. Switch version without saving?')) return;
+    if (!confirm(_arrT('arr.unsavedSwitchConfirm', 'You have unsaved changes. Switch version without saving?'))) return;
   }
   _arrEditorActive = i;
   _arrEditorDirty  = false;
@@ -548,8 +564,8 @@ function arrSwitchVersion(i) {
 }
 
 async function arrNewVersion() {
-  var choice = confirm('Copy current version?\nOK = copy, Cancel = blank');
-  var body   = { name: 'Version ' + (_arrEditorVersions.length + 1) };
+  var choice = confirm(_arrT('arr.newVersionConfirm', 'Copy current version?\nOK = copy, Cancel = blank'));
+  var body   = { name: _arrT('arr.versionNamePrefix', 'Version') + ' ' + (_arrEditorVersions.length + 1) };
   if (choice) {
     var cur = _arrEditorVersions[_arrEditorActive];
     if (cur) body.copy_from = cur.id;
@@ -560,7 +576,7 @@ async function arrNewVersion() {
     body
   );
   var v = await r.json();
-  if (!r.ok) { setStatus('arr-modal-status', v.error || 'Error', true); return; }
+  if (!r.ok) { setStatus('arr-modal-status', v.error || _arrT('arr.error', 'Error'), true); return; }
   _arrEditorVersions.push(v);
   _arrEditorActive = _arrEditorVersions.length - 1;
   _arrEditorDirty  = false;
@@ -572,8 +588,8 @@ async function arrDeleteVersion(i) {
   if (!v) return;
   var isLast = _arrEditorVersions.length === 1;
   var msg = isLast
-    ? 'Delete all arrangement data for "' + _arrEditorSongTitle + '"? This cannot be undone.'
-    : 'Delete version "' + v.name + '"?';
+    ? _arrT('arr.deleteAllConfirm', 'Delete all arrangement data for "{title}"? This cannot be undone.', { title: _arrEditorSongTitle })
+    : _arrT('arr.deleteVersionConfirm', 'Delete version "{name}"?', { name: v.name });
   if (!confirm(msg)) return;
   var r = await apiFetch(
     '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements/' + v.id,
@@ -581,7 +597,7 @@ async function arrDeleteVersion(i) {
   );
   if (!r.ok) {
     var j = await r.json();
-    setStatus('arr-modal-status', j.error || 'Cannot delete', true);
+    setStatus('arr-modal-status', j.error || _arrT('arr.cannotDelete', 'Cannot delete'), true);
     return;
   }
   _arrEditorVersions.splice(i, 1);
@@ -604,28 +620,28 @@ async function arrSetActive() {
   );
   if (!r.ok) {
     var j = await r.json();
-    setStatus('arr-modal-status', j.error || 'Error', true);
+    setStatus('arr-modal-status', j.error || _arrT('arr.error', 'Error'), true);
     return;
   }
   var updated = await r.json();
   _arrEditorVersions.forEach(function(ver) { ver.is_active = false; });
   _arrEditorVersions[_arrEditorActive] = updated;
   _arrRenderVersionBar();
-  setStatus('arr-modal-status', 'Active version updated.');
+  setStatus('arr-modal-status', _arrT('arr.activeUpdated', 'Active version updated.'));
   setTimeout(function() { setStatus('arr-modal-status', ''); }, 2000);
 }
 
 async function arrRenameVersion(i) {
   var v = _arrEditorVersions[i];
   if (!v) return;
-  var name = prompt('Version name:', v.name);
+  var name = prompt(_arrT('arr.versionNamePrompt', 'Version name:'), v.name);
   if (!name || name === v.name) return;
   var r = await apiFetch(
     '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements/' + v.id,
     'PUT',
     { name: name }
   );
-  if (!r.ok) { var j = await r.json(); setStatus('arr-modal-status', j.error || 'Rename failed', true); return; }
+  if (!r.ok) { var j = await r.json(); setStatus('arr-modal-status', j.error || _arrT('arr.renameFailed', 'Rename failed'), true); return; }
   v.name = name;
   _arrRenderVersionBar();
 }
@@ -633,7 +649,7 @@ async function arrRenameVersion(i) {
 async function arrSave() {
   var cur = _arrEditorVersions[_arrEditorActive];
   if (!cur) return;
-  setStatus('arr-modal-status', 'Saving…');
+  setStatus('arr-modal-status', _arrT('arr.saving', 'Saving…'));
   var btn = document.getElementById('arr-save-btn');
   if (btn) btn.disabled = true;
   var r = await apiFetch(
@@ -644,18 +660,18 @@ async function arrSave() {
   if (btn) btn.disabled = false;
   if (!r.ok) {
     var j = await r.json();
-    setStatus('arr-modal-status', j.error || 'Error saving', true);
+    setStatus('arr-modal-status', j.error || _arrT('arr.errorSaving', 'Error saving'), true);
     return;
   }
   var updated = await r.json();
   _arrEditorVersions[_arrEditorActive] = updated;
   _arrEditorDirty = false;
   if (btn) {
-    btn.textContent = '✓ Saved';
+    btn.textContent = _arrT('arr.savedConfirm', '✓ Saved');
     btn.style.background = '#4a9a6a';
     btn.style.borderColor = '#4a9a6a';
     setTimeout(function() {
-      btn.textContent = 'Save';
+      btn.textContent = _arrT('arr.save', 'Save');
       btn.style.background = '';
       btn.style.borderColor = '';
     }, 1500);
@@ -663,7 +679,7 @@ async function arrSave() {
 }
 
 function closeArrangementEditor() {
-  if (_arrEditorDirty && !confirm('Unsaved changes. Close without saving?')) return;
+  if (_arrEditorDirty && !confirm(_arrT('arr.unsavedCloseConfirm', 'Unsaved changes. Close without saving?'))) return;
   var modal = document.getElementById('arr-modal');
   if (modal) modal.classList.remove('open');
   var picker = document.getElementById('arr-harm-picker');
@@ -691,7 +707,7 @@ function _ensureArrStageModal() {
   el.innerHTML =
     '<div class="arr-stage-modal">' +
       '<div class="arr-stage-modal-header">' +
-        '<span>Arrangement</span>' +
+        '<span>' + _arrT('arr.stageTitle', 'Arrangement') + '</span>' +
         '<button onclick="closeArrStagePopup()" style="background:none;border:none;color:#888;cursor:pointer;font-size:1.1rem;line-height:1">&#215;</button>' +
       '</div>' +
       '<div class="arr-stage-body" id="arr-stage-body"></div>' +
