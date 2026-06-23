@@ -512,7 +512,7 @@ function renderResult(songs) {
   ).join('');
 
   const headerText = splitAt
-    ? `${songs.length} ${t('setlist.songs')} &bull; ${formatLength(totalMin)} &ensp;(2 sets)`
+    ? `${songs.length} ${t('setlist.songs')} &bull; ${formatLength(totalMin)} &ensp;${t('setlist.twoSets')}`
     : `${songs.length} ${t('setlist.songs')} &bull; ${formatLength(totalMin)}`;
 
   const feelScores = songs.map(s => songFeel(s)).filter(f => f != null);
