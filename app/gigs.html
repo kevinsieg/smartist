@@ -11,6 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=27">
+  <script src="/app/js/i18n.js?v=2"></script>
   <style>
     .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .gigs-section-title { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin: 1.75rem 0 0.75rem; }
@@ -83,42 +84,42 @@
 </head>
 <body>
 <main class="app-wrap gigs-wrap">
-  <h1>Gigs</h1>
+  <h1 data-i18n="gigs.pageTitle">Gigs</h1>
 
   <div id="gig-action-row">
     <div class="gig-cal-group">
       <a id="gig-cal-subscribe" href="#" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Subscribe to calendar
+        <span data-i18n="gigs.subscribeCalendar">Subscribe to calendar</span>
       </a>
-      <button id="gig-cal-copy" class="gig-cal-copy-btn">Copy link</button>
+      <button id="gig-cal-copy" class="gig-cal-copy-btn" data-i18n="gigs.copyLink">Copy link</button>
     </div>
-    <button class="btn active auth-action" disabled id="gig-add-btn" onclick="openAddModal()">+ Add gig</button>
+    <button class="btn active auth-action" disabled id="gig-add-btn" onclick="openAddModal()" data-i18n="gigs.addGigBtn">+ Add gig</button>
   </div>
 
   <button id="gig-filter-toggle" aria-expanded="false" aria-controls="gig-filter-panel">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-    Filters <span id="gig-filter-arrow">▾</span><span id="gig-filter-badge" style="display:none"></span>
+    <span data-i18n="gigs.filtersBtn">Filters</span> <span id="gig-filter-arrow">▾</span><span id="gig-filter-badge" style="display:none"></span>
   </button>
 
-  <div id="gig-filter-panel" role="region" aria-label="Filters" style="display:none">
+  <div id="gig-filter-panel" role="region" data-i18n-attr="aria-label:gigs.filtersBtn" aria-label="Filters" style="display:none">
     <div class="filter-bar" id="gigs-filter-bar">
       <div class="filter-bar-fields">
         <label class="filter-bar-field">
-          <span class="filter-bar-label">Gig</span>
-          <input type="text" id="gig-f-gig" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+          <span class="filter-bar-label" data-i18n="gigs.filterGig">Gig</span>
+          <input type="text" id="gig-f-gig" class="filter-bar-input" placeholder="Search…" autocomplete="off" data-i18n-attr="placeholder:gigs.filterSearch">
         </label>
         <label class="filter-bar-field gig-filter-desktop">
-          <span class="filter-bar-label">Venue</span>
-          <input type="text" id="gig-f-venue" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+          <span class="filter-bar-label" data-i18n="gigs.filterVenue">Venue</span>
+          <input type="text" id="gig-f-venue" class="filter-bar-input" placeholder="Search…" autocomplete="off" data-i18n-attr="placeholder:gigs.filterSearch">
         </label>
         <label class="filter-bar-field auth-only">
-          <span class="filter-bar-label">Setlist</span>
-          <input type="text" id="gig-f-setlist" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+          <span class="filter-bar-label" data-i18n="gigs.filterSetlist">Setlist</span>
+          <input type="text" id="gig-f-setlist" class="filter-bar-input" placeholder="Search…" autocomplete="off" data-i18n-attr="placeholder:gigs.filterSearch">
         </label>
         <label class="filter-bar-field">
-          <span class="filter-bar-label">Song</span>
-          <input type="text" id="gig-f-song" class="filter-bar-input" placeholder="Search…" autocomplete="off">
+          <span class="filter-bar-label" data-i18n="gigs.filterSong">Song</span>
+          <input type="text" id="gig-f-song" class="filter-bar-input" placeholder="Search…" autocomplete="off" data-i18n-attr="placeholder:gigs.filterSearch">
         </label>
         <span class="filter-count" id="gig-filter-count"></span>
       </div>
@@ -126,112 +127,112 @@
     </div>
   </div>
 
-  <div class="gigs-section-title">Upcoming</div>
-  <div id="upcoming-list"><p class="empty-hint">Loading…</p></div>
-  <div class="gigs-section-title">Past</div>
-  <div id="past-list"><p class="empty-hint">Loading…</p></div>
+  <div class="gigs-section-title" data-i18n="gigs.sectionUpcoming">Upcoming</div>
+  <div id="upcoming-list"><p class="empty-hint" data-i18n="gigs.loading">Loading…</p></div>
+  <div class="gigs-section-title" data-i18n="gigs.sectionPast">Past</div>
+  <div id="past-list"><p class="empty-hint" data-i18n="gigs.loading">Loading…</p></div>
   <div id="gigs-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="gigs-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="gigs-load-more-btn" class="btn auth-action" disabled onclick="loadMoreGigs()">Load more</button>
+    <button id="gigs-load-more-btn" class="btn auth-action" disabled onclick="loadMoreGigs()" data-i18n="gigs.loadMore">Load more</button>
   </div>
 </main>
 
 <!-- Add/Edit gig modal -->
 <div class="modal-overlay" id="gig-modal">
   <div class="modal" style="max-width:460px;">
-    <h2 id="gig-modal-title">Add gig</h2>
+    <h2 id="gig-modal-title" data-i18n="gigs.addGig">Add gig</h2>
     <div class="modal-field">
-      <label>Title *</label>
-      <input type="text" id="gm-title" placeholder="Gig title">
+      <label data-i18n="gigs.fieldTitle">Title *</label>
+      <input type="text" id="gm-title" placeholder="Gig title" data-i18n-attr="placeholder:gigs.fieldTitlePlaceholder">
     </div>
     <div class="modal-field">
-      <label>Date</label>
+      <label data-i18n="gigs.fieldDate">Date</label>
       <input type="date" id="gm-date">
     </div>
     <div class="modal-field">
-      <label>Type</label>
+      <label data-i18n="gigs.fieldType">Type</label>
       <select id="gm-type">
         <option value="">—</option>
-        <option value="concert">Concert</option>
-        <option value="festival">Festival</option>
-        <option value="wedding">Wedding</option>
-        <option value="private">Private</option>
-        <option value="other">Other</option>
+        <option value="concert" data-i18n="gigs.typeConcert">Concert</option>
+        <option value="festival" data-i18n="gigs.typeFestival">Festival</option>
+        <option value="wedding" data-i18n="gigs.typeWedding">Wedding</option>
+        <option value="private" data-i18n="gigs.typePrivate">Private</option>
+        <option value="other" data-i18n="gigs.typeOther">Other</option>
       </select>
     </div>
     <div class="modal-field">
-      <label>Venue</label>
+      <label data-i18n="gigs.fieldVenue">Venue</label>
       <div class="typeahead-wrap">
-        <input type="text" id="gm-venue-input" placeholder="Search venue…" autocomplete="off">
+        <input type="text" id="gm-venue-input" placeholder="Search venue…" autocomplete="off" data-i18n-attr="placeholder:gigs.searchVenuePlaceholder">
         <input type="hidden" id="gm-venue-id">
       </div>
       <div class="quick-create-form" id="gm-venue-qc">
         <div class="qc-row">
-          <input type="text" id="gm-venue-qc-name" placeholder="Venue name *">
-          <input type="text" id="gm-venue-qc-city" placeholder="City">
+          <input type="text" id="gm-venue-qc-name" placeholder="Venue name *" data-i18n-attr="placeholder:gigs.venueNamePlaceholder">
+          <input type="text" id="gm-venue-qc-city" placeholder="City" data-i18n-attr="placeholder:gigs.cityPlaceholder">
         </div>
         <div class="qc-actions">
-          <button class="btn active" type="button" onclick="quickCreateVenue()">Add venue</button>
-          <button class="btn" type="button" onclick="closeVenueQc()">Cancel</button>
+          <button class="btn active" type="button" onclick="quickCreateVenue()" data-i18n="gigs.addVenueBtn">Add venue</button>
+          <button class="btn" type="button" onclick="closeVenueQc()" data-i18n="gigs.cancelBtn">Cancel</button>
         </div>
         <div class="status-msg" id="gm-venue-qc-status"></div>
       </div>
     </div>
     <div class="modal-field">
-      <label>Location <span style="font-weight:normal;color:var(--third-color);font-size:0.8rem;">(city / address — when no venue)</span></label>
-      <input type="text" id="gm-location" placeholder="Paris">
+      <label><span data-i18n="gigs.fieldLocation">Location</span> <span style="font-weight:normal;color:var(--third-color);font-size:0.8rem;" data-i18n="gigs.locationHint">(city / address — when no venue)</span></label>
+      <input type="text" id="gm-location" placeholder="Paris" data-i18n-attr="placeholder:gigs.locationPlaceholder">
     </div>
     <div class="modal-field">
-      <label>Organizer</label>
+      <label data-i18n="gigs.fieldOrganizer">Organizer</label>
       <div class="typeahead-wrap">
-        <input type="text" id="gm-organizer-input" placeholder="Search organizer…" autocomplete="off">
+        <input type="text" id="gm-organizer-input" placeholder="Search organizer…" autocomplete="off" data-i18n-attr="placeholder:gigs.searchOrganizerPlaceholder">
         <input type="hidden" id="gm-organizer-id">
       </div>
       <div class="quick-create-form" id="gm-organizer-qc">
         <div class="qc-row">
-          <input type="text" id="gm-organizer-qc-name" placeholder="Organizer name *">
-          <input type="text" id="gm-organizer-qc-city" placeholder="City">
+          <input type="text" id="gm-organizer-qc-name" placeholder="Organizer name *" data-i18n-attr="placeholder:gigs.organizerNamePlaceholder">
+          <input type="text" id="gm-organizer-qc-city" placeholder="City" data-i18n-attr="placeholder:gigs.cityPlaceholder">
         </div>
         <div class="qc-actions">
-          <button class="btn active" type="button" onclick="quickCreateOrganizer()">Add organizer</button>
-          <button class="btn" type="button" onclick="closeOrganizerQc()">Cancel</button>
+          <button class="btn active" type="button" onclick="quickCreateOrganizer()" data-i18n="gigs.addOrganizerBtn">Add organizer</button>
+          <button class="btn" type="button" onclick="closeOrganizerQc()" data-i18n="gigs.cancelBtn">Cancel</button>
         </div>
         <div class="status-msg" id="gm-organizer-qc-status"></div>
       </div>
     </div>
     <div class="modal-field">
-      <label>Start time</label>
+      <label data-i18n="gigs.fieldTimeStart">Start time</label>
       <input type="time" id="gm-time-start">
     </div>
     <div class="modal-field">
-      <label>End time</label>
+      <label data-i18n="gigs.fieldTimeEnd">End time</label>
       <input type="time" id="gm-time-end">
     </div>
     <div class="modal-field">
-      <label>Link</label>
+      <label data-i18n="gigs.fieldLink">Link</label>
       <input type="url" id="gm-link" placeholder="https://…">
     </div>
     <div class="modal-field">
-      <label>Comment</label>
-      <textarea id="gm-comment" rows="2" placeholder="Notes…"></textarea>
+      <label data-i18n="gigs.fieldComment">Comment</label>
+      <textarea id="gm-comment" rows="2" placeholder="Notes…" data-i18n-attr="placeholder:gigs.commentPlaceholder"></textarea>
     </div>
     <input type="file" id="gm-poster-input" accept="image/jpeg,image/png,image/webp"
            style="display:none" onchange="handlePosterSelect(this.files[0])">
     <div id="gm-poster-section" style="display:none">
       <hr style="border:none;border-top:1px solid var(--border-color);margin:0.9rem 0 0.75rem">
-      <label style="display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color);margin-bottom:0.5rem;">Poster / Flyer</label>
+      <label style="display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color);margin-bottom:0.5rem;" data-i18n="gigs.posterLabel">Poster / Flyer</label>
       <div id="gm-poster-row"></div>
       <div class="status-msg" id="gm-poster-status"></div>
     </div>
     <div class="related-section" id="gm-related" style="display:none;">
-      <h4>Related</h4>
+      <h4 data-i18n="gigs.relatedTitle">Related</h4>
       <div id="gm-related-content"></div>
     </div>
     <div class="status-msg" id="gm-status"></div>
     <div class="modal-actions">
-      <button class="btn active" type="button" onclick="saveGig()">Save</button>
-      <button class="btn" type="button" onclick="closeGigModal()">Cancel</button>
-      <button class="btn" type="button" id="gm-soft-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteGigFromPopup()">Delete</button>
+      <button class="btn active" type="button" onclick="saveGig()" data-i18n="gigs.saveBtn">Save</button>
+      <button class="btn" type="button" onclick="closeGigModal()" data-i18n="gigs.cancelBtn">Cancel</button>
+      <button class="btn" type="button" id="gm-soft-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteGigFromPopup()" data-i18n="gigs.deleteBtn">Delete</button>
     </div>
   </div>
 </div>
@@ -239,15 +240,15 @@
 <!-- Setlist detail modal -->
 <div class="modal-overlay" id="setlist-detail-modal">
   <div class="modal" style="max-width:360px;">
-    <h2 id="sd-title">Setlist</h2>
+    <h2 id="sd-title" data-i18n="gigs.setlistModalTitle">Setlist</h2>
     <div id="sd-body" style="margin:0.75rem 0 0.5rem;"></div>
     <div class="modal-actions">
-      <button class="btn" type="button" onclick="closeModal('setlist-detail-modal')">Close</button>
+      <button class="btn" type="button" onclick="closeModal('setlist-detail-modal')" data-i18n="gigs.closeBtn">Close</button>
     </div>
   </div>
 </div>
 
 <script src="/app/js/common.js?v=12"></script>
-<script src="/app/js/gigs.js?v=6"></script>
+<script src="/app/js/gigs.js?v=7"></script>
 </body>
 </html>

@@ -21,7 +21,7 @@ function _loadImage(file) {
     var url = URL.createObjectURL(file);
     var img = new Image();
     img.onload = function() { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('Could not load image')); };
+    img.onerror = function() { URL.revokeObjectURL(url); reject(new Error(t('gigs.couldNotLoadImage'))); };
     img.src = url;
   });
 }
@@ -66,33 +66,33 @@ async function generateThumbBlob(file) {
 }
 
 async function uploadPoster(gigId, file) {
-  setStatus('gm-poster-status', 'Processing image…');
+  setStatus('gm-poster-status', t('gigs.processingImage'));
   try {
     var [posterBlob, thumbBlob] = await Promise.all([
       generatePosterBlob(file),
       generateThumbBlob(file),
     ]);
-    setStatus('gm-poster-status', 'Uploading…');
+    setStatus('gm-poster-status', t('gigs.uploading'));
     var r1 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster-url', 'POST', {
       contentType: 'image/jpeg',
     });
     if (!r1.ok) {
       var e1 = await r1.json();
-      throw new Error(e1.error || 'Could not get upload URL');
+      throw new Error(e1.error || t('gigs.couldNotGetUploadUrl'));
     }
     var urls = await r1.json();
     var [pr, tr] = await Promise.all([
       fetch(urls.posterUploadUrl, { method: 'PUT', body: posterBlob, headers: { 'Content-Type': 'image/jpeg' } }),
       fetch(urls.thumbUploadUrl,  { method: 'PUT', body: thumbBlob,  headers: { 'Content-Type': 'image/jpeg' } }),
     ]);
-    if (!pr.ok || !tr.ok) throw new Error('Upload to storage failed (' + (!pr.ok ? pr.status : tr.status) + ')');
+    if (!pr.ok || !tr.ok) throw new Error(t('gigs.uploadStorageFailed', { status: !pr.ok ? pr.status : tr.status }));
     var r2 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster', 'PUT', {
       posterUrl: urls.posterPublicUrl,
       thumbUrl:  urls.thumbPublicUrl,
     });
     if (!r2.ok) {
       var e2 = await r2.json();
-      throw new Error(e2.error || 'Could not save poster');
+      throw new Error(e2.error || t('gigs.couldNotSavePoster'));
     }
     var gig = allGigs.find(function(g) { return g.id === gigId; });
     if (gig) { gig.poster_url = urls.posterPublicUrl; gig.thumb_url = urls.thumbPublicUrl; }
@@ -100,17 +100,17 @@ async function uploadPoster(gigId, file) {
     renderPosterRow(gig);
     setStatus('gm-poster-status', '');
   } catch (err) {
-    setStatus('gm-poster-status', err.message || 'Upload failed', true);
+    setStatus('gm-poster-status', err.message || t('gigs.uploadFailed'), true);
   }
 }
 
 async function removePoster(gigId) {
-  setStatus('gm-poster-status', 'Removing…');
+  setStatus('gm-poster-status', t('gigs.removing'));
   try {
     var r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster', 'DELETE');
     if (!r.ok) {
       var e = await r.json();
-      throw new Error(e.error || 'Could not remove poster');
+      throw new Error(e.error || t('gigs.couldNotRemovePoster'));
     }
     var gig = allGigs.find(function(g) { return g.id === gigId; });
     if (gig) { gig.poster_url = null; gig.thumb_url = null; }
@@ -118,7 +118,7 @@ async function removePoster(gigId) {
     renderPosterRow(gig);
     setStatus('gm-poster-status', '');
   } catch (err) {
-    setStatus('gm-poster-status', err.message || 'Remove failed', true);
+    setStatus('gm-poster-status', err.message || t('gigs.removeFailed'), true);
   }
 }
 
@@ -131,13 +131,13 @@ function renderPosterRow(g) {
       '<div class="gig-poster-row">' +
         '<img class="gig-poster-thumb" src="' + escHtml(g.thumb_url) + '">' +
         '<div class="gig-poster-actions">' +
-          '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">Replace</button>' +
-          '<button class="btn" type="button" id="gm-poster-remove-btn" onclick="confirmRemovePoster()">Remove</button>' +
+          '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">' + t('gigs.replaceBtn') + '</button>' +
+          '<button class="btn" type="button" id="gm-poster-remove-btn" onclick="confirmRemovePoster()">' + t('gigs.removeBtn') + '</button>' +
         '</div>' +
       '</div>';
   } else {
     row.innerHTML =
-      '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">Upload poster</button>';
+      '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">' + t('gigs.uploadPosterBtn') + '</button>';
   }
 }
 
@@ -147,10 +147,10 @@ function confirmRemovePoster() {
   if (btn.dataset.confirm === '1') {
     removePoster(editingId);
   } else {
-    btn.textContent = 'Confirm remove';
+    btn.textContent = t('gigs.confirmRemoveBtn');
     btn.dataset.confirm = '1';
     setTimeout(function() {
-      if (btn.isConnected) { btn.textContent = 'Remove'; delete btn.dataset.confirm; }
+      if (btn.isConnected) { btn.textContent = t('gigs.removeBtn'); delete btn.dataset.confirm; }
     }, 3000);
   }
 }
@@ -159,7 +159,7 @@ async function handlePosterSelect(file) {
   if (!file || !editingId) return;
   var allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
   if (!allowed.has(file.type)) {
-    setStatus('gm-poster-status', 'Only JPEG, PNG, or WebP images are accepted', true);
+    setStatus('gm-poster-status', t('gigs.imageTypeError'), true);
     document.getElementById('gm-poster-input').value = '';
     return;
   }
@@ -174,25 +174,25 @@ var GIG_COLUMNS = [
         return '<div class="gig-thumb-wrap" data-poster="' + escHtml(g.poster_url) + '" onclick="event.stopPropagation();openLightbox(this.dataset.poster)">' +
                '<img class="gig-thumb" src="' + escHtml(g.thumb_url) + '" loading="lazy"></div>';
       }
-      return '<div class="gig-thumb-placeholder gig-thumb-add" onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="Upload poster"></div>';
+      return '<div class="gig-thumb-placeholder gig-thumb-add" onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="' + t('gigs.uploadPosterBtn') + '"></div>';
     }
   },
-  { field: 'date', label: 'Date', width: '75px', sortable: true, type: 'date',
+  { field: 'date', get label() { return t('gigs.colDate'); }, width: '75px', sortable: true, type: 'date',
     render: g => { if (!g.date) return '—'; var d = String(g.date); return d.slice(8, 10) + '/' + d.slice(5, 7); } },
-  { field: 'title',          label: 'Title',     width: '1fr',   sortable: true, filterable: true },
-  { field: 'type',           label: 'Type',      width: '80px',
+  { field: 'title',      get label() { return t('gigs.colTitle'); },  width: '1fr',   sortable: true, filterable: true },
+  { field: 'type',       get label() { return t('gigs.colType'); },   width: '80px',
     render: g => g.type ? `<span class="sl-badge">${escHtml(g.type)}</span>` : '' },
-  { field: 'venue_name',     label: 'Venue',     width: '1fr',   sortable: true, filterable: true, muted: true },
+  { field: 'venue_name', get label() { return t('gigs.colVenue'); },  width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
-    if (g.deleted) return '<span class="sl-deleted-badge">deleted</span>' +
-      '<button class="btn sl-edit-btn" title="Permanently delete" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">Erase</button>';
+    if (g.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>' +
+      '<button class="btn sl-edit-btn" title="' + t('gigs.permanentlyDeleteTitle') + '" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">' + t('gigs.eraseBtn') + '</button>';
     var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
-    var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="View setlists" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
+    var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="' + t('gigs.viewSetlistsTitle') + '" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
       '</svg></button>' : '';
-    return '<button class="btn sl-edit-btn" title="Edit" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
+    return '<button class="btn sl-edit-btn" title="' + t('gigs.editTitle') + '" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>' + setsBtn;
   }},
@@ -256,8 +256,8 @@ initPage(async function(config) {
     _copyEl.dataset.url = location.protocol + '//' + location.host + _icsPath;
     _copyEl.addEventListener('click', function() {
       navigator.clipboard.writeText(this.dataset.url).then(function() {
-        _copyEl.textContent = 'copied!';
-        setTimeout(function() { _copyEl.textContent = 'Copy link'; }, 2000);
+        _copyEl.textContent = t('gigs.copiedMsg');
+        setTimeout(function() { _copyEl.textContent = t('gigs.copyLink'); }, 2000);
       });
     });
   }
@@ -274,7 +274,7 @@ initPage(async function(config) {
     defaultSortDir: -1,
     rowClass:       function(g) { return g.deleted ? 'deleted' : ''; },
     onExpand:       function(g) { return expandGig(g); },
-    emptyHint:      'No upcoming gigs.',
+    emptyHint:      t('gigs.noUpcomingGigs'),
   });
 
   pastTable = createSortableList({
@@ -286,7 +286,7 @@ initPage(async function(config) {
     separateDeleted: true,
     rowClass:        function(g) { return g.deleted ? 'deleted' : ''; },
     onExpand:        function(g) { return expandGig(g); },
-    emptyHint:       'No past gigs.',
+    emptyHint:       t('gigs.noPastGigs'),
   });
 
   await loadGigs();
@@ -417,8 +417,8 @@ if (f.setlist) {
       var ctaDiv = document.createElement('div');
       ctaDiv.id = 'gigs-empty-cta';
       ctaDiv.style.cssText = 'text-align:center;padding:1.5rem 1rem;color:var(--third-color);';
-      ctaDiv.innerHTML = '<p style="margin-bottom:1rem;">No gigs yet.</p>' +
-        (getToken() ? '<button class="btn active" onclick="openAddModal()">+ Add your first gig</button>' : '');
+      ctaDiv.innerHTML = '<p style="margin-bottom:1rem;">' + t('gigs.noGigsYet') + '</p>' +
+        (getToken() ? '<button class="btn active" onclick="openAddModal()">' + t('gigs.addFirstGigBtn') + '</button>' : '');
       upList.appendChild(ctaDiv);
     }
   }
@@ -463,7 +463,7 @@ function updateGigsFooter() {
   const counter = document.getElementById('gigs-counter');
   const btn     = document.getElementById('gigs-load-more-btn');
   if (!footer || !counter) return;
-  counter.textContent = `Showing ${allGigs.length} of ${_gigsTotal} gig${_gigsTotal !== 1 ? 's' : ''}`;
+  counter.textContent = t(_gigsTotal !== 1 ? 'gigs.showingGigs_other' : 'gigs.showingGigs_one', { shown: allGigs.length, total: _gigsTotal });
   footer.style.display = _gigsTotal > 0 ? '' : 'none';
   if (btn) btn.style.display = allGigs.length < _gigsTotal ? '' : 'none';
 }
@@ -515,11 +515,11 @@ function closeVenueQc() {
 async function quickCreateVenue() {
   const name = document.getElementById('gm-venue-qc-name').value.trim();
   const city = document.getElementById('gm-venue-qc-city').value.trim();
-  if (!name) { setStatus('gm-venue-qc-status', 'Name required', true); return; }
-  setStatus('gm-venue-qc-status', 'Saving…');
+  if (!name) { setStatus('gm-venue-qc-status', t('gigs.nameRequired'), true); return; }
+  setStatus('gm-venue-qc-status', t('gigs.saving'));
   const r = await apiFetch(`/api/${artistSlug}/venues`, 'POST', { name, city: city || null });
   const json = await r.json();
-  if (!r.ok) { setStatus('gm-venue-qc-status', json.error || 'Error', true); return; }
+  if (!r.ok) { setStatus('gm-venue-qc-status', json.error || t('gigs.errorFallback'), true); return; }
   allVenues.push(json);
   if (_venueTypeahead) _venueTypeahead.updateItems(allVenues);
   document.getElementById('gm-venue-input').value = json.name + (json.city ? ` (${json.city})` : '');
@@ -574,11 +574,11 @@ function closeOrganizerQc() {
 async function quickCreateOrganizer() {
   const name = document.getElementById('gm-organizer-qc-name').value.trim();
   const city = document.getElementById('gm-organizer-qc-city').value.trim();
-  if (!name) { setStatus('gm-organizer-qc-status', 'Name required', true); return; }
-  setStatus('gm-organizer-qc-status', 'Saving…');
+  if (!name) { setStatus('gm-organizer-qc-status', t('gigs.nameRequired'), true); return; }
+  setStatus('gm-organizer-qc-status', t('gigs.saving'));
   const r = await apiFetch(`/api/${artistSlug}/organizers`, 'POST', { name, city: city || null });
   const json = await r.json();
-  if (!r.ok) { setStatus('gm-organizer-qc-status', json.error || 'Error', true); return; }
+  if (!r.ok) { setStatus('gm-organizer-qc-status', json.error || t('gigs.errorFallback'), true); return; }
   allOrganizers.push(json);
   if (_organizerTypeahead) _organizerTypeahead.updateItems(allOrganizers);
   document.getElementById('gm-organizer-input').value = json.name + (json.city ? ` (${json.city})` : '');
@@ -588,7 +588,7 @@ async function quickCreateOrganizer() {
 
 async function openAddModal() {
   editingId = null;
-  document.getElementById('gig-modal-title').textContent = 'Add gig';
+  document.getElementById('gig-modal-title').textContent = t('gigs.addGig');
   ['title', 'date', 'location', 'time-start', 'time-end', 'link', 'comment'].forEach(f => {
     const el = document.getElementById(`gm-${f}`); if (el) el.value = '';
   });
@@ -611,7 +611,7 @@ async function openEditModal(id) {
   const g = allGigs.find(x => x.id === id);
   if (!g) return;
   editingId = id;
-  document.getElementById('gig-modal-title').textContent = 'Edit gig';
+  document.getElementById('gig-modal-title').textContent = t('gigs.editGig');
   document.getElementById('gm-title').value      = g.title || '';
   document.getElementById('gm-date').value       = g.date ? String(g.date).slice(0, 10) : '';
   document.getElementById('gm-type').value       = g.type || '';
@@ -684,30 +684,30 @@ function _downloadGigIcs(id) {
 
 function expandGig(g) {
   var rows = [];
-  if (g.venue_name)      rows.push(['Venue',     escHtml(g.venue_name)]);
-  if (!g.venue_name && g.location) rows.push(['Location', escHtml(g.location)]);
-  if (g.organizer_name) rows.push(['Organizer', escHtml(g.organizer_name)]);
-  if (g.type)            rows.push(['Type',      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
-  if (g.time_start)      rows.push(['Time',      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
-  if (g.additional_link) rows.push(['Link',      '<a href="' + escHtml(safeUrl(g.additional_link)) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
-  if (g.comment) rows.push(['Notes', escHtml(g.comment)]);
-  if (g.additional_text) rows.push(['Info',      escHtml(g.additional_text)]);
+  if (g.venue_name)      rows.push([t('gigs.expandVenue'),     escHtml(g.venue_name)]);
+  if (!g.venue_name && g.location) rows.push([t('gigs.expandLocation'), escHtml(g.location)]);
+  if (g.organizer_name) rows.push([t('gigs.expandOrganizer'), escHtml(g.organizer_name)]);
+  if (g.type)            rows.push([t('gigs.expandType'),      escHtml(g.type.charAt(0).toUpperCase() + g.type.slice(1))]);
+  if (g.time_start)      rows.push([t('gigs.expandTime'),      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
+  if (g.additional_link) rows.push([t('gigs.expandLink'),      '<a href="' + escHtml(safeUrl(g.additional_link)) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
+  if (g.comment) rows.push([t('gigs.expandNotes'), escHtml(g.comment)]);
+  if (g.additional_text) rows.push([t('gigs.expandInfo'),      escHtml(g.additional_text)]);
   var html = rows.map(function(r) {
     return '<div class="expansion-row"><span class="expansion-label expansion-key">' + r[0] + '</span><span>' + r[1] + '</span></div>';
   }).join('');
-  if (!html) html = '<span style="color:var(--third-color);font-size:0.82rem;">No details on record.</span>';
+  if (!html) html = '<span style="color:var(--third-color);font-size:0.82rem;">' + t('gigs.noDetails') + '</span>';
   if (g.date) html += '<div style="margin-top:0.6rem">' +
     '<button class="btn" style="font-size:0.78rem;padding:0.2rem 0.65rem;min-height:0" ' +
-    'onclick="event.stopPropagation();_downloadGigIcs(' + g.id + ')" title="Download .ics">' +
+    'onclick="event.stopPropagation();_downloadGigIcs(' + g.id + ')" title="' + t('gigs.downloadIcsTitle') + '">' +
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-    'Add to calendar</button></div>';
+    t('gigs.addToCalendar') + '</button></div>';
   return html;
 }
 
 async function openGigSetlists(gigId) {
   var titleEl = document.getElementById('sd-title');
   var body    = document.getElementById('sd-body');
-  titleEl.textContent = 'Setlists';
+  titleEl.textContent = t('gigs.setlistsTitle');
   body.innerHTML = skeletonHtml(2);
   openModal('setlist-detail-modal');
   if (!_gigRefsCache[gigId]) {
@@ -716,17 +716,17 @@ async function openGigSetlists(gigId) {
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
-      body.innerHTML = '<span style="color:#e55;font-size:0.85rem;">Could not load setlists.</span>';
+      body.innerHTML = '<span style="color:#e55;font-size:0.85rem;">' + t('gigs.couldNotLoadSetlists') + '</span>';
       return;
     }
   }
   const refs = _gigRefsCache[gigId].refs;
   if (!refs.setlists.length) {
-    body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">No setlists yet.</span>';
+    body.innerHTML = '<span style="color:var(--third-color);font-size:0.85rem;">' + t('gigs.noSetlistsYet') + '</span>';
     return;
   }
   var single = refs.setlists.length === 1;
-  if (single) titleEl.textContent = refs.setlists[0].title || 'Setlist';
+  if (single) titleEl.textContent = refs.setlists[0].title || t('gigs.setlistsTitle');
   body.innerHTML = refs.setlists.map(function(s) {
     var songs = (refs.setlistSongs || []).filter(function(ss) { return ss.setlist_id === s.id; });
     var hdr  = single ? '' : '<div class="expansion-label" style="margin:0.6rem 0 0.3rem;">' + escHtml(s.title || 'Setlist') + '</div>';
@@ -734,7 +734,7 @@ async function openGigSetlists(gigId) {
       ? '<ol style="margin:0 0 0.5rem;padding-left:1.4rem;line-height:1.9;font-size:0.9rem;">' +
           songs.map(function(ss) { return '<li>' + escHtml(ss.title) + '</li>'; }).join('') +
           '</ol>'
-      : '<p style="color:var(--third-color);font-size:0.85rem;margin-bottom:0.5rem;">Empty setlist</p>';
+      : '<p style="color:var(--third-color);font-size:0.85rem;margin-bottom:0.5rem;">' + t('gigs.emptySetlist') + '</p>';
     return hdr + list;
   }).join('');
 }
@@ -743,18 +743,18 @@ function deleteGigFromPopup(id) {
   id = id || editingId;
   closeGigModal();
   openHardDeleteModal({
-    title: 'Permanently delete gig?',
+    title: t('gigs.permanentlyDeleteGig'),
     refsUrl: '/api/' + artistSlug + '/gigs/' + id + '?refs=1',
     deleteUrl: '/api/' + artistSlug + '/gigs/' + id,
     buildRefsMsg: function(refs) {
-      if (!refs.setlists.length) return 'No linked setlists.';
-      return 'Linked setlists:<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
-        refs.setlists.map(function(s) { return '<li>' + escHtml(s.title || 'Untitled setlist') + '</li>'; }).join('') +
+      if (!refs.setlists.length) return t('gigs.noLinkedSetlists');
+      return t('gigs.linkedSetlists') + '<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
+        refs.setlists.map(function(s) { return '<li>' + escHtml(s.title || t('gigs.untitledSetlist')) + '</li>'; }).join('') +
         '</ul>';
     },
     buildCascadeOpts: function(refs) {
       return refs.setlists.length
-        ? '<label><input type="checkbox" id="hd-cascade-setlists"> Also delete ' + refs.setlists.length + ' linked setlist(s)</label>'
+        ? '<label><input type="checkbox" id="hd-cascade-setlists"> ' + t('gigs.alsoDeleteSetlists', { count: refs.setlists.length }) + '</label>'
         : '';
     },
     getCascade: function() {
@@ -781,11 +781,11 @@ async function saveGig() {
     additional_link: document.getElementById('gm-link').value.trim()      || null,
     comment:         document.getElementById('gm-comment').value.trim()   || null,
   };
-  setStatus('gm-status', 'Saving…');
+  setStatus('gm-status', t('gigs.saving'));
   const url = editingId ? `/api/${artistSlug}/gigs/${editingId}` : `/api/${artistSlug}/gigs`;
   const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
   const json = await r.json();
-  if (!r.ok) { setStatus('gm-status', json.error || 'Error', true); return; }
+  if (!r.ok) { setStatus('gm-status', json.error || t('gigs.errorFallback'), true); return; }
   closeGigModal();
   await loadGigs();
   if (editingId) delete _gigRefsCache[editingId];
@@ -805,25 +805,25 @@ async function renderGigRelated(gigId) {
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
-      content.innerHTML = '<span style="color:#e55;font-size:0.82rem;">Could not load related data.</span>';
+      content.innerHTML = '<span style="color:#e55;font-size:0.82rem;">' + t('gigs.couldNotLoadRelated') + '</span>';
       return;
     }
   }
   const { refs } = _gigRefsCache[gigId];
 
   const venuePart = refs.venue
-    ? `<div class="related-row">Venue &nbsp;<strong>${escHtml(refs.venue.name)}${refs.venue.city ? `, ${escHtml(refs.venue.city)}` : ''}</strong><a href="/venues" class="related-link">↗</a></div>`
+    ? `<div class="related-row">${t('gigs.expandVenue')} &nbsp;<strong>${escHtml(refs.venue.name)}${refs.venue.city ? `, ${escHtml(refs.venue.city)}` : ''}</strong><a href="/venues" class="related-link">↗</a></div>`
     : '';
 
   const orgPart = refs.organizer
-    ? `<div class="related-row">Organizer &nbsp;<strong>${escHtml(refs.organizer.name)}</strong><a href="/organizers" class="related-link">↗</a></div>`
+    ? `<div class="related-row">${t('gigs.expandOrganizer')} &nbsp;<strong>${escHtml(refs.organizer.name)}</strong><a href="/organizers" class="related-link">↗</a></div>`
     : '';
 
   const setlistPart = refs.setlists.length
-    ? `<div class="related-row">Setlists &nbsp;${refs.setlists.map(s => `<a href="/${_artistSlug}/stage?id=${s.id}" target="_blank" style="font-size:0.82rem;margin-right:0.5rem;">${escHtml(s.title || '(untitled)')}</a>`).join(' · ')}</div>`
+    ? `<div class="related-row">${t('gigs.setlistsTitle')} &nbsp;${refs.setlists.map(s => `<a href="/${_artistSlug}/stage?id=${s.id}" target="_blank" style="font-size:0.82rem;margin-right:0.5rem;">${escHtml(s.title || t('gigs.untitledSetlist'))}</a>`).join(' · ')}</div>`
     : '';
 
   content.innerHTML = venuePart + orgPart + setlistPart
-    || '<span style="color:var(--third-color);font-size:0.82rem;">No related records.</span>';
+    || '<span style="color:var(--third-color);font-size:0.82rem;">' + t('gigs.noRelatedRecords') + '</span>';
 }
 
