@@ -948,5 +948,26 @@
   "contact.errEmailRequired": "Veuillez saisir votre e-mail.",
   "contact.errMessageRequired": "Veuillez saisir un message.",
   "contact.errGeneric": "Échec de l'envoi — réessayez plus tard.",
-  "contact.errNetwork": "Erreur de connexion — réessayez."
+  "contact.errNetwork": "Erreur de connexion — réessayez.",
+
+  "touring.pageTitle": "Tournées",
+  "touring.wipBadge": "En développement",
+  "touring.wipText": "Planifiez vos itinéraires, suivez vos réservations, estimez vos revenus et gérez votre calendrier de tournée — tout en un.",
+  "touring.sectionTools": "Outils",
+  "touring.statusSoon": "Bientôt",
+  "touring.routePlannerTitle": "Planificateur d'itinéraire",
+  "touring.routePlannerDesc": "Routage de tournée assisté par IA — minimisez les déplacements, regroupez les salles proches et visualisez votre tournée sur une carte.",
+  "touring.routePlannerBtn": "Planifier un itinéraire",
+  "touring.bookingOutreachTitle": "Démarchage de réservation",
+  "touring.bookingOutreachDesc": "Rédigez et suivez vos e-mails de réservation auprès des salles. Sachez qui a répondu, qui est en attente et qui a refusé.",
+  "touring.bookingOutreachBtn": "Lancer le démarchage",
+  "touring.revenueForecastTitle": "Prévision de revenus",
+  "touring.revenueForecastDesc": "Estimez les revenus de la tournée à partir des cachets, du merchandising et des entrées. Comparez avec les frais de déplacement et d'hébergement.",
+  "touring.revenueForecastBtn": "Ouvrir la prévision",
+  "touring.conflictDetectionTitle": "Détection de conflits",
+  "touring.conflictDetectionDesc": "Signalez automatiquement les doubles réservations, les créneaux de déplacement serrés et les lacunes de planification avant qu'ils ne deviennent des problèmes.",
+  "touring.conflictDetectionBtn": "Vérifier les conflits",
+  "touring.sectionUpcoming": "Dates à venir",
+  "touring.noDates": "Aucune date planifiée pour l'instant",
+  "touring.noDatesHint": "Ajoutez des concerts depuis la page Concerts ou connectez vos réservations de salles ici"
 }
