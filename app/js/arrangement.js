@@ -95,15 +95,36 @@ var _arrEditorVersions  = [];   // full version objects from API
 var _arrEditorActive    = 0;    // index into _arrEditorVersions
 var _arrEditorConfig    = null; // arrangementConfig from artists.config
 var _arrEditorDirty     = false;
+var _arrEditorDraft     = false; // new, unsaved song: edit in memory, persist on song save
+var _arrEditorOnDraftSave = null;
 
 // ── Editor entry point ────────────────────────────────────────────────────────
 
-function openArrangementEditor(songId, songTitle, arrConfig) {
+// opts (optional): { draft: <saved draft or null>, onDraftSave: fn(draft) }.
+// In draft mode there is no song id: a single version is edited in memory and
+// handed back via onDraftSave instead of being written to the server.
+function openArrangementEditor(songId, songTitle, arrConfig, opts) {
+  opts = opts || {};
   _arrEditorSongId    = songId;
   _arrEditorSongTitle = songTitle || '';
   _arrEditorConfig    = arrConfig || { members: [], instruments: [] };
   _arrEditorDirty     = false;
+  _arrEditorDraft     = !songId;
+  _arrEditorOnDraftSave = opts.onDraftSave || null;
   _ensureArrModal();
+  if (_arrEditorDraft) {
+    var d = opts.draft;
+    _arrEditorVersions = [{
+      id: '_draft', name: 'Default', is_active: true,
+      rows: (d && d.rows) || [], hidden_instruments: (d && d.hidden_instruments) || [],
+    }];
+    _arrEditorActive = 0;
+    var modal = document.getElementById('arr-modal');
+    if (modal) modal.classList.add('open');
+    document.getElementById('arr-modal-title').textContent = '⊞ ' + _arrT('arr.modalTitle', 'Arrangement — {title}', { title: _arrEditorSongTitle });
+    _arrRenderEditor();
+    return;
+  }
   _arrLoadVersions();
 }
 
@@ -177,6 +198,12 @@ function _arrRenderEditor() {
 function _arrRenderVersionBar() {
   var bar = document.getElementById('arr-version-bar');
   if (!bar) return;
+  // Draft mode (new song): single version only, no version management.
+  if (_arrEditorDraft) {
+    bar.innerHTML = '<span class="arr-tab arr-tab--current"><span class="arr-tab-name">' +
+      escHtml(_arrEditorVersions[0].name) + '</span></span>';
+    return;
+  }
   var html = _arrEditorVersions.map(function(v, i) {
     var isCurrent = i === _arrEditorActive;
     var tabCls    = 'arr-tab' + (isCurrent ? ' arr-tab--current' : '');
@@ -649,6 +676,18 @@ async function arrRenameVersion(i) {
 async function arrSave() {
   var cur = _arrEditorVersions[_arrEditorActive];
   if (!cur) return;
+
+  // Draft mode: hand the arrangement back to the caller; it persists when the
+  // song is created. No API call (the song has no id yet).
+  if (_arrEditorDraft) {
+    _arrEditorDirty = false;
+    if (_arrEditorOnDraftSave) {
+      _arrEditorOnDraftSave({ rows: cur.rows || [], hidden_instruments: cur.hidden_instruments || [] });
+    }
+    closeArrangementEditor();
+    return;
+  }
+
   setStatus('arr-modal-status', _arrT('arr.saving', 'Saving…'));
   var btn = document.getElementById('arr-save-btn');
   if (btn) btn.disabled = true;
