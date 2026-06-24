@@ -19,6 +19,7 @@
     { "source": "/login",           "destination": "/app/index.html" },
     { "source": "/signup",          "destination": "/app/signup.html" },
     { "source": "/onboarding",      "destination": "/app/onboarding.html" },
+    { "source": "/workspaces",      "destination": "/app/workspaces.html" },
     { "source": "/home",            "destination": "/app/workspaces.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
     { "source": "/impressum",       "destination": "/app/impressum.html" },

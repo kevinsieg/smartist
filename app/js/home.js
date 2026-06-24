@@ -121,7 +121,7 @@ function renderLoggedIn(cfg, artists) {
     window.location.href = '/' + artists[0].slug + '/dashboard';
     return;
   }
-  window.location.href = '/home';
+  window.location.href = '/workspaces';
 }
 
 // ── Login form ────────────────────────────────────────────────────────────────
