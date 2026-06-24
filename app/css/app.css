@@ -40,6 +40,12 @@ body {
     /* prevent iOS from auto-scaling text in landscape */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /* Sticky-footer shell: content fills the viewport, footer rests at the
+       bottom even with little/no data — no scroll needed to reach it. */
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
 }
 a { color: var(--secondary-ink); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -348,7 +354,7 @@ body.view-mode .auth-only { display: none !important; }
 
 /* ── Page layout ────────────────────────────────────────────────────────────── */
 /* Base: 5 rem clears the mobile header (~46 px) with headroom */
-.app-page { padding-top: 5rem; min-height: 100vh; }
+.app-page { padding-top: 5rem; flex: 1 0 auto; }
 @media (min-width: 480px) { .app-page { padding-top: 5.5rem; } }
 
 .app-wrap {
@@ -418,6 +424,9 @@ footer {
     font-size: 0.82rem;
     color: var(--third-color);
     text-align: center;
+    /* Pushes the footer to the viewport bottom when content is short. */
+    margin-top: auto;
+    flex-shrink: 0;
 }
 .footer-backlink { color: var(--muted-ink); text-decoration: none; }
 .footer-backlink:hover { color: var(--secondary-ink); text-decoration: underline; }
@@ -1255,8 +1264,8 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 
 /* ── Landing page ────────────────────────────────────────────────────────── */
 .landing-main {
-    min-height: 100vh;
-    min-height: 100dvh;
+    flex: 1;
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;

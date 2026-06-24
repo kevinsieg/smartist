@@ -442,7 +442,7 @@ function renderWorkspace(cfg) {
       body: JSON.stringify({ config: { private: privToggle.checked } }),
     })
       .then(function (r) {
-        if (!r.ok) throw new Error('Failed to save');
+        if (!r.ok) throw new Error('');
         invalidateConfigCache();
         msg.textContent = privToggle.checked ? t('settings.workspaceNowPrivate') : t('settings.workspaceNowPublic');
         setTimeout(function () { msg.textContent = ''; }, 2500);
@@ -578,7 +578,7 @@ function uploadFavicon(file) {
       }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: versionedUrl, data: d }; }); });
     })
     .then(function (r) {
-      if (!r.ok) throw new Error(r.data.error || 'Failed to save');
+      if (!r.ok) throw new Error(r.data.error || '');
       showFavicon(r.publicUrl);
       invalidateConfigCache();
       document.querySelectorAll('link[rel="icon"]').forEach(function(el) { el.href = r.publicUrl; });
@@ -629,7 +629,7 @@ function uploadPhoto(file) {
       }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: publicUrl, data: d }; }); });
     })
     .then(function (r) {
-      if (!r.ok) throw new Error(r.data.error || 'Failed to save');
+      if (!r.ok) throw new Error(r.data.error || '');
       showPhoto(r.publicUrl);
       invalidateConfigCache();
       applyNav(document.getElementById('band-name-input').value || '', { logoUrl: r.publicUrl });
