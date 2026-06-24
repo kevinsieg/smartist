@@ -11,14 +11,18 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=27">
-  <script src="/app/js/i18n.js?v=3"></script>
+  <script src="/app/js/i18n.js?v=6"></script>
 </head>
 <body class="brand-page">
-<header class="brand-bar">
-  <a class="brand-wordmark" href="/">smartist</a>
-  <nav><a href="#" id="ws-logout" style="display:none" data-i18n="workspaces.logOut">log out</a></nav>
+<header class="app-header">
+  <nav class="app-nav">
+    <a href="/" class="brand-wordmark">smartist</a>
+    <div class="nav-auth" style="margin-left:auto">
+      <a href="#" id="ws-logout" class="nav-auth-login" style="display:none" data-i18n="workspaces.logOut">log out</a>
+    </div>
+  </nav>
 </header>
-<main class="landing-main landing-main--no-nav">
+<main class="landing-main">
   <div class="landing-card">
     <div class="brand-wave" aria-hidden="true">
       <span style="height:6px"></span><span style="height:14px"></span><span style="height:10px"></span>

@@ -37,13 +37,13 @@ function songFeel(song) {
 
 // Setlist score labels — shown as a badge on the generated result
 const FEEL_LABELS = [
-  { max: 0.12, icon: '🧘', label: 'Savasana'      },
-  { max: 0.28, icon: '🌙', label: 'Late Night'     },
-  { max: 0.44, icon: '🛶', label: 'Morning Paddle' },
-  { max: 0.58, icon: '🚶', label: 'Sunday Stroll'  },
-  { max: 0.72, icon: '🏃', label: '10K Run'        },
-  { max: 0.88, icon: '🚴', label: 'Sprint Cycling' },
-  { max: 1.01, icon: '🔥', label: 'Triathlon'      },
+  { max: 0.12, icon: '🧘', get label() { return t('setlist.feelSavasana'); }      },
+  { max: 0.28, icon: '🌙', get label() { return t('setlist.feelLateNight'); }     },
+  { max: 0.44, icon: '🛶', get label() { return t('setlist.feelMorningPaddle'); } },
+  { max: 0.58, icon: '🚶', get label() { return t('setlist.feelSundayStroll'); }  },
+  { max: 0.72, icon: '🏃', get label() { return t('setlist.feel10kRun'); }        },
+  { max: 0.88, icon: '🚴', get label() { return t('setlist.feelSprintCycling'); } },
+  { max: 1.01, icon: '🔥', get label() { return t('setlist.feelTriathlon'); }      },
 ];
 
 var artistSlug = '';
@@ -518,7 +518,7 @@ function renderResult(songs) {
   const feelScores = songs.map(s => songFeel(s)).filter(f => f != null);
   const avgFeel    = feelScores.length ? feelScores.reduce((a, b) => a + b) / feelScores.length : null;
   const feelLabel  = avgFeel != null ? FEEL_LABELS.find(l => avgFeel <= l.max) : null;
-  const feelBadge  = feelLabel ? `<span class="feel-badge" title="Vibe score ${Math.round(avgFeel * 100)}/100">${feelLabel.icon} ${feelLabel.label}</span>` : '';
+  const feelBadge  = feelLabel ? `<span class="feel-badge" title="${t('setlist.vibeScore')} ${Math.round(avgFeel * 100)}/100">${feelLabel.icon} ${feelLabel.label}</span>` : '';
 
   resultArea.innerHTML = `
     <div class="setlist-result">

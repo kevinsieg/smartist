@@ -1,27 +1,31 @@
+// `value` is the data value stored in the DB and used as the filter/select key — never
+// translated. Only the user-visible `label` is translated (re-evaluated per render).
 window.VENUE_STATUSES = [
-  { value: 'prospect',  label: 'Prospect' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'active',    label: 'Active' },
-  { value: 'declined',  label: 'Declined' },
+  { value: 'prospect',  get label() { return t('venues.statusProspect'); } },
+  { value: 'contacted', get label() { return t('venues.statusContacted'); } },
+  { value: 'confirmed', get label() { return t('venues.statusConfirmed'); } },
+  { value: 'active',    get label() { return t('venues.statusActive'); } },
+  { value: 'declined',  get label() { return t('venues.statusDeclined'); } },
 ];
 
 window.VENUE_CATEGORIES = [
-  { value: 'association',  label: 'Association' },
-  { value: 'club',         label: 'Club' },
-  { value: 'festival',     label: 'Festival' },
-  { value: 'placeholder',  label: 'Placeholder' },
-  { value: 'private',      label: 'Private' },
-  { value: 'pub',          label: 'Pub' },
-  { value: 'restaurant',   label: 'Restaurant' },
-  { value: 'street',       label: 'Street' },
+  { value: 'association',  get label() { return t('venues.categoryAssociation'); } },
+  { value: 'club',         get label() { return t('venues.categoryClub'); } },
+  { value: 'festival',     get label() { return t('venues.categoryFestival'); } },
+  { value: 'placeholder',  get label() { return t('venues.categoryPlaceholder'); } },
+  { value: 'private',      get label() { return t('venues.categoryPrivate'); } },
+  { value: 'pub',          get label() { return t('venues.categoryPub'); } },
+  { value: 'restaurant',   get label() { return t('venues.categoryRestaurant'); } },
+  { value: 'street',       get label() { return t('venues.categoryStreet'); } },
 ];
-
-// Status/category labels are data values stored in the DB and used as filter keys —
-// not translated. Only UI chrome (column headers, buttons, messages) is translated.
 
 var VENUE_STATUSES   = window.VENUE_STATUSES;
 var VENUE_CATEGORIES = window.VENUE_CATEGORIES;
+
+function _venueStatusLabel(value) {
+  var s = VENUE_STATUSES.find(function(x) { return x.value === value; });
+  return s ? s.label : value;
+}
 
 function populateSelects() {
   function fill(id, items) {
@@ -326,10 +330,11 @@ var VENUE_COLUMNS = [
   { field: 'country', get label() { return t('venues.colCountry'); },  width: '1fr',   sortable: true, filterable: true, muted: true },
   { field: 'size',    get label() { return t('venues.colCapacity'); }, width: '70px',  sortable: true, type: 'number',   muted: true },
   { field: 'status',  get label() { return t('venues.colStatus'); },   width: '90px',
-    render: v => v.status ? `<span class="sl-badge">${escHtml(v.status)}</span>` : '' },
+    render: v => v.status ? `<span class="sl-badge">${escHtml(_venueStatusLabel(v.status))}</span>` : '' },
   { width: 'auto', actions: true, render: function(v) {
     if (v.deleted)                    return '<span class="sl-deleted-badge">' + t('venues.deletedBadge') + '</span>';
     if (v.category === 'placeholder') return '';
+    if (isViewMode())                 return '';  // read-only: every mutation 401s
     return '<button class="btn sl-edit-btn" title="' + t('venues.editTitle') + '" onclick="event.stopPropagation();openEditModal(' + v.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
@@ -527,7 +532,7 @@ function openEditModal(id) {
   document.getElementById('vm-email').value    = v.generic_email || '';
   document.getElementById('vm-website').value  = v.website       || '';
   document.getElementById('vm-comment').value  = v.comment       || '';
-  document.getElementById('vm-delete-btn').style.display = v.deleted ? 'none' : '';
+  document.getElementById('vm-delete-btn').style.display = (v.deleted || isViewMode()) ? 'none' : '';
   document.getElementById('vm-dup-warning').style.display = 'none';
   setStatus('vm-status-msg', '');
   _pendingLat = v.lat || null; _pendingLng = v.lng || null; _geocodeAccepted = !!(v.lat && v.lng);

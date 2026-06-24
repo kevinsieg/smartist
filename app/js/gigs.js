@@ -195,17 +195,21 @@ var GIG_COLUMNS = [
     render: g => g.type ? `<span class="sl-badge">${_gigTypeLabel(g.type)}</span>` : '' },
   { field: 'venue_name', get label() { return t('gigs.colVenue'); },  width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(g) {
+    // View mode (no/expired token) can still read the list via public GET, but
+    // every mutation 401s. Omit write buttons so they can't trigger silent fails.
+    var vm = isViewMode();
     if (g.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>' +
-      '<button class="btn sl-edit-btn" title="' + t('gigs.permanentlyDeleteTitle') + '" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">' + t('gigs.eraseBtn') + '</button>';
+      (vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.permanentlyDeleteTitle') + '" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">' + t('gigs.eraseBtn') + '</button>');
     var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
     var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="' + t('gigs.viewSetlistsTitle') + '" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
       '</svg></button>' : '';
-    return '<button class="btn sl-edit-btn" title="' + t('gigs.editTitle') + '" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
+    var editBtn = vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.editTitle') + '" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
-      '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>' + setsBtn;
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
+    return editBtn + setsBtn;
   }},
 ];
 
@@ -637,7 +641,7 @@ async function openEditModal(id) {
   await ensureOrganizersLoaded();
   wireOrganizerTypeahead(g.organizer_id);
   document.getElementById('gm-organizer-qc').classList.remove('open');
-  document.getElementById('gm-soft-delete-btn').style.display = '';
+  document.getElementById('gm-soft-delete-btn').style.display = isViewMode() ? 'none' : '';
   setStatus('gm-status', '');
   renderGigRelated(id);
   var ps = document.getElementById('gm-poster-section');

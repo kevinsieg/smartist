@@ -9,15 +9,21 @@ var _orgsOffset = 0;
 var _orgsQ = '';
 var _orgsTimer = null;
 
+function _orgTypeLabel(type) {
+  var map = { person: t('organizers.typePerson'), organization: t('organizers.typeOrg') };
+  return map[type] || escHtml(type);
+}
+
 var ORGANIZER_COLUMNS = [
   { field: 'name',    get label() { return t('venues.colName'); },    width: '1.5fr', sortable: true, filterable: true },
   { field: 'type',    get label() { return t('organizers.fieldType'); },    width: '90px',  sortable: true,
-    render: o => o.type ? `<span class="sl-badge">${escHtml(o.type)}</span>` : '' },
+    render: o => o.type ? `<span class="sl-badge">${escHtml(_orgTypeLabel(o.type))}</span>` : '' },
   { field: 'city',    get label() { return t('venues.colCity'); },    width: '1fr',   sortable: true, filterable: true, muted: true },
   { field: 'country', get label() { return t('venues.colCountry'); }, width: '1fr',   sortable: true, filterable: true, muted: true },
   { field: 'email',   get label() { return t('venues.fieldEmail'); }, width: '1fr',   sortable: true, filterable: true, muted: true },
   { width: 'auto', actions: true, render: function(o) {
     if (o.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>';
+    if (isViewMode()) return '';  // read-only: every mutation 401s
     return '<button class="btn sl-edit-btn" title="' + t('organizers.editBtnTitle') + '" onclick="event.stopPropagation();openEditModal(' + o.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
@@ -115,7 +121,7 @@ function openEditModal(id) {
   document.getElementById('om-city').value    = o.city    || '';
   document.getElementById('om-country').value = o.country || '';
   document.getElementById('om-comment').value = o.comment || '';
-  document.getElementById('om-delete-btn').style.display = o.deleted ? 'none' : '';
+  document.getElementById('om-delete-btn').style.display = (o.deleted || isViewMode()) ? 'none' : '';
   setStatus('om-status-msg', '');
   renderOrganizerGigs(id, o.name);
   openModal('organizer-modal');

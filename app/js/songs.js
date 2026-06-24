@@ -3,6 +3,22 @@
 var TIME_SIGNATURES = ['4/4', '3/4', '6/8', '5/4', '12/8'];
 var GEMA_LANGUAGES  = ['EN', 'FR', 'DE'];
 
+// Circle-of-fifths keys: 15 majors then their 15 relative minors.
+var MUSICAL_KEYS = [
+  'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯', 'F', 'B♭', 'E♭', 'A♭', 'D♭', 'G♭', 'C♭',
+  'Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'A♯m', 'Dm', 'Gm', 'Cm', 'Fm', 'B♭m', 'E♭m', 'A♭m',
+];
+
+// Option HTML for a key <select>. Preserves a legacy/free-text value that
+// predates this list so editing a song never silently drops its key.
+function _keyOptions(cur) {
+  cur = cur || '';
+  var list = (cur && MUSICAL_KEYS.indexOf(cur) === -1) ? [cur].concat(MUSICAL_KEYS) : MUSICAL_KEYS;
+  return '<option value="">—</option>' + list.map(function(k) {
+    return '<option value="' + escHtml(k) + '"' + (k === cur ? ' selected' : '') + '>' + escHtml(k) + '</option>';
+  }).join('');
+}
+
 var artistSlug = '';
 var songs = [];
 var dirty = new Set();
@@ -20,6 +36,7 @@ var _newPanelEscapeHandler = null;
 var SONGS_BULK_EDIT_KEY = 'songs_bulk_edit';
 var _viewMode = false;
 var _songsCfg = null;
+var _pendingArrDrafts = {};  // new-song formId → draft arrangement, persisted on Add
 var _songsOffset = 0;
 var _songsTotal = 0;
 var SONGS_VIEW_PAGE = 30;
@@ -188,7 +205,7 @@ var COLS = [
   { key: 'gema_work_number',    label: 'GEMA-Nr',            type: 'stat',   cls: 'col-gema',    width: 116, title: 'GEMA Werknummer' },
   { key: 'gema_language',       get label() { return t('songs.colLabelLang'); },      type: 'select', cls: 'col-glang',   width: 56,  title: 'Language (GEMA)', options: GEMA_LANGUAGES, default: 'EN' },
   { key: 'extra.isrc',          label: 'ISRC',               type: 'stat',   cls: 'col-isrc',    width: 120, title: 'ISRC (recording)' },
-  { key: 'key',                 get label() { return t('songs.colLabelKey'); },        type: 'text',   cls: 'col-key',     width: 52  },
+  { key: 'key',                 get label() { return t('songs.colLabelKey'); },        type: 'select', cls: 'col-key',     width: 52, options: MUSICAL_KEYS },
   { key: 'extra.lead',          get label() { return t('songs.colLabelLead'); },       type: 'text',   cls: 'col-lead',    width: 80  },
   { key: 'extra.banjoCapo',     label: 'banjoCapo',          type: 'number', cls: 'col-bcapo',   width: 58  },
   { key: 'extra.git2',          label: 'git2',               type: 'bool',   cls: 'col-lgit',    width: 70  },
@@ -599,7 +616,6 @@ function _openSongEditForm(sid, panelEl) {
   var timeSig  = escHtml(getVal(song, 'time_signature') || '');
   var bpm      = escHtml(String(getVal(song, 'bpm') || ''));
   var length   = escHtml(minsToTime(getVal(song, 'length_min')));
-  var key      = escHtml(getVal(song, 'key') || '');
   var lead     = escHtml(getVal(song, 'extra.lead') || '');
   var git2     = getVal(song, 'extra.git2') ? ' checked' : '';
   var gitCapo  = escHtml(String(getVal(song, 'extra.gitCapo') || ''));
@@ -608,7 +624,6 @@ function _openSongEditForm(sid, panelEl) {
   var listen   = escHtml(getVal(song, 'extra.listenUrl') || '');
   var sheet    = escHtml(getVal(song, 'extra.sheetUrl') || '');
   var playback = escHtml(getVal(song, 'extra.playbackUrl') || '');
-  var lyrics   = escHtml(String(getVal(song, 'extra.lyrics') || ''));
   var author   = escHtml(getVal(song, 'extra.author') || '');
   var interp   = escHtml(getVal(song, 'interpret') || '');
   var refInt   = escHtml(getVal(song, 'reference_interpret') || '');
@@ -625,10 +640,23 @@ function _openSongEditForm(sid, panelEl) {
     return '<input type="' + type + '" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" oninput="markPanelEditDirty()">';
   };
   var num = function(key, val) {
-    return '<input type="number" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" min="0" step="any" oninput="markPanelEditDirty()">';
+    return '<input type="number" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" min="0" step="1" inputmode="numeric" oninput="markPanelEditDirty()">';
   };
   var chk = function(key, checked) {
     return '<input type="checkbox" data-id="' + id + '" data-key="' + key + '"' + checked + ' onchange="markPanelEditDirty()">';
+  };
+  // Media row: URL field + ↑ upload. Existing songs upload immediately; new
+  // songs stage the file and upload on save (no song id exists yet).
+  var mediaRow = function(label, key, fileId, accept, type, urlVal) {
+    var onchange = isNew
+      ? '_panelStageFile(this,\'' + type + '\',\'' + id + '\')'
+      : '_panelUploadHandler(this,\'' + id + '\',\'' + type + '\')';
+    return _editField(label,
+      '<div class="panel-file-row">' + inp(key, urlVal) +
+        '<button type="button" class="btn panel-upload-btn" onclick="_panelUploadFile(\'' + fileId + '\')">&#8593;</button>' +
+        '<input type="file" id="' + fileId + '" style="display:none" accept="' + accept + '" onchange="' + onchange + '">' +
+      '</div>' +
+      '<div class="panel-file-staged" id="staged-' + type + '-' + id + '" style="display:none;font-size:0.72rem;color:var(--third-color);margin-top:0.2rem"></div>');
   };
 
   var langOpts = GEMA_LANGUAGES.map(function(o) {
@@ -644,19 +672,26 @@ function _openSongEditForm(sid, panelEl) {
       '<details class="edit-section" open><summary class="edit-section-summary">' + t('songs.sectionBasics') + '</summary>' +
         '<div class="edit-section-body">' +
           _editField(t('songs.fieldTitle'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="' + t('songs.songTitlePlaceholder') + '">') +
-          _editField(t('songs.fieldKey'), inp('key', key)) +
+          _editField(t('songs.fieldKey'), '<select class="edit-input" data-id="' + id + '" data-key="key" onchange="markPanelEditDirty()">' + _keyOptions(getVal(song, 'key')) + '</select>') +
           _editField(t('songs.fieldGitCapo'), num('extra.gitCapo', gitCapo)) +
           _editField(t('songs.fieldBanjoCapo'), num('extra.banjoCapo', bjCapo)) +
+          _editField(t('songs.fieldBpm'), num('bpm', bpm)) +
+          _editField(t('songs.fieldTimeSig'), '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
           _editField(t('songs.fieldLengthMmss'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
-          _editField(t('songs.lyricsTitle'), '<textarea class="edit-textarea edit-input" data-id="' + id + '" data-key="extra.lyrics" oninput="markPanelEditDirty()" placeholder="' + t('songs.lyricsPlaceholder') + '">' + lyrics + '</textarea>') +
-          _editField(t('songs.listen'), '<div class="panel-file-row">' + inp('extra.listenUrl', listen) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-audio-' + id + '\')">&#8593;</button><input type="file" id="pf-audio-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'audio\')">' : '') + '</div>') +
         '</div>' +
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionRecordings') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField(t('songs.sheet'), '<div class="panel-file-row">' + inp('extra.sheetUrl', sheet) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-sheet-' + id + '\')">&#8593;</button><input type="file" id="pf-sheet-' + id + '" style="display:none" accept=".pdf,application/pdf" onchange="_panelUploadHandler(this,\'' + id + '\',\'sheet\')">' : '') + '</div>') +
-          _editField(t('songs.playback'), '<div class="panel-file-row">' + inp('extra.playbackUrl', playback) + (!isNew ? '<button class="btn panel-upload-btn" onclick="_panelUploadFile(\'pf-playback-' + id + '\')">&#8593;</button><input type="file" id="pf-playback-' + id + '" style="display:none" accept="audio/*" onchange="_panelUploadHandler(this,\'' + id + '\',\'playback\')">' : '') + '</div>') +
+          mediaRow(t('songs.listen'),   'extra.listenUrl',   'pf-audio-' + id,    'audio/*',              'audio',    listen) +
+          mediaRow(t('songs.sheet'),    'extra.sheetUrl',    'pf-sheet-' + id,    '.pdf,application/pdf', 'sheet',    sheet) +
+          mediaRow(t('songs.playback'), 'extra.playbackUrl', 'pf-playback-' + id, 'audio/*',              'playback', playback) +
           _editField(t('songs.fieldRefUrl'), inp('extra.referenceUrl', refUrl, 'url')) +
+        '</div>' +
+      '</details>' +
+      '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.lyricsTitle') + '</summary>' +
+        '<div class="edit-section-body">' +
+          '<button type="button" class="btn" onclick="_openLyricsFromPanel(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')">' + t('songs.openLyricsEditor') + '</button>' +
+          (isNew ? '<input type="hidden" data-id="' + id + '" data-key="extra.lyrics" value="">' : '') +
         '</div>' +
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionSongInfo') + '</summary>' +
@@ -665,13 +700,10 @@ function _openSongEditForm(sid, panelEl) {
           _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; ' + t('songs.favouriteHint') + '</span></div>') +
           _editField(t('songs.fieldGenre'), inp('genre', genre)) +
           _editField(t('songs.fieldEnergy'), inp('energy', energy)) +
-          _editField(t('songs.fieldTimeSig'), '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
-          _editField(t('songs.fieldBpm'), num('bpm', bpm)) +
+          _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
           _editField(t('songs.fieldLead'), inp('extra.lead', lead)) +
           _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>') +
           _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>' + t('songs.fieldHarmonica') + '</span></div>') +
-          _editField(t('songs.fieldAuthor'), inp('extra.author', author)) +
-          _editField(t('songs.fieldInterpret'), inp('interpret', interp)) +
           _editField(t('songs.fieldRefInterpret'), inp('reference_interpret', refInt)) +
           _editField(t('songs.fieldSongInfoUrl'), inp('extra.songinfoUrl', infoUrl, 'url')) +
           _editField(t('songs.fieldComment'), inp('comment', comment)) +
@@ -679,20 +711,20 @@ function _openSongEditForm(sid, panelEl) {
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionRights') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
-          (iswc   ? _editField('ISWC',    '<div class="edit-readonly">' + escHtml(iswc)   + '</div>') : '') +
-          (gemaNr ? _editField('GEMA-Nr', '<div class="edit-readonly">' + escHtml(gemaNr) + '</div>') : '') +
-          (isrc   ? _editField('ISRC',    '<div class="edit-readonly">' + escHtml(isrc)   + '</div>') : '') +
+          _editField(t('songs.fieldAuthor'), inp('extra.author', author)) +
+          _editField(t('songs.fieldInterpret'), inp('interpret', interp)) +
+          _editField('ISWC',    '<div class="edit-readonly">' + escHtml(iswc   || '—') + '</div>') +
+          _editField('GEMA-Nr', '<div class="edit-readonly">' + escHtml(gemaNr || '—') + '</div>') +
+          _editField('ISRC',    '<div class="edit-readonly">' + escHtml(isrc   || '—') + '</div>') +
         '</div>' +
       '</details>' +
-      (!isNew ? (
-        '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.colTitleArrangement') + '</summary>' +
-          '<div class="edit-section-body">' +
-            '<div id="edit-arr-preview"></div>' +
-            '<button class="btn" style="margin-top:0.4rem" onclick="_openSongArrangement(' + Number(sid) + ')">' + t('songs.openArrEditor') + '</button>' +
-          '</div>' +
-        '</details>'
-      ) : '') +
+      '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.colTitleArrangement') + '</summary>' +
+        '<div class="edit-section-body">' +
+          (!isNew ? '<div id="edit-arr-preview"></div>' : '') +
+          '<button class="btn" style="margin-top:0.4rem" onclick="_openArrFromPanel(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')">' + t('songs.openArrEditor') + '</button>' +
+          (isNew ? '<div class="panel-file-staged" id="staged-arr-' + id + '" style="display:none;font-size:0.72rem;color:var(--third-color);margin-top:0.4rem"></div>' : '') +
+        '</div>' +
+      '</details>' +
       '<div class="status-msg" id="song-panel-edit-error"></div>' +
       '<div class="modal-actions">' +
         '<button class="btn active auth-action" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? t('songs.add') : t('songs.save')) + '</button>' +
@@ -719,51 +751,145 @@ function _openSongEditForm(sid, panelEl) {
   }
 }
 
+// New-song file picks are deferred: stash the File in its hidden input and show
+// the filename. The actual upload happens in _commitNewSong, once the song has
+// an id. (Existing songs upload immediately via _panelUploadHandler.)
+function _panelStageFile(input, type, id) {
+  var file = input.files[0];
+  if (!file) return;
+  var maxBytes = type === 'sheet' ? 20 * 1024 * 1024 : 50 * 1024 * 1024;
+  if (file.size > maxBytes) { input.value = ''; _setBulkStatus('error', t('songs.fileTooLarge')); return; }
+  var label = document.getElementById('staged-' + type + '-' + id);
+  if (label) { label.textContent = '✓ ' + t('songs.willUploadOnSave', { name: file.name }); label.style.display = ''; }
+  markPanelEditDirty();
+}
+
+// Create a song from the panel, then upload any files staged on its inputs.
+// Returns the created song, or null if it couldn't be created (no title / auth).
+async function _commitNewSong(formId) {
+  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) { if (!isViewMode()) requireLogin(); return null; }
+
+  var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
+    .find(function(i) { return !i.checkValidity(); });
+  if (bad) { bad.reportValidity(); bad.focus(); return null; }
+
+  var data = collectRow(formId);
+  if (!data.title) {
+    var titleInput = document.querySelector('input[data-key="title"][data-id="' + formId + '"]');
+    if (titleInput) titleInput.focus();
+    return null;
+  }
+
+  var r = await fetch('/api/' + artistSlug + '/songs', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body:    JSON.stringify(data),
+  });
+  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return null; }
+  if (!r.ok) throw new Error('create failed');
+  var newSong = await r.json();
+
+  var staged = [['audio', 'pf-audio-'], ['sheet', 'pf-sheet-'], ['playback', 'pf-playback-']];
+  for (var i = 0; i < staged.length; i++) {
+    var inputEl = document.getElementById(staged[i][1] + formId);
+    var file = inputEl && inputEl.files[0];
+    if (!file) continue;
+    try { await _uploadSongMedia(newSong.id, staged[i][0], file); }
+    catch (err) { if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed')); }
+  }
+
+  // Persist a draft arrangement entered before the song existed, then activate it.
+  var draft = _pendingArrDrafts[formId];
+  if (draft) {
+    try {
+      var ar = await fetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body:    JSON.stringify({ name: 'Default', rows: draft.rows, hidden_instruments: draft.hidden_instruments }),
+      });
+      if (ar.ok) {
+        var created = await ar.json();
+        await fetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements/' + created.id + '/activate', {
+          method: 'POST', headers: { 'Authorization': 'Bearer ' + token },
+        });
+      }
+    } catch (e) { /* song is saved; arrangement just didn't attach */ }
+    delete _pendingArrDrafts[formId];
+  }
+  return newSong;
+}
+
 async function _savePanelSong(formId, isNew, realSid) {
   var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) { if (!isViewMode()) requireLogin(); return; }
 
+  var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
+    .find(function(i) { return !i.checkValidity(); });
+  if (bad) { bad.reportValidity(); bad.focus(); return; }
+
   var btn = document.getElementById('song-panel-save-btn');
   if (btn) { btn.disabled = true; btn.textContent = t('songs.saving'); }
 
-  var data = collectRow(formId);
-
   try {
-    var r;
+    var targetId;
     if (isNew) {
-      if (!data.title) {
-        if (btn) { btn.disabled = false; btn.textContent = t('songs.add'); }
-        return;
-      }
-      r = await fetch('/api/' + artistSlug + '/songs', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body:    JSON.stringify(data),
-      });
+      var newSong = await _commitNewSong(formId);
+      if (!newSong) { if (btn) { btn.disabled = false; btn.textContent = t('songs.add'); } return; }
+      targetId = String(newSong.id);
     } else {
-      r = await fetch('/api/' + artistSlug + '/songs', {
+      var r = await fetch('/api/' + artistSlug + '/songs', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body:    JSON.stringify([Object.assign({ id: parseInt(realSid, 10) }, data)]),
+        body:    JSON.stringify([Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]),
       });
+      if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+      if (!r.ok) throw new Error('save failed');
+      targetId = String(realSid);
     }
 
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
-    if (!r.ok) throw new Error('save failed');
-
-    var newSong = isNew ? await r.json() : null;
     await fetchSongsList(true);
-    if (_songsView) {
-      _songsView.refresh();
-      var targetId = isNew ? String(newSong.id) : String(realSid);
-      _songsView.select(targetId);
-    }
+    if (_songsView) { _songsView.refresh(); _songsView.select(targetId); }
     loadLogs();
   } catch {
     var errEl = document.getElementById('song-panel-edit-error');
     if (errEl) { errEl.textContent = t('songs.saveFailed'); errEl.className = 'status-msg error'; }
     if (btn) { btn.disabled = false; btn.textContent = isNew ? t('songs.add') : t('songs.save'); }
   }
+}
+
+function _isNewPanelSid(sid) { return String(sid).indexOf('_new_panel_') === 0; }
+
+// Lyrics editor. Existing songs save through the API (needs an id). A new,
+// unsaved song has no id, so it opens in local mode: lyrics are held in the
+// panel's hidden field and written when the song is created (see saveLyrics).
+function _openLyricsFromPanel(formId, isNew, sid) {
+  if (!isNew) { openLyricsEdit(sid); return; }
+  currentLyricsSid = formId;
+  var hidden = document.querySelector('input[data-key="extra.lyrics"][data-id="' + formId + '"]');
+  document.getElementById('lyrics-title').textContent = '¶ ' + t('songs.lyricsTitle');
+  document.getElementById('lyrics-edit').value        = (hidden && hidden.value) || '';
+  _lyricsSetMode('edit');
+  document.getElementById('lyrics-modal').classList.add('open');
+  document.getElementById('lyrics-edit').focus();
+}
+
+// Arrangement editor. Existing songs edit live against the API. A new, unsaved
+// song opens a single-version draft held in memory; it's persisted on Add.
+function _openArrFromPanel(formId, isNew, sid) {
+  if (!isNew) { _openSongArrangement(sid); return; }
+  var titleInput = document.querySelector('input[data-key="title"][data-id="' + formId + '"]');
+  var title  = (titleInput && titleInput.value) || t('songs.newSong');
+  var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
+  openArrangementEditor(null, title, arrCfg, {
+    draft: _pendingArrDrafts[formId] || null,
+    onDraftSave: function(draft) {
+      _pendingArrDrafts[formId] = draft;
+      var cue = document.getElementById('staged-arr-' + formId);
+      if (cue) { cue.textContent = '✓ ' + t('songs.arrStaged'); cue.style.display = ''; }
+      markPanelEditDirty();
+    },
+  });
 }
 
 function _openNewSongPanel() {
@@ -1152,20 +1278,26 @@ function renderRow(song) {
     if (c.type === 'number') {
       return `<td class="${c.cls}${sticky}">
         <input type="number" data-id="${sid}" data-key="${c.key}"
-          value="${escHtml(String(val))}" min="0" step="any"
+          value="${escHtml(String(val))}" min="0" step="1" inputmode="numeric"
           oninput="markDirty('${sid}')">
       </td>`;
     }
     if (c.type === 'select') {
-      if (song.gema_work_number) {
+      const isLang = c.key === 'gema_language';
+      // GEMA language is shadowed (read-only) once a GEMA work is linked.
+      if (isLang && song.gema_work_number) {
         return `<td class="${c.cls}${sticky}"><span class="stat-cell">${escHtml(val || '—')}</span></td>`;
       }
-      const cur = song.extra?.language || c.default || '';
-      const opts = (c.options || []).map(o =>
-        `<option value="${o}"${o === cur ? ' selected' : ''}>${o}</option>`
+      const cur = isLang ? (song.extra?.language || c.default || '') : (val ?? '');
+      const dataKey = isLang ? 'extra.language' : c.key;
+      let list = c.options || [];
+      if (cur && list.indexOf(cur) === -1) list = [cur, ...list];
+      const placeholder = isLang ? '' : '<option value="">—</option>';
+      const opts = placeholder + list.map(o =>
+        `<option value="${escHtml(o)}"${o === cur ? ' selected' : ''}>${escHtml(o)}</option>`
       ).join('');
       return `<td class="${c.cls}${sticky}">
-        <select data-id="${sid}" data-key="extra.language" onchange="markDirty('${sid}')">${opts}</select>
+        <select data-id="${sid}" data-key="${dataKey}" onchange="markDirty('${sid}')">${opts}</select>
       </td>`;
     }
     if (c.type === 'url') {
@@ -1289,6 +1421,9 @@ function discardAll() {
 async function saveAll() {
   const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) { if (!isViewMode()) requireLogin(); return; }
+
+  const bad = [...document.querySelectorAll('#tbody input[type="number"]')].find(i => !i.checkValidity());
+  if (bad) { bad.reportValidity(); bad.focus(); return; }
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = t('songs.saving');
@@ -2164,6 +2299,9 @@ function _lyricsSetMode(mode) { // 'view' or 'edit'
   document.getElementById('lyrics-edit').style.display        = mode === 'edit' ? '' : 'none';
   document.getElementById('lyrics-actions-view').style.display = mode === 'view' ? '' : 'none';
   document.getElementById('lyrics-actions-edit').style.display = mode === 'edit' ? '' : 'none';
+  // AI suggest needs a saved song (title + artist) — hide it for a new, unsaved one.
+  var suggestBtn = document.getElementById('lyrics-suggest-btn');
+  if (suggestBtn) suggestBtn.style.display = _isNewPanelSid(currentLyricsSid) ? 'none' : '';
   _lyricsSaveStatus('', false);
 }
 
@@ -2283,6 +2421,14 @@ async function saveLyrics() {
   const sid = currentLyricsSid;
   if (!sid) return;
   const text = document.getElementById('lyrics-edit').value;
+
+  // New, unsaved song: stash lyrics in the panel; they persist when it's created.
+  if (_isNewPanelSid(sid)) {
+    const hidden = document.querySelector(`input[data-key="extra.lyrics"][data-id="${sid}"]`);
+    if (hidden) { hidden.value = text; markPanelEditDirty(); }
+    closeLyrics();
+    return;
+  }
 
   const saveBtn = document.getElementById('lyrics-save-btn');
   if (saveBtn) { saveBtn.textContent = t('songs.savingDot'); saveBtn.disabled = true; }

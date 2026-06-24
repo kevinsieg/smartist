@@ -1,7 +1,7 @@
 // Shared utilities for all app pages
 
 const AUTH_TOKEN_KEY = 'smartist_token';
-var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','demo','impressum','contact']);
+var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
 // artist's dashboard).
@@ -238,23 +238,26 @@ function getInitials(name) {
 (function injectDemoBanner() {
   var demoName = sessionStorage.getItem('demo_name');
   if (!demoName) return;
-  var genres = [];
-  try { genres = JSON.parse(sessionStorage.getItem('demo_genres') || '[]'); } catch {}
-  var sub = genres.length ? genres.slice(0, 3).join(', ') : 'live demo workspace';
-  var initials = demoName.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
-  var bar = document.createElement('div');
-  bar.id = 'demo-banner';
-  bar.style.cssText = 'background:#2e2e2e;color:#aaa;font-family:"Courier New",monospace;font-size:0.68rem;letter-spacing:0.06em;padding:8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #444;';
-  bar.innerHTML =
-    '<span style="display:flex;align-items:center;gap:10px;">' +
-    '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#b06a2a;color:#f5f0ea;font-weight:700;font-size:0.7rem;letter-spacing:0.05em;border-radius:2px;flex-shrink:0;">' + escHtml(initials) + '</span>' +
-    '<span><strong style="color:#f9bf8f">' + escHtml(demoName) + '</strong>' +
-    ' &mdash; live demo workspace' +
-    (genres.length ? ' · <span style="color:#666">' + escHtml(sub) + '</span>' : '') +
-    '</span></span>' +
-    '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:#555;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0;" aria-label="Dismiss">&times;</button>';
-  var header = document.querySelector('.app-header');
-  if (header) header.insertAdjacentElement('afterend', bar);
+  var ready = (window.i18n && window.i18n.ready) ? window.i18n.ready : Promise.resolve();
+  ready.then(function() {
+    var genres = [];
+    try { genres = JSON.parse(sessionStorage.getItem('demo_genres') || '[]'); } catch {}
+    var sub = genres.length ? genres.slice(0, 3).join(', ') : t('demo.bannerLiveWorkspace');
+    var initials = demoName.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
+    var bar = document.createElement('div');
+    bar.id = 'demo-banner';
+    bar.style.cssText = 'background:#2e2e2e;color:#aaa;font-family:"Courier New",monospace;font-size:0.68rem;letter-spacing:0.06em;padding:8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #444;';
+    bar.innerHTML =
+      '<span style="display:flex;align-items:center;gap:10px;">' +
+      '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#b06a2a;color:#f5f0ea;font-weight:700;font-size:0.7rem;letter-spacing:0.05em;border-radius:2px;flex-shrink:0;">' + escHtml(initials) + '</span>' +
+      '<span><strong style="color:#f9bf8f">' + escHtml(demoName) + '</strong>' +
+      ' &mdash; ' + t('demo.bannerLiveWorkspace') +
+      (genres.length ? ' · <span style="color:#666">' + escHtml(sub) + '</span>' : '') +
+      '</span></span>' +
+      '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:#555;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0;" aria-label="' + t('demo.bannerDismiss') + '">&times;</button>';
+    var header = document.querySelector('.app-header');
+    if (header) header.insertAdjacentElement('afterend', bar);
+  });
 })();
 
 function escHtml(s) {
@@ -583,7 +586,7 @@ function updateAuthIndicator() {
       ? '<img class="nav-auth-avatar-img" src="' + escHtml(_photoUrl) + '" alt="">'
       : '<span class="nav-auth-avatar-mono">' + escHtml(_initials || '&#10004;') + '</span>';
     var _emailHtml = _email ? '<span class="nav-auth-email">' + escHtml(_email) + '</span>' : '';
-    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="Account menu">' +
+    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="' + t('nav.accountMenu') + '">' +
       _avatarHtml + _emailHtml +
     '</button>';
   } else {
@@ -592,8 +595,8 @@ function updateAuthIndicator() {
     } else {
       el.innerHTML =
         '<div class="nav-auth-vm">' +
-          '<a class="nav-auth-signup" href="/signup">Sign up</a>' +
-          '<a class="nav-auth-login nav-auth-login--vm go-login" href="' + loginPageUrl() + '">Login</a>' +
+          '<a class="nav-auth-signup" href="/signup">' + t('nav.signup') + '</a>' +
+          '<a class="nav-auth-login nav-auth-login--vm go-login" href="' + loginPageUrl() + '">' + t('nav.login') + '</a>' +
         '</div>';
       var _nlLogin = document.getElementById('nav-links-login');
       if (_nlLogin) _nlLogin.href = loginPageUrl();
@@ -622,7 +625,7 @@ function switchWorkspace() {
   try { sessionStorage.setItem('ws_skip_autoredirect', '1'); } catch {}
   var _menu = document.getElementById('nav-auth-menu');
   if (_menu) _menu.remove();
-  window.location.assign('/home');
+  window.location.assign('/workspaces');
 }
 window.switchWorkspace = switchWorkspace;
 
@@ -640,13 +643,13 @@ function _openAuthMenu(btn) {
   menu.className = 'nav-auth-menu';
   menu.innerHTML =
     '<div class="nav-auth-menu-item" onclick="navigate(\'' + _profilePath + '\');document.getElementById(\'nav-auth-menu\')&&document.getElementById(\'nav-auth-menu\').remove()">' +
-      'Profile' +
+      t('nav.profile') +
     '</div>' +
     (_showSwitch
-      ? '<div class="nav-auth-menu-item" onclick="switchWorkspace()">Switch workspace</div>'
+      ? '<div class="nav-auth-menu-item" onclick="switchWorkspace()">' + t('nav.switchWorkspace') + '</div>'
       : '') +
     '<div class="nav-auth-menu-item" onclick="doLogout()">' +
-      'Logout' +
+      t('nav.logout') +
     '</div>';
   var rect = btn.getBoundingClientRect();
   // Top edge sits on the nav bar's bottom border (same line as the More dropdown).
@@ -724,7 +727,7 @@ async function apiFetch(url, method = 'GET', body) {
 
 // Standard page bootstrap: config → nav → page-specific callback.
 // Requires login — unauthenticated visits redirect to login immediately.
-// Config fetch failure (unknown slug, network) redirects to /home.
+// Config fetch failure (unknown slug, network) redirects to /workspaces.
 // Loads the light config (no songs payload) unless opts.fullConfig is set.
 async function initPage(onReady, opts) {
   if (isViewMode()) { goToLogin(); return; }
@@ -737,7 +740,7 @@ async function initPage(onReady, opts) {
     console.error(e);
     // Flag stops workspaces.js from auto-redirecting straight back here.
     try { sessionStorage.setItem('ws_skip_autoredirect', '1'); } catch {}
-    window.location.assign('/home');
+    window.location.assign('/workspaces');
     return;
   }
   applyNav(cfg.name, cfg.config);
@@ -1261,8 +1264,8 @@ function _ensureHardDeleteModal() {
     '<div id="hd-cascade-opts"></div>' +
     '<div class="status-msg error" id="hd-status"></div>' +
     '<div class="modal-actions">' +
-    '<button class="btn active" type="button" id="hd-confirm-btn" style="background:#e55;" onclick="confirmHardDelete()">Delete permanently</button>' +
-    '<button class="btn" type="button" onclick="closeModal(\'hard-delete-modal\')">Cancel</button>' +
+    '<button class="btn active" type="button" id="hd-confirm-btn" style="background:#e55;" onclick="confirmHardDelete()">' + t('common.deletePermanently') + '</button>' +
+    '<button class="btn" type="button" onclick="closeModal(\'hard-delete-modal\')">' + t('common.cancel') + '</button>' +
     '</div></div>';
   document.body.appendChild(el);
 }
@@ -1271,11 +1274,11 @@ async function openHardDeleteModal(opts) {
   _ensureHardDeleteModal();
   _hardDeleteOpts = opts;
   document.getElementById('hd-title').textContent = opts.title;
-  document.getElementById('hd-refs-msg').textContent = 'Loading…';
+  document.getElementById('hd-refs-msg').textContent = t('common.loading');
   document.getElementById('hd-cascade-opts').innerHTML = '';
   setStatus('hd-status', '');
   var btn = document.getElementById('hd-confirm-btn');
-  if (btn) { btn.disabled = false; btn.textContent = 'Delete permanently'; }
+  if (btn) { btn.disabled = false; btn.textContent = t('common.deletePermanently'); }
   openModal('hard-delete-modal');
   try {
     var r = await apiFetch(opts.refsUrl);
@@ -1283,19 +1286,19 @@ async function openHardDeleteModal(opts) {
     document.getElementById('hd-refs-msg').innerHTML = opts.buildRefsMsg(data.refs);
     document.getElementById('hd-cascade-opts').innerHTML = opts.buildCascadeOpts ? opts.buildCascadeOpts(data.refs) : '';
   } catch {
-    setStatus('hd-status', 'Could not load references.', true);
+    setStatus('hd-status', t('common.couldNotLoadRefs'), true);
   }
 }
 
 async function confirmHardDelete() {
   if (!_hardDeleteOpts) return;
   var btn = document.getElementById('hd-confirm-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('common.deleting'); }
   try {
     var cascade = _hardDeleteOpts.getCascade ? _hardDeleteOpts.getCascade() : [];
     var r = await apiFetch(_hardDeleteOpts.deleteUrl, 'DELETE', { hard: true, cascade });
     if (r.ok) {
-      setStatus('hd-status', 'Deleted.');
+      setStatus('hd-status', t('common.deleted'));
       var opts = _hardDeleteOpts;
       _hardDeleteOpts = null;
       setTimeout(async function() {
@@ -1304,12 +1307,12 @@ async function confirmHardDelete() {
       }, 700);
     } else {
       var j = await r.json();
-      setStatus('hd-status', j.error || 'Error', true);
-      if (btn) { btn.disabled = false; btn.textContent = 'Delete permanently'; }
+      setStatus('hd-status', j.error || t('common.error'), true);
+      if (btn) { btn.disabled = false; btn.textContent = t('common.deletePermanently'); }
     }
   } catch {
-    setStatus('hd-status', 'Network error. Try again.', true);
-    if (btn) { btn.disabled = false; btn.textContent = 'Delete permanently'; }
+    setStatus('hd-status', t('common.networkError'), true);
+    if (btn) { btn.disabled = false; btn.textContent = t('common.deletePermanently'); }
   }
 }
 
