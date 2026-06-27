@@ -8,6 +8,7 @@ const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
+const { wouldExceedStorage, storageLimitBytes } = require('../_plans');
 const logger = require('../_logger');
 
 module.exports = wrap(async function handler(req, res) {
@@ -306,12 +307,25 @@ module.exports = wrap(async function handler(req, res) {
     const [song] = await sql`SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
+    if (wouldExceedStorage(band, band.storage_used_bytes || 0, head.size)) {
+      await deleteFromR2(publicUrl);
+      return res.status(402).json({
+        error: 'storage_limit',
+        limit: storageLimitBytes(band),
+        used:  Number(band.storage_used_bytes || 0),
+      });
+    }
+
     const previousUrl = song.extra?.[config.extraKey] ?? null;
     const newExtra = { ...(song.extra ?? {}), [config.extraKey]: publicUrl };
     const [updated] = await sql`UPDATE songs SET extra = ${newExtra} WHERE id = ${songId} AND artist_id = ${band.id} RETURNING *`;
 
+    await sql`UPDATE artists SET storage_used_bytes = storage_used_bytes + ${head.size} WHERE id = ${band.id}`;
+
     if (previousUrl && previousUrl !== publicUrl) {
+      const prevHead = await verifyUpload(keyFromUrl(previousUrl));
       await deleteFromR2(previousUrl);
+      if (prevHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${prevHead.size}) WHERE id = ${band.id}`;
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_replace`, {
         previousFilename: filenameFromUrl(previousUrl),
         newFilename:      filenameFromUrl(publicUrl),
@@ -340,7 +354,9 @@ module.exports = wrap(async function handler(req, res) {
 
     const url = song.extra?.[config.extraKey];
     if (url) {
+      const delHead = await verifyUpload(keyFromUrl(url));
       await deleteFromR2(url);
+      if (delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
         filename:  filenameFromUrl(url),
         deletedAt: new Date().toISOString(),
