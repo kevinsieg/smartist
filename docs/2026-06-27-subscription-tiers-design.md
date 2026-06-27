@@ -123,10 +123,12 @@ if (!hasFeature(artist, 'venues'))
 - PRO/GEMA import segment in `api/[artist]/songs/[...path].js` → `'pro-import'`
 - Booking: no code yet; key reserved for when it lands.
 
-**Storage limit + accounting** — at every R2 upload-confirm site
-(`api/[artist]/songs.js`, `api/[artist]/songs/[...path].js`, and the
-photo/favicon uploads in `api/config.js`), where `verifyUpload`/`head.size`
-already runs:
+**Storage limit + accounting** — counts **song media only** (audio / sheet /
+playback). Band photo/favicon are excluded: each uses a single fixed R2 key, is
+tiny, and is not the storage-cost driver. Hook at the song-media upload-confirm
+sites (`api/_media.js:makeMediaFn` — the shared path — and the
+`media_confirm_id` branch in `api/[artist]/songs.js`), where
+`verifyUpload`/`head.size` already runs:
 ```js
 const limit = storageLimitBytes(artist);
 if (limit != null && usedBytes + size > limit)
