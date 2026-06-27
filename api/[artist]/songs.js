@@ -8,7 +8,7 @@ const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
-const { wouldExceedStorage, storageLimitBytes } = require('../_plans');
+const { wouldExceedStorage, storageLimitBytes, songLimit } = require('../_plans');
 const logger = require('../_logger');
 
 module.exports = wrap(async function handler(req, res) {
@@ -407,6 +407,13 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
+    const _max = songLimit(band);
+    if (_max != null) {
+      const [{ count }] = await sql`
+        SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      if (count >= _max)
+        return res.status(402).json({ error: 'song_limit', limit: _max });
+    }
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
