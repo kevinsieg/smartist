@@ -24,12 +24,34 @@ function _callbackUri(req) {
   return `${_origin(req)}/auth/callback`;
 }
 
+// ── Super-admin guard ─────────────────────────────────────────────────────────
+
+async function requireSuperAdmin(req, res, sql) {
+  const tok = (req.headers.authorization || '').replace(/^Bearer /, '');
+  const claim = verifyUserToken(tok);
+  if (!claim) { res.status(401).json({ error: 'Unauthorized' }); return false; }
+  const [u] = await sql`SELECT email FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  const allow = (process.env.SUPER_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!u || !allow.includes(String(u.email).toLowerCase())) { res.status(403).json({ error: 'Forbidden' }); return false; }
+  return true;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 module.exports = wrap(async function handler(req, res) {
 
   // ── POST: contact form / email subscribe / demo signup ────────────────────
   if (req.method === 'POST') {
+    if (req.body?.action === 'admin-set-plan') {
+      const sql = getDb();
+      if (!await requireSuperAdmin(req, res, sql)) return;
+      const { slug: target, plan } = req.body;
+      if (!['free', 'pro'].includes(plan)) return res.status(400).json({ error: 'invalid plan' });
+      const r = await sql`UPDATE artists SET config = config || ${{ plan }} WHERE slug = ${target} RETURNING id`;
+      if (!r.length) return res.status(404).json({ error: 'Artist not found' });
+      return res.json({ ok: true });
+    }
+
     if (req.body?.action === 'signup-link') {
       const email = validateEmail(req.body?.email);
       if (!email) return res.status(400).json({ error: 'Valid email required' });
@@ -241,6 +263,25 @@ module.exports = wrap(async function handler(req, res) {
       }
     }
     return res.status(401).json({ error: 'Unauthorised' });
+  }
+
+  // ── GET ?action=admin-overview — global band list (super-admin only) ─────────
+  if (req.query.action === 'admin-overview') {
+    const sql = getDb();
+    if (!await requireSuperAdmin(req, res, sql)) return;
+    const bands = await sql`
+      SELECT a.slug, a.name, COALESCE(a.config->>'plan','free') AS plan,
+             a.storage_used_bytes,
+             (SELECT count(*)::int FROM songs s WHERE s.artist_id = a.id AND NOT s.deleted) AS songs,
+             (SELECT count(*)::int FROM users u WHERE u.artist_id = a.id) AS users
+      FROM artists a ORDER BY a.name`;
+    const totals = {
+      bands: bands.length,
+      storageUsedBytes: bands.reduce((n, b) => n + Number(b.storage_used_bytes || 0), 0),
+      pro: bands.filter(b => b.plan === 'pro').length,
+      free: bands.filter(b => b.plan !== 'pro').length,
+    };
+    return res.json({ totals, bands });
   }
 
   const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
