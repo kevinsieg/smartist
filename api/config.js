@@ -11,6 +11,7 @@ const logger = require('./_logger');
 const { resolveOAuthEmail, generateState, verifyState } = require('./_domain/identity');
 const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
 const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken, checkEmailDeliverable } = require('./_domain/registration');
+const { planSummary } = require('./_plans');
 
 // ── OAuth helpers ─────────────────────────────────────────────────────────────
 
@@ -422,6 +423,11 @@ module.exports = wrap(async function handler(req, res) {
     role:          (user && user.id != null) ? user.role : null,
     songs:         light ? undefined : songs,
     counts,
+    plan:          planSummary(band),
+    usage:         {
+      storageUsedBytes: Number(band.storage_used_bytes || 0),
+      songs: (counts && counts.songs != null) ? counts.songs : null,
+    },
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
     singleTenant:  !!process.env.ARTIST_SLUG,
