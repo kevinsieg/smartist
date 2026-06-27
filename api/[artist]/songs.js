@@ -307,7 +307,15 @@ module.exports = wrap(async function handler(req, res) {
     const [song] = await sql`SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
-    if (wouldExceedStorage(band, band.storage_used_bytes || 0, head.size)) {
+    // A replacement frees the previous file's bytes, so the cap check is on the
+    // NET change (new − old), not the gross add — otherwise replacing a file with
+    // a same-size one would falsely trip the limit near the cap.
+    const previousUrl = song.extra?.[config.extraKey] ?? null;
+    const prevHead = (previousUrl && previousUrl !== publicUrl)
+      ? await verifyUpload(keyFromUrl(previousUrl)) : null;
+    const prevSize = prevHead ? prevHead.size : 0;
+
+    if (wouldExceedStorage(band, (band.storage_used_bytes || 0) - prevSize, head.size)) {
       await deleteFromR2(publicUrl);
       return res.status(402).json({
         error: 'storage_limit',
@@ -316,14 +324,12 @@ module.exports = wrap(async function handler(req, res) {
       });
     }
 
-    const previousUrl = song.extra?.[config.extraKey] ?? null;
     const newExtra = { ...(song.extra ?? {}), [config.extraKey]: publicUrl };
     const [updated] = await sql`UPDATE songs SET extra = ${newExtra} WHERE id = ${songId} AND artist_id = ${band.id} RETURNING *`;
 
     await sql`UPDATE artists SET storage_used_bytes = storage_used_bytes + ${head.size} WHERE id = ${band.id}`;
 
     if (previousUrl && previousUrl !== publicUrl) {
-      const prevHead = await verifyUpload(keyFromUrl(previousUrl));
       await deleteFromR2(previousUrl);
       if (prevHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${prevHead.size}) WHERE id = ${band.id}`;
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_replace`, {

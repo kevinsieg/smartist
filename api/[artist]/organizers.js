@@ -17,7 +17,7 @@ module.exports = wrap(async function handler(req, res) {
     if (req.query.slim) {
       const orgs = await sql`
         SELECT id, name, city FROM organizers
-        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND deleted = false
+        WHERE artist_id = ${authArtist.id} AND deleted = false
         ORDER BY name ASC
       `;
       return res.json(orgs);

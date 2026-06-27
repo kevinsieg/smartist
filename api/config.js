@@ -45,7 +45,9 @@ module.exports = wrap(async function handler(req, res) {
     if (req.body?.action === 'admin-set-plan') {
       const sql = getDb();
       if (!await requireSuperAdmin(req, res, sql)) return;
-      const { slug: target, plan } = req.body;
+      const { plan } = req.body;
+      const target = validateStr(req.body.slug, 100);
+      if (!target) return res.status(400).json({ error: 'slug required' });
       if (!['free', 'pro'].includes(plan)) return res.status(400).json({ error: 'invalid plan' });
       const r = await sql`UPDATE artists SET config = config || ${{ plan }} WHERE slug = ${target} RETURNING id`;
       if (!r.length) return res.status(404).json({ error: 'Artist not found' });

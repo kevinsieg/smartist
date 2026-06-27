@@ -80,7 +80,15 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
         return res.status(400).json({ error: `Uploaded file exceeds ${maxMB} MB` });
       }
 
-      if (wouldExceedStorage(band, band.storage_used_bytes || 0, head.size)) {
+      // A replacement frees the previous file's bytes, so the cap check is on the
+      // NET change (new − old), not the gross add — otherwise replacing a file
+      // with a same-size one would falsely trip the limit near the cap.
+      const previousUrl = song.extra?.[extraKey] ?? null;
+      const prevHead = (previousUrl && previousUrl !== publicUrl)
+        ? await verifyUpload(keyFromUrl(previousUrl)) : null;
+      const prevSize = prevHead ? prevHead.size : 0;
+
+      if (wouldExceedStorage(band, (band.storage_used_bytes || 0) - prevSize, head.size)) {
         await deleteFromR2(publicUrl);
         return res.status(402).json({
           error: 'storage_limit',
@@ -89,7 +97,6 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
         });
       }
 
-      const previousUrl = song.extra?.[extraKey] ?? null;
       const newExtra = { ...(song.extra ?? {}), [extraKey]: publicUrl };
       const [updated] = await sql`
         UPDATE songs SET extra = ${newExtra}
@@ -100,7 +107,6 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       await sql`UPDATE artists SET storage_used_bytes = storage_used_bytes + ${head.size} WHERE id = ${band.id}`;
 
       if (previousUrl && previousUrl !== publicUrl) {
-        const prevHead = await verifyUpload(keyFromUrl(previousUrl));
         await deleteFromR2(previousUrl);
         if (prevHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${prevHead.size}) WHERE id = ${band.id}`;
         await insertAuditLog(sql, band.id, songId, `${actionPrefix}_replace`, {

@@ -12,10 +12,10 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'GET') {
     const { artist, user } = await getAccess(req, slug);
     if (!artist) return res.status(404).json({ error: 'Artist not found' });
-    if (!requireFeature(res, artist, 'venues')) return;
     const viewOnly = !user;
     if (viewOnly && isPrivate(artist))
       return res.status(401).json({ error: 'This workspace is private' });
+    if (!requireFeature(res, artist, 'venues')) return;
 
     if (req.query.slim) {
       const venues = await sql`

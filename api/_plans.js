@@ -15,13 +15,16 @@ const PLANS = {
   },
 };
 
+function planKey(artist) {
+  return PLANS[artist?.config?.plan] ? artist.config.plan : 'free';
+}
+
 function getPlan(artist) {
-  return PLANS[artist?.config?.plan] || PLANS.free;
+  return PLANS[planKey(artist)];
 }
 
 function hasFeature(artist, key) {
-  const f = getPlan(artist).features;
-  return f.includes('*') || f.includes(key);
+  return getPlan(artist).features.includes(key);
 }
 
 function storageLimitBytes(artist) {
@@ -40,7 +43,7 @@ function wouldExceedStorage(artist, usedBytes, addBytes) {
 }
 
 function planSummary(artist) {
-  const key = PLANS[artist?.config?.plan] ? artist.config.plan : 'free';
+  const key = planKey(artist);
   const p = PLANS[key];
   return { key, label: p.label, limits: p.limits, features: p.features };
 }
