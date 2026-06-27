@@ -226,6 +226,9 @@ module.exports = wrap(async function handler(req, res) {
       await sql`UPDATE artists SET name = ${name} WHERE id = ${band.id}`;
     }
     if (req.body?.config !== undefined) {
+      // NOTE: `config.plan` is currently writable here so the self-serve placeholder
+      // upgrade works without billing. When real billing lands, strip `plan` from this
+      // merge and set it only via the Stripe webhook + ?action=admin-set-plan.
       await sql`UPDATE artists SET config = config || ${req.body.config} WHERE id = ${band.id}`;
     }
     return res.json({ ok: true });

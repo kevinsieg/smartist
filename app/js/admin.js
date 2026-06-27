@@ -1,4 +1,4 @@
-const TOKEN = sessionStorage.getItem('smartist_token') || '';
+const TOKEN = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token') || '';
 
 async function load() {
   const r = await fetch('/api/config?action=admin-overview', {
