@@ -20,6 +20,7 @@ initPage(function(cfg) {
   document.getElementById('settings-loading').style.display = 'none';
   document.getElementById('settings-content').style.display = '';
   renderWorkspace(cfg);
+  renderPlan(cfg);
   loadUsers();
 });
 
@@ -826,6 +827,31 @@ async function saveFilterFields() {
   } else {
     msg.textContent = t('settings.saveFailed'); msg.className = 'save-msg err';
   }
+}
+
+function renderPlan(cfg) {
+  var p = cfg.plan, u = cfg.usage || {};
+  document.getElementById('plan-label').textContent = p.label;
+  var usedMB = ((u.storageUsedBytes || 0) / 1024 / 1024).toFixed(1);
+  document.getElementById('plan-storage').textContent =
+    p.limits.storageMB == null ? t('settings.plan.storageUnlimited', { used: usedMB })
+                               : t('settings.plan.storage', { used: usedMB, limit: p.limits.storageMB });
+  document.getElementById('plan-songs').textContent =
+    p.limits.songs == null ? t('settings.plan.songsUnlimited', { used: (u.songs == null ? 0 : u.songs) })
+                           : t('settings.plan.songs', { used: (u.songs == null ? 0 : u.songs), limit: p.limits.songs });
+  var btn = document.getElementById('plan-toggle');
+  var target = p.key === 'pro' ? 'free' : 'pro';
+  btn.textContent = target === 'pro' ? t('settings.plan.upgrade') : t('settings.plan.downgrade');
+  btn.onclick = async function () {
+    btn.disabled = true;
+    var ok = await patchConfig({ plan: target });
+    if (ok) {
+      invalidateConfigCache();
+      window.location.reload();
+    } else {
+      btn.disabled = false;
+    }
+  };
 }
 
 async function patchConfig(configUpdate) {
