@@ -48,6 +48,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/profile` | inline script in `profile.html` — personal (email, change password) |
 | `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
 | `/stage?id=N` | `app/js/stage.js` — **no `common.js`; no nav** |
+| `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, no `common.js`, English-only |
 
 `app/js/common.js` is loaded by every page except `stage.html`. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `common.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()` (which lives in `common.js`).
 
@@ -62,7 +63,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 
 | File | Routes |
 |------|--------|
-| `api/config.js` | `GET /api/config`; `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (via `/auth/callback` rewrite); `GET ?action=photo-url` (presigned upload) |
+| `api/config.js` | `GET /api/config` (returns `plan`+`usage`); `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `POST ?action=upgrade` (self-serve plan seam — see Plans); `GET ?action=admin-overview` / `POST ?action=admin-set-plan` (super-admin); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (via `/auth/callback` rewrite); `GET ?action=photo-url` (presigned upload) |
 | `api/[artist]/auth.js` | `POST /api/:artist/auth` (login); `POST ?action=invite\|resend-invite\|accept-invite\|change-password`; `GET` (list users), `PUT` (role/email), `DELETE` — admin; `POST /api/:artist/request-reset` (via rewrite) |
 | `api/[artist]/gigs.js` | `GET/POST /api/:artist/gigs` |
 | `api/[artist]/gigs/[id].js` | `GET/PUT/DELETE /api/:artist/gigs/:id` |
@@ -156,6 +157,22 @@ Venues and organizers are CRM-style reference tables linked to gigs via `venue_i
 
 GEMA: `extra.language` is editable when no GEMA work is linked; the GEMA value shadows it when linked. `extra.isrc` is always read-only (set via script). The `||` PATCH merge preserves both.
 
+Plan state lives in `artists.config`: `plan` (`free`|`pro`), `upgradedAt` (sticky ISO, set on self-serve upgrade — survives downgrade, the demand metric). Storage usage is the `artists.storage_used_bytes BIGINT` column (atomic `+ n` / `GREATEST(0, - n)`; song media only). Future paid keys (`plan_status`, `ls_subscription_id`, `ls_customer_id`, `renews_at`) are reserved for the parked Lemon Squeezy rollout.
+
+---
+
+## Plans, limits, billing & support
+
+Per-band tier system. **`api/_plans.js` is the single source of truth** — edit the two `features` arrays to change what's free vs paid. `getPlan(artist)` is the **only entitlement seam** (reads `artists.config.plan`, unknown/missing → free); real billing later only changes what writes `config.plan`, nothing downstream.
+
+- **Tiers:** Free = 30 MB storage + 20 songs, features `songs/setlists/gigs/hub`. Pro = unlimited + `venues/organizers/pro-import/booking`. Helpers: `hasFeature`, `storageLimitBytes`, `songLimit`, `wouldExceedStorage`, `planSummary`, `requireFeature(res, artist, key)`.
+- **Enforcement is server-side** (`402` + machine codes): `requireFeature` → `upgrade_required` (venues/organizers/`gema-import`); storage cap → `storage_limit` (at song-media upload-confirm in `_media.js` + `songs.js`, nets the replaced file); song cap → `song_limit` (song create). Client mirrors for UX only.
+- **Client gating:** `common.js` adds `.plan-locked` to nav items the plan lacks (`NAV_FEATURE` map) and routes clicks to `/settings#plan`. `loadConfig()` exposes `cfg.plan`/`cfg.usage`.
+- **Self-serve upgrade seam:** `POST /api/config?action=upgrade` — today flips `config.plan=pro` + sets `upgradedAt`, returns `{mode:'self-serve'}`; later returns `{mode:'checkout', url}` and lets a webhook set the plan. `settings.js renderPlan` branches on `mode`. **This is the swap point for paid billing — no other code changes.**
+- **Super-admin:** `/admin` page + `?action=admin-overview`/`admin-set-plan`, gated by `SUPER_ADMIN_EMAILS` (allowlist via global user token, email from DB). Manual grants also via `scripts/plans.js`.
+- **Support/donations (live now):** `SUPPORT_LINKS` constant in `common.js` (provider-agnostic; empty-url entries skipped; optional `img` for official brand buttons loaded as `<img>` — third-party `button.js` is **not** used, CSP blocks it). `renderSupportLinks(el)` renders them in the footer + the Settings donation panel shown after a self-serve upgrade. i18n: `support.label`, `settings.plan.donatePrompt`.
+- **Specs in `docs/`:** `2026-06-27-subscription-tiers-design.md` (tiers), `…-billing-lemonsqueezy-design.md` (**parked** paid rollout — Lemon Squeezy MoR; needs one webhook function freed by merging `gigs/[id].js`→`gigs.js`; lock down client-set `plan` when enabled), `…-support-links-design.md` (current donations + upgrade seam).
+
 ---
 
 ## Client-side rules
@@ -196,6 +213,9 @@ node scripts/setup.js                                      # first-time: schema 
 node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
 node scripts/import_songs.js --artist <slug> songs.json
 node scripts/import_gema.js  --artist <slug> [--ids <csv>] [--info <csv>] [--beteiligte <csv>] [--dry-run]
+node scripts/plans.js                                      # list bands: plan, storage used/limit, songs, users
+node scripts/plans.js --artist <slug> --plan <free|pro>   # grant/change a band's plan
+node scripts/plans.js --recount                           # recompute storage_used_bytes from R2
 ```
 
 `ARTIST_SLUG` env var targets the artist; falls back to the first artist in the DB.
