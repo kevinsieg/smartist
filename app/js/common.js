@@ -3,11 +3,14 @@
 const AUTH_TOKEN_KEY = 'smartist_token';
 
 // "Support the project" donation links. Edit this list to add/remove/reorder
-// providers; entries with an empty url are skipped. Brand labels are not
-// translated. Used by the footer and the Settings plan section.
+// providers; entries with an empty url are skipped. `img` (optional) is the
+// provider's official button image — loaded as a plain <img> (their button.js
+// scripts are intentionally NOT used: CSP blocks third-party scripts and an
+// image gives the same branding without executing third-party code). Falls back
+// to the text label when no img. Brand labels/images are not translated.
 const SUPPORT_LINKS = [
-  { id: 'liberapay',    label: 'Liberapay',       url: '' },
-  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: '' },
+  { id: 'liberapay',    label: 'Liberapay',       url: 'https://liberapay.com/kevkevkev/donate', img: 'https://liberapay.com/assets/widgets/donate.svg' },
+  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: '', img: '' },
 ];
 
 // Render the non-empty SUPPORT_LINKS as external buttons into containerEl.
@@ -22,7 +25,15 @@ function renderSupportLinks(containerEl) {
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     a.className = 'support-link';
-    a.textContent = l.label;
+    if (l.img && l.img.trim()) {
+      var img = document.createElement('img');
+      img.src = l.img;
+      img.alt = l.label;
+      img.loading = 'lazy';
+      a.appendChild(img);
+    } else {
+      a.textContent = l.label;
+    }
     containerEl.appendChild(a);
   });
   return links.length;

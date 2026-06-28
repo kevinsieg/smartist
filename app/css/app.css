@@ -307,8 +307,9 @@ body.view-mode .auth-only { display: none !important; }
 .nav-links a.plan-locked::after { content: " 🔒"; font-size: .85em; }
 
 /* Support-the-project donation links */
-.support-link { display: inline-block; margin-right: 0.5rem; text-decoration: underline; }
-.footer-support .support-link:last-child { margin-right: 0; }
+.support-link { display: inline-block; margin-right: 0.5rem; text-decoration: underline; vertical-align: middle; }
+.support-link:last-child { margin-right: 0; }
+.support-link img { height: 26px; width: auto; vertical-align: middle; display: inline-block; }
 
 /* Dashboard next-action hint */
 .dash-next-hint { font-size: 0.72rem; color: var(--third-color); margin: -0.4rem 0 1.1rem; line-height: 1.4; }
