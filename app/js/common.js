@@ -10,7 +10,7 @@ const AUTH_TOKEN_KEY = 'smartist_token';
 // to the text label when no img. Brand labels/images are not translated.
 const SUPPORT_LINKS = [
   { id: 'liberapay',    label: 'Liberapay',       url: 'https://liberapay.com/kevkevkev/donate', img: 'https://liberapay.com/assets/widgets/donate.svg' },
-  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: '', img: '' },
+  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: 'https://www.buymeacoffee.com/kevkevkev', img: 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png' },
 ];
 
 // Render the non-empty SUPPORT_LINKS as external buttons into containerEl.
