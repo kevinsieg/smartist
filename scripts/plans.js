@@ -17,7 +17,6 @@ const readline              = require('readline');
 const fs                    = require('fs');
 const path                  = require('path');
 const { storageLimitBytes } = require('../api/_plans');
-const { verifyUpload, keyFromUrl } = require('../api/_r2');
 
 // ── Env ────────────────────────────────────────────────────────────────────
 
@@ -150,27 +149,51 @@ async function setPlan(slug, plan) {
   }
 }
 
+// Read a public media file's size via HTTP HEAD (media live on public r2.dev
+// URLs). This needs no R2 credentials and no R2_PUBLIC_URL, so recount works
+// against any database — including production — with only DATABASE_URL set.
+async function headContentLength(url) {
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    if (!r.ok) return null;
+    const len = r.headers.get('content-length');
+    return len == null ? null : Number(len);
+  } catch { return null; }
+}
+
 async function recount() {
   const artists = await sql`SELECT id, slug, name FROM artists ORDER BY name`;
   if (!artists.length) { warn('No artists found.'); return; }
 
-  console.log();
+  // Compute first (no writes), so a guard can refuse to clobber on failure.
+  const results = [];
   for (const a of artists) {
     const songs = await sql`SELECT extra FROM songs WHERE artist_id = ${a.id} AND NOT deleted`;
-    let total = 0;
+    let total = 0, urls = 0, missing = 0;
     for (const s of songs) {
       for (const k of ['listenUrl', 'sheetUrl', 'playbackUrl']) {
         const url = s.extra && s.extra[k];
         if (!url) continue;
-        const key  = keyFromUrl(url);
-        if (!key) continue;
-        const head = await verifyUpload(key);
-        if (head) total += head.size;
+        urls++;
+        const len = await headContentLength(url);
+        if (len == null) missing++; else total += len;
       }
     }
+    results.push({ a, total, urls, missing });
+  }
+
+  console.log();
+  for (const { a, total, urls, missing } of results) {
+    // If a band has media URLs but every one is unreachable, the URLs/network
+    // are wrong — do NOT overwrite its stored value with 0.
+    if (urls > 0 && missing === urls) {
+      err(`${a.slug.padEnd(20)} ${urls} media URL(s) ALL unreachable — NOT written (would clobber to 0).`);
+      continue;
+    }
     await sql`UPDATE artists SET storage_used_bytes = ${total} WHERE id = ${a.id}`;
-    const mb = (total / (1024 * 1024)).toFixed(2);
-    ok(`${a.slug.padEnd(20)} ${mb} MB  (${total} bytes)`);
+    const mb   = (total / (1024 * 1024)).toFixed(2);
+    const note = missing ? Y(`  (${missing}/${urls} files unreachable)`) : '';
+    ok(`${a.slug.padEnd(20)} ${mb} MB  (${total} bytes)${note}`);
   }
   console.log();
 }
