@@ -1,6 +1,32 @@
 // Shared utilities for all app pages
 
 const AUTH_TOKEN_KEY = 'smartist_token';
+
+// "Support the project" donation links. Edit this list to add/remove/reorder
+// providers; entries with an empty url are skipped. Brand labels are not
+// translated. Used by the footer and the Settings plan section.
+const SUPPORT_LINKS = [
+  { id: 'liberapay',    label: 'Liberapay',       url: '' },
+  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: '' },
+];
+
+// Render the non-empty SUPPORT_LINKS as external buttons into containerEl.
+// Returns the number of links rendered (0 = caller should hide its group).
+function renderSupportLinks(containerEl) {
+  if (!containerEl) return 0;
+  containerEl.textContent = '';
+  var links = SUPPORT_LINKS.filter(function (l) { return l.url && l.url.trim(); });
+  links.forEach(function (l) {
+    var a = document.createElement('a');
+    a.href = l.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'support-link';
+    a.textContent = l.label;
+    containerEl.appendChild(a);
+  });
+  return links.length;
+}
 var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
@@ -106,12 +132,15 @@ var NAV_FEATURE = { '/venues': 'venues', '/organizers': 'organizers', '/pro-impo
   document.body.insertBefore(header, document.body.firstChild);
 
   const footer = document.createElement('footer');
+  var _hasSupport = SUPPORT_LINKS.some(function (l) { return l.url && l.url.trim(); });
   footer.innerHTML =
     '<p>&copy; <span id="currentYear"></span> <span class="band-name"></span>' +
     ' &middot; <span data-i18n="footer.poweredBy">powered by</span> <a href="https://smartist.studio" target="_blank" rel="noopener" class="footer-backlink">smartist.studio</a>' +
     ' &middot; <a href="' + _base + '/contact" class="footer-backlink" data-i18n="footer.contact">Contact</a>' +
+    (_hasSupport ? ' &middot; <span class="footer-support"><span data-i18n="support.label">Support the project</span>: <span data-support-links></span></span>' : '') +
     ' &middot; <span data-lang-switcher></span></p>';
   document.body.insertBefore(footer, document.currentScript);
+  if (_hasSupport) renderSupportLinks(footer.querySelector('[data-support-links]'));
 
   document.getElementById('currentYear').textContent = new Date().getFullYear();
 

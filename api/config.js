@@ -54,6 +54,19 @@ module.exports = wrap(async function handler(req, res) {
       return res.json({ ok: true });
     }
 
+    // Self-serve upgrade seam. Today: free flip to Pro + sticky upgradedAt for
+    // demand tracking, returns mode 'self-serve' (client then offers a donation).
+    // Swapping to a paid provider later = return { mode:'checkout', url } here and
+    // let the provider webhook set the plan instead.
+    if (req.body?.action === 'upgrade') {
+      const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
+      const band = await requireAuth(req, res, slugParam, 'admin');
+      if (!band) return;
+      const sql = getDb();
+      await sql`UPDATE artists SET config = config || ${{ plan: 'pro', upgradedAt: new Date().toISOString() }} WHERE id = ${band.id}`;
+      return res.json({ ok: true, mode: 'self-serve' });
+    }
+
     if (req.body?.action === 'signup-link') {
       const email = validateEmail(req.body?.email);
       if (!email) return res.status(400).json({ error: 'Valid email required' });
@@ -276,6 +289,7 @@ module.exports = wrap(async function handler(req, res) {
     if (!await requireSuperAdmin(req, res, sql)) return;
     const bands = await sql`
       SELECT a.slug, a.name, COALESCE(a.config->>'plan','free') AS plan,
+             a.config->>'upgradedAt' AS upgraded_at,
              a.storage_used_bytes,
              (SELECT count(*)::int FROM songs s WHERE s.artist_id = a.id AND NOT s.deleted) AS songs,
              (SELECT count(*)::int FROM users u WHERE u.artist_id = a.id) AS users
@@ -285,6 +299,7 @@ module.exports = wrap(async function handler(req, res) {
       storageUsedBytes: bands.reduce((n, b) => n + Number(b.storage_used_bytes || 0), 0),
       pro: bands.filter(b => b.plan === 'pro').length,
       free: bands.filter(b => b.plan !== 'pro').length,
+      upgraded: bands.filter(b => b.upgraded_at).length,
     };
     return res.json({ totals, bands });
   }

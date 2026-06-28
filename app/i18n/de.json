@@ -25,6 +25,7 @@
   "nav.openMenu": "Menü öffnen",
   "footer.poweredBy": "von",
   "footer.contact": "Kontakt",
+  "support.label": "Projekt unterstützen",
   "profile.title": "Profil",
   "profile.emailLabel": "E-Mail",
   "profile.emailHint": "Ihre Login-E-Mail. Bitten Sie einen Workspace-Admin, sie zu ändern.",
@@ -994,6 +995,7 @@
   "settings.plan.songsUnlimited": "Songs: {used} (unbegrenzt)",
   "settings.plan.upgrade": "Auf Pro upgraden",
   "settings.plan.downgrade": "Zu Free wechseln",
+  "settings.plan.donatePrompt": "Danke fürs Upgraden! Wenn du das Projekt unterstützen möchtest:",
 
   "contact.heading": "Kontakt",
   "contact.hint": "Bug gefunden, Funktion vermisst oder eine Idee? Schreiben Sie uns — wir lesen alles.",

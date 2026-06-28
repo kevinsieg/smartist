@@ -55,27 +55,44 @@ url, the group is omitted entirely. Appears on every `common.js` page;
 A small reusable helper `renderSupportLinks(containerEl)` builds the buttons, so
 the footer and the Settings section share one implementation.
 
-### 3. Settings Plan section — remove self-serve upgrade
+### 3. Self-serve upgrade through a swappable seam
 
-Pro is now invite-only, so the self-serve upgrade/downgrade button built earlier
-must be **removed** (otherwise any admin self-grants Pro). In
-`app/js/settings.js` `renderPlan()` / `app/settings.html`:
-- Keep the plan label and the storage/song usage meters.
-- Replace the `#plan-toggle` button with a short note (i18n
-  `settings.plan.inviteOnly`, e.g. "Pro is invite-only for now.") followed by the
-  shared support links (`renderSupportLinks`).
-- Granting Pro stays operator-only via `/admin` + `scripts/plans.js`.
+The self-serve upgrade button **stays**, but routes through one server action so
+a future paid solution (Lemon Squeezy) is a one-function swap, not a refactor.
 
-### 4. Lock down client-set plan (security)
+- **Server:** `POST /api/config?action=upgrade` — `requireAuth(..., 'admin')`,
+  then today it does the free flip and tracking (§4) and returns
+  `{ ok: true, mode: 'self-serve' }`. Later (paid): same action returns
+  `{ ok: true, mode: 'checkout', url: '<LS checkout URL>' }` and does **not** set
+  the plan (the LS webhook does). This action is the single seam.
+- **Client (`settings.js` `renderPlan`):** the upgrade button calls the action
+  and branches on `mode`: `self-serve` → show the donation panel (§5) + refresh
+  the Pro state; `checkout` → `window.location.href = url`. Downgrade ("Switch to
+  Free") stays a plain `patchConfig({ plan: 'free' })`.
 
-With Pro invite-only there is no legitimate client reason to set the plan, so
-harden `PATCH /api/config` now (the billing spec planned this; doing it here is
-correct): before the `config || ${req.body.config}` merge, **strip the keys**
-`plan`, `plan_status`, `ls_subscription_id`, `ls_customer_id`, `renews_at` from
-the client-supplied `config` object. The super-admin `?action=admin-set-plan`
-(direct UPDATE) and `scripts/plans.js` (direct DB) are unaffected and remain the
-only ways to change a plan. (The reserved-key comment already at that line marks
-this.)
+### 4. Track upgrades
+
+On each self-serve upgrade, set a **sticky** `config.upgradedAt` (ISO timestamp)
+alongside `plan='pro'` via the JSONB `||` merge. It is *not* cleared on
+downgrade, so it preserves the "this band wanted Pro" signal. The super-admin
+`admin-overview` adds `upgraded` = count of bands with `upgradedAt` set, shown on
+`/admin` ("N upgraded / M currently Pro"). That is the demand metric.
+
+### 5. Donation prompt at the upgrade moment
+
+When a `self-serve` upgrade succeeds, the Settings Plan section reveals a
+donation panel: a thank-you line (i18n `settings.plan.donatePrompt`) followed by
+the shared `renderSupportLinks` buttons (Liberapay + Buy Me a Coffee). Support
+links also remain in the footer (§2).
+
+### 6. Plan stays client-settable (for now)
+
+Because self-serve upgrade is intentional, `config.plan` remains writable via
+`PATCH /api/config` and the new `?action=upgrade`. The reserved-key lockdown
+(stripping `plan`/`plan_status`/`ls_*`/`renews_at` from the client config merge)
+moves to the day Lemon Squeezy is switched on — the reserved-key comment already
+marks that spot. Operator grants via `/admin` + `scripts/plans.js` continue to
+work regardless.
 
 ### 5. i18n
 
@@ -101,13 +118,14 @@ unchanged).
 
 ## Testing
 
-- **Unit** (`tests/unit.js`): reserved-key stripping in the config PATCH —
-  `plan` (and the other reserved keys) supplied by a client are NOT written;
-  a normal config key (e.g. `displayFields`) still is. i18n parity stays green.
+- **Unit** (`tests/unit.js`): i18n parity stays green with the new keys; existing
+  238 suite unaffected. (`?action=upgrade` is verified manually/integration like
+  the other `config.js` actions — no handler unit harness for config.js.)
 - **Manual**: footer shows Liberapay + Buy Me a Coffee buttons (once URLs set),
-  open in a new tab; an empty-url entry is skipped; Settings shows the
-  invite-only note + links and no upgrade button; a client `PATCH /api/config`
-  with `{config:{plan:'pro'}}` does NOT upgrade the band.
+  open in a new tab; an empty-url entry is skipped; Settings upgrade button flips
+  to Pro and reveals the donation panel; `config.upgradedAt` is set; `/admin`
+  shows the upgraded count; the future `mode:'checkout'` branch redirects (when a
+  paid provider returns a URL).
 
 ## Out of scope (YAGNI)
 

@@ -25,6 +25,7 @@
   "nav.openMenu": "Ouvrir le menu",
   "footer.poweredBy": "propulsé par",
   "footer.contact": "Contact",
+  "support.label": "Soutenir le projet",
   "profile.title": "Profil",
   "profile.emailLabel": "E-mail",
   "profile.emailHint": "Votre e-mail de connexion. Demandez à un administrateur de l'espace de le modifier.",
@@ -994,6 +995,7 @@
   "settings.plan.songsUnlimited": "Chansons : {used} (illimité)",
   "settings.plan.upgrade": "Passer à Pro",
   "settings.plan.downgrade": "Revenir à Gratuit",
+  "settings.plan.donatePrompt": "Merci pour votre passage à Pro ! Si vous souhaitez soutenir le projet :",
 
   "contact.heading": "Contact",
   "contact.hint": "Un bug, une idée ou une fonctionnalité manquante ? Écrivez-nous — nous lisons tout.",

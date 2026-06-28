@@ -844,11 +844,27 @@ function renderPlan(cfg) {
   btn.textContent = target === 'pro' ? t('settings.plan.upgrade') : t('settings.plan.downgrade');
   btn.onclick = async function () {
     btn.disabled = true;
-    var ok = await patchConfig({ plan: target });
-    if (ok) {
+    if (target === 'free') {
+      // Downgrade is a plain plan flip.
+      var ok = await patchConfig({ plan: 'free' });
+      if (ok) { invalidateConfigCache(); window.location.reload(); }
+      else { btn.disabled = false; }
+      return;
+    }
+    // Upgrade goes through the swappable seam.
+    try {
+      var r = await apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'POST', { action: 'upgrade' });
+      var data = await r.json().catch(function () { return {}; });
+      if (!r.ok) { btn.disabled = false; return; }
       invalidateConfigCache();
-      window.location.reload();
-    } else {
+      if (data.mode === 'checkout' && data.url) { window.location.href = data.url; return; }
+      // self-serve: reflect Pro + reveal the donation prompt in place.
+      document.getElementById('plan-label').textContent = 'Pro';
+      btn.style.display = 'none';
+      var donation = document.getElementById('plan-donation');
+      var nLinks = renderSupportLinks(donation.querySelector('[data-support-links]'));
+      if (nLinks > 0) donation.style.display = '';
+    } catch (e) {
       btn.disabled = false;
     }
   };

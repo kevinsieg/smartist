@@ -10,7 +10,8 @@ async function load() {
   document.getElementById('totals').textContent =
     totals.bands + ' bands · ' +
     (totals.storageUsedBytes / 1048576).toFixed(1) + ' MB · ' +
-    totals.pro + ' pro / ' + totals.free + ' free';
+    totals.pro + ' pro / ' + totals.free + ' free · ' +
+    totals.upgraded + ' upgraded';
 
   const tb = document.getElementById('bands');
   tb.innerHTML = '';
