@@ -24,8 +24,11 @@ async function run(r) {
     delete require.cache[dbPath];
     delete require.cache[configPath];
     delete require.cache[tokenPath];
-    ['identity', 'artist', 'registration'].forEach(function(m) {
-      try { delete require.cache[require.resolve(path.join(__dirname, '../../api/_domain/' + m))]; } catch {}
+    // config.js delegates to every module under api/_domain — bust them all so a
+    // re-require rebuilds the whole chain against the stubs set below.
+    const domainDir = path.join(__dirname, '../../api/_domain');
+    require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {
+      try { delete require.cache[require.resolve(path.join(domainDir, f))]; } catch {}
     });
 
     require.cache[rlPath] = {
@@ -290,6 +293,30 @@ async function run(r) {
     }, res);
     assertEq(res._status, 200);
     assert(Array.isArray(res._body && res._body.artists), 'expected artists array');
+  });
+
+  // ── OAuth GET endpoints must not require a slug ──────────────────────────────
+  // They resolve the user by email, never by slug. In a multi-tenant deployment
+  // (ARTIST_SLUG unset) the client calls them with no ?slug, so they must be
+  // reachable without one — regression guard for the slug-guard ordering bug.
+  console.log(B('\nGET OAuth endpoints (slug-independent)'));
+
+  await testAsync('google-url → 200 + provider url (no slug, ARTIST_SLUG unset)', async () => {
+    delete process.env.ARTIST_SLUG;
+    const handler = makeHandler(async () => []);
+    const res = mockRes();
+    await handler({ method: 'GET', query: { action: 'google-url' }, headers: {} }, res);
+    assertEq(res._status, 200);
+    assert(res._body && /accounts\.google\.com/.test(res._body.url), 'expected a Google auth url');
+  });
+
+  await testAsync('oauth-callback with no code → 302 redirect, not 404 (no slug)', async () => {
+    delete process.env.ARTIST_SLUG;
+    const handler = makeHandler(async () => []);
+    const res = mockRes();
+    await handler({ method: 'GET', query: { action: 'oauth-callback' }, headers: {} }, res);
+    assertEq(res._status, 302);
+    assert(/oauth_error=1/.test(res._redirected || ''), 'expected redirect to login with oauth_error');
   });
 }
 

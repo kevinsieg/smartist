@@ -14,6 +14,12 @@ function makeHandler(sqlFn) {
 
   delete require.cache[dbPath];
   delete require.cache[configPath];
+  // config.js delegates to api/_domain/* — bust them so the re-require rebuilds
+  // the chain against the stubs below (the subscribe handler lives in _domain/subscribe).
+  const domainDir = path.join(__dirname, '../../api/_domain');
+  require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {
+    try { delete require.cache[require.resolve(path.join(domainDir, f))]; } catch {}
+  });
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,

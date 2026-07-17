@@ -95,6 +95,19 @@ function getInitials(name) {
 // Nav href → plan feature key. Used to lock items the band's plan doesn't include.
 var NAV_FEATURE = { '/venues': 'venues', '/organizers': 'organizers', '/pro-import': 'pro-import' };
 
+// Toggle .plan-locked on nav items to match the plan's feature list. Called at
+// page load and again after an in-place plan change (upgrade with no reload).
+function applyPlanNavLocks(planFeatures) {
+  var feats = planFeatures || [];
+  if (!feats.length) return;
+  document.querySelectorAll('.nav-links a').forEach(function(_navA) {
+    var _navHref = _navA.getAttribute('href') || '';
+    var _navKey = Object.keys(NAV_FEATURE).find(function(_p) { return _navHref.endsWith(_p); });
+    if (!_navKey) return;
+    _navA.classList.toggle('plan-locked', feats.indexOf(NAV_FEATURE[_navKey]) === -1);
+  });
+}
+
 // Inject the shared header (nav) and footer into the page body.
 // Runs immediately at script load. stage.html intentionally does not load
 // common.js, so this only fires on the three navigable app pages.
@@ -797,16 +810,7 @@ async function initPage(onReady, opts) {
   }
   applyNav(cfg.name, cfg.config);
   // Lock nav items the band's plan doesn't include.
-  var _planFeats = (cfg && cfg.plan && cfg.plan.features) || [];
-  if (_planFeats.length) {
-    document.querySelectorAll('.nav-links a').forEach(function(_navA) {
-      var _navHref = _navA.getAttribute('href') || '';
-      var _navKey = Object.keys(NAV_FEATURE).find(function(_p) { return _navHref.endsWith(_p); });
-      if (_navKey && _planFeats.indexOf(NAV_FEATURE[_navKey]) === -1) {
-        _navA.classList.add('plan-locked');
-      }
-    });
-  }
+  applyPlanNavLocks((cfg && cfg.plan && cfg.plan.features) || []);
   document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
     el.disabled = false;
   });
