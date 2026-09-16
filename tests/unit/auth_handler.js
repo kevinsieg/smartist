@@ -209,6 +209,34 @@ async function run(r) {
     assertEq(sql.calls.length, 0);
   });
 
+  // Email is the cross-workspace identity (resolveUser joins users on email), so
+  // an admin setting a member's email to someone else's would hijack that account.
+  await testAsync('PUT /auth rejects an email change without updating the user', async () => {
+    const sql = makeSqlStub();
+    const handler = makeHandler({ sql, user: { id: 1, role: 'admin' } });
+    const res = mockRes();
+
+    await handler(authReq('PUT', '/api/test/auth', { userId: 42, email: 'victim@example.com' }, {
+      authorization: 'Bearer admin',
+    }), res);
+
+    assertEq(res.statusCode, 400);
+    assertEq(sql.calls.filter(call => call.text.includes('UPDATE users')).length, 0);
+  });
+
+  await testAsync('PUT /auth rejects an email smuggled alongside a role change', async () => {
+    const sql = makeSqlStub();
+    const handler = makeHandler({ sql, user: { id: 1, role: 'admin' } });
+    const res = mockRes();
+
+    await handler(authReq('PUT', '/api/test/auth', { userId: 42, role: 'member', email: 'victim@example.com' }, {
+      authorization: 'Bearer admin',
+    }), res);
+
+    assertEq(res.statusCode, 400);
+    assertEq(sql.calls.filter(call => call.text.includes('UPDATE users')).length, 0);
+  });
+
   await testAsync('DELETE /auth refuses to remove the current admin user', async () => {
     const sql = makeSqlStub([
       {

@@ -20,6 +20,7 @@ module.exports = wrap(async function handler(req, res) {
     const action = req.body?.action;
     if (action === 'admin-set-plan')      return admin.setPlan(req, res);
     if (action === 'upgrade')             return upgrade(req, res);
+    if (action === 'downgrade')           return downgrade(req, res);
     if (action === 'signup-link')         return signup.signupLink(req, res);
     if (action === 'verify-signup-token') return signup.verifySignup(req, res);
     if (action === 'signup')              return signup.signup(req, res);
@@ -64,6 +65,17 @@ async function upgrade(req, res) {
   return res.json({ ok: true, mode: 'self-serve' });
 }
 
+// ── POST ?action=downgrade — back to Free ───────────────────────────────────────
+// upgradedAt is deliberately kept: it is the sticky demand metric.
+async function downgrade(req, res) {
+  const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
+  const band = await requireAuth(req, res, slugParam, 'admin');
+  if (!band) return;
+  const sql = getDb();
+  await sql`UPDATE artists SET config = config || ${{ plan: 'free' }} WHERE id = ${band.id}`;
+  return res.json({ ok: true });
+}
+
 // ── PATCH — update artist name / config ─────────────────────────────────────────
 async function patchConfig(req, res) {
   const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
@@ -77,10 +89,12 @@ async function patchConfig(req, res) {
     await sql`UPDATE artists SET name = ${name} WHERE id = ${band.id}`;
   }
   if (req.body?.config !== undefined) {
-    // NOTE: `config.plan` is currently writable here so the self-serve placeholder
-    // upgrade works without billing. When real billing lands, strip `plan` from this
-    // merge and set it only via the Stripe webhook + ?action=admin-set-plan.
-    await sql`UPDATE artists SET config = config || ${req.body.config} WHERE id = ${band.id}`;
+    // Plan state changes only through ?action=upgrade|downgrade|admin-set-plan
+    // (later: the billing webhook), never through a generic config patch.
+    const update = { ...req.body.config };
+    delete update.plan;
+    delete update.upgradedAt;
+    await sql`UPDATE artists SET config = config || ${update} WHERE id = ${band.id}`;
   }
   return res.json({ ok: true });
 }

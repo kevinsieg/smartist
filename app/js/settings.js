@@ -76,10 +76,9 @@ function _renderUsers(users) {
                 return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + _roleLabel(r) + '</option>';
               }).join('') +
             '</select>';
-        var editBtn = '<button class="user-action-btn" onclick="_editEmail(' + u.id + ')">' + t('settings.editEmailBtn') + '</button>';
         var actionCell = isMe
-          ? '<span style="display:flex;gap:0.35rem">' + editBtn + '</span>'
-          : '<span style="display:flex;gap:0.35rem">' + editBtn +
+          ? '<span></span>'
+          : '<span style="display:flex;gap:0.35rem">' +
             '<button class="user-action-btn danger" onclick="_removeUser(' + u.id + ')">' + t('songs.remove') + '</button></span>';
         return '<div class="user-row">' +
           '<span class="user-email">' + escHtml(u.email) +
@@ -196,22 +195,6 @@ var _allUsers = [];        // all users, cached for id→email lookup
 function _userEmailById(userId) {
   var u = _allUsers.find(function(x) { return x.id === userId; });
   return u ? u.email : '';
-}
-
-async function _editEmail(userId) {
-  var currentEmail = _userEmailById(userId);
-  var next = prompt(t('settings.promptNewEmail', { email: currentEmail }), currentEmail);
-  if (next === null) return;
-  next = next.trim();
-  if (!next || next === currentEmail) return;
-  _usersStatus('');
-  try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'PUT', { userId, email: next });
-    const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || t('settings.failedToUpdateEmail'), true); return; }
-    _usersStatus(t('settings.emailUpdatedTo', { email: data.user.email }));
-    loadUsers();
-  } catch {}
 }
 
 function _renderArrMembersIfReady() {
@@ -845,10 +828,11 @@ function renderPlan(cfg) {
   btn.onclick = async function () {
     btn.disabled = true;
     if (target === 'free') {
-      // Downgrade is a plain plan flip.
-      var ok = await patchConfig({ plan: 'free' });
-      if (ok) { invalidateConfigCache(); window.location.reload(); }
-      else { btn.disabled = false; }
+      try {
+        var dr = await apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'POST', { action: 'downgrade' });
+        if (dr.ok) { invalidateConfigCache(); window.location.reload(); return; }
+      } catch (e) {}
+      btn.disabled = false;
       return;
     }
     // Upgrade goes through the swappable seam.
