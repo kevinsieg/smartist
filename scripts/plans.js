@@ -140,9 +140,10 @@ async function setPlan(slug, plan) {
     process.exit(1);
   }
 
-  const result = await sql`UPDATE artists SET config = config || ${{ plan }} WHERE slug = ${slug}`;
-  const count  = result.count ?? result.rowCount ?? (Array.isArray(result) ? result.length : 0);
-  if (count > 0) {
+  // The neon HTTP driver resolves to rows, never a row count, so an UPDATE
+  // without RETURNING always looks like "0 rows matched".
+  const updated = await sql`UPDATE artists SET config = config || ${{ plan }} WHERE slug = ${slug} RETURNING slug`;
+  if (updated.length > 0) {
     ok(`Artist "${slug}" plan set to "${plan}".`);
   } else {
     warn(`No artist found with slug "${slug}".`);
