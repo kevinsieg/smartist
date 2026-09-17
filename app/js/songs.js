@@ -848,6 +848,9 @@ async function _savePanelSong(formId, isNew, realSid) {
       targetId = String(realSid);
     }
 
+    // Songs ride along in the cached /api/config payload (the setlist page reads
+    // cfg.songs), so drop that cache or other pages keep serving the old list.
+    invalidateConfigCache();
     await fetchSongsList(true);
     if (_songsView) { _songsView.refresh(); _songsView.select(targetId); }
     loadLogs();
@@ -1399,6 +1402,7 @@ async function deleteRow(sid) {
   });
 
   if (r.ok || r.status === 404) {
+    invalidateConfigCache();
     document.getElementById(`row-${sid}`)?.remove();
     dirty.delete(String(sid));
     songs = songs.filter(s => String(s.id) !== String(sid));
@@ -1463,6 +1467,7 @@ async function saveAll() {
     }
 
     dirty.clear();
+    invalidateConfigCache();
     await loadAndRender();
     _setBulkStatus('saved', t('songs.allChangesSaved'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
@@ -1533,6 +1538,7 @@ async function restoreSong(songId) {
   });
   if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
   if (r.ok) {
+    invalidateConfigCache();
     await loadAndRender();
   } else {
     _setBulkStatus('error', t('songs.couldNotRestore'));
@@ -1715,6 +1721,8 @@ async function _uploadSongMedia(sid, type, file) {
   if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } throw new Error('auth'); }
   if (!confirm.ok) throw new Error('confirm');
 
+  // Media URLs live in songs.extra, which the cached config payload carries.
+  invalidateConfigCache();
   return json.publicUrl;
 }
 
@@ -1840,6 +1848,7 @@ async function confirmDeleteAudio() {
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveAudio')); return; }
+    invalidateConfigCache();
 
     // Update local cache and swap ▶ back to ↑ in the table cell
     const song = songs.find(s => String(s.id) === String(sid));
@@ -2025,6 +2034,7 @@ async function confirmDeleteSheet() {
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveSheet')); return; }
+    invalidateConfigCache();
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.sheetUrl;
@@ -2214,6 +2224,7 @@ async function confirmDeletePlayback() {
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemovePlayback')); return; }
+    invalidateConfigCache();
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.playbackUrl;
@@ -2448,6 +2459,7 @@ async function saveLyrics() {
       console.error('saveLyrics failed', r.status, body);
       return;
     }
+    invalidateConfigCache();
 
     // Update local cache and DOM
     const song = songs.find(s => String(s.id) === String(sid));
@@ -2510,6 +2522,7 @@ async function confirmDeleteLyrics() {
     });
     if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotDeleteLyrics')); return; }
+    invalidateConfigCache();
 
     const song = songs.find(s => String(s.id) === String(sid));
     if (song?.extra) delete song.extra.lyrics;

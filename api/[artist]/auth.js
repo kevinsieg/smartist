@@ -288,36 +288,20 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true });
   }
 
-  // PUT — update user role and/or email (admin)
+  // PUT — update user role (admin). Login email is never admin-editable: it is
+  // the cross-workspace identity (resolveUser joins users on email), so rewriting
+  // it would hand this user another account's memberships.
   if (req.method === 'PUT') {
     if (!requireRole(req, res, 'admin')) return;
     const { userId, role, email } = req.body ?? {};
     if (!userId) return res.status(400).json({ error: 'userId required' });
-    if (role === undefined && email === undefined)
-      return res.status(400).json({ error: 'role or email required' });
-
-    const updates = {};
-    if (role !== undefined) {
-      if (!['admin', 'member', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
-      if (req.user.id !== null && req.user.id === Number(userId))
-        return res.status(400).json({ error: 'Cannot change your own role' });
-      updates.role = role;
-    }
-    if (email !== undefined) {
-      const cleanEmail = validateStr(email, 200);
-      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail))
-        return res.status(400).json({ error: 'Invalid email address' });
-      const lower = cleanEmail.toLowerCase();
-      const [conflict] = await sql`
-        SELECT id FROM users
-        WHERE artist_id = ${artist.id} AND email = ${lower} AND id <> ${Number(userId)}
-      `;
-      if (conflict) return res.status(409).json({ error: 'A user with this email already exists' });
-      updates.email = lower;
-    }
+    if (email !== undefined) return res.status(400).json({ error: 'Email cannot be changed' });
+    if (!['admin', 'member', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    if (req.user.id !== null && req.user.id === Number(userId))
+      return res.status(400).json({ error: 'Cannot change your own role' });
 
     const [updated] = await sql`
-      UPDATE users SET ${sql(updates)}
+      UPDATE users SET role = ${role}
       WHERE id = ${Number(userId)} AND artist_id = ${artist.id}
       RETURNING id, email, role
     `;

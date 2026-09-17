@@ -3,6 +3,7 @@ const { requireAuth, getAccess, isPrivate } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr, validateNum } = require('../_validate');
 const { VENUE_PUBLIC_STATUSES } = require('../_constants');
+const { requireFeature } = require('../_plans');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -14,6 +15,7 @@ module.exports = wrap(async function handler(req, res) {
     const viewOnly = !user;
     if (viewOnly && isPrivate(artist))
       return res.status(401).json({ error: 'This workspace is private' });
+    if (!requireFeature(res, artist, 'venues')) return;
 
     if (req.query.slim) {
       const venues = await sql`
@@ -97,6 +99,7 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
+    if (!requireFeature(res, artist, 'venues')) return;
     const b        = req.body ?? {};
     const name     = validateStr(b.name, 200);
     if (name === false) return res.status(400).json({ error: 'name too long' });

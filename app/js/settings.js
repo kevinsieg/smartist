@@ -20,6 +20,7 @@ initPage(function(cfg) {
   document.getElementById('settings-loading').style.display = 'none';
   document.getElementById('settings-content').style.display = '';
   renderWorkspace(cfg);
+  renderPlan(cfg);
   loadUsers();
 });
 
@@ -75,10 +76,9 @@ function _renderUsers(users) {
                 return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + _roleLabel(r) + '</option>';
               }).join('') +
             '</select>';
-        var editBtn = '<button class="user-action-btn" onclick="_editEmail(' + u.id + ')">' + t('settings.editEmailBtn') + '</button>';
         var actionCell = isMe
-          ? '<span style="display:flex;gap:0.35rem">' + editBtn + '</span>'
-          : '<span style="display:flex;gap:0.35rem">' + editBtn +
+          ? '<span></span>'
+          : '<span style="display:flex;gap:0.35rem">' +
             '<button class="user-action-btn danger" onclick="_removeUser(' + u.id + ')">' + t('songs.remove') + '</button></span>';
         return '<div class="user-row">' +
           '<span class="user-email">' + escHtml(u.email) +
@@ -195,22 +195,6 @@ var _allUsers = [];        // all users, cached for id→email lookup
 function _userEmailById(userId) {
   var u = _allUsers.find(function(x) { return x.id === userId; });
   return u ? u.email : '';
-}
-
-async function _editEmail(userId) {
-  var currentEmail = _userEmailById(userId);
-  var next = prompt(t('settings.promptNewEmail', { email: currentEmail }), currentEmail);
-  if (next === null) return;
-  next = next.trim();
-  if (!next || next === currentEmail) return;
-  _usersStatus('');
-  try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'PUT', { userId, email: next });
-    const data = await r.json();
-    if (!r.ok) { _usersStatus(data.error || t('settings.failedToUpdateEmail'), true); return; }
-    _usersStatus(t('settings.emailUpdatedTo', { email: data.user.email }));
-    loadUsers();
-  } catch {}
 }
 
 function _renderArrMembersIfReady() {
@@ -826,6 +810,50 @@ async function saveFilterFields() {
   } else {
     msg.textContent = t('settings.saveFailed'); msg.className = 'save-msg err';
   }
+}
+
+function renderPlan(cfg) {
+  var p = cfg.plan, u = cfg.usage || {};
+  document.getElementById('plan-label').textContent = p.label;
+  var usedMB = ((u.storageUsedBytes || 0) / 1024 / 1024).toFixed(1);
+  document.getElementById('plan-storage').textContent =
+    p.limits.storageMB == null ? t('settings.plan.storageUnlimited', { used: usedMB })
+                               : t('settings.plan.storage', { used: usedMB, limit: p.limits.storageMB });
+  document.getElementById('plan-songs').textContent =
+    p.limits.songs == null ? t('settings.plan.songsUnlimited', { used: (u.songs == null ? 0 : u.songs) })
+                           : t('settings.plan.songs', { used: (u.songs == null ? 0 : u.songs), limit: p.limits.songs });
+  var btn = document.getElementById('plan-toggle');
+  var target = p.key === 'pro' ? 'free' : 'pro';
+  btn.textContent = target === 'pro' ? t('settings.plan.upgrade') : t('settings.plan.downgrade');
+  btn.onclick = async function () {
+    btn.disabled = true;
+    if (target === 'free') {
+      try {
+        var dr = await apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'POST', { action: 'downgrade' });
+        if (dr.ok) { invalidateConfigCache(); window.location.reload(); return; }
+      } catch (e) {}
+      btn.disabled = false;
+      return;
+    }
+    // Upgrade goes through the swappable seam.
+    try {
+      var r = await apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'POST', { action: 'upgrade' });
+      var data = await r.json().catch(function () { return {}; });
+      if (!r.ok) { btn.disabled = false; return; }
+      invalidateConfigCache();
+      if (data.mode === 'checkout' && data.url) { window.location.href = data.url; return; }
+      // self-serve: reflect Pro + reveal the donation prompt in place.
+      document.getElementById('plan-label').textContent = 'Pro';
+      btn.style.display = 'none';
+      var donation = document.getElementById('plan-donation');
+      var nLinks = renderSupportLinks(donation.querySelector('[data-support-links]'));
+      if (nLinks > 0) donation.style.display = '';
+      // Unlock Pro-only nav items without forcing a reload.
+      try { var _fresh = await loadConfig(); applyPlanNavLocks((_fresh.plan && _fresh.plan.features) || []); } catch (e) {}
+    } catch (e) {
+      btn.disabled = false;
+    }
+  };
 }
 
 async function patchConfig(configUpdate) {

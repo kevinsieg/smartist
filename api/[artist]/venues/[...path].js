@@ -3,6 +3,7 @@ const { requireAuth, getAccess, isPrivate } = require('../../_auth');
 const { VENUE_PUBLIC_STATUSES } = require('../../_constants');
 const { wrap } = require('../../_handler');
 const { validateStr, validateNum } = require('../../_validate');
+const { requireFeature } = require('../../_plans');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -19,6 +20,7 @@ module.exports = wrap(async function handler(req, res) {
     if (!artist) return res.status(404).json({ error: 'Artist not found' });
     if (!user && isPrivate(artist))
       return res.status(401).json({ error: 'This workspace is private' });
+    if (!requireFeature(res, artist, 'venues')) return;
     let [venue] = await sql`SELECT * FROM venues WHERE id = ${id} AND artist_id = ${artist.id}`;
     if (!venue) return res.status(404).json({ error: 'Venue not found' });
     if (!user) {
@@ -42,6 +44,7 @@ module.exports = wrap(async function handler(req, res) {
 
   const artist = await requireAuth(req, res, slug, 'member');
   if (!artist) return;
+  if (!requireFeature(res, artist, 'venues')) return;
   const [venue] = await sql`SELECT * FROM venues WHERE id = ${id} AND artist_id = ${artist.id}`;
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 

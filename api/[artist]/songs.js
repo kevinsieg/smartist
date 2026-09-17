@@ -8,6 +8,7 @@ const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
+const { wouldExceedStorage, storageLimitBytes, songLimit } = require('../_plans');
 const logger = require('../_logger');
 
 module.exports = wrap(async function handler(req, res) {
@@ -306,12 +307,40 @@ module.exports = wrap(async function handler(req, res) {
     const [song] = await sql`SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
+    // A replacement frees the previous file's bytes, so the cap check is on the
+    // NET change (new − old), not the gross add — otherwise replacing a file with
+    // a same-size one would falsely trip the limit near the cap.
     const previousUrl = song.extra?.[config.extraKey] ?? null;
+    // Re-confirming the URL already stored (a retried request) is not a
+    // replacement and adds nothing — those bytes are counted already.
+    const isReplacement = previousUrl != null && previousUrl !== publicUrl;
+    const prevHead = isReplacement
+      ? await verifyUpload(keyFromUrl(previousUrl)) : null;
+    const prevSize = prevHead ? prevHead.size : 0;
+
+    if (wouldExceedStorage(band, (band.storage_used_bytes || 0) - prevSize, head.size)) {
+      await deleteFromR2(publicUrl);
+      return res.status(402).json({
+        error: 'storage_limit',
+        limit: storageLimitBytes(band),
+        used:  Number(band.storage_used_bytes || 0),
+      });
+    }
+
     const newExtra = { ...(song.extra ?? {}), [config.extraKey]: publicUrl };
     const [updated] = await sql`UPDATE songs SET extra = ${newExtra} WHERE id = ${songId} AND artist_id = ${band.id} RETURNING *`;
 
-    if (previousUrl && previousUrl !== publicUrl) {
-      await deleteFromR2(previousUrl);
+    // Delete first: whether the old object really went away decides the net
+    // change, so the counter settles in one round-trip instead of a +n then −m
+    // pair (which also left it briefly overstated).
+    const removed  = isReplacement ? await deleteFromR2(previousUrl) : false;
+    const freed    = (removed && prevHead) ? prevHead.size : 0;
+    const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
+
+    if (netBytes !== 0)
+      await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${netBytes}) WHERE id = ${band.id}`;
+
+    if (isReplacement) {
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_replace`, {
         previousFilename: filenameFromUrl(previousUrl),
         newFilename:      filenameFromUrl(publicUrl),
@@ -340,7 +369,9 @@ module.exports = wrap(async function handler(req, res) {
 
     const url = song.extra?.[config.extraKey];
     if (url) {
-      await deleteFromR2(url);
+      const delHead = await verifyUpload(keyFromUrl(url));
+      const removed = await deleteFromR2(url);
+      if (removed && delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
         filename:  filenameFromUrl(url),
         deletedAt: new Date().toISOString(),
@@ -391,6 +422,13 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
+    const _max = songLimit(band);
+    if (_max != null) {
+      const [{ count }] = await sql`
+        SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      if (count >= _max)
+        return res.status(402).json({ error: 'song_limit', limit: _max });
+    }
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
