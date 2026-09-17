@@ -132,12 +132,10 @@ Replace the placeholder upgrade button (`settings.js` Plan section):
 
 ### 5. Lock down client-set plan (security)
 
-`PATCH /api/config`'s config merge currently accepts any keys (the placeholder
-upgrade). After billing, **strip `plan`, `plan_status`, `ls_subscription_id`,
-`ls_customer_id`, `renews_at`** from the client-supplied `config` before the
-merge — these become webhook-only. The super-admin `?action=admin-set-plan`
-remains the sole manual override. (The reserved-key comment already added in
-`api/config.js` marks this spot.)
+`PATCH /api/config` already strips `plan` and `upgradedAt` from the client-supplied
+`config` before the merge. After billing, **also strip `plan_status`,
+`ls_subscription_id`, `ls_customer_id`, `renews_at`** — these become webhook-only.
+The super-admin `?action=admin-set-plan` remains the sole manual override.
 
 ## Data model
 

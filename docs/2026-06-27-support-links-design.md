@@ -68,7 +68,8 @@ a future paid solution (Lemon Squeezy) is a one-function swap, not a refactor.
 - **Client (`settings.js` `renderPlan`):** the upgrade button calls the action
   and branches on `mode`: `self-serve` → show the donation panel (§5) + refresh
   the Pro state; `checkout` → `window.location.href = url`. Downgrade ("Switch to
-  Free") stays a plain `patchConfig({ plan: 'free' })`.
+  Free") calls `POST ?action=downgrade`; a plain `patchConfig({ plan: 'free' })` no
+longer works (see §6).
 
 ### 4. Track upgrades
 
@@ -85,14 +86,14 @@ donation panel: a thank-you line (i18n `settings.plan.donatePrompt`) followed by
 the shared `renderSupportLinks` buttons (Liberapay + Buy Me a Coffee). Support
 links also remain in the footer (§2).
 
-### 6. Plan stays client-settable (for now)
+### 6. Plan is not client-settable
 
-Because self-serve upgrade is intentional, `config.plan` remains writable via
-`PATCH /api/config` and the new `?action=upgrade`. The reserved-key lockdown
-(stripping `plan`/`plan_status`/`ls_*`/`renews_at` from the client config merge)
-moves to the day Lemon Squeezy is switched on — the reserved-key comment already
-marks that spot. Operator grants via `/admin` + `scripts/plans.js` continue to
-work regardless.
+`PATCH /api/config` strips `plan` and `upgradedAt` from the client config merge,
+so plan state changes only through `?action=upgrade`, `?action=downgrade` and the
+super-admin `?action=admin-set-plan` (later: the billing webhook). The remaining
+reserved keys (`plan_status`, `ls_*`, `renews_at`) join that strip list the day
+Lemon Squeezy is switched on. Operator grants via `/admin` + `scripts/plans.js`
+continue to work regardless.
 
 ### 5. i18n
 

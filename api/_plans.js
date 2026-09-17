@@ -1,5 +1,6 @@
 // Single source of truth for plan tiers. getPlan() is the only seam real
-// billing later replaces (a Stripe webhook writes artists.config.plan; nothing
+// billing later replaces (the provider webhook writes artists.config.plan — see
+// docs/2026-06-27-billing-lemonsqueezy-design.md for the chosen provider; nothing
 // else changes). Move a feature key between the two `features` arrays to change
 // what is free vs paid.
 const PLANS = {
