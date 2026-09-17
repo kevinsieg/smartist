@@ -19,7 +19,7 @@ const PROVIDER = {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const FROM = process.env.RESEND_FROM || 'Band Tools <noreply@example.com>';
+const FROM = process.env.RESEND_FROM || 'Smartist Studio <noreply@smartist.studio>';
 
 async function sendEmail({ to, subject, text, html, attachments, reply_to }) {
   const apiKey = process.env[PROVIDER.envVar];

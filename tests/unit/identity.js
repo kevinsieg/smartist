@@ -7,9 +7,38 @@ process.env.FACEBOOK_APP_ID      = process.env.FACEBOOK_APP_ID      || 'test-fb-
 process.env.FACEBOOK_APP_SECRET  = process.env.FACEBOOK_APP_SECRET  || 'test-fb-secret';
 
 async function run(r) {
-  const { test, assert, assertEq, B } = r;
+  const { test, testAsync, assert, assertEq, B } = r;
 
-  const { generateState, verifyState } = require(path.join(__dirname, '../../api/_domain/identity'));
+  const { generateState, verifyState, resolveOAuthEmail } = require(path.join(__dirname, '../../api/_domain/identity'));
+
+  // Stubs Google's token + v2 userinfo endpoints (full real response shapes).
+  async function withGoogleUserinfo(userinfo, fn) {
+    const realFetch = global.fetch;
+    global.fetch = async (url) => ({
+      json: async () => (String(url).includes('oauth2.googleapis.com/token')
+        ? { access_token: 'at', expires_in: 3599, token_type: 'Bearer', scope: 'openid email', id_token: 'id' }
+        : userinfo),
+    });
+    try { return await fn(); } finally { global.fetch = realFetch; }
+  }
+
+  console.log(B('\nresolveOAuthEmail (google)'));
+
+  // OAuth login maps the email to existing users rows, so an unverified address
+  // on a Google account would log its holder into someone else's account.
+  await testAsync('google: unverified email is not trusted', async () => {
+    const email = await withGoogleUserinfo(
+      { id: '1', email: 'victim@example.com', verified_email: false, picture: 'https://x/p.png' },
+      () => resolveOAuthEmail('google', 'code', 'https://app/auth/callback'));
+    assertEq(email, null);
+  });
+
+  await testAsync('google: verified email is returned', async () => {
+    const email = await withGoogleUserinfo(
+      { id: '1', email: 'owner@example.com', verified_email: true, picture: 'https://x/p.png' },
+      () => resolveOAuthEmail('google', 'code', 'https://app/auth/callback'));
+    assertEq(email, 'owner@example.com');
+  });
 
   console.log(B('\ngenerateState / verifyState'));
 
