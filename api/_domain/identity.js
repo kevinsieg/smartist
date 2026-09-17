@@ -47,8 +47,9 @@ async function resolveOAuthEmail(provider, code, redirectUri) {
     const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${access_token}` },
     });
-    const { email } = await userRes.json();
-    return email || null;
+    // Unverified addresses are rejected: the email is mapped straight to users rows.
+    const { email, verified_email } = await userRes.json();
+    return verified_email === true && email ? email : null;
   }
 
   if (provider === 'facebook') {

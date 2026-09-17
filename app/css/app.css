@@ -302,6 +302,15 @@ body.view-mode .auth-only { display: none !important; }
 .app-header:not(.app-header--authed) .nav-links .nav-links-profile,
 .app-header:not(.app-header--authed) .nav-links .nav-links-logout { display: none !important; }
 
+/* Plan-locked nav items — dimmed with lock icon, redirect to settings#plan on click */
+.nav-links a.plan-locked { opacity: .55; }
+.nav-links a.plan-locked::after { content: " 🔒"; font-size: .85em; }
+
+/* Support-the-project donation links */
+.support-link { display: inline-block; margin-right: 0.5rem; text-decoration: underline; vertical-align: middle; }
+.support-link:last-child { margin-right: 0; }
+.support-link img { height: 26px; width: auto; vertical-align: middle; display: inline-block; }
+
 /* Dashboard next-action hint */
 .dash-next-hint { font-size: 0.72rem; color: var(--third-color); margin: -0.4rem 0 1.1rem; line-height: 1.4; }
 
@@ -2210,8 +2219,14 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 .lang-switcher { position: relative; display: inline-block; }
 .lang-switcher-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; font: inherit; color: inherit; padding: 4px 6px; }
 .lang-switcher-toggle svg { border-radius: 2px; }
-.lang-switcher-menu { position: absolute; bottom: 100%; right: 0; display: none; flex-direction: column; background: var(--white); border: 1px solid #ddd; border-radius: 4px; min-width: 140px; z-index: 50; }
+.lang-switcher-menu { position: absolute; bottom: calc(100% + 4px); right: 0; display: none; flex-direction: column; background: var(--white); border: 1px solid #ddd; border-radius: 4px; min-width: 140px; box-shadow: 0 4px 20px rgba(0,0,0,0.14); z-index: 200; }
 .lang-switcher.open .lang-switcher-menu { display: flex; }
 .lang-switcher-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: none; border: none; cursor: pointer; font: inherit; text-align: left; color: var(--black); }
 .lang-switcher-item:hover { background: #f3f3f3; }
 .lang-switcher-item.current { font-weight: 700; }
+/* The footer is centred and wraps on narrow screens, so the switcher can end up
+   anywhere on the last line and a right-anchored menu runs off the edge. Centre
+   it on the toggle and cap it to the viewport instead. */
+@media (max-width: 639px) {
+    .lang-switcher-menu { right: auto; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 2rem); }
+}

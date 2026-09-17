@@ -353,3 +353,6 @@ ALTER TABLE gigs ADD COLUMN IF NOT EXISTS thumb_url  TEXT;
 
 -- 2026-06-08: multi-tenant signup — password_hash no longer required on artists
 ALTER TABLE artists ALTER COLUMN password_hash DROP NOT NULL;
+
+-- 2026-06-27: storage usage tracking per artist
+ALTER TABLE artists ADD COLUMN IF NOT EXISTS storage_used_bytes BIGINT NOT NULL DEFAULT 0;

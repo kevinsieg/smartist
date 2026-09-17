@@ -2,6 +2,7 @@ const { getDb, getArtist, getSlug } = require('../../_db');
 const { requireAuth } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { validateStr } = require('../../_validate');
+const { requireFeature } = require('../../_plans');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -17,6 +18,7 @@ module.exports = wrap(async function handler(req, res) {
     // Private CRM data — auth required even for reads.
     const artist = await requireAuth(req, res, slug);
     if (!artist) return;
+    if (!requireFeature(res, artist, 'organizers')) return;
     const [org] = await sql`SELECT * FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`;
     if (!org) return res.status(404).json({ error: 'Organizer not found' });
     if (req.query.refs) {
@@ -34,6 +36,7 @@ module.exports = wrap(async function handler(req, res) {
 
   const artist = await requireAuth(req, res, slug, 'member');
   if (!artist) return;
+  if (!requireFeature(res, artist, 'organizers')) return;
   const [org] = await sql`SELECT * FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`;
   if (!org) return res.status(404).json({ error: 'Organizer not found' });
 
