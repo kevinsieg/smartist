@@ -84,7 +84,10 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       // NET change (new − old), not the gross add — otherwise replacing a file
       // with a same-size one would falsely trip the limit near the cap.
       const previousUrl = song.extra?.[extraKey] ?? null;
-      const prevHead = (previousUrl && previousUrl !== publicUrl)
+      // Re-confirming the URL already stored (a retried request) is not a
+      // replacement and adds nothing — those bytes are counted already.
+      const isReplacement = previousUrl != null && previousUrl !== publicUrl;
+      const prevHead = isReplacement
         ? await verifyUpload(keyFromUrl(previousUrl)) : null;
       const prevSize = prevHead ? prevHead.size : 0;
 
@@ -104,11 +107,13 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
         RETURNING *
       `;
 
-      await sql`UPDATE artists SET storage_used_bytes = storage_used_bytes + ${head.size} WHERE id = ${band.id}`;
+      if (previousUrl !== publicUrl)
+        await sql`UPDATE artists SET storage_used_bytes = storage_used_bytes + ${head.size} WHERE id = ${band.id}`;
 
-      if (previousUrl && previousUrl !== publicUrl) {
-        await deleteFromR2(previousUrl);
-        if (prevHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${prevHead.size}) WHERE id = ${band.id}`;
+      if (isReplacement) {
+        // Credit the old bytes back only once storage confirms the object is gone.
+        const removed = await deleteFromR2(previousUrl);
+        if (removed && prevHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${prevHead.size}) WHERE id = ${band.id}`;
         await insertAuditLog(sql, band.id, songId, `${actionPrefix}_replace`, {
           previousFilename: filenameFromUrl(previousUrl),
           newFilename:      filenameFromUrl(publicUrl),
@@ -131,8 +136,8 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       const url = song.extra?.[extraKey];
       if (url) {
         const delHead = await verifyUpload(keyFromUrl(url));
-        await deleteFromR2(url);
-        if (delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
+        const removed = await deleteFromR2(url);
+        if (removed && delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
         await insertAuditLog(sql, band.id, songId, `${actionPrefix}_delete`, {
           filename:  filenameFromUrl(url),
           deletedAt: new Date().toISOString(),

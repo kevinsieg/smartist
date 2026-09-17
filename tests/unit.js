@@ -29,6 +29,7 @@ const suites = [
   require('./unit/plans'),
   require('./unit/asset_versions'),
   require('./unit/page_scripts'),
+  require('./unit/storage_accounting'),
 ];
 
 (async () => {

@@ -13,7 +13,8 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 //
 // Non-S3 providers (GCS, Azure Blob): replace the SDK; keep exported function
 // signatures (createPresignedUrl, deleteFromR2, keyFromUrl, filenameFromUrl) so
-// callers need no changes.
+// callers need no changes — deleteFromR2 must keep returning whether the object
+// was removed, since storage accounting depends on it.
 const STORAGE = {
   region:          'auto',                                                             // AWS S3: e.g. 'eu-west-1'
   endpoint:        () => `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, // remove for AWS S3
@@ -43,13 +44,18 @@ function filenameFromUrl(url) {
   try { return decodeURIComponent(url.split('/').pop().split('?')[0]); } catch { return url; }
 }
 
+// Reports whether the object is gone. Callers credit artists.storage_used_bytes
+// back only on true, so a swallowed failure never frees bytes that are still
+// stored. Never throws — a failed delete stays non-fatal (the audit log entry is
+// still written).
 async function deleteFromR2(url) {
   const key = keyFromUrl(url);
-  if (!key) return;
+  if (!key) return false;
   try {
     await getR2Client().send(new DeleteObjectCommand({ Bucket: STORAGE.bucket(), Key: key }));
+    return true;
   } catch {
-    // Non-fatal: log entry still written even if storage delete fails
+    return false;
   }
 }
 
