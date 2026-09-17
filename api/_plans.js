@@ -6,7 +6,7 @@
 const PLANS = {
   free: {
     label: 'Free',
-    limits: { storageMB: 30, songs: 20 },
+    limits: { storageMB: 30, songs: 100 },
     features: ['songs', 'setlists', 'gigs', 'hub'],
   },
   pro: {

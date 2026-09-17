@@ -21,7 +21,7 @@ function run(r) {
 
   test('free storage limit is 30MB in bytes', () => assertEq(storageLimitBytes(free), 30 * 1024 * 1024));
   test('pro storage unlimited', () => assertEq(storageLimitBytes(pro), null));
-  test('free song limit 20', () => assertEq(songLimit(free), 20));
+  test('free song limit 100', () => assertEq(songLimit(free), 100));
   test('pro song limit null', () => assertEq(songLimit(pro), null));
 
   test('wouldExceedStorage true when over free cap', () =>

@@ -69,7 +69,7 @@ The one file the developer edits to manage paid access.
 
 ```js
 const PLANS = {
-  free: { label: 'Free', limits: { storageMB: 30,   songs: 20 },
+  free: { label: 'Free', limits: { storageMB: 30,   songs: 100 },
           features: ['songs', 'setlists', 'gigs', 'hub'] },
   pro:  { label: 'Pro',  limits: { storageMB: null, songs: null },
           features: ['songs','setlists','gigs','hub','venues','organizers','pro-import','booking'] },
