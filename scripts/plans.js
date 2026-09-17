@@ -162,6 +162,21 @@ async function headContentLength(url) {
   } catch { return null; }
 }
 
+// Runs fn over items with at most `limit` in flight, preserving input order.
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    })
+  );
+  return out;
+}
+
 async function recount() {
   const artists = await sql`SELECT id, slug, name FROM artists ORDER BY name`;
   if (!artists.length) { warn('No artists found.'); return; }
@@ -170,17 +185,18 @@ async function recount() {
   const results = [];
   for (const a of artists) {
     const songs = await sql`SELECT extra FROM songs WHERE artist_id = ${a.id} AND NOT deleted`;
-    let total = 0, urls = 0, missing = 0;
+    const urlList = [];
     for (const s of songs) {
       for (const k of ['listenUrl', 'sheetUrl', 'playbackUrl']) {
         const url = s.extra && s.extra[k];
-        if (!url) continue;
-        urls++;
-        const len = await headContentLength(url);
-        if (len == null) missing++; else total += len;
+        if (url) urlList.push(url);
       }
     }
-    results.push({ a, total, urls, missing });
+    // Concurrent HEADs — one request at a time meant minutes for a large catalogue.
+    const lengths = await mapLimit(urlList, 8, headContentLength);
+    let total = 0, missing = 0;
+    for (const len of lengths) { if (len == null) missing++; else total += len; }
+    results.push({ a, total, urls: urlList.length, missing });
   }
 
   console.log();

@@ -330,13 +330,17 @@ module.exports = wrap(async function handler(req, res) {
     const newExtra = { ...(song.extra ?? {}), [config.extraKey]: publicUrl };
     const [updated] = await sql`UPDATE songs SET extra = ${newExtra} WHERE id = ${songId} AND artist_id = ${band.id} RETURNING *`;
 
-    if (previousUrl !== publicUrl)
-      await sql`UPDATE artists SET storage_used_bytes = storage_used_bytes + ${head.size} WHERE id = ${band.id}`;
+    // Delete first: whether the old object really went away decides the net
+    // change, so the counter settles in one round-trip instead of a +n then −m
+    // pair (which also left it briefly overstated).
+    const removed  = isReplacement ? await deleteFromR2(previousUrl) : false;
+    const freed    = (removed && prevHead) ? prevHead.size : 0;
+    const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
+
+    if (netBytes !== 0)
+      await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${netBytes}) WHERE id = ${band.id}`;
 
     if (isReplacement) {
-      // Credit the old bytes back only once storage confirms the object is gone.
-      const removed = await deleteFromR2(previousUrl);
-      if (removed && prevHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${prevHead.size}) WHERE id = ${band.id}`;
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_replace`, {
         previousFilename: filenameFromUrl(previousUrl),
         newFilename:      filenameFromUrl(publicUrl),

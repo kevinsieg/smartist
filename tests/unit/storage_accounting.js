@@ -56,8 +56,12 @@ function loadSongs({ storedUrl = null, deleteOk = true } = {}) {
     if (text.includes('SELECT * FROM songs'))                       return [{ id: 5, extra }];
     if (text.includes('SELECT extra FROM songs'))                   return [{ extra }];
     if (text.includes('UPDATE songs SET extra'))                    return [{ id: 5, extra }];
-    if (text.includes('storage_used_bytes = storage_used_bytes +')) { deltas.push(Number(values[0])); return []; }
-    if (text.includes('GREATEST(0, storage_used_bytes -'))          { deltas.push(-Number(values[0])); return []; }
+    // Counter writes in either shape: "storage_used_bytes + $n" or "... - $n",
+    // with or without a GREATEST(0, ...) wrapper.
+    if (text.includes('UPDATE artists') && text.includes('storage_used_bytes')) {
+      deltas.push(text.includes('storage_used_bytes -') ? -Number(values[0]) : Number(values[0]));
+      return [];
+    }
     return [];
   };
 
@@ -119,11 +123,13 @@ async function run(r) {
     assertEq(deltas, [100]);
   });
 
-  await testAsync('replacing a file adds the new size and subtracts the old', async () => {
+  // One round-trip, carrying the net change (+100 new − 40 old): two statements
+  // would double the latency and leave the count briefly overstated in between.
+  await testAsync('replacing a file settles the counter in a single statement', async () => {
     const { handler, token, deltas } = loadSongs({ storedUrl: OLD_URL });
     const res = await call(handler, token, confirmAudio);
     assertEq(res.statusCode, 200);
-    assertEq(deltas.slice().sort((a, b) => b - a), [100, -40]);
+    assertEq(deltas, [60]);
   });
 
   // A retried or double-submitted confirm re-sends the URL already stored: the
