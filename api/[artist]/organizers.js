@@ -2,6 +2,7 @@ const { getDb, getArtist, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr } = require('../_validate');
+const { requireFeature } = require('../_plans');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -10,11 +11,13 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'GET') {
     // Organizer records are private CRM data (contact emails, notes) — no
     // public view mode for this resource.
-    if (!await requireAuth(req, res, slug)) return;
+    const authArtist = await requireAuth(req, res, slug);
+    if (!authArtist) return;
+    if (!requireFeature(res, authArtist, 'organizers')) return;
     if (req.query.slim) {
       const orgs = await sql`
         SELECT id, name, city FROM organizers
-        WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug}) AND deleted = false
+        WHERE artist_id = ${authArtist.id} AND deleted = false
         ORDER BY name ASC
       `;
       return res.json(orgs);
@@ -47,6 +50,7 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
+    if (!requireFeature(res, artist, 'organizers')) return;
     const b       = req.body ?? {};
     const name    = validateStr(b.name, 200);
     if (name    === false) return res.status(400).json({ error: 'name too long' });

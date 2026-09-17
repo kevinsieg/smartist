@@ -36,7 +36,9 @@ function songFeel(song) {
 }
 
 // Setlist score labels — shown as a badge on the generated result
-const FEEL_LABELS = [
+// var, not const: SPA navigation re-executes this file in the same document,
+// and a repeated top-level const/let throws before init() runs.
+var FEEL_LABELS = [
   { max: 0.12, icon: '🧘', get label() { return t('setlist.feelSavasana'); }      },
   { max: 0.28, icon: '🌙', get label() { return t('setlist.feelLateNight'); }     },
   { max: 0.44, icon: '🛶', get label() { return t('setlist.feelMorningPaddle'); } },

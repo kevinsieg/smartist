@@ -120,7 +120,10 @@ async function run(r) {
   });
 
   await testAsync('member passes the song gate and reaches validation', async () => {
-    const { handler, token } = loadHandler('api/[artist]/songs.js', { role: 'member' });
+    const { handler, token } = loadHandler('api/[artist]/songs.js', {
+      role: 'member',
+      rows: (text) => text.includes('count(*)') ? [{ count: 0 }] : [],
+    });
     const res = await call(handler, mockReq('POST', `/api/${ARTIST.slug}/songs`, { token, body: {} }));
     assertEq(res.statusCode, 400);
     assertEq(res.body?.error, 'title required');

@@ -21,6 +21,7 @@
     { "source": "/onboarding",      "destination": "/app/onboarding.html" },
     { "source": "/workspaces",      "destination": "/app/workspaces.html" },
     { "source": "/home",            "destination": "/app/workspaces.html" },
+    { "source": "/admin",           "destination": "/app/admin.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
     { "source": "/impressum",       "destination": "/app/impressum.html" },
     { "source": "/contact",         "destination": "/app/contact.html" },

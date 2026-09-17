@@ -10,8 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=27">
-  <script src="/app/js/i18n.js?v=6"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=29">
+  <script src="/app/js/i18n.js?v=9"></script>
   <style>
     .settings-wrap { max-width: 680px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .invite-bar { display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;padding:1rem 1.1rem;background:var(--surface-color);border:1px solid var(--border-color);border-radius:4px; }
@@ -237,7 +237,7 @@
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=13"></script>
+<script src="/app/js/common.js?v=14"></script>
 
 <div class="app-wrap settings-wrap">
   <h1 data-i18n="nav.settings">Settings</h1>
@@ -353,6 +353,18 @@
       </div>
     </section>
 
+    <section class="settings-card" id="plan">
+      <h2 class="settings-card-title" data-i18n="settings.plan.title">Plan</h2>
+      <p><strong data-i18n="settings.plan.current">Current plan:</strong> <span id="plan-label"></span></p>
+      <p id="plan-storage"></p>
+      <p id="plan-songs"></p>
+      <button id="plan-toggle" class="btn"></button>
+      <div id="plan-donation" style="display:none;margin-top:1rem;">
+        <p data-i18n="settings.plan.donatePrompt">Thanks for upgrading! If you'd like to support the project:</p>
+        <div data-support-links></div>
+      </div>
+    </section>
+
     <section class="settings-card">
       <h2 class="settings-card-title" data-i18n="settings.sectionInstruments">Instruments</h2>
       <!-- Arrangement config -->
@@ -374,6 +386,6 @@
 
   </div>
 </div>
-<script src="/app/js/settings.js?v=2"></script>
+<script src="/app/js/settings.js?v=3"></script>
 </body>
 </html>

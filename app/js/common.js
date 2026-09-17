@@ -1,6 +1,43 @@
 // Shared utilities for all app pages
 
 const AUTH_TOKEN_KEY = 'smartist_token';
+
+// "Support the project" donation links. Edit this list to add/remove/reorder
+// providers; entries with an empty url are skipped. `img` (optional) is the
+// provider's official button image — loaded as a plain <img> (their button.js
+// scripts are intentionally NOT used: CSP blocks third-party scripts and an
+// image gives the same branding without executing third-party code). Falls back
+// to the text label when no img. Brand labels/images are not translated.
+const SUPPORT_LINKS = [
+  { id: 'liberapay',    label: 'Liberapay',       url: 'https://liberapay.com/kevkevkev/donate', img: 'https://liberapay.com/assets/widgets/donate.svg' },
+  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: 'https://www.buymeacoffee.com/kevkevkev', img: 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png' },
+];
+
+// Render the non-empty SUPPORT_LINKS as external buttons into containerEl.
+// Returns the number of links rendered (0 = caller should hide its group).
+function renderSupportLinks(containerEl) {
+  if (!containerEl) return 0;
+  containerEl.textContent = '';
+  var links = SUPPORT_LINKS.filter(function (l) { return l.url && l.url.trim(); });
+  links.forEach(function (l) {
+    var a = document.createElement('a');
+    a.href = l.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'support-link';
+    if (l.img && l.img.trim()) {
+      var img = document.createElement('img');
+      img.src = l.img;
+      img.alt = l.label;
+      img.loading = 'lazy';
+      a.appendChild(img);
+    } else {
+      a.textContent = l.label;
+    }
+    containerEl.appendChild(a);
+  });
+  return links.length;
+}
 var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
@@ -55,6 +92,22 @@ function getInitials(name) {
   return name.slice(0, 2).toUpperCase();
 }
 
+// Nav href → plan feature key. Used to lock items the band's plan doesn't include.
+var NAV_FEATURE = { '/venues': 'venues', '/organizers': 'organizers', '/pro-import': 'pro-import' };
+
+// Toggle .plan-locked on nav items to match the plan's feature list. Called at
+// page load and again after an in-place plan change (upgrade with no reload).
+function applyPlanNavLocks(planFeatures) {
+  var feats = planFeatures || [];
+  if (!feats.length) return;
+  document.querySelectorAll('.nav-links a').forEach(function(_navA) {
+    var _navHref = _navA.getAttribute('href') || '';
+    var _navKey = Object.keys(NAV_FEATURE).find(function(_p) { return _navHref.endsWith(_p); });
+    if (!_navKey) return;
+    _navA.classList.toggle('plan-locked', feats.indexOf(NAV_FEATURE[_navKey]) === -1);
+  });
+}
+
 // Inject the shared header (nav) and footer into the page body.
 // Runs immediately at script load. stage.html intentionally does not load
 // common.js, so this only fires on the three navigable app pages.
@@ -103,12 +156,15 @@ function getInitials(name) {
   document.body.insertBefore(header, document.body.firstChild);
 
   const footer = document.createElement('footer');
+  var _hasSupport = SUPPORT_LINKS.some(function (l) { return l.url && l.url.trim(); });
   footer.innerHTML =
     '<p>&copy; <span id="currentYear"></span> <span class="band-name"></span>' +
     ' &middot; <span data-i18n="footer.poweredBy">powered by</span> <a href="https://smartist.studio" target="_blank" rel="noopener" class="footer-backlink">smartist.studio</a>' +
     ' &middot; <a href="' + _base + '/contact" class="footer-backlink" data-i18n="footer.contact">Contact</a>' +
+    (_hasSupport ? ' &middot; <span class="footer-support"><span data-i18n="support.label">Support the project</span>: <span data-support-links></span></span>' : '') +
     ' &middot; <span data-lang-switcher></span></p>';
   document.body.insertBefore(footer, document.currentScript);
+  if (_hasSupport) renderSupportLinks(footer.querySelector('[data-support-links]'));
 
   document.getElementById('currentYear').textContent = new Date().getFullYear();
 
@@ -205,6 +261,15 @@ function getInitials(name) {
         var bgr2 = document.getElementById('nav-burger');
         if (bgr2) bgr2.setAttribute('aria-expanded', 'false');
       }
+    }
+    // Plan-locked nav item → redirect to settings#plan
+    var _lockedEl = e.target.closest('.plan-locked');
+    if (_lockedEl) {
+      e.preventDefault();
+      var _lockedHref = _lockedEl.getAttribute('href') || '';
+      var _lockedBase = _lockedHref.replace(/\/(venues|organizers|pro-import).*$/, '');
+      window.location.href = _lockedBase + '/settings#plan';
+      return;
     }
     // SPA nav link
     var a = e.target.closest('.nav-links a');
@@ -744,6 +809,8 @@ async function initPage(onReady, opts) {
     return;
   }
   applyNav(cfg.name, cfg.config);
+  // Lock nav items the band's plan doesn't include.
+  applyPlanNavLocks((cfg && cfg.plan && cfg.plan.features) || []);
   document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
     el.disabled = false;
   });

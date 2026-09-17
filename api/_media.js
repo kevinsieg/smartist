@@ -3,6 +3,7 @@ const { getDb, insertAuditLog, getSlug } = require('./_db');
 const { requireAuth } = require('./_auth');
 const { wrap } = require('./_handler');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
+const { wouldExceedStorage, storageLimitBytes } = require('./_plans');
 
 // Shared handler factory for the three R2-backed media endpoints (audio, sheet, playback).
 //
@@ -79,7 +80,26 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
         return res.status(400).json({ error: `Uploaded file exceeds ${maxMB} MB` });
       }
 
+      // A replacement frees the previous file's bytes, so the cap check is on the
+      // NET change (new − old), not the gross add — otherwise replacing a file
+      // with a same-size one would falsely trip the limit near the cap.
       const previousUrl = song.extra?.[extraKey] ?? null;
+      // Re-confirming the URL already stored (a retried request) is not a
+      // replacement and adds nothing — those bytes are counted already.
+      const isReplacement = previousUrl != null && previousUrl !== publicUrl;
+      const prevHead = isReplacement
+        ? await verifyUpload(keyFromUrl(previousUrl)) : null;
+      const prevSize = prevHead ? prevHead.size : 0;
+
+      if (wouldExceedStorage(band, (band.storage_used_bytes || 0) - prevSize, head.size)) {
+        await deleteFromR2(publicUrl);
+        return res.status(402).json({
+          error: 'storage_limit',
+          limit: storageLimitBytes(band),
+          used:  Number(band.storage_used_bytes || 0),
+        });
+      }
+
       const newExtra = { ...(song.extra ?? {}), [extraKey]: publicUrl };
       const [updated] = await sql`
         UPDATE songs SET extra = ${newExtra}
@@ -87,8 +107,17 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
         RETURNING *
       `;
 
-      if (previousUrl && previousUrl !== publicUrl) {
-        await deleteFromR2(previousUrl);
+      // Delete first: whether the old object really went away decides the net
+      // change, so the counter settles in one round-trip instead of a +n then −m
+      // pair (which also left it briefly overstated).
+      const removed  = isReplacement ? await deleteFromR2(previousUrl) : false;
+      const freed    = (removed && prevHead) ? prevHead.size : 0;
+      const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
+
+      if (netBytes !== 0)
+        await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${netBytes}) WHERE id = ${band.id}`;
+
+      if (isReplacement) {
         await insertAuditLog(sql, band.id, songId, `${actionPrefix}_replace`, {
           previousFilename: filenameFromUrl(previousUrl),
           newFilename:      filenameFromUrl(publicUrl),
@@ -110,7 +139,9 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
 
       const url = song.extra?.[extraKey];
       if (url) {
-        await deleteFromR2(url);
+        const delHead = await verifyUpload(keyFromUrl(url));
+        const removed = await deleteFromR2(url);
+        if (removed && delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
         await insertAuditLog(sql, band.id, songId, `${actionPrefix}_delete`, {
           filename:  filenameFromUrl(url),
           deletedAt: new Date().toISOString(),

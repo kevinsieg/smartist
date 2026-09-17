@@ -94,6 +94,9 @@ const PUT    = (path, body, opts) => req('PUT',    path, { body, ...opts });
 const PATCH  = (path, body, opts) => req('PATCH',  path, { body, ...opts });
 const DELETE = (path, opts)       => req('DELETE', path, opts);
 
+// Feature keys match resource names (venues, organizers, gigs); gated endpoints return 402 when the plan lacks them.
+const planHas = (config, feature) => !!config.plan?.features?.includes(feature);
+
 // ── Test sections ─────────────────────────────────────────────────────────────
 
 async function testConfig() {
@@ -396,8 +399,24 @@ async function testGigs(slug) {
   return firstGig;
 }
 
-async function testVenues(slug) {
+async function testVenues(slug, config) {
   console.log(B(`\n/api/${slug}/venues`));
+
+  if (!planHas(config, 'venues')) {
+    await test(`GET on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
+      const { res, json } = await GET(`/api/${slug}/venues`);
+      assertStatus(res, json, 402);
+      assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
+    });
+
+    await test(`GET /:id on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
+      const { res, json } = await GET(`/api/${slug}/venues/999999999`);
+      assertStatus(res, json, 402);
+      assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
+    });
+    return;
+  }
+
   let firstVenue = null;
 
   await test('GET returns paginated shape', async () => {
@@ -694,33 +713,14 @@ async function testMultiUserAuth(slug, token) {
     });
   }
 
-  if (_testUserId) {
-    await test('PUT updates user email → 200', async () => {
-      const newEmail = '[TEST]renamed_' + Date.now() + '@example.com';
-      const { res, json } = await PUT(`/api/${slug}/auth`,
-        { userId: _testUserId, email: newEmail }, { token });
-      assertStatus(res, json, 200);
-      assert(json.user?.email === newEmail.toLowerCase(), 'email updated');
-    });
+  // Login email is the cross-workspace identity — admins must not be able to rewrite it.
+  await test('PUT with email → 400', async () => {
+    const { res, json } = await PUT(`/api/${slug}/auth`,
+      { userId: _testUserId || 999999, email: 'hijack@example.com' }, { token });
+    assertStatus(res, json, 400);
+  });
 
-    await test('PUT email duplicate of existing user → 409', async () => {
-      // First user in the list is some other account; reusing its email must conflict.
-      const { json: list } = await GET(`/api/${slug}/auth`, { token });
-      const other = (list.users || []).find(u => u.id !== _testUserId);
-      if (!other) { console.log('    (skipped — only one user)'); return; }
-      const { res, json } = await PUT(`/api/${slug}/auth`,
-        { userId: _testUserId, email: other.email }, { token });
-      assertStatus(res, json, 409);
-    });
-
-    await test('PUT invalid email → 400', async () => {
-      const { res, json } = await PUT(`/api/${slug}/auth`,
-        { userId: _testUserId, email: 'not-an-email' }, { token });
-      assertStatus(res, json, 400);
-    });
-  }
-
-  await test('PUT with neither role nor email → 400', async () => {
+  await test('PUT without role → 400', async () => {
     const { res, json } = await PUT(`/api/${slug}/auth`,
       { userId: 999999 }, { token });
     assertStatus(res, json, 400);
@@ -1059,7 +1059,7 @@ async function testSetlistShareValidation(slug, token, setlistId) {
   });
 }
 
-async function testWrite(slug, token, firstSong) {
+async function testWrite(slug, token, firstSong, config) {
   console.log(B('\nWrite ops'));
 
   // Verify password
@@ -1079,20 +1079,32 @@ async function testWrite(slug, token, firstSong) {
   // Song lifecycle — fully reversible
   let song;
 
-  await test('POST /songs creates song → 201', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`,
-      { title: '[TEST] Temporary', key: 'G', active: false }, { token });
-    assertStatus(res, json, 201);
-    assert(json.id > 0, 'missing id');
-    assert(json.title === '[TEST] Temporary', 'title mismatch');
-    song = json;
-  });
+  const songLimit = config.plan?.limits?.songs;
+  if (songLimit != null && config.usage?.songs >= songLimit) {
+    await test(`POST /songs at ${songLimit}-song limit → 402 song_limit`, async () => {
+      const { res, json } = await POST(`/api/${slug}/songs`,
+        { title: '[TEST] Temporary', key: 'G', active: false }, { token });
+      assertStatus(res, json, 402);
+      assert(json.error === 'song_limit' && json.limit === songLimit, 'expected song_limit');
+    });
+    skip('POST /songs creates song → 201', 'band at song limit');
+    skip('POST /songs missing title → 400', 'band at song limit');
+  } else {
+    await test('POST /songs creates song → 201', async () => {
+      const { res, json } = await POST(`/api/${slug}/songs`,
+        { title: '[TEST] Temporary', key: 'G', active: false }, { token });
+      assertStatus(res, json, 201);
+      assert(json.id > 0, 'missing id');
+      assert(json.title === '[TEST] Temporary', 'title mismatch');
+      song = json;
+    });
 
-  await test('POST /songs missing title → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`, { key: 'G' }, { token });
-    assertStatus(res, json, 400);
-    assert(json.error, 'missing error message');
-  });
+    await test('POST /songs missing title → 400', async () => {
+      const { res, json } = await POST(`/api/${slug}/songs`, { key: 'G' }, { token });
+      assertStatus(res, json, 400);
+      assert(json.error, 'missing error message');
+    });
+  }
 
   if (song) {
     await test('PATCH /songs updates song → 200', async () => {
@@ -1223,8 +1235,18 @@ async function testWrite(slug, token, firstSong) {
 // Shared factory: create → validate → update → GET verify → soft-delete →
 // 409 on modify → hard-delete cleanup. Parameterised on resource + payloads.
 
-async function testCrudLifecycle(slug, token, { resource, createBody, invalidBody, updateBody, labelField }) {
+async function testCrudLifecycle(slug, token, config, { resource, createBody, invalidBody, updateBody, labelField }) {
   console.log(B(`\nWrite ops — ${resource}`));
+
+  if (!planHas(config, resource)) {
+    await test(`POST /${resource} on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
+      const { res, json } = await POST(`/api/${slug}/${resource}`, createBody, { token });
+      assertStatus(res, json, 402);
+      assert(json.error === 'upgrade_required' && json.feature === resource, 'expected upgrade_required');
+    });
+    return;
+  }
+
   let item;
 
   await test(`POST /${resource} creates → 201`, async () => {
@@ -1297,7 +1319,7 @@ async function main() {
     testSongs(slug),
     testSongLogs(slug),
     testGigs(slug),
-    testVenues(slug),
+    testVenues(slug, config),
     testOrganizers(slug),
     testSetlists(slug),
     testAuth(slug),
@@ -1307,22 +1329,22 @@ async function main() {
   await testArrangements(slug, firstSong);
 
   if (PASSWORD) {
-    await testWrite(slug, PASSWORD, firstSong);
-    await testCrudLifecycle(slug, PASSWORD, {
+    await testWrite(slug, PASSWORD, firstSong, config);
+    await testCrudLifecycle(slug, PASSWORD, config, {
       resource: 'venues',
       labelField: 'name',
       createBody:  { name: '[TEST] Venue',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Venue updated', city: 'Teststadt' },
     });
-    await testCrudLifecycle(slug, PASSWORD, {
+    await testCrudLifecycle(slug, PASSWORD, config, {
       resource: 'organizers',
       labelField: 'name',
       createBody:  { name: '[TEST] Organizer',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Organizer updated', city: 'Teststadt' },
     });
-    await testCrudLifecycle(slug, PASSWORD, {
+    await testCrudLifecycle(slug, PASSWORD, config, {
       resource: 'gigs',
       labelField: 'title',
       createBody:  { title: '[TEST] Gig', date: '2099-12-31' },
