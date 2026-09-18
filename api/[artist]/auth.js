@@ -346,6 +346,35 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true });
   }
 
+  // POST ?action=confirm-email-change — public: the link is clicked from an
+  // inbox, so there is no session. Two modes: without `confirm` it previews the
+  // change (new address + every band affected); with `confirm: true` it applies.
+  if (req.method === 'POST' && action === 'confirm-email-change') {
+    const { token, confirm } = req.body ?? {};
+    if (!token) return res.status(400).json({ error: 'token required' });
+    if (await checkRateLimit(`emailchg-confirm:${clientIp(req)}`, 10, 600))
+      return res.status(429).json({ error: 'Too many attempts — try again later' });
+
+    const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
+    const [pending] = await sql`
+      SELECT id, email, pending_email FROM users
+      WHERE email_change_token_hash = ${tokenHash}
+        AND email_change_expires_at > now()
+        AND pending_email IS NOT NULL
+    `;
+    if (!pending) return res.status(400).json({ error: 'Invalid or expired link' });
+
+    // Every band reached by the current address — the change moves all of them.
+    const bands = await sql`
+      SELECT a.slug, a.name, u.role
+      FROM users u JOIN artists a ON a.id = u.artist_id
+      WHERE u.email = ${pending.email}
+      ORDER BY a.name
+    `;
+
+    if (!confirm) return res.json({ newEmail: pending.pending_email, bands });
+  }
+
   // PUT — update user role (admin). Login email is never admin-editable: it is
   // the cross-workspace identity (resolveUser joins users on email), so rewriting
   // it would hand this user another account's memberships.

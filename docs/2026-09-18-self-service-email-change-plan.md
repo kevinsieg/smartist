@@ -864,7 +864,7 @@ git commit -m "i18n: add email change strings, bump cache version"
 ### Task 8: Integration coverage and final verification
 
 **Files:**
-- Modify: `tests/api.js` (append inside `testAuth`, before its closing brace)
+- Modify: `tests/api.js` (append inside `testAuth`, which spans lines 536-641 — insert directly after the `PATCH /config without token → 401` test that ends at line 640, before the function's closing brace. Note `testMultiUserAuth` starts at line 645; these tests do **not** belong there, since they need no password.)
 
 **Interfaces:**
 - Consumes: both actions from Tasks 2-4

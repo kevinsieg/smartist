@@ -326,6 +326,55 @@ async function run(r) {
     assert(sentMail && sentMail.to === 'new@example.com', 'confirmation mail goes to the NEW address');
     assert(!sentMail.html.includes(written[1]), 'the mail must carry the raw token, not the stored hash');
   });
+
+  await testAsync('POST confirm-email-change previews the affected bands without writing', async () => {
+    const rawToken  = 'a'.repeat(64);
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const sql = makeSqlStub([
+      {
+        match: text => text.includes('email_change_token_hash'),
+        rows: (_text, values) => {
+          assertEq(values[0], tokenHash, 'lookup must hash the raw token');
+          return [{ id: 7, email: 'old@example.com', pending_email: 'new@example.com' }];
+        },
+      },
+      {
+        match: text => text.includes('JOIN artists a'),
+        rows: () => [
+          { slug: 'band-a', name: 'Band A', role: 'admin' },
+          { slug: 'band-b', name: 'Band B', role: 'member' },
+        ],
+      },
+      { match: text => text.includes('UPDATE users'), rows: () => { throw new Error('preview must not write'); } },
+    ]);
+    const handler = makeHandler({ sql });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: rawToken }), res);
+
+    assertEq(res.statusCode, 200);
+    assertEq(res._body, {
+      newEmail: 'new@example.com',
+      bands: [
+        { slug: 'band-a', name: 'Band A', role: 'admin' },
+        { slug: 'band-b', name: 'Band B', role: 'member' },
+      ],
+    });
+    assertEq(sql.calls.filter(c => c.text.includes('UPDATE users')).length, 0);
+  });
+
+  await testAsync('POST confirm-email-change rejects an unknown or expired token', async () => {
+    const sql = makeSqlStub([
+      { match: text => text.includes('email_change_token_hash'), rows: () => [] },
+    ]);
+    const handler = makeHandler({ sql });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: 'b'.repeat(64) }), res);
+
+    assertEq(res.statusCode, 400);
+    assertEq(res._body, { error: 'Invalid or expired link' });
+  });
 }
 
 if (require.main === module) {
