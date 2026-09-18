@@ -460,7 +460,7 @@ R2 file assets (audio, sheet PDFs, playback) are referenced by URL in `songs.ext
 
 ### Delete all data for one artist
 
-All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. However, `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order.
+All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order, and `setlist_songs.song_id` has no cascade at all, so the song cascade fails while setlist entries still reference those songs.
 
 **Safe deletion sequence — always use this pattern:**
 
@@ -472,8 +472,13 @@ UPDATE gigs
 SET venue_id = NULL, organizer_id = NULL
 WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
 
+-- setlist_songs.song_id has no cascade — drop the setlists first (that cascades
+-- setlist_songs), otherwise deleting the songs fails with a FK violation.
+DELETE FROM setlists
+WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
+
 -- Single delete cascades to all nine artist-scoped tables automatically:
---   venues, organizers, gigs, songs, setlists, song_logs,
+--   venues, organizers, gigs, songs, song_arrangements, setlists, song_logs, users,
 --   gema_works → gema_rightholders, setlist_songs (via setlists)
 DELETE FROM artists WHERE slug = 'yourslug';
 
