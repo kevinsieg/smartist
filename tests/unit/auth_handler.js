@@ -375,6 +375,52 @@ async function run(r) {
     assertEq(res.statusCode, 400);
     assertEq(res._body, { error: 'Invalid or expired link' });
   });
+
+  await testAsync('POST confirm-email-change applies to every band and clears the token', async () => {
+    const rawToken = 'c'.repeat(64);
+    const sql = makeSqlStub([
+      {
+        match: text => text.includes('email_change_token_hash') && text.includes('SELECT'),
+        rows: () => [{ id: 7, email: 'old@example.com', pending_email: 'new@example.com' }],
+      },
+      { match: text => text.includes('JOIN artists a'), rows: () => [{ slug: 'band-a', name: 'Band A', role: 'admin' }] },
+      { match: text => text.includes('SELECT 1 FROM users'), rows: () => [] },
+    ]);
+    sql.begin = async fn => fn(sql);
+    const handler = makeHandler({ sql });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: rawToken, confirm: true }), res);
+
+    assertEq(res.statusCode, 200);
+    assertEq(res._body, { ok: true, email: 'new@example.com' });
+    const rewrite = sql.calls.find(c => c.text.includes('SET email'));
+    assert(rewrite, 'must rewrite the email');
+    assertEq(rewrite.values, ['new@example.com', 'old@example.com']);
+    assert(sql.calls.some(c => c.text.includes('email_change_token_hash = NULL')), 'must clear the pending columns');
+    assert(sentMail && sentMail.to === 'old@example.com', 'notice goes to the OLD address');
+  });
+
+  await testAsync('POST confirm-email-change refuses an address already used in an affected band', async () => {
+    const rawToken = 'd'.repeat(64);
+    const sql = makeSqlStub([
+      {
+        match: text => text.includes('email_change_token_hash') && text.includes('SELECT'),
+        rows: () => [{ id: 7, email: 'old@example.com', pending_email: 'taken@example.com' }],
+      },
+      { match: text => text.includes('JOIN artists a'), rows: () => [{ slug: 'band-a', name: 'Band A', role: 'admin' }] },
+      { match: text => text.includes('SELECT 1 FROM users'), rows: () => [{ '?column?': 1 }] },
+      { match: text => text.includes('SET email'), rows: () => { throw new Error('must not rewrite on collision'); } },
+    ]);
+    sql.begin = async fn => fn(sql);
+    const handler = makeHandler({ sql });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: rawToken, confirm: true }), res);
+
+    assertEq(res.statusCode, 409);
+    assertEq(sql.calls.filter(c => c.text.includes('SET email')).length, 0);
+  });
 }
 
 if (require.main === module) {

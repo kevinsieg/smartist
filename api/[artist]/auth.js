@@ -373,6 +373,49 @@ module.exports = wrap(async function handler(req, res) {
     `;
 
     if (!confirm) return res.json({ newEmail: pending.pending_email, bands });
+
+    const oldEmail = pending.email;
+    const target   = pending.pending_email;
+    try {
+      await sql.begin(async tx => {
+        // Refuse if the address is already taken in any band this change touches.
+        const [clash] = await tx`
+          SELECT 1 FROM users u
+          WHERE u.email = ${target}
+            AND u.artist_id IN (SELECT artist_id FROM users WHERE email = ${oldEmail})
+          LIMIT 1
+        `;
+        if (clash) { const e = new Error('taken'); e.taken = true; throw e; }
+
+        // One statement moves every membership, so the person keeps all bands.
+        await tx`UPDATE users SET email = ${target} WHERE email = ${oldEmail}`;
+        await tx`
+          UPDATE users
+          SET pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL
+          WHERE id = ${pending.id}
+        `;
+      });
+    } catch (err) {
+      // 23505 = unique_violation: someone claimed the address mid-flight.
+      if (err.taken || err.code === '23505')
+        return res.status(409).json({ error: 'That email address is already in use' });
+      throw err;
+    }
+
+    // Tell the old address once the change is durable. A mail failure must not
+    // roll it back — retrying would risk applying the change twice.
+    try {
+      await sendEmail({
+        to: oldEmail,
+        subject: 'Your email address was changed',
+        html: `<p>Your smartist login email was changed to ${target}.</p>
+               <p>If you did not do this, contact support immediately.</p>`,
+      });
+    } catch (err) {
+      await logger.error('email_change_notice_failed', { band: slug, error: err.message });
+    }
+
+    return res.json({ ok: true, email: target });
   }
 
   // PUT — update user role (admin). Login email is never admin-editable: it is
