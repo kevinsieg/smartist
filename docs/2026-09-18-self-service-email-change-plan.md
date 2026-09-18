@@ -184,7 +184,7 @@ let sentMail = null;
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `node tests/unit/auth_handler.js`
-Expected: the four new tests FAIL — the first three with `expected 401/400, got 404` (no branch matches, so the handler falls through), the fourth with a null `written`.
+Expected: the four new tests FAIL with `got 405` — no branch matches, so the POST falls through to the handler's method guard.
 
 - [ ] **Step 3: Write the implementation**
 
@@ -332,7 +332,7 @@ Append inside `run(r)` in `tests/unit/auth_handler.js`:
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `node tests/unit/auth_handler.js`
-Expected: both new tests FAIL with `expected 200/400, got 404`.
+Expected: both new tests FAIL with `got 405` (unmatched POST falls through to the method guard).
 
 - [ ] **Step 3: Write the implementation**
 
@@ -450,7 +450,7 @@ Append inside `run(r)` in `tests/unit/auth_handler.js`:
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `node tests/unit/auth_handler.js`
-Expected: both FAIL with `expected 200/409, got 404` — the apply path does not exist yet.
+Expected: both FAIL with `got 405` — the apply path does not exist yet, so the POST falls through to the method guard.
 
 - [ ] **Step 3: Write the implementation**
 

@@ -8,6 +8,10 @@ stubLogger();
 const ROLE_ORDER = ['viewer', 'member', 'admin'];
 const ARTIST = { id: 7, slug: 'test', name: 'Test Band', password_hash: 'artist-hash' };
 
+// Last mail the stubbed _email captured; reset per makeHandler so it cannot leak
+// between tests.
+let sentMail = null;
+
 function roleAllowed(userRole, minRole) {
   return ROLE_ORDER.indexOf(userRole || 'viewer') >= ROLE_ORDER.indexOf(minRole);
 }
@@ -73,7 +77,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST } =
   };
   require.cache[emailPath] = {
     id: emailPath, filename: emailPath, loaded: true,
-    exports: { sendEmail: async () => {} },
+    exports: { sendEmail: async (mail) => { sentMail = mail; } },
   };
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
@@ -83,10 +87,11 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST } =
     id: bcryptPath, filename: bcryptPath, loaded: true,
     exports: {
       hash: async (password, cost) => `hashed:${password}:${cost}`,
-      compare: async () => false,
+      compare: async (plain) => plain === 'correct-password',
     },
   };
 
+  sentMail = null;
   return require(path.join(__dirname, '../../api/[artist]/auth'));
 }
 
@@ -254,6 +259,72 @@ async function run(r) {
     assertEq(res.statusCode, 400);
     assertEq(res._body, { error: 'Cannot remove yourself' });
     assertEq(sql.calls.length, 0);
+  });
+
+  await testAsync('POST request-email-change rejects a wrong current password', async () => {
+    const sql = makeSqlStub([
+      { match: text => text.includes('SELECT * FROM users'), rows: () => [{ id: 7, email: 'old@example.com', password_hash: 'stored-hash' }] },
+      { match: text => text.includes('UPDATE users'), rows: () => { throw new Error('must not write on a bad password'); } },
+    ]);
+    const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+      currentPassword: 'wrong-password', newEmail: 'new@example.com',
+    }, { authorization: 'Bearer member' }), res);
+
+    assertEq(res.statusCode, 401);
+    assertEq(sql.calls.filter(c => c.text.includes('UPDATE users')).length, 0);
+  });
+
+  await testAsync('POST request-email-change rejects a bootstrap login', async () => {
+    const sql = makeSqlStub();
+    const handler = makeHandler({ sql, user: { id: null, role: 'admin' } });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+      currentPassword: 'whatever', newEmail: 'new@example.com',
+    }, { authorization: 'Bearer band' }), res);
+
+    assertEq(res.statusCode, 400);
+    assertEq(sql.calls.filter(c => c.text.includes('UPDATE users')).length, 0);
+  });
+
+  await testAsync('POST request-email-change rejects an invalid address', async () => {
+    const sql = makeSqlStub();
+    const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+      currentPassword: 'correct-password', newEmail: 'not-an-email',
+    }, { authorization: 'Bearer member' }), res);
+
+    assertEq(res.statusCode, 400);
+  });
+
+  await testAsync('POST request-email-change stores a token hash, never the raw token, and mails the new address', async () => {
+    let written = null;
+    const sql = makeSqlStub([
+      { match: text => text.includes('SELECT * FROM users'), rows: () => [{ id: 7, email: 'old@example.com', password_hash: 'stored-hash' }] },
+      {
+        match: text => text.includes('UPDATE users') && text.includes('pending_email'),
+        rows: (_text, values) => { written = values; return []; },
+      },
+    ]);
+    const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+      currentPassword: 'correct-password', newEmail: 'New@Example.com',
+    }, { authorization: 'Bearer member' }), res);
+
+    assertEq(res.statusCode, 200);
+    assertEq(res._body, { ok: true });
+    assertEq(written[0], 'new@example.com');
+    assert(/^[0-9a-f]{64}$/.test(written[1]), 'must store a sha256 hex hash');
+    assert(new Date(written[2]).getTime() > Date.now(), 'expiry must be in the future');
+    assert(sentMail && sentMail.to === 'new@example.com', 'confirmation mail goes to the NEW address');
+    assert(!sentMail.html.includes(written[1]), 'the mail must carry the raw token, not the stored hash');
   });
 }
 

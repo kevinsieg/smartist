@@ -288,6 +288,64 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true });
   }
 
+  // POST ?action=request-email-change — caller asks to change their own login
+  // email. Nothing changes until the link sent to the NEW address is confirmed:
+  // email is the cross-workspace identity, so it must be proven, not asserted.
+  if (req.method === 'POST' && action === 'request-email-change') {
+    const { currentPassword, newEmail } = req.body ?? {};
+    if (!currentPassword || !newEmail)
+      return res.status(400).json({ error: 'currentPassword and newEmail required' });
+    if (String(currentPassword).length > 1000)
+      return res.status(400).json({ error: 'Password too long' });
+    if (req.user.id === null)
+      return res.status(400).json({ error: 'Email change is not available for this account' });
+
+    const clean = validateStr(newEmail, 200);
+    if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean))
+      return res.status(400).json({ error: 'Invalid email address' });
+    const lower = clean.toLowerCase();
+
+    if (await checkRateLimit(`emailchg:${clientIp(req)}`, 5, 600))
+      return res.status(429).json({ error: 'Too many attempts — try again later' });
+
+    const [user] = await sql`SELECT * FROM users WHERE id = ${req.user.id}`;
+    if (!user || !user.password_hash || !await bcrypt.compare(String(currentPassword), user.password_hash))
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    if (user.email.toLowerCase() === lower)
+      return res.status(400).json({ error: 'That is already your email address' });
+
+    const rawToken  = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expires   = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    await sql`
+      UPDATE users
+      SET pending_email = ${lower}, email_change_token_hash = ${tokenHash}, email_change_expires_at = ${expires}
+      WHERE id = ${user.id}
+    `;
+
+    const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
+    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
+    // Fragment, not query — tokens must not land in server/CDN logs.
+    const link   = `${origin}/confirm-email#token=${encodeURIComponent(rawToken)}&slug=${encodeURIComponent(slug)}`;
+
+    try {
+      await sendEmail({
+        to: lower,
+        subject: 'Confirm your new email address',
+        html: `<p>Confirm this address to finish changing your smartist login email:</p>
+               <p><a href="${link}">Confirm new email address</a></p>
+               <p>Valid for 24 hours. If you did not request this, you can ignore this email.</p>`,
+      });
+    } catch (err) {
+      await logger.error('email_change_request_failed', { band: slug, error: err.message });
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
+
+    return res.json({ ok: true });
+  }
+
   // PUT — update user role (admin). Login email is never admin-editable: it is
   // the cross-workspace identity (resolveUser joins users on email), so rewriting
   // it would hand this user another account's memberships.
