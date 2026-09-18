@@ -118,13 +118,25 @@ module.exports = wrap(async function handler(req, res) {
     if (status   === false) return res.status(400).json({ error: 'status too long' });
     const comment  = validateStr(b.comment, 2000);
     if (comment  === false) return res.status(400).json({ error: 'comment too long' });
+    const phone = validateStr(b.phone, 100);
+    if (phone === false) return res.status(400).json({ error: 'phone too long' });
+    const contact_name = validateStr(b.contact_name, 200);
+    if (contact_name === false) return res.status(400).json({ error: 'contact_name too long' });
+    const postcode = validateStr(b.postcode, 20);
+    if (postcode === false) return res.status(400).json({ error: 'postcode too long' });
+    const generic_email = validateStr(b.generic_email, 254);
+    if (generic_email === false) return res.status(400).json({ error: 'generic_email too long' });
+    const website = validateStr(b.website, 500);
+    if (website === false) return res.status(400).json({ error: 'website too long' });
     const lat = validateNum(b.lat);
     if (lat === false) return res.status(400).json({ error: 'lat must be a number' });
     const lng = validateNum(b.lng);
     if (lng === false) return res.status(400).json({ error: 'lng must be a number' });
     const [venue] = await sql`
-      INSERT INTO venues (artist_id, name, street_number, street, city, country, category, status, comment, lat, lng)
-      VALUES (${artist.id}, ${name}, ${street_number}, ${street}, ${city}, ${country}, ${category}, ${status}, ${comment}, ${lat}, ${lng})
+      INSERT INTO venues (artist_id, name, street_number, street, postcode, city, country, category, status, comment,
+                          generic_email, website, lat, lng, phone, contact_name)
+      VALUES (${artist.id}, ${name}, ${street_number}, ${street}, ${postcode}, ${city}, ${country}, ${category}, ${status}, ${comment},
+              ${generic_email}, ${website}, ${lat}, ${lng}, ${phone}, ${contact_name})
       RETURNING *
     `;
     return res.status(201).json(venue);

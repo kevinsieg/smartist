@@ -504,7 +504,7 @@ function updateVenuesFooter() {
 function openAddModal() {
   editingId = null;
   document.getElementById('venue-modal-title').textContent = t('venues.addVenue');
-  ['name','street-number','street','postcode','city','country','category','email','website','comment'].forEach(f => {
+  ['name','street-number','street','postcode','city','country','category','email','website','phone','contact-name','comment'].forEach(f => {
     const el = document.getElementById(`vm-${f}`); if (el) el.value = '';
   });
   document.getElementById('vm-status').value = '';
@@ -531,6 +531,8 @@ function openEditModal(id) {
   document.getElementById('vm-category').value = v.category      || '';
   document.getElementById('vm-email').value    = v.generic_email || '';
   document.getElementById('vm-website').value  = v.website       || '';
+  document.getElementById('vm-phone').value        = v.phone         || '';
+  document.getElementById('vm-contact-name').value = v.contact_name  || '';
   document.getElementById('vm-comment').value  = v.comment       || '';
   document.getElementById('vm-delete-btn').style.display = (v.deleted || isViewMode()) ? 'none' : '';
   document.getElementById('vm-dup-warning').style.display = 'none';
@@ -612,6 +614,8 @@ async function saveVenue() {
     category:      document.getElementById('vm-category').value.trim() || null,
     generic_email: document.getElementById('vm-email').value.trim()    || null,
     website:       document.getElementById('vm-website').value.trim()  || null,
+    phone:         document.getElementById('vm-phone').value.trim()        || null,
+    contact_name:  document.getElementById('vm-contact-name').value.trim() || null,
     comment:       document.getElementById('vm-comment').value.trim()  || null,
     lat:  _geocodeAccepted ? _pendingLat : null,
     lng:  _geocodeAccepted ? _pendingLng : null,

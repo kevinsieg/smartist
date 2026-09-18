@@ -10,7 +10,8 @@ var _orgsQ = '';
 var _orgsTimer = null;
 
 function _orgTypeLabel(type) {
-  var map = { person: t('organizers.typePerson'), organization: t('organizers.typeOrg') };
+  var map = { person: t('organizers.typePerson'), organization: t('organizers.typeOrg'),
+              event: t('organizers.typeEvent'), press: t('organizers.typePress'), radio: t('organizers.typeRadio') };
   return map[type] || escHtml(type);
 }
 

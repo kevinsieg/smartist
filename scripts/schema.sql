@@ -356,3 +356,6 @@ ALTER TABLE artists ALTER COLUMN password_hash DROP NOT NULL;
 
 -- 2026-06-27: storage usage tracking per artist
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS storage_used_bytes BIGINT NOT NULL DEFAULT 0;
+
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS phone        TEXT;
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS contact_name TEXT;

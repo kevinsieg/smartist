@@ -3,7 +3,7 @@
 (function () {
   var SUPPORTED_LOCALES = ['en', 'fr', 'de'];
   var DEFAULT_LOCALE = 'en';
-  var I18N_VERSION = 9;
+  var I18N_VERSION = 10;
 
   function resolveLocale(stored, navLangs, supported, def) {
     supported = supported || SUPPORTED_LOCALES;

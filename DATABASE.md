@@ -118,6 +118,8 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `state` | text | |
 | `country` | text | |
 | `generic_email` | text | General booking email |
+| `phone` | text | Venue phone |
+| `contact_name` | text | Booking contact person |
 | `website` | text | |
 | `social_links` | jsonb DEFAULT `{}` | |
 | `last_communication` | date | |
