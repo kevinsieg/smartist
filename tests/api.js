@@ -638,6 +638,24 @@ async function testAuth(slug) {
     const { res, json } = await PATCH('/api/config', { name: 'x' });
     assertStatus(res, json, 401);
   });
+
+  // Email change: request needs a session, confirm needs a valid token.
+  await test('POST request-email-change without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=request-email-change`,
+      { currentPassword: 'x'.repeat(8), newEmail: 'someone@example.com' });
+    assertStatus(res, json, 401);
+  });
+
+  await test('POST confirm-email-change without a token → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=confirm-email-change`, {});
+    assertStatus(res, json, 400);
+  });
+
+  await test('POST confirm-email-change with a garbage token → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=confirm-email-change`,
+      { token: 'e'.repeat(64) });
+    assertStatus(res, json, 400);
+  });
 }
 
 // ── Multi-user auth ──────────────────────────────────────────────────────────
