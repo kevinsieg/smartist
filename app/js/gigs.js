@@ -84,7 +84,7 @@ async function uploadPoster(gigId, file) {
       generateThumbBlob(file),
     ]);
     setStatus('gm-poster-status', t('gigs.uploading'));
-    var r1 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster-url', 'POST', {
+    var r1 = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&action=poster-url', 'POST', {
       contentType: 'image/jpeg',
     });
     if (!r1.ok) {
@@ -97,7 +97,7 @@ async function uploadPoster(gigId, file) {
       fetch(urls.thumbUploadUrl,  { method: 'PUT', body: thumbBlob,  headers: { 'Content-Type': 'image/jpeg' } }),
     ]);
     if (!pr.ok || !tr.ok) throw new Error(t('gigs.uploadStorageFailed', { status: !pr.ok ? pr.status : tr.status }));
-    var r2 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster', 'PUT', {
+    var r2 = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&action=poster', 'PUT', {
       posterUrl: urls.posterPublicUrl,
       thumbUrl:  urls.thumbPublicUrl,
     });
@@ -118,7 +118,7 @@ async function uploadPoster(gigId, file) {
 async function removePoster(gigId) {
   setStatus('gm-poster-status', t('gigs.removing'));
   try {
-    var r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?action=poster', 'DELETE');
+    var r = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&action=poster', 'DELETE');
     if (!r.ok) {
       var e = await r.json();
       throw new Error(e.error || t('gigs.couldNotRemovePoster'));
@@ -737,7 +737,7 @@ async function openGigSetlists(gigId) {
   openModal('setlist-detail-modal');
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?refs=1');
+      const r = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&refs=1');
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
@@ -769,8 +769,8 @@ function deleteGigFromPopup(id) {
   closeGigModal();
   openHardDeleteModal({
     title: t('gigs.permanentlyDeleteGig'),
-    refsUrl: '/api/' + artistSlug + '/gigs/' + id + '?refs=1',
-    deleteUrl: '/api/' + artistSlug + '/gigs/' + id,
+    refsUrl: '/api/' + artistSlug + '/gigs?id=' + id + '&refs=1',
+    deleteUrl: '/api/' + artistSlug + '/gigs?id=' + id,
     buildRefsMsg: function(refs) {
       if (!refs.setlists.length) return t('gigs.noLinkedSetlists');
       return t('gigs.linkedSetlists') + '<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
