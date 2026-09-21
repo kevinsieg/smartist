@@ -41,7 +41,6 @@ var _songsOffset = 0;
 var _songsTotal = 0;
 var SONGS_VIEW_PAGE = 30;
 
-function isMobile() { return window.innerWidth <= 1024; }
 function isBulkEdit() { return !isMobile() && !_viewMode && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
 
 function toggleBulkEdit() {

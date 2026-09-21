@@ -493,11 +493,8 @@ var BOOKING_CHANNELS = [
   { value: 'phone',           get label() { return t('venues.channelPhone'); } },
 ];
 
-// Private name: page scripts stay alive after SPA navigation and must not collide.
-function _venuesIsNarrow() { return window.innerWidth <= 1024; }
-
 function isVenueBulkEdit() {
-  return localStorage.getItem(VENUE_BULK_KEY) === '1' && !_venuesIsNarrow() && !isViewMode();
+  return localStorage.getItem(VENUE_BULK_KEY) === '1' && !isMobile() && !isViewMode();
 }
 
 function toggleVenueBulkEdit() {
@@ -579,11 +576,13 @@ function renderVenueBulk() {
     '<div class="table-wrap"><table><thead><tr>' +
       BULK_COLUMNS.map(function(c) {
         var cls = 'col-' + c.field;
-        if (!c.sortable) return '<th class="' + cls + '">' + escHtml(c.label) + '</th>';
+        if (!c.sortable) return '<th scope="col" class="' + cls + '">' + escHtml(c.label) + '</th>';
         var active = _venueBulkSortState.field === c.field;
-        var arrow  = active ? (_venueBulkSortState.dir === 1 ? ' ▲' : ' ▼') : '';
-        return '<th class="' + cls + ' bulk-sortable' + (active ? ' bulk-sorted' : '') + '" data-sort="' + c.field + '">' +
-               escHtml(c.label) + arrow + '</th>';
+        var asc    = _venueBulkSortState.dir === 1;
+        var arrow  = active ? (asc ? ' ▲' : ' ▼') : '';
+        return '<th scope="col" class="' + cls + ' bulk-sortable' + (active ? ' bulk-sorted' : '') + '"' +
+               ' data-sort="' + c.field + '" aria-sort="' + (active ? (asc ? 'ascending' : 'descending') : 'none') + '">' +
+               '<button type="button" class="th-sort-btn">' + escHtml(c.label) + arrow + '</button></th>';
       }).join('') +
     '</tr></thead><tbody>' +
       rows.map(function(v) {
@@ -718,12 +717,17 @@ function _renderLetterBar() {
   var bar = document.getElementById('venues-letters');
   if (!bar) return;
   var letters = ['#'].concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''));
-  bar.innerHTML =
-    '<button class="letter-btn' + (_venuesLetter === '' ? ' letter-active' : '') + '" data-letter="">' +
-      t('venues.allLetters') + '</button>' +
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', t('venues.letterBarLabel'));
+  var btn = function(value, label, aria) {
+    var on = _venuesLetter === value;
+    return '<button type="button" class="letter-btn' + (on ? ' letter-active' : '') + '"' +
+           ' data-letter="' + escHtml(value) + '" aria-pressed="' + on + '"' +
+           ' aria-label="' + escHtml(aria) + '">' + escHtml(label) + '</button>';
+  };
+  bar.innerHTML = btn('', t('venues.allLetters'), t('venues.allLetters')) +
     letters.map(function(l) {
-      return '<button class="letter-btn' + (_venuesLetter === l ? ' letter-active' : '') +
-             '" data-letter="' + l + '">' + l + '</button>';
+      return btn(l, l, l === '#' ? t('venues.letterOther') : l);
     }).join('');
   bar.querySelectorAll('.letter-btn').forEach(function(btn) {
     btn.onclick = function() { jumpToVenueLetter(btn.dataset.letter); };

@@ -475,6 +475,9 @@ function _isTokenExpired(token) {
   } catch (_) { return false; }                            // unparseable → plain password
 }
 
+// Narrow viewport: table-style editing is desktop-only (songs bulk edit, venues bulk edit).
+function isMobile() { return window.innerWidth <= 1024; }
+
 function isViewMode() {
   var token = getToken();
   if (!token) return true;

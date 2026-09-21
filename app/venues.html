@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <script src="/app/js/i18n.js?v=12"></script>
+  <script src="/app/js/i18n.js?v=13"></script>
   <link rel="stylesheet" href="/app/css/app.css?v=31">
   <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
@@ -29,7 +29,11 @@
     #venues-bulk .col-remuneration, #venues-bulk .col-season { width: 95px; }
     #venues-bulk .col-preferred_period { width: 130px; }
     #venues-bulk .col-comment { width: 240px; }
-    #venues-bulk th.bulk-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    #venues-bulk th.bulk-sortable { cursor: pointer; user-select: none; white-space: nowrap; padding: 0; }
+    #venues-bulk th.bulk-sortable .th-sort-btn { width: 100%; text-align: left; background: none; border: none;
+      font: inherit; color: inherit; cursor: pointer; padding: 0.4rem 0.5rem 0.45rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     #venues-bulk th.bulk-sortable:hover { color: var(--secondary-ink); }
     #venues-bulk th.bulk-sorted { color: var(--secondary-ink); }
     .letter-bar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin: 0 0 0.75rem; }
@@ -183,14 +187,16 @@
   <div id="venues-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="venues-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
     <div class="venues-pager">
-      <button class="btn" id="venues-first" title="1">«</button>
-      <button class="btn" id="venues-prev">‹</button>
+      <button class="btn" id="venues-first" data-i18n-attr="aria-label:venues.pageFirst" aria-label="First page">«</button>
+      <button class="btn" id="venues-prev" data-i18n-attr="aria-label:venues.pagePrev" aria-label="Previous page">‹</button>
       <span class="venues-pageinfo">
+        <label class="sr-only" for="venues-page-input" data-i18n="venues.pageInputLabel">Page</label>
         <input type="number" id="venues-page-input" min="1" value="1">
         <span id="venues-page-of"></span>
       </span>
-      <button class="btn" id="venues-next">›</button>
-      <button class="btn" id="venues-last">»</button>
+      <button class="btn" id="venues-next" data-i18n-attr="aria-label:venues.pageNext" aria-label="Next page">›</button>
+      <button class="btn" id="venues-last" data-i18n-attr="aria-label:venues.pageLast" aria-label="Last page">»</button>
+      <label class="sr-only" for="venues-page-size" data-i18n="venues.pageSizeLabel">Venues per page</label>
       <select id="venues-page-size">
         <option value="50">50</option>
         <option value="100">100</option>
