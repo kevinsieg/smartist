@@ -142,5 +142,70 @@ module.exports = wrap(async function handler(req, res) {
     return res.status(201).json(venue);
   }
 
+  // Bulk edit of the CRM fields — one request for all rows changed in the table.
+  // Only the fields present per row are written; everything else keeps its stored value.
+  if (req.method === 'PATCH') {
+    const artist = await requireAuth(req, res, slug, 'member');
+    if (!artist) return;
+    if (!requireFeature(res, artist, 'venues')) return;
+    const updates = req.body;
+    if (!Array.isArray(updates) || updates.length === 0)
+      return res.status(400).json({ error: 'Array of updates required' });
+    if (updates.length > 200)
+      return res.status(400).json({ error: 'Too many updates (max 200)' });
+
+    const ids = updates.map(u => Number(u.id)).filter(n => Number.isInteger(n) && n > 0);
+    if (!ids.length) return res.json({ ok: true, count: 0 });
+    const rows = await sql`
+      SELECT * FROM venues WHERE artist_id = ${artist.id} AND deleted = false AND id = ANY(${ids}::int[])`;
+    const byId = new Map(rows.map(r => [r.id, r]));
+
+    // field → max length; dates are validated separately.
+    const TEXT_FIELDS = { status: 50, category: 100, booking_channel: 50, remuneration: 100,
+                          season: 50, preferred_period: 100, comment: 2000 };
+    const DATE_FIELDS = ['last_communication', 'deadline'];
+    const isDate = v => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+    let count = 0;
+    for (const update of updates) {
+      const venue = byId.get(Number(update.id));
+      if (!venue) continue;
+
+      const next = {};
+      let invalid = false;
+      for (const [field, maxLen] of Object.entries(TEXT_FIELDS)) {
+        if (!(field in update)) { next[field] = venue[field]; continue; }
+        const value = validateStr(update[field], maxLen);
+        if (value === false) { invalid = true; break; }
+        next[field] = value;
+      }
+      if (invalid) continue;
+      for (const field of DATE_FIELDS) {
+        if (!(field in update)) { next[field] = venue[field]; continue; }
+        const value = validateStr(update[field], 10);
+        if (value === false || !isDate(value)) { invalid = true; break; }
+        next[field] = value;
+      }
+      if (invalid) continue;
+
+      const [updated] = await sql`
+        UPDATE venues SET
+          status             = ${next.status},
+          category           = ${next.category},
+          booking_channel    = ${next.booking_channel},
+          remuneration       = ${next.remuneration},
+          season             = ${next.season},
+          preferred_period   = ${next.preferred_period},
+          comment            = ${next.comment},
+          last_communication = ${next.last_communication},
+          deadline           = ${next.deadline},
+          last_updated       = NOW()
+        WHERE id = ${venue.id} AND artist_id = ${artist.id}
+        RETURNING id`;
+      if (updated) count++;
+    }
+    return res.json({ ok: true, count });
+  }
+
   res.status(405).json({ error: 'Method not allowed' });
 });

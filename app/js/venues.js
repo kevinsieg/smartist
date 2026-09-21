@@ -454,6 +454,156 @@ async function openVenueFromMap(id) {
   } catch {}
 }
 
+// ── Bulk edit (CRM fields) ────────────────────────────────────────────────
+// Spreadsheet-style editing of the fields that change while booking. Name, address
+// and contact data stay in the modal. Saving sends one PATCH for all changed rows.
+
+var VENUE_BULK_KEY = 'venues_bulk_edit';
+var _venueDirty = new Set();
+
+var BULK_COLUMNS = [
+  { field: 'name',               get label() { return t('venues.colName'); },           type: 'ro' },
+  { field: 'city',               get label() { return t('venues.colCity'); },           type: 'ro' },
+  { field: 'status',             get label() { return t('venues.colStatus'); },         type: 'select', options: function() { return VENUE_STATUSES; } },
+  { field: 'category',           get label() { return t('venues.fieldCategory'); },     type: 'select', options: function() { return VENUE_CATEGORIES; } },
+  { field: 'last_communication', get label() { return t('venues.colLastContact'); },    type: 'date' },
+  { field: 'booking_channel',    get label() { return t('venues.colBookingChannel'); }, type: 'select', options: function() { return BOOKING_CHANNELS; } },
+  { field: 'deadline',           get label() { return t('venues.colDeadline'); },       type: 'date' },
+  { field: 'remuneration',       get label() { return t('venues.colRemuneration'); },   type: 'text' },
+  { field: 'season',             get label() { return t('venues.colSeason'); },         type: 'text' },
+  { field: 'preferred_period',   get label() { return t('venues.colPreferredPeriod'); },type: 'text' },
+  { field: 'comment',            get label() { return t('venues.colComment'); },        type: 'text' },
+];
+
+var BOOKING_CHANNELS = [
+  { value: 'email',           get label() { return t('venues.channelEmail'); } },
+  { value: 'contactForm',     get label() { return t('venues.channelContactForm'); } },
+  { value: 'applicationForm', get label() { return t('venues.channelApplicationForm'); } },
+  { value: 'facebook',        get label() { return t('venues.channelFacebook'); } },
+  { value: 'phone',           get label() { return t('venues.channelPhone'); } },
+];
+
+// Private name: page scripts stay alive after SPA navigation and must not collide.
+function _venuesIsNarrow() { return window.innerWidth <= 1024; }
+
+function isVenueBulkEdit() {
+  return localStorage.getItem(VENUE_BULK_KEY) === '1' && !_venuesIsNarrow() && !isViewMode();
+}
+
+function toggleVenueBulkEdit() {
+  if (isVenueBulkEdit()) {
+    if (_venueDirty.size && !confirm(t('venues.bulkDiscardConfirm'))) return;
+    localStorage.removeItem(VENUE_BULK_KEY);
+  } else {
+    localStorage.setItem(VENUE_BULK_KEY, '1');
+  }
+  _venueDirty.clear();
+  renderVenueBulk();
+}
+
+function _bulkCell(v, col) {
+  var value = v[col.field] == null ? '' : String(v[col.field]);
+  if (col.type === 'ro') return escHtml(value);
+  if (col.type === 'date') {
+    return '<input type="date" data-field="' + col.field + '" value="' + escHtml(value.slice(0, 10)) + '">';
+  }
+  if (col.type === 'select') {
+    return '<select data-field="' + col.field + '"><option value=""></option>' +
+      col.options().map(function(o) {
+        return '<option value="' + escHtml(o.value) + '"' + (o.value === value ? ' selected' : '') + '>' + escHtml(o.label) + '</option>';
+      }).join('') +
+      // keep a stored value the list does not know, so saving cannot silently drop it
+      (value && !col.options().some(function(o) { return o.value === value; })
+        ? '<option value="' + escHtml(value) + '" selected>' + escHtml(value) + '</option>' : '') +
+      '</select>';
+  }
+  return '<input type="text" data-field="' + col.field + '" value="' + escHtml(value) + '">';
+}
+
+function renderVenueBulk() {
+  var bulkEl = document.getElementById('venues-bulk');
+  var on     = isVenueBulkEdit();
+  document.body.classList.toggle('venues-bulk', on);
+  [document.getElementById('sort-bar'),
+   document.getElementById('venues-list'),
+   document.querySelector('.placeholder-section')].forEach(function(el) {
+    if (el) el.style.display = on ? 'none' : '';
+  });
+  var btn = document.getElementById('venue-bulk-btn');
+  if (btn) btn.classList.toggle('active', on);
+  if (!bulkEl) return;
+  if (!on) { bulkEl.style.display = 'none'; bulkEl.innerHTML = ''; return; }
+
+  var rows = allVenues.filter(function(v) { return !v.deleted && v.category !== 'placeholder'; });
+  bulkEl.style.display = '';
+  bulkEl.innerHTML =
+    '<div class="toolbar">' +
+      '<button class="btn active" id="venue-bulk-save" disabled>' + t('venues.saveBtn') + '</button>' +
+      '<button class="btn" id="venue-bulk-discard" disabled>' + t('venues.bulkDiscard') + '</button>' +
+      '<span class="status" id="venue-bulk-status"></span>' +
+    '</div>' +
+    '<div class="bulk-wrap"><table><thead><tr>' +
+      BULK_COLUMNS.map(function(c) { return '<th>' + escHtml(c.label) + '</th>'; }).join('') +
+    '</tr></thead><tbody>' +
+      rows.map(function(v) {
+        return '<tr data-id="' + v.id + '">' + BULK_COLUMNS.map(function(c) {
+          return '<td class="col-' + c.field + '">' + _bulkCell(v, c) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') +
+    '</tbody></table></div>';
+
+  // Property assignment, not addEventListener — renderVenueBulk() runs again after every load.
+  bulkEl.oninput  = _onBulkInput;
+  bulkEl.onchange = _onBulkInput;
+  document.getElementById('venue-bulk-save').onclick = saveVenueBulk;
+  document.getElementById('venue-bulk-discard').onclick = function() {
+    _venueDirty.clear();
+    renderVenueBulk();
+  };
+  _updateBulkButtons();
+}
+
+function _onBulkInput(e) {
+  var row = e.target.closest('tr[data-id]');
+  if (!row) return;
+  _venueDirty.add(row.dataset.id);
+  row.classList.add('dirty');
+  _updateBulkButtons();
+}
+
+function _updateBulkButtons(msg) {
+  var save    = document.getElementById('venue-bulk-save');
+  var discard = document.getElementById('venue-bulk-discard');
+  var status  = document.getElementById('venue-bulk-status');
+  if (save)    save.disabled    = _venueDirty.size === 0;
+  if (discard) discard.disabled = _venueDirty.size === 0;
+  if (status)  status.textContent = msg !== undefined ? msg
+    : (_venueDirty.size ? t('venues.bulkUnsaved', { n: _venueDirty.size }) : '');
+}
+
+async function saveVenueBulk() {
+  if (!_venueDirty.size) return;
+  var updates = [];
+  _venueDirty.forEach(function(id) {
+    var row = document.querySelector('#venues-bulk tr[data-id="' + id + '"]');
+    if (!row) return;
+    var update = { id: Number(id) };
+    row.querySelectorAll('[data-field]').forEach(function(el) {
+      update[el.dataset.field] = el.value.trim() === '' ? null : el.value.trim();
+    });
+    updates.push(update);
+  });
+  _updateBulkButtons(t('venues.savingMsg'));
+  var r = await apiFetch('/api/' + artistSlug + '/venues', 'PATCH', updates);
+  var json = await r.json().catch(function() { return {}; });
+  if (!r.ok) { _updateBulkButtons(json.error || t('gigs.errorFallback')); return; }
+  // Re-read from the server so the table shows what was actually stored.
+  _venueDirty.clear();
+  _venuesOffset = 0;
+  await loadVenues();
+  _updateBulkButtons(t('venues.bulkSaved', { n: json.count || 0 }));
+}
+
 async function loadVenues() {
   const params = new URLSearchParams({ limit: 50, offset: _venuesOffset });
   if (_venuesQ)        params.set('q',        _venuesQ);
@@ -470,6 +620,7 @@ async function loadVenues() {
   }
   placeholderTable.setData(allVenues.filter(v => v.category === 'placeholder'));
   venueTable.setData(allVenues.filter(v => v.category !== 'placeholder'));
+  renderVenueBulk();
   updateVenuesFooter();
   _populateCountryFilter();
 }

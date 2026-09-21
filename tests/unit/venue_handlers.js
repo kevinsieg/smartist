@@ -134,6 +134,63 @@ async function run(r) {
     assert(update.values.includes('+49 1') && update.values.includes('Anna'), 'stored values not kept');
   });
 
+  await testAsync('PATCH updates only the fields sent and keeps the rest', async () => {
+    const stored = { id: 5, artist_id: 1, status: 'prospect', category: 'pub', comment: 'old note',
+      booking_channel: 'email', season: 'summer', preferred_period: 'June', remuneration: '150',
+      last_communication: '2026-01-01', deadline: null };
+    const { handler, calls } = loadHandler('api/[artist]/venues.js',
+      text => (text.startsWith('SELECT * FROM venues') ? [stored] : [{ ...stored, status: 'contacted' }]));
+    const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, status: 'contacted', comment: '' }]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.count, 1);
+    const update = calls.find(c => c.text.startsWith('UPDATE venues'));
+    assert(update.values.includes('contacted'), 'new status not passed');
+    assert(update.values.includes('pub'), 'untouched category not kept');
+    assert(update.values.includes('email'), 'untouched booking_channel not kept');
+    assert(update.values.includes(null), 'cleared comment should be null');
+  });
+
+  await testAsync('PATCH skips rows with an invalid date and reports the count', async () => {
+    const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
+      season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null };
+    const { handler } = loadHandler('api/[artist]/venues.js',
+      text => (text.startsWith('SELECT * FROM venues') ? [stored] : [stored]));
+    const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, last_communication: 'gestern' }]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.count, 0);
+  });
+
+  await testAsync('PATCH accepts a date and clears one with an empty string', async () => {
+    const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
+      season: null, preferred_period: null, remuneration: null, last_communication: '2020-01-01', deadline: '2020-02-02' };
+    const { handler, calls } = loadHandler('api/[artist]/venues.js',
+      text => (text.startsWith('SELECT * FROM venues') ? [stored] : [stored]));
+    const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, last_communication: '2026-09-21', deadline: '' }]);
+    assertEq(res.body?.count, 1);
+    const update = calls.find(c => c.text.startsWith('UPDATE venues'));
+    assert(update.values.includes('2026-09-21'), 'date not passed');
+  });
+
+  await testAsync('PATCH without an array → 400', async () => {
+    const { handler } = loadHandler('api/[artist]/venues.js', () => []);
+    const res = await call(handler, 'PATCH', '/api/test/venues', { id: 5 });
+    assertEq(res.statusCode, 400);
+  });
+
+  await testAsync('PATCH with more than 200 rows → 400', async () => {
+    const { handler } = loadHandler('api/[artist]/venues.js', () => []);
+    const res = await call(handler, 'PATCH', '/api/test/venues', Array.from({ length: 201 }, (_, i) => ({ id: i + 1 })));
+    assertEq(res.statusCode, 400);
+  });
+
+  await testAsync('PATCH ignores ids that belong to another artist', async () => {
+    const { handler } = loadHandler('api/[artist]/venues.js',
+      text => (text.startsWith('SELECT * FROM venues') ? [] : []));
+    const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 999, status: 'contacted' }]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.count, 0);
+  });
+
   await testAsync('PUT rejects phone over 100 chars → 400', async () => {
     const { handler } = loadHandler('api/[artist]/venues/[...path].js', byId);
     const res = await call(handler, 'PUT', '/api/test/venues/5', { name: 'Old', phone: 'x'.repeat(101) });

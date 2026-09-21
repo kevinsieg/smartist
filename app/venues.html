@@ -10,12 +10,18 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <script src="/app/js/i18n.js?v=10"></script>
+  <script src="/app/js/i18n.js?v=11"></script>
   <link rel="stylesheet" href="/app/css/app.css?v=29">
   <script async src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
   <style>
     .venues-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
+    /* Bulk edit needs the full width — the list view is centred and narrower. */
+    body.venues-bulk .venues-wrap { max-width: none; }
+    #venues-bulk .bulk-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 4px; }
+    #venues-bulk td input, #venues-bulk td select { width: 100%; box-sizing: border-box; font-size: 0.8rem; }
+    #venues-bulk td.col-name { font-weight: 500; white-space: nowrap; }
+    #venues-bulk td.col-city { color: var(--third-color); white-space: nowrap; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: nowrap; align-items: flex-start; margin-bottom: 0.75rem; }
     .venue-filter-fields { display: flex; flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: center; min-width: 0; }
     .venue-filter-fields input[type="text"] { flex: 1 1 180px; min-width: 0; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; font-family: inherit; outline: none; }
@@ -137,8 +143,10 @@
         <option value="" data-i18n="venues.allCountries">All countries</option>
       </select>
     </div>
+    <button class="btn auth-action venue-filter-desktop" disabled id="venue-bulk-btn" onclick="toggleVenueBulkEdit()" data-i18n="venues.bulkEdit">Bulk edit</button>
     <button class="btn active auth-action" disabled id="venue-add-btn" onclick="openAddModal()" data-i18n="venues.addVenueBtn">+ Add venue</button>
   </div>
+  <div id="venues-bulk" style="display:none;"></div>
   <div id="sort-bar" class="sort-bar"></div>
   <div class="placeholder-section">
     <h2 data-i18n="venues.placeholdersSection">Placeholders</h2>

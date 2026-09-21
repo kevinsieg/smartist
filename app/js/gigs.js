@@ -697,6 +697,16 @@ function _downloadGigIcs(id) {
   URL.revokeObjectURL(url);
 }
 
+// Past gigs get no calendar button — adding a date that has already happened is pointless.
+function _gigIsUpcoming(date) {
+  if (!date) return false;
+  var d = new Date(date);
+  if (isNaN(d)) return false;
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d >= today;
+}
+
 function expandGig(g) {
   var rows = [];
   if (g.venue_name)      rows.push([t('gigs.expandVenue'),     escHtml(g.venue_name)]);
@@ -711,7 +721,7 @@ function expandGig(g) {
     return '<div class="expansion-row"><span class="expansion-label expansion-key">' + r[0] + '</span><span>' + r[1] + '</span></div>';
   }).join('');
   if (!html) html = '<span style="color:var(--third-color);font-size:0.82rem;">' + t('gigs.noDetails') + '</span>';
-  if (g.date) html += '<div style="margin-top:0.6rem">' +
+  if (_gigIsUpcoming(g.date)) html += '<div style="margin-top:0.6rem">' +
     '<button class="btn" style="font-size:0.78rem;padding:0.2rem 0.65rem;min-height:0" ' +
     'onclick="event.stopPropagation();_downloadGigIcs(' + g.id + ')" title="' + t('gigs.downloadIcsTitle') + '">' +
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
