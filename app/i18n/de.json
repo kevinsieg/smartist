@@ -262,6 +262,7 @@
   "songs.changeLog": "Änderungsprotokoll",
   "songs.unsavedChanges": "Nicht gespeicherte Änderungen",
   "songs.allChangesSaved": "Alle Änderungen gespeichert",
+  "songs.savedWithErrors": "{n} Zeile(n) nicht gespeichert: {error}",
   "songs.saveFailed": "Speichern fehlgeschlagen — erneut versuchen",
   "songs.saveFailedStatus": "Speichern fehlgeschlagen ({status})",
   "songs.confirmDeleteSong": "Song löschen? Er wird auch aus allen gespeicherten Setlists entfernt.",

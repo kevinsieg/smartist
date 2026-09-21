@@ -1050,6 +1050,15 @@ function renderListRowHtml(s) {
   var borderCls = s.active ? 'songs-list-row--active' : 'songs-list-row--inactive';
   var titleCls  = s.active ? '' : ' songs-list-row-title--inactive';
 
+  var heartOn  = !!s.heart;
+  var heartCls  = 'songs-list-row-heart' + (heartOn ? ' songs-list-row-heart--on' : '');
+  var heartBtn  = _viewMode
+    ? (heartOn ? '<span class="' + heartCls + '">&#9829;</span>' : '<span class="songs-list-row-heart"></span>')
+    : '<button type="button" class="' + heartCls + '" aria-pressed="' + heartOn + '"' +
+      ' title="' + t('songs.colTitleHeart') + '" aria-label="' + t('songs.colTitleHeart') + '"' +
+      ' onclick="event.stopPropagation();toggleFavourite(' + Number(s.id) + ')">' +
+      (heartOn ? '&#9829;' : '&#9825;') + '</button>';
+
   var icons = '';
   if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
   if (hasLyrics) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '">&#182;</button>';
@@ -1057,6 +1066,7 @@ function renderListRowHtml(s) {
   if (hasArrangement) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
+    heartBtn +
     '<div class="songs-list-row-stack">' +
       '<span class="songs-list-row-title' + titleCls + '">' + title + '</span>' +
       (interp ? '<span class="songs-list-row-interpret">' + interp + '</span>' : '') +
@@ -1070,6 +1080,27 @@ function renderListRowHtml(s) {
   '</div>';
 }
 
+
+// Favourite toggle straight from the list: flip it locally, then persist. On failure the
+// icon goes back, so what you see always matches what is stored.
+async function toggleFavourite(id) {
+  if (_viewMode) return;
+  var song = songs.find(function(s) { return s.id === id; });
+  if (!song) return;
+  var wanted = !song.heart;
+  song.heart = wanted;
+  if (_songsView) _songsView.refresh();
+  try {
+    var r = await apiFetch('/api/' + artistSlug + '/songs', 'PATCH',
+      [{ id: id, title: song.title, active: song.active, heart: wanted }]);
+    var json = r.ok ? await r.json().catch(function() { return {}; }) : {};
+    if (!r.ok || (json.rejected && json.rejected.length)) throw new Error('save failed');
+    invalidateConfigCache();
+  } catch {
+    song.heart = !wanted;
+    if (_songsView) _songsView.refresh();
+  }
+}
 
 function _openSongArrangement(id) {
   var song = songs.find(function(s) { return s.id === id; });
@@ -1458,6 +1489,7 @@ async function saveAll() {
       else                          toUpdate.push({ id: parseInt(sid, 10), ...data });
     }
 
+    var rejected = [];
     if (toUpdate.length > 0) {
       const r = await fetch(`/api/${artistSlug}/songs`, {
         method: 'PATCH',
@@ -1466,6 +1498,8 @@ async function saveAll() {
       });
       if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
       if (!r.ok) throw new Error('patch failed');
+      // Rows the server refused: say so instead of reporting a silent success.
+      rejected = (await r.json().catch(function() { return {}; })).rejected || [];
     }
 
     for (const data of toInsert) {
@@ -1481,8 +1515,16 @@ async function saveAll() {
     dirty.clear();
     invalidateConfigCache();
     await loadAndRender();
-    _setBulkStatus('saved', t('songs.allChangesSaved'));
-    setTimeout(() => _setBulkStatus('', ''), 3000);
+    if (rejected.length) {
+      _setBulkStatus('error', t('songs.savedWithErrors', { n: rejected.length, error: rejected[0].error }));
+      rejected.forEach(function(rej) {
+        var row = document.getElementById('row-' + rej.id);
+        if (row) { row.classList.add('dirty'); row.title = rej.error; }
+      });
+    } else {
+      _setBulkStatus('saved', t('songs.allChangesSaved'));
+      setTimeout(() => _setBulkStatus('', ''), 3000);
+    }
 
   } catch {
     _setBulkStatus('error', t('songs.saveFailed'));

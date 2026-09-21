@@ -1894,6 +1894,16 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 .songs-list-row-title--inactive { font-weight: normal; color: var(--third-color); }
 .songs-list-row-interpret { font-size: 0.76rem; color: var(--third-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .songs-list-row-icons { display: flex; gap: 0.15rem; flex-shrink: 0; }
+.songs-list-row-heart {
+  flex-shrink: 0; width: 1.5rem; height: 1.5rem; padding: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; font-size: 0.95rem;
+  color: var(--border-color); font-family: inherit;
+  transition: color 120ms, transform 120ms;
+}
+.songs-list-row-heart:hover  { color: var(--secondary-ink); transform: scale(1.12); }
+.songs-list-row-heart--on    { color: var(--secondary-ink); }
+span.songs-list-row-heart    { cursor: default; }
 
 /* Desktop-only action buttons and secondary row columns */
 @media (max-width: 1024px) {
@@ -1935,7 +1945,7 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
      is missing one of them. */
   .songs-list-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 7.5rem 2.5rem 3.5rem 4.5rem;
+    grid-template-columns: 1.5rem minmax(0, 1fr) 7.5rem 2.5rem 3.5rem 4.5rem;
     align-items: center;
     gap: 0.75rem;
   }

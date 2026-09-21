@@ -262,6 +262,7 @@
   "songs.changeLog": "Journal des modifications",
   "songs.unsavedChanges": "Modifications non enregistrées",
   "songs.allChangesSaved": "Toutes les modifications enregistrées",
+  "songs.savedWithErrors": "{n} ligne(s) non enregistrée(s) : {error}",
   "songs.saveFailed": "Échec de l'enregistrement — réessayez",
   "songs.saveFailedStatus": "Échec de l'enregistrement ({status})",
   "songs.confirmDeleteSong": "Supprimer cette chanson ? Elle sera aussi retirée des setlists.",

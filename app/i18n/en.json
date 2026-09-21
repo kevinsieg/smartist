@@ -262,6 +262,7 @@
   "songs.changeLog": "Change log",
   "songs.unsavedChanges": "Unsaved changes",
   "songs.allChangesSaved": "All changes saved",
+  "songs.savedWithErrors": "{n} row(s) not saved: {error}",
   "songs.saveFailed": "Save failed — try again",
   "songs.saveFailedStatus": "Save failed ({status})",
   "songs.confirmDeleteSong": "Delete this song? It will also be removed from any saved setlists.",
