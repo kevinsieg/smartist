@@ -92,8 +92,7 @@ function _renderUsers(users) {
 
   var pendingRows = pending.map(function(u) {
     var sentDate = u.invite_expires_at
-      ? new Date(new Date(u.invite_expires_at).getTime() - 7 * 24 * 60 * 60 * 1000)
-          .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      ? formatDate(new Date(new Date(u.invite_expires_at).getTime() - 7 * 24 * 60 * 60 * 1000), 'short')
       : '';
     return '<div class="user-row">' +
       '<span class="user-email">' + escHtml(u.email) + '</span>' +
@@ -534,7 +533,7 @@ function uploadFavicon(file) {
   var progress = document.getElementById('favicon-progress');
   progress.textContent = t('settings.gettingUploadUrl');
   fetch('/api/config?action=favicon-url&type=' + encodeURIComponent(file.type), {
-    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
+    headers: { 'Authorization': 'Bearer ' + getToken() },
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -586,7 +585,7 @@ function uploadPhoto(file) {
   var progress = document.getElementById('photo-progress');
   progress.textContent = t('settings.gettingUploadUrl');
   fetch('/api/config?action=photo-url&type=' + encodeURIComponent(file.type), {
-    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
+    headers: { 'Authorization': 'Bearer ' + getToken() },
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {

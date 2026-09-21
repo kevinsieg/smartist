@@ -12,6 +12,19 @@ var _shareSlug      = null;
 var _shareSetlistId = null;
 
 // Members of private workspaces must authenticate to read config/setlists/songs.
+// stage.html deliberately loads no common.js, so the date format lives here too.
+// Keep in step with formatDate() in common.js.
+function _stageDate(value) {
+  if (!value) return null;
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  var day = String(d.getUTCDate()).padStart(2, '0');
+  var month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  var year = String(d.getUTCFullYear());
+  var lang = (document.documentElement.lang || 'en').slice(0, 2);
+  return lang === 'de' ? day + '.' + month + '.' + year : day + '/' + month + '/' + year.slice(2);
+}
+
 function _stageAuthHeaders() {
   var t = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
   return t ? { Authorization: 'Bearer ' + t } : {};
@@ -169,7 +182,7 @@ async function initSetlist(params, el, cfg) {
   try { sessionStorage.setItem('stage_sl_' + setlistId, JSON.stringify(data)); } catch {}
 
   const songs = data.songs ?? [];
-  const gigParts = [data.gig_name, data.gig_date ? String(data.gig_date).slice(0, 10) : null, data.gig_venue]
+  const gigParts = [data.gig_name, _stageDate(data.gig_date), data.gig_venue]
     .filter(Boolean);
   const gigLine   = gigParts.join(' — ');
   const setTitle  = data.title ? `"${escHtml(data.title)}"` : '';

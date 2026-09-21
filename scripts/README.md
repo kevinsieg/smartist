@@ -128,3 +128,22 @@ node scripts/import_gema.js --band <slug> --ids <...> --dry-run
 **Rightholder import** (`--beteiligte`): replace-all per work — existing rightholders for each affected work are deleted before re-inserting. Re-runs are idempotent.
 
 The web UI at `/gema-import` runs the same pipeline interactively with a dry-run preview step.
+
+---
+
+## delete_artist.js — remove one artist and all its data
+
+```bash
+node scripts/delete_artist.js --artist <slug>
+```
+
+Prints the DB hostname, the artist name and a row count per table, then requires the slug
+to be typed back. The deletion runs in one transaction in the order `DATABASE.md` documents:
+
+1. `gigs.venue_id` / `gigs.organizer_id` are `ON DELETE RESTRICT` → set to NULL first.
+2. `setlist_songs.song_id` has no cascade → delete the setlists first (that cascades their songs).
+3. `DELETE FROM artists` cascades songs, venues, organizers, gigs, arrangements, logs, users and GEMA works.
+
+Other artists are untouched. R2 files (audio, sheets, playback) are **not** deleted — the script
+warns how many songs still reference them; remove those in the Cloudflare dashboard or with
+`wrangler r2 object delete`.
