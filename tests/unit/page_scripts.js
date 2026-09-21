@@ -67,6 +67,24 @@ function run(r) {
       'these calls send no token and fail in a private workspace:\n      ' + offenders.join('\n      '));
   });
 
+  // "Remember me" stores the token in localStorage only (home.js storeToken clears the
+  // session copy), so reading sessionStorage directly finds nothing and the action fails
+  // silently — this is what made bulk save do nothing at all.
+  test('page scripts read the token through getToken()', () => {
+    // login/bootstrap pages read both stores on purpose; stage.js loads no common.js.
+    const ALLOWED = new Set(['common.js', 'home.js', 'onboarding.js', 'stage.js', 'share-utils.js', 'arrangement.js']);
+    const offenders = [];
+    fs.readdirSync(path.join(APP, 'js')).filter(f => f.endsWith('.js') && !ALLOWED.has(f)).forEach(function(file) {
+      fs.readFileSync(path.join(APP, 'js', file), 'utf8').split('\n').forEach(function(line, i) {
+        if (/sessionStorage\.(get|remove)Item\(\s*AUTH_TOKEN_KEY/.test(line) && !/localStorage/.test(line)) {
+          offenders.push(`${file}:${i + 1}  ${line.trim().slice(0, 70)}`);
+        }
+      });
+    });
+    assert(offenders.length === 0,
+      'use getToken()/clearToken() — remember-me keeps the token in localStorage:\n      ' + offenders.join('\n      '));
+  });
+
   // Dates must look the same in every corner of the app: common.js formatDate/formatTime
   // own the formatting (stage.js keeps a documented copy — it loads no common.js).
   test('no page script formats dates on its own', () => {

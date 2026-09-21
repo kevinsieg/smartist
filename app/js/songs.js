@@ -777,7 +777,7 @@ function _panelStageFile(input, type, id) {
 // Create a song from the panel, then upload any files staged on its inputs.
 // Returns the created song, or null if it couldn't be created (no title / auth).
 async function _commitNewSong(formId) {
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   if (!token) { if (!isViewMode()) requireLogin(); return null; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
@@ -796,7 +796,7 @@ async function _commitNewSong(formId) {
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body:    JSON.stringify(data),
   });
-  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return null; }
+  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return null; }
   if (!r.ok) throw new Error('create failed');
   var newSong = await r.json();
 
@@ -831,7 +831,7 @@ async function _commitNewSong(formId) {
 }
 
 async function _savePanelSong(formId, isNew, realSid) {
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
@@ -853,7 +853,7 @@ async function _savePanelSong(formId, isNew, realSid) {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body:    JSON.stringify([Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]),
       });
-      if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+      if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
       if (!r.ok) throw new Error('save failed');
       targetId = String(realSid);
     }
@@ -1438,7 +1438,7 @@ async function deleteRow(sid) {
 
   if (!confirm(t('songs.confirmDeleteSong'))) return;
 
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   const r = await fetch(`/api/${artistSlug}/songs/${sid}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
@@ -1451,7 +1451,7 @@ async function deleteRow(sid) {
     songs = songs.filter(s => String(s.id) !== String(sid));
     if (dirty.size === 0) _setBulkStatus('', '');
   } else if (r.status === 401) {
-    if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); }
+    if (!isViewMode()) { clearToken(); requireLogin(); }
   } else {
     _setBulkStatus('error', t('songs.couldNotDeleteSong'));
   }
@@ -1466,7 +1466,7 @@ function discardAll() {
 }
 
 async function saveAll() {
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   const bad = [...document.querySelectorAll('#tbody input[type="number"]')].find(i => !i.checkValidity());
@@ -1496,7 +1496,7 @@ async function saveAll() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(toUpdate),
       });
-      if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+      if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
       if (!r.ok) throw new Error('patch failed');
       // Rows the server refused: say so instead of reporting a silent success.
       rejected = (await r.json().catch(function() { return {}; })).rejected || [];
@@ -1560,7 +1560,7 @@ function renderLogs(logs) {
   if (!el) return;
   if (!logs.length) { el.innerHTML = ''; return; }
 
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   const items = logs.map(log => {
     const title = log.song_data?.title ?? '(unknown)';
     const badge = log.action === 'create' ? 'log-create'
@@ -1584,13 +1584,13 @@ function renderLogs(logs) {
 }
 
 async function restoreSong(songId) {
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   if (!token) return;
   const r = await fetch(`/api/${artistSlug}/songs/${songId}/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
   });
-  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
   if (r.ok) {
     invalidateConfigCache();
     await loadAndRender();
@@ -1752,14 +1752,14 @@ async function _panelUploadHandler(input, sid, mediaType) {
 //   'storage' — PUT to storage failed
 //   'confirm' — confirm request failed
 async function _uploadSongMedia(sid, type, file) {
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   var contentType = type === 'sheet' ? 'application/pdf' : file.type;
   var r = await fetch('/api/' + artistSlug + '/songs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body: JSON.stringify({ upload_presign_id: sid, upload_type: type, filename: file.name, contentType: file.type, size: file.size }),
   });
-  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } throw new Error('auth'); }
+  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
   if (!r.ok) throw new Error('presign');
 
   var json = await r.json();
@@ -1771,7 +1771,7 @@ async function _uploadSongMedia(sid, type, file) {
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body: JSON.stringify({ media_confirm_id: sid, media_type: type, publicUrl: json.publicUrl }),
   });
-  if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } throw new Error('auth'); }
+  if (confirm.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
   if (!confirm.ok) throw new Error('confirm');
 
   // Media URLs live in songs.extra, which the cached config payload carries.
@@ -1896,10 +1896,10 @@ async function confirmDeleteAudio() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ media_delete_id: sid, media_type: 'audio' }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveAudio')); return; }
     invalidateConfigCache();
 
@@ -2082,10 +2082,10 @@ async function confirmDeleteSheet() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ media_delete_id: sid, media_type: 'sheet' }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveSheet')); return; }
     invalidateConfigCache();
 
@@ -2272,10 +2272,10 @@ async function confirmDeletePlayback() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ media_delete_id: sid, media_type: 'playback' }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemovePlayback')); return; }
     invalidateConfigCache();
 
@@ -2422,7 +2422,7 @@ async function suggestLyrics() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
+        Authorization: `Bearer ${getToken()}`,
       },
       body: JSON.stringify({ lyrics_suggest_id: currentLyricsSid }),
       signal: _lyricsSuggestAbort.signal,
@@ -2501,10 +2501,10 @@ async function saveLyrics() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ lyrics_update_id: sid, lyrics: text }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closeLyrics(); return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } closeLyrics(); return; }
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       const msg = body.error ?? t('songs.saveFailedStatus', { status: r.status });
@@ -2570,10 +2570,10 @@ async function confirmDeleteLyrics() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ lyrics_delete_id: sid }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotDeleteLyrics')); return; }
     invalidateConfigCache();
 

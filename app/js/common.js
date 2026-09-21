@@ -803,6 +803,14 @@ function getToken() {
   return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || null;
 }
 
+// Remember-me keeps the token in localStorage, a normal login in sessionStorage —
+// clearing one store alone leaves a half-logged-in state where actions fail silently.
+function clearToken() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem('setlist_token');
+}
+
 function getAuthRole() {
   var tok = getToken();
   if (!tok) return null;

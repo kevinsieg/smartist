@@ -533,7 +533,7 @@ function uploadFavicon(file) {
   var progress = document.getElementById('favicon-progress');
   progress.textContent = t('settings.gettingUploadUrl');
   fetch('/api/config?action=favicon-url&type=' + encodeURIComponent(file.type), {
-    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
+    headers: { 'Authorization': 'Bearer ' + getToken() },
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -585,7 +585,7 @@ function uploadPhoto(file) {
   var progress = document.getElementById('photo-progress');
   progress.textContent = t('settings.gettingUploadUrl');
   fetch('/api/config?action=photo-url&type=' + encodeURIComponent(file.type), {
-    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem(AUTH_TOKEN_KEY) },
+    headers: { 'Authorization': 'Bearer ' + getToken() },
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {

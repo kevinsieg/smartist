@@ -794,7 +794,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   });
 
   if (r.status === 401) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    clearToken();
     localStorage.removeItem(AUTH_TOKEN_KEY);
     document.getElementById('save-step').style.display = 'none';
     document.getElementById('auth-step').style.display = 'block';
@@ -1349,7 +1349,7 @@ async function _saveHistEdit(sid) {
     });
 
     if (r.status === 401) {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       var errEl3 = document.getElementById('hist-edit-error');
       if (errEl3) { errEl3.textContent = t('setlist.editSessionExpired'); errEl3.className = 'status-msg error'; }
@@ -1676,7 +1676,7 @@ async function _histShareSend(sid) {
     });
 
     if (r.status === 401) {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       if (st) { st.textContent = t('setlist.shareWrongPassword'); st.className = 'status-msg error'; }
       if (btn) { btn.disabled = false; btn.textContent = t('setlist.shareSendBtn'); }
@@ -1722,7 +1722,7 @@ async function _histDuplicate(sid) {
     });
 
     if (r.status === 401) {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = t('setlist.duplicateTooltip'); }
       return;
