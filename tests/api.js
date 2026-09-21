@@ -361,14 +361,14 @@ async function testGigs(slug) {
 
   if (firstGig) {
     await test('GET /:id returns gig', async () => {
-      const { res, json } = await GET(`/api/${slug}/gigs/${firstGig.id}`);
+      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}`);
       assertStatus(res, json, 200);
       assert(json.id === firstGig.id, 'id mismatch');
       assert('title' in json, 'missing title');
     });
 
     await test('GET /:id?refs=1 returns gig with setlists/venue/organizer', async () => {
-      const { res, json } = await GET(`/api/${slug}/gigs/${firstGig.id}?refs=1`);
+      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}&refs=1`);
       assertStatus(res, json, 200);
       assert('gig' in json && 'refs' in json, 'missing gig or refs');
       assert(Array.isArray(json.refs.setlists), 'refs.setlists should be array');
@@ -378,12 +378,12 @@ async function testGigs(slug) {
   }
 
   await test('GET /:id with id=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs/0`);
+    const { res, json } = await GET(`/api/${slug}/gigs?id=0`);
     assertStatus(res, json, 400);
   });
 
   await test('GET /:id not found → 404', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs/999999999`);
+    const { res, json } = await GET(`/api/${slug}/gigs?id=999999999`);
     assertStatus(res, json, 404);
   });
 
@@ -610,19 +610,21 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
-  // Gigs, venues, organizers auth
+  // Gigs, venues, organizers auth. A single gig is addressed as ?id=N — gigs.js serves
+  // the collection and the item in one serverless function.
   for (const resource of ['gigs', 'venues', 'organizers']) {
     const body = resource === 'gigs' ? { title: 'x' } : { name: 'x' };
+    const itemUrl = resource === 'gigs' ? `/api/${slug}/gigs?id=1` : `/api/${slug}/${resource}/1`;
     await test(`POST /${resource} without token → 401`, async () => {
       const { res, json } = await POST(`/api/${slug}/${resource}`, body);
       assertStatus(res, json, 401);
     });
-    await test(`PUT /${resource}/:id without token → 401`, async () => {
-      const { res, json } = await PUT(`/api/${slug}/${resource}/1`, body);
+    await test(`PUT /${resource} item without token → 401`, async () => {
+      const { res, json } = await PUT(itemUrl, body);
       assertStatus(res, json, 401);
     });
-    await test(`DELETE /${resource}/:id without token → 401`, async () => {
-      const { res, json } = await DELETE(`/api/${slug}/${resource}/1`);
+    await test(`DELETE /${resource} item without token → 401`, async () => {
+      const { res, json } = await DELETE(itemUrl);
       assertStatus(res, json, 401);
     });
   }
@@ -1253,7 +1255,10 @@ async function testWrite(slug, token, firstSong, config) {
 // Shared factory: create → validate → update → GET verify → soft-delete →
 // 409 on modify → hard-delete cleanup. Parameterised on resource + payloads.
 
-async function testCrudLifecycle(slug, token, config, { resource, createBody, invalidBody, updateBody, labelField }) {
+// itemUrl: gigs live in the collection handler (one function for both), so a single gig is
+// addressed as ?id=N; venues and organizers have their own catch-all and keep /:id.
+async function testCrudLifecycle(slug, token, config, { resource, createBody, invalidBody, updateBody, labelField,
+                                                        itemUrl = (id, qs = '') => `/api/${slug}/${resource}/${id}${qs}` }) {
   console.log(B(`\nWrite ops — ${resource}`));
 
   if (!planHas(config, resource)) {
@@ -1283,7 +1288,7 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
   if (!item) return;
 
   await test(`PUT /${resource}/:id updates → 200`, async () => {
-    const { res, json } = await PUT(`/api/${slug}/${resource}/${item.id}`, updateBody, { token });
+    const { res, json } = await PUT(itemUrl(item.id), updateBody, { token });
     assertStatus(res, json, 200);
     assert(json[labelField] === updateBody[labelField], `${labelField} not updated`);
     item = json;
@@ -1292,25 +1297,24 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
   await test(`GET /${resource}/:id reflects update → 200`, async () => {
     // Authenticated read: venue/organizer GET-by-id is owner-scoped (CRM data),
     // and public venue reads require a public status the [TEST] row doesn't set.
-    const { res, json } = await GET(`/api/${slug}/${resource}/${item.id}`, { token });
+    const { res, json } = await GET(itemUrl(item.id), { token });
     assertStatus(res, json, 200);
     assert(json[labelField] === updateBody[labelField], `${labelField} not reflected`);
   });
 
   await test(`DELETE /${resource}/:id soft-delete → 200`, async () => {
-    const { res, json } = await DELETE(`/api/${slug}/${resource}/${item.id}`, { token });
+    const { res, json } = await DELETE(itemUrl(item.id), { token });
     assertStatus(res, json, 200);
     assert(json.deleted === true, 'expected deleted:true on soft-deleted row');
   });
 
   await test(`PUT /${resource}/:id after soft-delete → 409`, async () => {
-    const { res, json } = await PUT(`/api/${slug}/${resource}/${item.id}`, updateBody, { token });
+    const { res, json } = await PUT(itemUrl(item.id), updateBody, { token });
     assertStatus(res, json, 409);
   });
 
   await test(`DELETE /${resource}/:id hard cleanup → 200`, async () => {
-    const { res, json } = await DELETE(`/api/${slug}/${resource}/${item.id}`,
-      { body: { hard: true }, token });
+    const { res, json } = await DELETE(itemUrl(item.id), { body: { hard: true }, token });
     assertStatus(res, json, 200);
     assert(json.deleted === true && json.hard === true, 'expected deleted+hard:true');
   });
@@ -1365,6 +1369,7 @@ async function main() {
     await testCrudLifecycle(slug, PASSWORD, config, {
       resource: 'gigs',
       labelField: 'title',
+      itemUrl: (id, qs = '') => `/api/${slug}/gigs?id=${id}${qs.replace('?', '&')}`,
       createBody:  { title: '[TEST] Gig', date: '2099-12-31' },
       invalidBody: { date: '2099-12-31' },
       updateBody:  { title: '[TEST] Gig updated', date: '2099-12-31' },

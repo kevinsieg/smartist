@@ -59,14 +59,13 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 
 ---
 
-## Serverless functions (12 — Hobby plan limit)
+## Serverless functions (11 of 12 — Hobby plan limit)
 
 | File | Routes |
 |------|--------|
 | `api/config.js` | `GET /api/config` (returns `plan`+`usage`); `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `POST ?action=upgrade|downgrade` (self-serve plan seam — see Plans); `GET ?action=admin-overview` / `POST ?action=admin-set-plan` (super-admin); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (via `/auth/callback` rewrite); `GET ?action=photo-url` (presigned upload) |
 | `api/[artist]/auth.js` | `POST /api/:artist/auth` (login); `POST ?action=invite\|resend-invite\|accept-invite\|change-password`; `GET` (list users), `PUT` (role only — login email is the cross-workspace identity and is never admin-editable), `DELETE` — admin; `POST /api/:artist/request-reset` (via rewrite) |
-| `api/[artist]/gigs.js` | `GET/POST /api/:artist/gigs` |
-| `api/[artist]/gigs/[id].js` | `GET/PUT/DELETE /api/:artist/gigs/:id` |
+| `api/[artist]/gigs.js` | `GET/POST /api/:artist/gigs`; `GET/PUT/DELETE /api/:artist/gigs/:id` and the poster actions (via the `/api/:artist/gigs/:id` → `?id=:id` rewrite — one function for both) |
 | `api/[artist]/organizers.js` | `GET/POST /api/:artist/organizers` |
 | `api/[artist]/organizers/[...path].js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
 | `api/[artist]/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
@@ -173,7 +172,7 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 - **Self-serve upgrade seam:** `POST /api/config?action=upgrade` — today flips `config.plan=pro` + sets `upgradedAt`, returns `{mode:'self-serve'}`; later returns `{mode:'checkout', url}` and lets a webhook set the plan. `settings.js renderPlan` branches on `mode`. `POST ?action=downgrade` sets `plan=free` (keeps `upgradedAt`). `PATCH /api/config` strips `plan`/`upgradedAt` — plan state changes only through these actions or `admin-set-plan`. **This is the swap point for paid billing — no other code changes.**
 - **Super-admin:** `/admin` page + `?action=admin-overview`/`admin-set-plan`, gated by `SUPER_ADMIN_EMAILS` (allowlist via global user token, email from DB). Manual grants also via `scripts/plans.js`.
 - **Support/donations (live now):** `SUPPORT_LINKS` constant in `common.js` (provider-agnostic; empty-url entries skipped; optional `img` for official brand buttons loaded as `<img>` — third-party `button.js` is **not** used, CSP blocks it). `renderSupportLinks(el)` renders them in the footer + the Settings donation panel shown after a self-serve upgrade. i18n: `support.label`, `settings.plan.donatePrompt`.
-- **Specs in `docs/`:** `2026-06-27-subscription-tiers-design.md` (tiers), `…-billing-lemonsqueezy-design.md` (**parked** paid rollout — Lemon Squeezy MoR; needs one webhook function freed by merging `gigs/[id].js`→`gigs.js`; client-set `plan` is already locked down), `…-support-links-design.md` (current donations + upgrade seam).
+- **Specs in `docs/`:** `2026-06-27-subscription-tiers-design.md` (tiers), `…-billing-lemonsqueezy-design.md` (**parked** paid rollout — Lemon Squeezy MoR; the webhook function is free since `gigs/[id].js` was merged into `gigs.js`; client-set `plan` is already locked down), `…-support-links-design.md` (current donations + upgrade seam).
 
 ---
 
