@@ -28,7 +28,7 @@ function makeSqlStub(responders = []) {
   return sql;
 }
 
-function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST } = {}) {
+function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, authFails = false } = {}) {
   const dbPath       = require.resolve(path.join(__dirname, '../../api/_db'));
   const authPath     = require.resolve(path.join(__dirname, '../../api/_auth'));
   const tokenPath    = require.resolve(path.join(__dirname, '../../api/_token'));
@@ -54,6 +54,9 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST } =
     exports: {
       checkCredentials: async () => false,
       requireAuth: async (req, res) => {
+        // authFails mirrors the real helper: it writes 401 and returns null, so any branch
+        // placed after the gate becomes unreachable without a session.
+        if (authFails) { res.status(401).json({ error: 'Unauthorized' }); return null; }
         req.user = user;
         return artist;
       },
@@ -259,6 +262,32 @@ async function run(r) {
     assertEq(res.statusCode, 400);
     assertEq(res._body, { error: 'Cannot remove yourself' });
     assertEq(sql.calls.length, 0);
+  });
+
+  // The confirmation link is clicked from an inbox, so there is no session. The branch
+  // must sit before the requireAuth gate or the whole email change is unreachable.
+  await testAsync('POST confirm-email-change answers without a session', async () => {
+    const sql = makeSqlStub();
+    const handler = makeHandler({ sql, authFails: true });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', {}), res);
+
+    assertEq(res.statusCode, 400);
+    assertEq(res._body, { error: 'token required' });
+  });
+
+  await testAsync('POST confirm-email-change rejects an unknown token without a session', async () => {
+    const sql = makeSqlStub([
+      { match: text => text.includes('SELECT id, email, pending_email FROM users'), rows: () => [] },
+    ]);
+    const handler = makeHandler({ sql, authFails: true });
+    const res = mockRes();
+
+    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: 'e'.repeat(64) }), res);
+
+    assertEq(res.statusCode, 400);
+    assertEq(res._body, { error: 'Invalid or expired link' });
   });
 
   await testAsync('POST request-email-change rejects a wrong current password', async () => {
