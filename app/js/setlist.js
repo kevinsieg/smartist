@@ -724,7 +724,7 @@ document.getElementById('password-input').addEventListener('keydown', e => {
 
 async function loadGigs() {
   try {
-    const r = await fetch(`/api/${artistSlug}/gigs?limit=500`);
+    const r = await apiFetch(`/api/${artistSlug}/gigs?limit=500`);
     if (!r.ok) return;
     const { rows } = await r.json();
     const sel = document.getElementById('gig-select');
@@ -977,7 +977,7 @@ async function _renderHistoryTab() {
   if (!_histLoaded) {
     try {
       var setsRes = await apiFetch('/api/' + artistSlug + '/setlists');
-      var gigsRes = await fetch('/api/' + artistSlug + '/gigs?limit=500');
+      var gigsRes = await apiFetch('/api/' + artistSlug + '/gigs?limit=500');
       _histSets = await setsRes.json();
       if (!Array.isArray(_histSets)) _histSets = [];
       var gigsData = await gigsRes.json();

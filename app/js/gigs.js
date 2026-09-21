@@ -450,7 +450,7 @@ async function _runGigSongFilter(q) {
     try {
       var results = await Promise.all(
         matchingSongs.map(function(s) {
-          return fetch('/api/' + artistSlug + '/songs/' + s.id + '/setlists').then(function(r) { return r.json(); });
+          return apiFetch('/api/' + artistSlug + '/songs/' + s.id + '/setlists').then(function(r) { return r.ok ? r.json() : []; });
         })
       );
       var setlistIds = new Set(results.reduce(function(acc, objs) { return acc.concat(objs.map(function(o) { return o.id; })); }, []));

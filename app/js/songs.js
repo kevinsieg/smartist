@@ -115,7 +115,7 @@ async function fetchSongsList(reset) {
     offset: String(_songsOffset),
     active: '1',
   });
-  const r = await fetch(`/api/${artistSlug}/songs?${params}`);
+  const r = await apiFetch(`/api/${artistSlug}/songs?${params}`);
   if (!r.ok) throw new Error('songs fetch failed');
   _applySongsResponse(await r.json(), reset);
 }
@@ -287,13 +287,13 @@ async function _applySetlistById(id) {
   // Ensure metadata cache is populated so we can show the name in the filter input
   if (!_allSetlistsMeta) {
     try {
-      var r = await fetch('/api/' + artistSlug + '/setlists');
-      _allSetlistsMeta = await r.json();
+      var r = await apiFetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = r.ok ? await r.json() : [];
       if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
     } catch { _allSetlistsMeta = []; }
   }
   try {
-    var detail = await fetch('/api/' + artistSlug + '/setlists/' + id).then(function(r) { return r.json(); });
+    var detail = await apiFetch('/api/' + artistSlug + '/setlists/' + id).then(function(r) { return r.ok ? r.json() : {}; });
     var songsList = Array.isArray(detail) ? detail : (detail.songs || []);
     songsList = songsList.slice().sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
     _setlistFilterOrder = songsList.map(function(s) { return s.id; });
@@ -343,8 +343,8 @@ function renderTable() {
 async function _resolveSetlistFilter(q) {
   if (!_allSetlistsMeta) {
     try {
-      var r = await fetch('/api/' + artistSlug + '/setlists');
-      _allSetlistsMeta = await r.json();
+      var r = await apiFetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = r.ok ? await r.json() : [];
       if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
     } catch { _allSetlistsMeta = []; }
   }
@@ -354,8 +354,8 @@ async function _resolveSetlistFilter(q) {
   if (!matches.length) return new Set();
 
   try {
-    var detail = await fetch('/api/' + artistSlug + '/setlists/' + matches[0].id)
-      .then(function(r) { return r.json(); });
+    var detail = await apiFetch('/api/' + artistSlug + '/setlists/' + matches[0].id)
+      .then(function(r) { return r.ok ? r.json() : {}; });
     var songsList = Array.isArray(detail) ? detail : (detail.songs || []);
     return new Set(songsList.map(function(s) { return s.id; }));
   } catch {
@@ -563,7 +563,7 @@ function _openSongPanelContent(item, panelEl) {
 
   // Async: arrangement table (auth-only, active version only)
   if (!_viewMode && song.has_arrangement) {
-    fetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
+    apiFetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
       .then(function(r) { return r.json(); })
       .then(function(versions) {
         var active = versions.find(function(v) { return v.is_active; });
@@ -586,8 +586,9 @@ function _openSongPanelContent(item, panelEl) {
   }
 
   // Async: setlist count
-  fetch('/api/' + artistSlug + '/songs?setlists=' + sid)
-    .then(function(r) { return r.json(); })
+  // apiFetch, not fetch: this endpoint needs the token in a private workspace.
+  apiFetch('/api/' + artistSlug + '/songs?setlists=' + sid)
+    .then(function(r) { return r.ok ? r.json() : []; })
     .then(function(ids) {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (!linkEl) return;
@@ -738,7 +739,7 @@ function _openSongEditForm(sid, panelEl) {
   if (!isNew && song.has_arrangement) {
     var _editArrSid = String(sid);
     var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
-    fetch('/api/' + artistSlug + '/songs/' + _editArrSid + '/arrangements')
+    apiFetch('/api/' + artistSlug + '/songs/' + _editArrSid + '/arrangements')
       .then(function(r) { return r.json(); })
       .then(function(versions) {
         var active = versions.find(function(v) { return v.is_active; });
@@ -930,8 +931,8 @@ function _closeNewSongPanel() {
 async function _applySetlistByIdForView(id) {
   if (!_allSetlistsMeta) {
     try {
-      var r = await fetch('/api/' + artistSlug + '/setlists');
-      _allSetlistsMeta = await r.json();
+      var r = await apiFetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = r.ok ? await r.json() : [];
       if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
     } catch { _allSetlistsMeta = []; }
   }
@@ -1486,7 +1487,7 @@ async function loadLogs() {
   const el = document.getElementById('logs-section');
   if (!el || !artistSlug) return;
   try {
-    const logs = await fetch(`/api/${artistSlug}/song-logs`).then(r => r.json());
+    const logs = await apiFetch(`/api/${artistSlug}/song-logs`).then(r => r.ok ? r.json() : []);
     renderLogs(logs);
   } catch {
     el.innerHTML = '';
@@ -1557,7 +1558,7 @@ async function openAppearances(songId) {
   modal.classList.add('open');
 
   try {
-    const data = await fetch(`/api/${artistSlug}/songs?setlists=${songId}`).then(r => r.json());
+    const data = await apiFetch(`/api/${artistSlug}/songs?setlists=${songId}`).then(r => r.ok ? r.json() : []);
     if (!data.length) {
       list.innerHTML = '<p class="appearance-empty">' + t('songs.notInAnySetlist') + '</p>';
       return;
@@ -1597,7 +1598,7 @@ async function openGema(songId) {
   content.innerHTML = '<p class="gema-loading">' + t('songs.loading') + '</p>';
   modal.classList.add('open');
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${songId}/gema`);
+    const r = await apiFetch(`/api/${artistSlug}/songs/${songId}/gema`);
     const { works, rightholders } = await r.json();
     content.innerHTML = works.length ? renderGemaContent(works, rightholders) : '<p class="gema-loading">' + t('songs.noGemaLinked') + '</p>';
   } catch {
@@ -1808,7 +1809,7 @@ function openPlayer(sid) {
   document.getElementById('player-history').innerHTML = '';
 
   // Fetch audio history for this song
-  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
+  apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderPlayerHistory)
     .catch(() => {});
@@ -1904,7 +1905,7 @@ async function handleReplaceFile(input) {
     } else {
       content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
     }
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
+    apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.audioReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
@@ -1994,7 +1995,7 @@ function openSheet(sid) {
   if (getToken()) document.getElementById('sheet-delete-btn').style.display = '';
   document.getElementById('sheet-history').innerHTML = '';
 
-  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
+  apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderSheetHistory)
     .catch(() => {});
@@ -2080,7 +2081,7 @@ async function handleReplaceSheet(input) {
     const td = document.querySelector(`#row-${sid} .sheet-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
+    apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.sheetReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
@@ -2184,7 +2185,7 @@ function openPlayback(sid) {
   if (getToken()) document.getElementById('playback-delete-btn').style.display = '';
   document.getElementById('playback-history').innerHTML = '';
 
-  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
+  apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderPlaybackHistory)
     .catch(() => {});
@@ -2271,7 +2272,7 @@ async function handleReplacePlayback(input) {
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('playback-content').innerHTML =
       `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
+    apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.playbackReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
