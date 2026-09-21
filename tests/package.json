@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node api.js",
-    "test:unit": "node unit.js && node history-client.js && node home-client.js && node viewmode-client.js",
+    "test:unit": "npm --prefix .. run test:unit",
     "test:e2e": "node e2e-signup.js",
     "test:dev": "BASE_URL=https://smartist-git-dev.vercel.app node api.js",
     "test:prod": "BASE_URL=https://smartist.salmons.fr node api.js"
