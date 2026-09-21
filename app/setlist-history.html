@@ -11,8 +11,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
-    <link rel="stylesheet" href="/app/css/app.css?v=29">
-    <script src="/app/js/i18n.js?v=11"></script>
+    <link rel="stylesheet" href="/app/css/app.css?v=31">
+    <script src="/app/js/i18n.js?v=12"></script>
 </head>
 <body>
 
@@ -48,7 +48,7 @@
             <div id="print-header">
                 <img alt="" class="app-logo-img">
                 <div id="print-meta">
-                    <p id="print-setlist-title" style="margin:0;font-family:'Courier New',monospace;font-size:10pt;"></p>
+                    <p id="print-setlist-title" style="margin:0;font-family:var(--font-mono);font-size:10pt;"></p>
                     <p id="print-timestamp" style="margin:0;"></p>
                 </div>
             </div>
@@ -124,7 +124,7 @@
       <div class="modal-field">
         <label data-i18n="nav.songs">Songs</label>
         <ul class="edit-song-list" id="edit-song-list"></ul>
-        <select id="edit-add-song" onchange="editAddSong(this)" style="margin-top:0.4rem;width:100%;font-family:'Courier New',monospace;font-size:0.82rem;padding:0.3rem 0.5rem;border:1px dashed rgba(160,156,147,0.4);border-radius:4px;background:transparent;color:var(--third-color);cursor:pointer;">
+        <select id="edit-add-song" onchange="editAddSong(this)" style="margin-top:0.4rem;width:100%;font-family:var(--font-mono);font-size:0.82rem;padding:0.3rem 0.5rem;border:1px dashed rgba(160,156,147,0.4);border-radius:4px;background:transparent;color:var(--third-color);cursor:pointer;">
           <option value="" data-i18n="setlist.addSongPlaceholder">+ add a song…</option>
         </select>
       </div>
