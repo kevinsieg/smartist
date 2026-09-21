@@ -39,12 +39,14 @@ module.exports = wrap(async function handler(req, res) {
 
     if (req.query.all) {
       const statusFilter = req.query.status ? req.query.status.toLowerCase() : null;
-      // Map payload: no comment (private CRM notes) and no audit columns.
+      // Map payload: no comment (private CRM notes) and no audit columns, and only
+      // venues that can actually be placed — a row without coordinates is dead weight.
       const venues = await sql`
         SELECT id, name, street_number, street, city, postcode, country,
                category, status, size, lat, lng
         FROM venues
         WHERE artist_id = ${artist.id} AND deleted = false
+          AND lat IS NOT NULL AND lng IS NOT NULL
           AND (${statusFilter}::text IS NULL OR LOWER(status) = ${statusFilter})
           AND (NOT ${viewOnly} OR LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES}))
         ORDER BY name ASC
