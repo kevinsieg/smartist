@@ -504,7 +504,7 @@ function _openSongPanelContent(item, panelEl) {
   var harp    = getVal(song, 'extra.harp');
   var perfCells =
     (key     ? _vspCell(t('songs.fieldKey'),        escHtml(String(key)))     : '') +
-    (energy  ? _vspCell(t('songs.fieldEnergy'),     escHtml(String(energy)))  : '') +
+    (energy  ? _vspCell(t('songs.fieldEnergy'),     escHtml(energyLabel(energy))) : '') +
     (timeSig ? _vspCell(t('songs.fieldTimeSig'),    escHtml(String(timeSig))) : '') +
     (bpm     ? _vspCell(t('songs.fieldBpm'),        escHtml(String(bpm)))     : '') +
     (len     ? _vspCell(t('songs.fieldLength'),     escHtml(len))             : '') +
@@ -1043,7 +1043,7 @@ function renderListRowHtml(s) {
   var interp    = escHtml(s.interpret || '');
   var genre     = escHtml(s.genre || '');
   var key       = escHtml(String(getVal(s, 'key') || ''));
-  var tempo     = escHtml(String(getVal(s, 'energy') || ''));
+  var tempo     = escHtml(energyLabel(getVal(s, 'energy')));
   var hasListen = !!getVal(s, 'extra.listenUrl');
   var hasLyrics = !!(String(getVal(s, 'extra.lyrics') || '').trim());
 

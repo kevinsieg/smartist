@@ -10,8 +10,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
-    <link rel="stylesheet" href="/app/css/app.css?v=33">
-    <script src="/app/js/i18n.js?v=14"></script>
+    <link rel="stylesheet" href="/app/css/app.css?v=34">
+    <script src="/app/js/i18n.js?v=15"></script>
     <style>
         /* Songs page needs full-width layout, not max-width 960px */
         .songs-page .app-wrap { max-width: 100%; }
@@ -183,31 +183,37 @@
             .filter-bar-row2 {
                 display: flex;
                 align-items: center;
-                gap: 0.35rem;
-                padding: 0 1rem 0.5rem;
+                gap: 0.4rem 0.45rem;
+                padding: 0.1rem 1.25rem 0.85rem;
+                border-top: 1px solid rgba(214,205,192,0.5);
+                margin-top: 0.15rem;
+                padding-top: 0.7rem;
                 flex-wrap: wrap;
             }
             .filter-genre-label {
-                font-size: 0.72rem;
-                color: var(--third-color);
-                margin-right: 0.1rem;
+                font-size: var(--text-xs);
+                color: var(--muted-ink);
+                margin-right: 0.35rem;
             }
             .genre-chip {
-                padding: 0.2rem 0.65rem;
-                font-size: 0.78rem;
+                padding: 0.25rem 0.7rem;
+                font-size: var(--text-xs);
                 border: 1px solid var(--border-color);
-                border-radius: 20px;
-                background: #fff;
+                border-radius: 999px;
+                background: var(--bg-color);
                 cursor: pointer;
-                color: var(--third-color);
+                color: var(--muted-ink);
                 font-family: inherit;
-                line-height: 1.4;
+                line-height: 1.5;
+                transition: background 120ms, color 120ms, border-color 120ms;
             }
+            .genre-chip:hover { border-color: var(--secondary-ink); color: var(--secondary-ink); }
             .genre-chip--active {
-                background: var(--secondary-color);
-                color: #fff;
-                border-color: var(--secondary-color);
+                background: var(--secondary-ink);
+                color: var(--primary-color);
+                border-color: var(--secondary-ink);
             }
+            .genre-chip--active:hover { color: var(--primary-color); }
         }
     </style>
 </head>

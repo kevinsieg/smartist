@@ -8,6 +8,7 @@ const vm = require('vm');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(REPO_ROOT, 'app/js/songs.js'), 'utf8');
+const COMMON = fs.readFileSync(path.join(REPO_ROOT, 'app/js/common.js'), 'utf8');
 
 const G = s => `\x1b[32m${s}\x1b[0m`;
 const R = s => `\x1b[31m${s}\x1b[0m`;
@@ -59,6 +60,15 @@ function load(songs) {
   return context;
 }
 
+// energyLabel lives in common.js and is used by the songs list, panel and setlist page.
+function loadEnergyLabel() {
+  const context = { console, t: key => ({ 'songs.energyLow': 'low', 'songs.energyMiddle': 'middle',
+                                          'songs.energyHigh': 'high' }[key] || key) };
+  vm.createContext(context);
+  vm.runInContext(`${extractFunction(COMMON, 'energyLabel')}; this.fn = energyLabel;`, context);
+  return context.fn;
+}
+
 const SONGS = [
   { id: 1, title: 'Ab in die Welt',  interpret: 'Kevin Klang', genre: 'World',  active: true },
   { id: 2, title: 'Wonderwall',      interpret: 'Oasis',       genre: 'Pop',    active: true },
@@ -96,6 +106,38 @@ const SONGS = [
 
   test('interpret filter narrows the genres', () => {
     assertEq(genres({ interpret: 'oasis' }), ['Pop']);
+  });
+
+  console.log(B('\nsongs: energy shown as low/middle/high'));
+
+  const energyLabel = loadEnergyLabel();
+
+  test('1-3 is low, 4-7 middle, 8-10 high', () => {
+    assertEq([1, 2, 3].map(energyLabel), ['low', 'low', 'low']);
+    assertEq([4, 5, 7].map(energyLabel), ['middle', 'middle', 'middle']);
+    assertEq([8, 9, 10].map(energyLabel), ['high', 'high', 'high']);
+  });
+
+  test('accepts the value as a string, as it comes from the API', () => {
+    assertEq(energyLabel('5'), 'middle');
+    assertEq(energyLabel(' 9 '), 'high');
+  });
+
+  test('values outside 1-10 still land in a band', () => {
+    assertEq(energyLabel(0), 'low');
+    assertEq(energyLabel(99), 'high');
+  });
+
+  test('words are left untouched', () => {
+    assertEq(energyLabel('Fast'), 'Fast');
+    assertEq(energyLabel('Slow'), 'Slow');
+    assertEq(energyLabel('Medium'), 'Medium');
+  });
+
+  test('empty stays empty', () => {
+    assertEq(energyLabel(''), '');
+    assertEq(energyLabel(null), '');
+    assertEq(energyLabel(undefined), '');
   });
 
   const total = passed + failed;

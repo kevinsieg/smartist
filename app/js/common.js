@@ -475,6 +475,19 @@ function _isTokenExpired(token) {
   } catch (_) { return false; }                            // unparseable → plain password
 }
 
+// Energy is stored as free text: 1–10 from the imported database, or a word like "Fast".
+// Numbers read better as three bands; words are shown as they are. Display only — the
+// stored value is untouched, and setlist.js still scores on the exact number.
+function energyLabel(value) {
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  var n = Number(raw);
+  if (!isFinite(n) || raw === '') return raw;
+  if (n <= 3) return t('songs.energyLow');
+  if (n <= 7) return t('songs.energyMiddle');
+  return t('songs.energyHigh');
+}
+
 // Narrow viewport: table-style editing is desktop-only (songs bulk edit, venues bulk edit).
 function isMobile() { return window.innerWidth <= 1024; }
 

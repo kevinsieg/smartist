@@ -464,7 +464,7 @@ function renderResult(songs) {
       s(song.extra?.lead || '',  'extra.lead',   t('setlist.leadTitle')),
       s(song.key ? formatKey(song.key) : '',  'key',           t('setlist.keyTitle')),
       capoSpan,
-      s(song.energy       || '',  'energy',        t('setlist.energyTitle')),
+      s(energyLabel(song.energy), 'energy',        t('setlist.energyTitle')),
       s(song.genre       || '',  'genre',         t('setlist.genreTitle')),
       song.extra?.harp ? s(t('setlist.harmonica'), 'extra.harp', t('setlist.harmonicaTitle')) : '',
       song.extra?.git2 ? s(t('setlist.guitar2'),   'extra.git2', t('setlist.guitar2Title')) : '',
