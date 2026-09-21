@@ -10,13 +10,13 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=29">
-  <script src="/app/js/i18n.js?v=10"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=36">
+  <script src="/app/js/i18n.js?v=18"></script>
   <style>
     .touring-wrap { max-width: 960px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 
     .wip-bar { display: flex; align-items: center; gap: 0.75rem; background: var(--primary-color); border: 1px solid var(--secondary-color); border-radius: 4px; padding: 0.6rem 1rem; margin-bottom: 1.75rem; font-size: 0.78rem; color: var(--third-color); }
-    .wip-badge { font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase; background: var(--secondary-color); color: var(--white); padding: 2px 8px; border-radius: 3px; white-space: nowrap; }
+    .wip-badge { font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase; background: var(--secondary-color); color: var(--white); padding: 2px 8px; border-radius: var(--radius-sm); white-space: nowrap; }
 
     .tour-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
 
@@ -25,7 +25,7 @@
     .tp-icon { width: 36px; height: 36px; border-radius: 4px; background: var(--primary-color); border: 1px solid var(--secondary-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; opacity: 0.7; }
     .tp-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.15rem; }
     .tp-desc { font-size: 0.73rem; color: var(--third-color); line-height: 1.45; }
-    .tp-status { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--third-color); border: 1px solid #e0e0e0; border-radius: 3px; padding: 2px 6px; }
+    .tp-status { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--third-color); border: 1px solid #e0e0e0; border-radius: var(--radius-sm); padding: 2px 6px; }
     .tour-panel .tp-action { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1px solid #f0f0f0; }
     .tp-action .btn { font-size: 0.68rem; padding: 0.3rem 0.7rem; opacity: 0.4; cursor: not-allowed; }
 
@@ -34,7 +34,7 @@
     .timeline-stub { border: 1px solid #e8e8e8; border-radius: 6px; background: var(--white); overflow: hidden; }
     .timeline-row { display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1.1rem; border-bottom: 1px solid #f4f4f4; }
     .timeline-row:last-child { border-bottom: none; }
-    .tl-date { font-size: 0.7rem; color: var(--third-color); width: 72px; flex-shrink: 0; font-family: 'Courier New', monospace; }
+    .tl-date { font-size: 0.7rem; color: var(--third-color); width: 72px; flex-shrink: 0; font-family: var(--font-mono); }
     .tl-dot { width: 8px; height: 8px; border-radius: 50%; background: #e0e0e0; flex-shrink: 0; }
     .tl-dot.filled { background: var(--secondary-color); opacity: 0.45; }
     .tl-info { flex: 1; }

@@ -73,7 +73,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `api/[artist]/setlists/[...path].js` | `GET/PUT /api/:artist/setlists/:id`; `GET /api/:artist/setlists/export` (via rewrite) |
 | `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite) |
 | `api/[artist]/songs/[...path].js` | `DELETE` / `restore` / `setlists` / `gema` / `lyrics` / `lyrics-suggest` / `audio` / `sheet` / `playback` / `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite) |
-| `api/[artist]/venues.js` | `GET/POST /api/:artist/venues` |
+| `api/[artist]/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
 | `api/[artist]/venues/[...path].js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
 
 **Duplicate and share are both `POST /api/:artist/setlists`** with a body field — not separate URL paths. This avoids the vercel dev multi-segment POST bug (see above).
@@ -151,6 +151,8 @@ Tables: `artists`, `songs`, `gigs`, `setlists`, `setlist_songs`, `song_logs`, `v
 
 Songs use a `deleted` flag (soft-delete). `songs.extra` JSONB holds arbitrary per-song data (`isrc`, `language`, `listenUrl`, `sheetUrl`, `playbackUrl`, `lyrics`, `capo`, …).
 
+`venues` carry CRM contact data: `phone`, `contact_name`, `generic_email`, plus `lat`/`lng` for the map.
+
 `artists.config` JSONB drives the UI: `displayFields`, `filterFields`, `logoUrl`, and `platforms` (streaming/social links managed via `/hub`). Always use JSONB `||` merge (`config || ${update}`) when patching — never overwrite the full object.
 
 Venues and organizers are CRM-style reference tables linked to gigs via `venue_id`/`organizer_id` (FK `ON DELETE RESTRICT`). Both support soft-delete (`deleted` flag).
@@ -177,12 +179,27 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 ## Client-side rules
 
+- **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A private workspace (`config.private`) answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/page_scripts.js` enforces this; `stage.js`/`arrangement.js` run without `common.js` and add the header themselves.
+- Venues list is **paged** (`limit`/`offset` + A–Z `letter`), not append-on-scroll; sorting is server-side so it covers all rows. Bulk edit (`venues_bulk_edit` in localStorage, desktop only) reloads the table on every sort, page, filter or letter change, so it asks before discarding unsaved rows (`_confirmDiscardBulk`). `PATCH` writes the whole batch in one `unnest` statement inside `sql.begin` and returns `{count, rejected:[{id,error}]}`; rejected rows are marked in the table.
+
 - `loadConfig()` in `common.js` — stale-while-revalidate via `sessionStorage` key `artist_config_cache`. First call blocks on network; subsequent calls in the same tab return immediately.
 - After any `PATCH /api/config` that changes `artists.config`, call `invalidateConfigCache()` so the next `loadConfig()` fetches fresh data.
 - Auth token: `sessionStorage.setlist_token` → `Authorization: Bearer <token>` on every mutating request.
 - **Do not call `loadLogs()` inside `renderTable()`** — `renderTable()` is also called by `discardAll()`. Logs only need refreshing after a real data change.
 - Songs table: toolbar is `position:sticky`; `table-wrap` has JS-computed `maxHeight` for independent scroll. `thead th` uses `box-shadow` instead of `border-bottom` to avoid the sticky/border-collapse disappearing-border bug.
 - OAuth login: Google/Facebook buttons appear on the login page only when `cfg.googleLogin`/`cfg.facebookLogin` are true (set from env vars). On success the server redirects to `/?magic=<token>` reusing the existing magic-link flow. Required env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `ARTIST_ADMIN_EMAIL`.
+
+---
+
+## Dates and numbers
+
+`formatDate(value, style)` and `formatTime(value)` in `common.js` are the only date formatters — no page calls `toLocaleDateString` itself (`tests/unit/page_scripts.js` enforces it). Styles: default `22.01.2026` (de) / `22/01/26` (en, fr), `'short'` without the year, `'long'` with the month spelled out. Values are read with UTC accessors because date columns arrive as UTC midnight. `stage.html` loads no `common.js` and keeps a documented copy (`_stageDate`). ISO strings stay raw in `<input type="date">` values and in the .ics export.
+
+---
+
+## Styling
+
+`app/css/app.css` holds the tokens: `--font-ui` (system sans, interface text) and `--font-mono` (song key, tempo, dates, lyrics, slugs, stage view — anything read as a grid), the type scale (`--text-xs/sm/md/base`), `--radius`/`--radius-sm`, `--control-h` (36px) and `--row-h` (32px). Page-level `<style>` blocks use these tokens rather than their own hex values and pixel sizes. **Bump the `app.css?v=` query on every page when the stylesheet changes** — same rule as `i18n.js?v=`.
 
 ---
 
@@ -216,6 +233,7 @@ node scripts/import_gema.js  --artist <slug> [--ids <csv>] [--info <csv>] [--bet
 node scripts/plans.js                                      # list bands: plan, storage used/limit, songs, users
 node scripts/plans.js --artist <slug> --plan <free|pro>   # grant/change a band's plan
 node scripts/plans.js --recount                           # recompute storage_used_bytes from R2
+node scripts/delete_artist.js --artist <slug>             # delete an artist + all its data (asks for the slug)
 ```
 
 `ARTIST_SLUG` env var targets the artist; falls back to the first artist in the DB.

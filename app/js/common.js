@@ -390,8 +390,8 @@ function printSetlistSongs(songs, title, cfg) {
   }
 
   var now = new Date();
-  var date = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-  var time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  var date = formatDate(now, 'long');
+  var time = formatTime(now);
   var tsEl = document.getElementById('print-timestamp');
   if (tsEl) tsEl.textContent = date + ' — ' + time;
 
@@ -474,6 +474,60 @@ function _isTokenExpired(token) {
     return Math.floor(Date.now() / 1000) >= parsed.exp;
   } catch (_) { return false; }                            // unparseable → plain password
 }
+
+// Full locale tag for Intl. English uses en-GB so dates stay day-first like the rest.
+function localeTag() {
+  var locale = (window.i18n && window.i18n.getLocale) ? window.i18n.getLocale() : 'en';
+  return { de: 'de-DE', fr: 'fr-FR', en: 'en-GB' }[locale] || 'en-GB';
+}
+
+// Every date in the interface goes through here — no page formats its own.
+//   default  22.01.2026 (de)   22/01/26 (en, fr)
+//   'short'  22.01.     (de)   22/01    (en, fr)
+//   'long'   22. Januar 2026 / 22 January 2026 / 22 janvier 2026
+// Accepts a date string or a full timestamp; anything unparseable renders as empty
+// rather than "Invalid Date".
+function formatDate(value, style) {
+  if (!value) return '';
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  var tag = localeTag();
+  if (style === 'long') {
+    return d.toLocaleDateString(tag, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
+  // UTC accessors: the API sends date columns as UTC midnight, and local getters would
+  // move them to the previous day for anyone behind UTC.
+  var day   = String(d.getUTCDate()).padStart(2, '0');
+  var month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  var year  = String(d.getUTCFullYear());
+  var german = tag === 'de-DE';
+  if (style === 'short') return german ? day + '.' + month + '.' : day + '/' + month;
+  return german ? day + '.' + month + '.' + year : day + '/' + month + '/' + year.slice(2);
+}
+
+// 24-hour clock in every language — the app shows set times, not wall-clock chat.
+function formatTime(value) {
+  if (!value) return '';
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+// Energy is stored as free text: 1–10 from the imported database, or a word like "Fast".
+// Numbers read better as three bands; words are shown as they are. Display only — the
+// stored value is untouched, and setlist.js still scores on the exact number.
+function energyLabel(value) {
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  var n = Number(raw);
+  if (!isFinite(n) || raw === '') return raw;
+  if (n <= 3) return t('songs.energyLow');
+  if (n <= 7) return t('songs.energyMiddle');
+  return t('songs.energyHigh');
+}
+
+// Narrow viewport: table-style editing is desktop-only (songs bulk edit, venues bulk edit).
+function isMobile() { return window.innerWidth <= 1024; }
 
 function isViewMode() {
   var token = getToken();
@@ -749,6 +803,14 @@ function getToken() {
   return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || null;
 }
 
+// Remember-me keeps the token in localStorage, a normal login in sessionStorage —
+// clearing one store alone leaves a half-logged-in state where actions fail silently.
+function clearToken() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem('setlist_token');
+}
+
 function getAuthRole() {
   var tok = getToken();
   if (!tok) return null;
@@ -1002,7 +1064,7 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     }
     let val;
     if      (col.type === 'number') val = row[col.field] != null ? Number(row[col.field]).toLocaleString() : '';
-    else if (col.type === 'date')   val = row[col.field] ? String(row[col.field]).slice(0, 10) : '—';
+    else if (col.type === 'date')   val = row[col.field] ? escHtml(formatDate(row[col.field])) : '—';
     else                            val = escHtml((row[col.field] ?? '').toString());
     const cls = (col.muted ? 'sl-cell sl-cell--muted' : 'sl-cell') + fieldCls;
     return `<div class="${cls}">${val}</div>`;
