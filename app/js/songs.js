@@ -41,7 +41,6 @@ var _songsOffset = 0;
 var _songsTotal = 0;
 var SONGS_VIEW_PAGE = 30;
 
-function isMobile() { return window.innerWidth <= 1024; }
 function isBulkEdit() { return !isMobile() && !_viewMode && localStorage.getItem(SONGS_BULK_EDIT_KEY) === '1'; }
 
 function toggleBulkEdit() {
@@ -115,7 +114,7 @@ async function fetchSongsList(reset) {
     offset: String(_songsOffset),
     active: '1',
   });
-  const r = await fetch(`/api/${artistSlug}/songs?${params}`);
+  const r = await apiFetch(`/api/${artistSlug}/songs?${params}`);
   if (!r.ok) throw new Error('songs fetch failed');
   _applySongsResponse(await r.json(), reset);
 }
@@ -287,13 +286,13 @@ async function _applySetlistById(id) {
   // Ensure metadata cache is populated so we can show the name in the filter input
   if (!_allSetlistsMeta) {
     try {
-      var r = await fetch('/api/' + artistSlug + '/setlists');
-      _allSetlistsMeta = await r.json();
+      var r = await apiFetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = r.ok ? await r.json() : [];
       if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
     } catch { _allSetlistsMeta = []; }
   }
   try {
-    var detail = await fetch('/api/' + artistSlug + '/setlists/' + id).then(function(r) { return r.json(); });
+    var detail = await apiFetch('/api/' + artistSlug + '/setlists/' + id).then(function(r) { return r.ok ? r.json() : {}; });
     var songsList = Array.isArray(detail) ? detail : (detail.songs || []);
     songsList = songsList.slice().sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
     _setlistFilterOrder = songsList.map(function(s) { return s.id; });
@@ -343,8 +342,8 @@ function renderTable() {
 async function _resolveSetlistFilter(q) {
   if (!_allSetlistsMeta) {
     try {
-      var r = await fetch('/api/' + artistSlug + '/setlists');
-      _allSetlistsMeta = await r.json();
+      var r = await apiFetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = r.ok ? await r.json() : [];
       if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
     } catch { _allSetlistsMeta = []; }
   }
@@ -354,8 +353,8 @@ async function _resolveSetlistFilter(q) {
   if (!matches.length) return new Set();
 
   try {
-    var detail = await fetch('/api/' + artistSlug + '/setlists/' + matches[0].id)
-      .then(function(r) { return r.json(); });
+    var detail = await apiFetch('/api/' + artistSlug + '/setlists/' + matches[0].id)
+      .then(function(r) { return r.ok ? r.json() : {}; });
     var songsList = Array.isArray(detail) ? detail : (detail.songs || []);
     return new Set(songsList.map(function(s) { return s.id; }));
   } catch {
@@ -375,6 +374,18 @@ function _getSongsForFactory(state) {
   });
 }
 
+// Genres worth offering as chips: those present on songs that pass the other filters.
+// The genre filter itself is ignored, otherwise picking one would leave it as the only
+// chip and there would be no way back to the others.
+function _availableGenres(state) {
+  var withoutGenre = Object.assign({}, state || {});
+  delete withoutGenre.genre;
+  var available = _getSongsForFactory(withoutGenre)
+    .map(function(s) { return s.genre; })
+    .filter(Boolean);
+  return Array.from(new Set(available)).sort();
+}
+
 function _renderSongsListView() {
   _songsView = createListView({
     container: document.getElementById('page-content'),
@@ -388,9 +399,7 @@ function _renderSongsListView() {
         resolve: _resolveSetlistFilter },
       { id: 'active',    label: t('songs.filterActiveOnly'),   type: FILTER_TYPES.CHECKBOX,   field: 'active', 'default': true },
       { id: 'genre',     label: t('songs.filterGenre'),        type: FILTER_TYPES.CHIPS,      field: 'genre',
-        getValues: function() {
-          return Array.from(new Set(songs.map(function(s) { return s.genre; }).filter(Boolean))).sort();
-        }},
+        getValues: _availableGenres },
     ],
     actions: isViewMode() ? [] : [
       { label: t('songs.addSong'), onClick: _openNewSongPanel },
@@ -495,7 +504,7 @@ function _openSongPanelContent(item, panelEl) {
   var harp    = getVal(song, 'extra.harp');
   var perfCells =
     (key     ? _vspCell(t('songs.fieldKey'),        escHtml(String(key)))     : '') +
-    (energy  ? _vspCell(t('songs.fieldEnergy'),     escHtml(String(energy)))  : '') +
+    (energy  ? _vspCell(t('songs.fieldEnergy'),     escHtml(energyLabel(energy))) : '') +
     (timeSig ? _vspCell(t('songs.fieldTimeSig'),    escHtml(String(timeSig))) : '') +
     (bpm     ? _vspCell(t('songs.fieldBpm'),        escHtml(String(bpm)))     : '') +
     (len     ? _vspCell(t('songs.fieldLength'),     escHtml(len))             : '') +
@@ -527,7 +536,7 @@ function _openSongPanelContent(item, panelEl) {
   var lastLive = getVal(song, 'last_played_at');
   var statsCells =
     (plays    ? _vspCell(t('songs.fieldPlays'),    escHtml(String(plays))) : '') +
-    (lastLive ? _vspCell(t('songs.fieldLastLive'), escHtml(String(lastLive).slice(0, 10))) : '');
+    (lastLive ? _vspCell(t('songs.fieldLastLive'), escHtml(formatDate(lastLive))) : '');
   var statsHtml = statsCells ? _vspSection(t('songs.sectionStats'), statsCells) : '';
 
   var lang   = getVal(song, 'gema_language') || (song.extra && song.extra.language) || '';
@@ -563,7 +572,7 @@ function _openSongPanelContent(item, panelEl) {
 
   // Async: arrangement table (auth-only, active version only)
   if (!_viewMode && song.has_arrangement) {
-    fetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
+    apiFetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
       .then(function(r) { return r.json(); })
       .then(function(versions) {
         var active = versions.find(function(v) { return v.is_active; });
@@ -586,8 +595,9 @@ function _openSongPanelContent(item, panelEl) {
   }
 
   // Async: setlist count
-  fetch('/api/' + artistSlug + '/songs?setlists=' + sid)
-    .then(function(r) { return r.json(); })
+  // apiFetch, not fetch: this endpoint needs the token in a private workspace.
+  apiFetch('/api/' + artistSlug + '/songs?setlists=' + sid)
+    .then(function(r) { return r.ok ? r.json() : []; })
     .then(function(ids) {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (!linkEl) return;
@@ -738,7 +748,7 @@ function _openSongEditForm(sid, panelEl) {
   if (!isNew && song.has_arrangement) {
     var _editArrSid = String(sid);
     var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
-    fetch('/api/' + artistSlug + '/songs/' + _editArrSid + '/arrangements')
+    apiFetch('/api/' + artistSlug + '/songs/' + _editArrSid + '/arrangements')
       .then(function(r) { return r.json(); })
       .then(function(versions) {
         var active = versions.find(function(v) { return v.is_active; });
@@ -767,7 +777,7 @@ function _panelStageFile(input, type, id) {
 // Create a song from the panel, then upload any files staged on its inputs.
 // Returns the created song, or null if it couldn't be created (no title / auth).
 async function _commitNewSong(formId) {
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   if (!token) { if (!isViewMode()) requireLogin(); return null; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
@@ -786,7 +796,7 @@ async function _commitNewSong(formId) {
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body:    JSON.stringify(data),
   });
-  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return null; }
+  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return null; }
   if (!r.ok) throw new Error('create failed');
   var newSong = await r.json();
 
@@ -821,7 +831,7 @@ async function _commitNewSong(formId) {
 }
 
 async function _savePanelSong(formId, isNew, realSid) {
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
@@ -843,7 +853,7 @@ async function _savePanelSong(formId, isNew, realSid) {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body:    JSON.stringify([Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]),
       });
-      if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+      if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
       if (!r.ok) throw new Error('save failed');
       targetId = String(realSid);
     }
@@ -930,8 +940,8 @@ function _closeNewSongPanel() {
 async function _applySetlistByIdForView(id) {
   if (!_allSetlistsMeta) {
     try {
-      var r = await fetch('/api/' + artistSlug + '/setlists');
-      _allSetlistsMeta = await r.json();
+      var r = await apiFetch('/api/' + artistSlug + '/setlists');
+      _allSetlistsMeta = r.ok ? await r.json() : [];
       if (!Array.isArray(_allSetlistsMeta)) _allSetlistsMeta = [];
     } catch { _allSetlistsMeta = []; }
   }
@@ -1033,12 +1043,21 @@ function renderListRowHtml(s) {
   var interp    = escHtml(s.interpret || '');
   var genre     = escHtml(s.genre || '');
   var key       = escHtml(String(getVal(s, 'key') || ''));
-  var tempo     = escHtml(String(getVal(s, 'energy') || ''));
+  var tempo     = escHtml(energyLabel(getVal(s, 'energy')));
   var hasListen = !!getVal(s, 'extra.listenUrl');
   var hasLyrics = !!(String(getVal(s, 'extra.lyrics') || '').trim());
 
   var borderCls = s.active ? 'songs-list-row--active' : 'songs-list-row--inactive';
   var titleCls  = s.active ? '' : ' songs-list-row-title--inactive';
+
+  var heartOn  = !!s.heart;
+  var heartCls  = 'songs-list-row-heart' + (heartOn ? ' songs-list-row-heart--on' : '');
+  var heartBtn  = _viewMode
+    ? (heartOn ? '<span class="' + heartCls + '">&#9829;</span>' : '<span class="songs-list-row-heart"></span>')
+    : '<button type="button" class="' + heartCls + '" aria-pressed="' + heartOn + '"' +
+      ' title="' + t('songs.colTitleHeart') + '" aria-label="' + t('songs.colTitleHeart') + '"' +
+      ' onclick="event.stopPropagation();toggleFavourite(' + Number(s.id) + ')">' +
+      (heartOn ? '&#9829;' : '&#9825;') + '</button>';
 
   var icons = '';
   if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
@@ -1047,17 +1066,41 @@ function renderListRowHtml(s) {
   if (hasArrangement) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
+    heartBtn +
     '<div class="songs-list-row-stack">' +
       '<span class="songs-list-row-title' + titleCls + '">' + title + '</span>' +
       (interp ? '<span class="songs-list-row-interpret">' + interp + '</span>' : '') +
     '</div>' +
-    (genre ? '<span class="songs-list-row-genre">' + genre + '</span>' : '') +
-    (key   ? '<span class="songs-list-row-key">'   + key   + '</span>' : '') +
-    (tempo ? '<span class="songs-list-row-tempo">'  + tempo + '</span>' : '') +
-    (icons ? '<span class="songs-list-row-icons">'  + icons + '</span>' : '') +
+    // The slots are always rendered, empty ones included — otherwise a song without a
+    // genre shifts key and energy left and the columns no longer line up.
+    '<span class="songs-list-row-genre">' + genre + '</span>' +
+    '<span class="songs-list-row-key">'   + key   + '</span>' +
+    '<span class="songs-list-row-tempo">' + tempo + '</span>' +
+    '<span class="songs-list-row-icons">' + icons + '</span>' +
   '</div>';
 }
 
+
+// Favourite toggle straight from the list: flip it locally, then persist. On failure the
+// icon goes back, so what you see always matches what is stored.
+async function toggleFavourite(id) {
+  if (_viewMode) return;
+  var song = songs.find(function(s) { return s.id === id; });
+  if (!song) return;
+  var wanted = !song.heart;
+  song.heart = wanted;
+  if (_songsView) _songsView.refresh();
+  try {
+    var r = await apiFetch('/api/' + artistSlug + '/songs', 'PATCH',
+      [{ id: id, title: song.title, active: song.active, heart: wanted }]);
+    var json = r.ok ? await r.json().catch(function() { return {}; }) : {};
+    if (!r.ok || (json.rejected && json.rejected.length)) throw new Error('save failed');
+    invalidateConfigCache();
+  } catch {
+    song.heart = !wanted;
+    if (_songsView) _songsView.refresh();
+  }
+}
 
 function _openSongArrangement(id) {
   var song = songs.find(function(s) { return s.id === id; });
@@ -1189,7 +1232,7 @@ function renderRow(song) {
       let display = '—';
       if (val !== '' && val !== null && val !== undefined) {
         if (c.key === 'last_played_at') {
-          display = new Date(val).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' });
+          display = formatDate(val);
         } else {
           display = String(val);
         }
@@ -1395,7 +1438,7 @@ async function deleteRow(sid) {
 
   if (!confirm(t('songs.confirmDeleteSong'))) return;
 
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   const r = await fetch(`/api/${artistSlug}/songs/${sid}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
@@ -1408,7 +1451,7 @@ async function deleteRow(sid) {
     songs = songs.filter(s => String(s.id) !== String(sid));
     if (dirty.size === 0) _setBulkStatus('', '');
   } else if (r.status === 401) {
-    if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); }
+    if (!isViewMode()) { clearToken(); requireLogin(); }
   } else {
     _setBulkStatus('error', t('songs.couldNotDeleteSong'));
   }
@@ -1423,7 +1466,7 @@ function discardAll() {
 }
 
 async function saveAll() {
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   if (!token) { if (!isViewMode()) requireLogin(); return; }
 
   const bad = [...document.querySelectorAll('#tbody input[type="number"]')].find(i => !i.checkValidity());
@@ -1446,14 +1489,17 @@ async function saveAll() {
       else                          toUpdate.push({ id: parseInt(sid, 10), ...data });
     }
 
+    var rejected = [];
     if (toUpdate.length > 0) {
       const r = await fetch(`/api/${artistSlug}/songs`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(toUpdate),
       });
-      if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+      if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
       if (!r.ok) throw new Error('patch failed');
+      // Rows the server refused: say so instead of reporting a silent success.
+      rejected = (await r.json().catch(function() { return {}; })).rejected || [];
     }
 
     for (const data of toInsert) {
@@ -1469,8 +1515,16 @@ async function saveAll() {
     dirty.clear();
     invalidateConfigCache();
     await loadAndRender();
-    _setBulkStatus('saved', t('songs.allChangesSaved'));
-    setTimeout(() => _setBulkStatus('', ''), 3000);
+    if (rejected.length) {
+      _setBulkStatus('error', t('songs.savedWithErrors', { n: rejected.length, error: rejected[0].error }));
+      rejected.forEach(function(rej) {
+        var row = document.getElementById('row-' + rej.id);
+        if (row) { row.classList.add('dirty'); row.title = rej.error; }
+      });
+    } else {
+      _setBulkStatus('saved', t('songs.allChangesSaved'));
+      setTimeout(() => _setBulkStatus('', ''), 3000);
+    }
 
   } catch {
     _setBulkStatus('error', t('songs.saveFailed'));
@@ -1486,7 +1540,7 @@ async function loadLogs() {
   const el = document.getElementById('logs-section');
   if (!el || !artistSlug) return;
   try {
-    const logs = await fetch(`/api/${artistSlug}/song-logs`).then(r => r.json());
+    const logs = await apiFetch(`/api/${artistSlug}/song-logs`).then(r => r.ok ? r.json() : []);
     renderLogs(logs);
   } catch {
     el.innerHTML = '';
@@ -1506,7 +1560,7 @@ function renderLogs(logs) {
   if (!el) return;
   if (!logs.length) { el.innerHTML = ''; return; }
 
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   const items = logs.map(log => {
     const title = log.song_data?.title ?? '(unknown)';
     const badge = log.action === 'create' ? 'log-create'
@@ -1530,13 +1584,13 @@ function renderLogs(logs) {
 }
 
 async function restoreSong(songId) {
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   if (!token) return;
   const r = await fetch(`/api/${artistSlug}/songs/${songId}/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
   });
-  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
   if (r.ok) {
     invalidateConfigCache();
     await loadAndRender();
@@ -1557,17 +1611,16 @@ async function openAppearances(songId) {
   modal.classList.add('open');
 
   try {
-    const data = await fetch(`/api/${artistSlug}/songs?setlists=${songId}`).then(r => r.json());
+    const data = await apiFetch(`/api/${artistSlug}/songs?setlists=${songId}`).then(r => r.ok ? r.json() : []);
     if (!data.length) {
       list.innerHTML = '<p class="appearance-empty">' + t('songs.notInAnySetlist') + '</p>';
       return;
     }
     list.innerHTML = data.map(sl => {
-      const parts = [sl.gig_name, sl.gig_date ? String(sl.gig_date).slice(0, 10) : null, sl.gig_venue]
+      const parts = [sl.gig_name, formatDate(sl.gig_date) || null, sl.gig_venue]
         .filter(Boolean);
       const label = parts.length ? parts.join(' — ') : (sl.title || `Setlist #${sl.id}`);
-      const date  = new Date(sl.created_at).toLocaleDateString('fr-FR',
-        { day: 'numeric', month: 'long', year: 'numeric' });
+      const date  = formatDate(sl.created_at);
       return `<div class="appearance-row">
         <a class="appearance-gig" href="/setlist-history#set-${sl.id}" target="_blank">${escHtml(label)}</a>
         <span class="appearance-date">${date}</span>
@@ -1597,7 +1650,7 @@ async function openGema(songId) {
   content.innerHTML = '<p class="gema-loading">' + t('songs.loading') + '</p>';
   modal.classList.add('open');
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${songId}/gema`);
+    const r = await apiFetch(`/api/${artistSlug}/songs/${songId}/gema`);
     const { works, rightholders } = await r.json();
     content.innerHTML = works.length ? renderGemaContent(works, rightholders) : '<p class="gema-loading">' + t('songs.noGemaLinked') + '</p>';
   } catch {
@@ -1699,14 +1752,14 @@ async function _panelUploadHandler(input, sid, mediaType) {
 //   'storage' — PUT to storage failed
 //   'confirm' — confirm request failed
 async function _uploadSongMedia(sid, type, file) {
-  var token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  var token = getToken();
   var contentType = type === 'sheet' ? 'application/pdf' : file.type;
   var r = await fetch('/api/' + artistSlug + '/songs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body: JSON.stringify({ upload_presign_id: sid, upload_type: type, filename: file.name, contentType: file.type, size: file.size }),
   });
-  if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } throw new Error('auth'); }
+  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
   if (!r.ok) throw new Error('presign');
 
   var json = await r.json();
@@ -1718,7 +1771,7 @@ async function _uploadSongMedia(sid, type, file) {
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body: JSON.stringify({ media_confirm_id: sid, media_type: type, publicUrl: json.publicUrl }),
   });
-  if (confirm.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } throw new Error('auth'); }
+  if (confirm.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
   if (!confirm.ok) throw new Error('confirm');
 
   // Media URLs live in songs.extra, which the cached config payload carries.
@@ -1808,7 +1861,7 @@ function openPlayer(sid) {
   document.getElementById('player-history').innerHTML = '';
 
   // Fetch audio history for this song
-  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
+  apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderPlayerHistory)
     .catch(() => {});
@@ -1843,10 +1896,10 @@ async function confirmDeleteAudio() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ media_delete_id: sid, media_type: 'audio' }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveAudio')); return; }
     invalidateConfigCache();
 
@@ -1904,7 +1957,7 @@ async function handleReplaceFile(input) {
     } else {
       content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
     }
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
+    apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.audioReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
@@ -1994,7 +2047,7 @@ function openSheet(sid) {
   if (getToken()) document.getElementById('sheet-delete-btn').style.display = '';
   document.getElementById('sheet-history').innerHTML = '';
 
-  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
+  apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderSheetHistory)
     .catch(() => {});
@@ -2029,10 +2082,10 @@ async function confirmDeleteSheet() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ media_delete_id: sid, media_type: 'sheet' }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveSheet')); return; }
     invalidateConfigCache();
 
@@ -2080,7 +2133,7 @@ async function handleReplaceSheet(input) {
     const td = document.querySelector(`#row-${sid} .sheet-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
+    apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.sheetReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
@@ -2184,7 +2237,7 @@ function openPlayback(sid) {
   if (getToken()) document.getElementById('playback-delete-btn').style.display = '';
   document.getElementById('playback-history').innerHTML = '';
 
-  fetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
+  apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`)
     .then(r => r.ok ? r.json() : [])
     .then(renderPlaybackHistory)
     .catch(() => {});
@@ -2219,10 +2272,10 @@ async function confirmDeletePlayback() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ media_delete_id: sid, media_type: 'playback' }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemovePlayback')); return; }
     invalidateConfigCache();
 
@@ -2271,7 +2324,7 @@ async function handleReplacePlayback(input) {
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('playback-content').innerHTML =
       `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
-    fetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
+    apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.playbackReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
@@ -2369,7 +2422,7 @@ async function suggestLyrics() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}`,
+        Authorization: `Bearer ${getToken()}`,
       },
       body: JSON.stringify({ lyrics_suggest_id: currentLyricsSid }),
       signal: _lyricsSuggestAbort.signal,
@@ -2448,10 +2501,10 @@ async function saveLyrics() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ lyrics_update_id: sid, lyrics: text }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } closeLyrics(); return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } closeLyrics(); return; }
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       const msg = body.error ?? t('songs.saveFailedStatus', { status: r.status });
@@ -2517,10 +2570,10 @@ async function confirmDeleteLyrics() {
   try {
     const r = await fetch(`/api/${artistSlug}/songs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem(AUTH_TOKEN_KEY)}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify({ lyrics_delete_id: sid }),
     });
-    if (r.status === 401) { if (!isViewMode()) { sessionStorage.removeItem(AUTH_TOKEN_KEY); requireLogin(); } return; }
+    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotDeleteLyrics')); return; }
     invalidateConfigCache();
 

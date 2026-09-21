@@ -10,7 +10,8 @@ var _orgsQ = '';
 var _orgsTimer = null;
 
 function _orgTypeLabel(type) {
-  var map = { person: t('organizers.typePerson'), organization: t('organizers.typeOrg') };
+  var map = { person: t('organizers.typePerson'), organization: t('organizers.typeOrg'),
+              event: t('organizers.typeEvent'), press: t('organizers.typePress'), radio: t('organizers.typeRadio') };
   return map[type] || escHtml(type);
 }
 
@@ -152,7 +153,7 @@ async function expandOrganizer(o) {
       ? ' <span style="color:var(--third-color)">@ ' + escHtml(g.venue_name) + (g.venue_city ? ', ' + escHtml(g.venue_city) : '') + '</span>'
       : '';
     return '<div style="padding:0.1rem 0;font-size:0.82rem;">' +
-      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) + venue + '</div>';
   }).join('');
   var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?organizer=' +
@@ -213,7 +214,7 @@ async function renderOrganizerGigs(orgId, orgName) {
   var n = refs.gigs.length;
   list.innerHTML = refs.gigs.map(function(g) {
     return '<div class="related-gig-item">' +
-      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) +
     '</div>';
   }).join('') +
