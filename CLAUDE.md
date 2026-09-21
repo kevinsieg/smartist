@@ -39,7 +39,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/dashboard` | `app/js/dashboard.js` |
 | `/setlist` | `app/js/setlist.js` |
 | `/setlist-history` | `app/js/setlist-history.js` |
-| `/songs` | `app/js/songs.js` |
+| `/songs` | `app/js/songs.js` (init, data, filters, list view) + `songs-table.js` (bulk edit), `songs-panel.js` (side panel), `songs-media.js` (audio/sheet/playback), `songs-lyrics.js` (lyrics + URL preview) — one global scope, loaded in that order with `songs.js` last because it calls `init()`; `tests/songs-split-client.js` executes them together |
 | `/pro-import` | `app/js/pro-import.js` |
 | `/gigs` | `app/js/gigs.js` |
 | `/venues` | `app/js/venues.js` |
