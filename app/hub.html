@@ -10,8 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=29">
-  <script src="/app/js/i18n.js?v=10"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=36">
+  <script src="/app/js/i18n.js?v=18"></script>
   <style>
     .hub-wrap { max-width: 960px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
 
@@ -37,7 +37,7 @@
       background: var(--primary-color); border: 1px solid rgba(160,156,147,0.25);
       display: flex; align-items: center; justify-content: center;
       font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; color: var(--third-color);
-      font-family: "Courier New", Courier, monospace;
+      font-family: var(--font-mono);
     }
     .pc-icon-add { font-size: 1.1rem; font-weight: 300; font-family: inherit; }
     .pc-info { min-width: 0; }
@@ -46,7 +46,7 @@
     .pc-dot { width: 6px; height: 6px; border-radius: 50%; background: #d0d0d0; flex-shrink: 0; }
     .pc-dot-on { background: #4a9a6a; }
     .pc-url {
-      font-size: 0.68rem; color: var(--third-color); font-family: "Courier New", Courier, monospace;
+      font-size: 0.68rem; color: var(--third-color); font-family: var(--font-mono);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .pc-links { display: flex; gap: 0.4rem; }
@@ -55,7 +55,7 @@
     /* Reach & tools panels */
     .hub-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
     .hub-panel { border: 1px solid #e8e8e8; border-radius: 6px; padding: 1.25rem; background: var(--white); position: relative; }
-    .hp-status { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--third-color); border: 1px solid #e0e0e0; border-radius: 3px; padding: 2px 6px; }
+    .hp-status { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--third-color); border: 1px solid #e0e0e0; border-radius: var(--radius-sm); padding: 2px 6px; }
     .hp-header { display: flex; align-items: flex-start; gap: 0.85rem; margin-bottom: 0.9rem; }
     .hp-icon { width: 36px; height: 36px; border-radius: 4px; background: var(--primary-color); border: 1px solid var(--secondary-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; opacity: 0.7; }
     .hp-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.15rem; }

@@ -21,7 +21,8 @@ var FILTER_TYPES = {
   // Toggling a chip sets the filter to that value; toggling again clears it.
   // state value: string ('' = inactive)
   // field: item property matched with strict equality — e.g. 'genre'
-  // opts: { getValues: fn() → string[] }  — called on every render to populate pills
+  // opts: { getValues: fn(state) → string[] }  — called on every render to populate pills;
+  //        `state` is the current filter state, so values can be narrowed to what matches
   CHIPS: 'chips',
 
   // Text input with debounce + async resolution. Re-renders after resolve() settles.
@@ -159,8 +160,15 @@ function createListView(opts) {
     var chipsFilter = opts.filters.find(function(f) { return f.type === FILTER_TYPES.CHIPS; });
     if (!chipsFilter) return;
 
-    var values = chipsFilter.getValues ? chipsFilter.getValues() : [];
+    // Pass the live filter state so the page can offer only the values that still
+    // have matching rows (e.g. no genre chips for genres without an active song).
+    var values = chipsFilter.getValues
+      ? chipsFilter.getValues(Object.assign({}, _state, _resolved))
+      : [];
     var active = _state[chipsFilter.id] || '';
+    // Keep the selected chip visible even when nothing matches it any more, otherwise
+    // the filter stays applied with no way to switch it off.
+    if (active && values.indexOf(active) === -1) values = values.concat(active).sort();
     if (!values.length) { row2.innerHTML = ''; return; }
 
     var chips = values.map(function(v) {
