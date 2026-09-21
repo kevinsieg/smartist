@@ -36,6 +36,17 @@
     <div class="profile-hint" data-i18n="profile.emailHint">Your login email.</div>
   </div>
 
+  <div class="profile-section" id="email-section" style="display:none;">
+    <label data-i18n="profile.changeEmail">Change email</label>
+    <input type="password" id="em-current" placeholder="Current password" autocomplete="current-password" data-i18n-attr="placeholder:profile.pwCurrent">
+    <input type="email" id="em-new" placeholder="New email address" autocomplete="email" data-i18n-attr="placeholder:profile.emNew">
+    <div class="save-row">
+      <button class="btn active" id="em-save-btn" data-i18n="profile.sendConfirmation">Send confirmation link</button>
+      <span class="save-msg" id="em-msg"></span>
+    </div>
+    <div class="profile-hint" data-i18n="profile.emailChangeHint">We email a link to the new address. Your login only changes once you confirm it there.</div>
+  </div>
+
   <div class="profile-section">
     <label data-i18n="profile.languageLabel">Language</label>
     <span data-lang-switcher></span>
@@ -76,6 +87,11 @@
     if (isBootstrap) return;
 
     document.getElementById('pw-save-btn').addEventListener('click', changePassword);
+
+    // Reached only past the bootstrap early-return above, so accounts without a
+    // users row never see this — matching the server, which rejects them.
+    document.getElementById('email-section').style.display = '';
+    document.getElementById('em-save-btn').addEventListener('click', requestEmailChange);
   });
 
   async function changePassword() {
@@ -98,6 +114,27 @@
       document.getElementById('pw-current').value = '';
       document.getElementById('pw-new').value = '';
       document.getElementById('pw-confirm').value = '';
+    } catch (e) {
+      if (!String(e.message).includes('Session')) { msg.textContent = t('profile.connError'); msg.className = 'save-msg err'; }
+    } finally { btn.disabled = false; }
+  }
+
+  async function requestEmailChange() {
+    var cur = document.getElementById('em-current').value;
+    var nw  = document.getElementById('em-new').value.trim();
+    var msg = document.getElementById('em-msg');
+    msg.className = 'save-msg';
+    if (!cur || !nw) { msg.textContent = t('profile.fillAll'); msg.className = 'save-msg err'; return; }
+    var btn = document.getElementById('em-save-btn');
+    btn.disabled = true; msg.textContent = t('profile.saving');
+    try {
+      var r = await apiFetch('/api/' + _slug + '/auth?action=request-email-change', 'POST',
+        { currentPassword: cur, newEmail: nw });
+      var data = await r.json();
+      if (!r.ok) { msg.textContent = data.error || t('profile.failed'); msg.className = 'save-msg err'; return; }
+      msg.textContent = t('profile.emailLinkSent'); msg.className = 'save-msg ok';
+      document.getElementById('em-current').value = '';
+      document.getElementById('em-new').value = '';
     } catch (e) {
       if (!String(e.message).includes('Session')) { msg.textContent = t('profile.connError'); msg.className = 'save-msg err'; }
     } finally { btn.disabled = false; }
