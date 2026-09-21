@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm email — smartist</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <link rel="stylesheet" href="/app/css/app.css?v=29">
+  <script src="/app/js/i18n.js?v=10"></script>
+  <style>
+    .confirm-wrap { max-width: 460px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
+    .confirm-bands { margin: 0.75rem 0 1.25rem; padding-left: 1.1rem; }
+    .confirm-bands li { margin-bottom: 0.3rem; }
+  </style>
+</head>
+<body>
+<div class="app-wrap confirm-wrap">
+  <h1 data-i18n="confirmEmail.title">Confirm your new email address</h1>
+  <div id="confirm-status" class="status-msg" data-i18n="confirmEmail.checking">Checking your link…</div>
+
+  <div id="confirm-body" style="display:none;">
+    <p><span data-i18n="confirmEmail.newAddress">New address</span>: <strong id="confirm-email-value"></strong></p>
+    <p data-i18n="confirmEmail.affects">This will apply to every band you belong to:</p>
+    <ul class="confirm-bands" id="confirm-bands"></ul>
+    <div class="save-row">
+      <button class="btn active" id="confirm-btn" data-i18n="confirmEmail.confirmBtn">Confirm change</button>
+      <span class="save-msg" id="confirm-msg"></span>
+    </div>
+  </div>
+
+  <p id="confirm-done" style="display:none;">
+    <a href="/login" data-i18n="confirmEmail.loginLink">Log in with your new address</a>
+  </p>
+</div>
+
+<script src="/app/js/common.js?v=14"></script>
+<script>
+(function () {
+  // var, not const/let: SPA navigation re-executes page scripts in the same
+  // document, and a repeated top-level declaration throws before this runs.
+  var params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  var token  = params.get('token') || '';
+  var slug   = params.get('slug')  || '';
+  // Strip the token from the address bar so it does not linger in history.
+  history.replaceState(null, '', window.location.pathname);
+
+  var statusEl = document.getElementById('confirm-status');
+
+  function fail(key) {
+    statusEl.textContent = t(key);
+    statusEl.className = 'status-msg error';
+  }
+
+  async function post(body) {
+    return await fetch('/api/' + encodeURIComponent(slug) + '/auth?action=confirm-email-change', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function start() {
+    if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
+    if (!token || !slug) { fail('confirmEmail.badLink'); return; }
+    try {
+      var r = await post({ token: token });
+      var data = await r.json();
+      if (!r.ok) { fail('confirmEmail.invalid'); return; }
+      document.getElementById('confirm-email-value').textContent = data.newEmail;
+      document.getElementById('confirm-bands').innerHTML =
+        (data.bands || []).map(function (b) { return '<li>' + escHtml(b.name) + '</li>'; }).join('');
+      statusEl.style.display = 'none';
+      document.getElementById('confirm-body').style.display = '';
+    } catch (e) { fail('confirmEmail.connError'); }
+  }
+
+  document.getElementById('confirm-btn').addEventListener('click', async function () {
+    var btn = document.getElementById('confirm-btn');
+    var msg = document.getElementById('confirm-msg');
+    btn.disabled = true;
+    msg.className = 'save-msg';
+    msg.textContent = t('confirmEmail.applying');
+    try {
+      var r = await post({ token: token, confirm: true });
+      var data = await r.json();
+      if (!r.ok) {
+        msg.textContent = data.error || t('confirmEmail.failed');
+        msg.className = 'save-msg err';
+        btn.disabled = false;
+        return;
+      }
+      document.getElementById('confirm-body').style.display = 'none';
+      statusEl.style.display = '';
+      statusEl.textContent = t('confirmEmail.changed');
+      statusEl.className = 'status-msg';
+      document.getElementById('confirm-done').style.display = '';
+    } catch (e) {
+      msg.textContent = t('confirmEmail.connError');
+      msg.className = 'save-msg err';
+      btn.disabled = false;
+    }
+  });
+
+  start();
+}());
+</script>
+</body>
+</html>
