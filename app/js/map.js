@@ -43,6 +43,34 @@
     document.head.appendChild(s);
   };
 
+  // Marker clustering. The plugin extends Leaflet, so it can only load afterwards —
+  // hence the chain instead of a second async tag in the page. It is optional: if it
+  // fails (offline, CSP, CDN), the map falls back to a plain feature group.
+  window.loadMarkerCluster = function (cb) {
+    if (!window.L || L.markerClusterGroup) { cb(); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+    s.integrity = 'sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr';
+    s.crossOrigin = 'anonymous';
+    s.onload  = cb;
+    s.onerror = cb;
+    document.head.appendChild(s);
+  };
+
+  // Grouping layer for the markers. featureGroup, not layerGroup: only the former has
+  // getBounds(), which the fit-to-venues call needs.
+  function _makeMarkerLayer() {
+    if (window.L && L.markerClusterGroup) {
+      return L.markerClusterGroup({
+        chunkedLoading: true,          // ~1800 markers without freezing the page
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        maxClusterRadius: 50,
+      });
+    }
+    return L.featureGroup();
+  }
+
   function _markerOptions(status) {
     var color = STATUS_COLORS[(status || '').toLowerCase()] || STATUS_COLORS[''];
     return {
@@ -204,8 +232,7 @@
         _dataReady = true;
         _buildSidebar();
         _buildMarkers();
-        var bounds = _layerGroup.getBounds();
-        if (bounds.isValid()) _map.fitBounds(bounds.pad(0.2));
+        _fitToMarkers();
       })
       .catch(function() {
         if (btn) { btn.disabled = false; btn.textContent = t('map.loadBtn'); }
@@ -232,7 +259,7 @@
     var canvas = document.getElementById('map-canvas');
     if (!canvas || _map) return;
     _renderer   = L.canvas({ padding: 0.5 });
-    _layerGroup = L.layerGroup();
+    _layerGroup = _makeMarkerLayer();
     _map = L.map(canvas, { zoomControl: true, preferCanvas: true }).setView([48.5, 9.0], 5);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -242,13 +269,20 @@
     _layerGroup.addTo(_map);
   }
 
+  // Zoom to the venues that are actually on the map; a group with no markers has no
+  // valid bounds, so the default view stays.
+  function _fitToMarkers() {
+    if (!_map || !_layerGroup || typeof _layerGroup.getBounds !== 'function') return;
+    var bounds = _layerGroup.getBounds();
+    if (bounds && bounds.isValid()) _map.fitBounds(bounds.pad(0.2));
+  }
+
   function _tryRender() {
     if (!_leafletReady || !_dataReady) return;
     _initLeafletMap();
     _buildSidebar();
     _buildMarkers();
-    var bounds = _layerGroup.getBounds();
-    if (bounds.isValid()) _map.fitBounds(bounds.pad(0.2));
+    _fitToMarkers();
     requestAnimationFrame(function() {
       requestAnimationFrame(function() { if (_map) _map.invalidateSize(); });
     });
@@ -259,9 +293,11 @@
     var leafletDone = false, dataDone = false;
 
     window.loadLeaflet(function() {
-      _leafletReady = true;
-      leafletDone = true;
-      if (dataDone) _tryRender();
+      window.loadMarkerCluster(function() {
+        _leafletReady = true;
+        leafletDone = true;
+        if (dataDone) _tryRender();
+      });
     });
 
     fetch('/api/' + slug + '/venues?all=1&status=confirmed', { headers: _authHeaders() })
