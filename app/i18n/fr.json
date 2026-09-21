@@ -767,6 +767,8 @@
   "venues.bulkDiscardConfirm": "Annuler les modifications non enregistrées ?",
   "venues.bulkUnsaved": "{n} modifié(s)",
   "venues.bulkSaved": "{n} enregistré(s)",
+  "venues.bulkSaveFailed": "Échec de l'enregistrement — vérifiez la connexion et réessayez.",
+  "venues.bulkSavedWithErrors": "{n} enregistrés, {failed} refusés — voir les lignes marquées",
   "venues.colLastContact": "Dernier contact",
   "venues.colBookingChannel": "Canal",
   "venues.colRemuneration": "Cachet",

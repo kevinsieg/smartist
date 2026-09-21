@@ -374,6 +374,18 @@ function _getSongsForFactory(state) {
   });
 }
 
+// Genres worth offering as chips: those present on songs that pass the other filters.
+// The genre filter itself is ignored, otherwise picking one would leave it as the only
+// chip and there would be no way back to the others.
+function _availableGenres(state) {
+  var withoutGenre = Object.assign({}, state || {});
+  delete withoutGenre.genre;
+  var available = _getSongsForFactory(withoutGenre)
+    .map(function(s) { return s.genre; })
+    .filter(Boolean);
+  return Array.from(new Set(available)).sort();
+}
+
 function _renderSongsListView() {
   _songsView = createListView({
     container: document.getElementById('page-content'),
@@ -387,9 +399,7 @@ function _renderSongsListView() {
         resolve: _resolveSetlistFilter },
       { id: 'active',    label: t('songs.filterActiveOnly'),   type: FILTER_TYPES.CHECKBOX,   field: 'active', 'default': true },
       { id: 'genre',     label: t('songs.filterGenre'),        type: FILTER_TYPES.CHIPS,      field: 'genre',
-        getValues: function() {
-          return Array.from(new Set(songs.map(function(s) { return s.genre; }).filter(Boolean))).sort();
-        }},
+        getValues: _availableGenres },
     ],
     actions: isViewMode() ? [] : [
       { label: t('songs.addSong'), onClick: _openNewSongPanel },
@@ -1051,10 +1061,12 @@ function renderListRowHtml(s) {
       '<span class="songs-list-row-title' + titleCls + '">' + title + '</span>' +
       (interp ? '<span class="songs-list-row-interpret">' + interp + '</span>' : '') +
     '</div>' +
-    (genre ? '<span class="songs-list-row-genre">' + genre + '</span>' : '') +
-    (key   ? '<span class="songs-list-row-key">'   + key   + '</span>' : '') +
-    (tempo ? '<span class="songs-list-row-tempo">'  + tempo + '</span>' : '') +
-    (icons ? '<span class="songs-list-row-icons">'  + icons + '</span>' : '') +
+    // The slots are always rendered, empty ones included — otherwise a song without a
+    // genre shifts key and energy left and the columns no longer line up.
+    '<span class="songs-list-row-genre">' + genre + '</span>' +
+    '<span class="songs-list-row-key">'   + key   + '</span>' +
+    '<span class="songs-list-row-tempo">' + tempo + '</span>' +
+    '<span class="songs-list-row-icons">' + icons + '</span>' +
   '</div>';
 }
 

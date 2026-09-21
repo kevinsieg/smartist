@@ -59,6 +59,8 @@ function loadIsUpcoming() {
 
   const isUpcoming = loadIsUpcoming();
   const day = 86400000;
+  // UTC throughout — the helper compares against new Date().toISOString(), and mixing in
+  // a local-midnight date would make this suite fail depending on the time of day.
   const iso = ts => new Date(ts).toISOString().slice(0, 10);
 
   test('a gig in the future is upcoming', () => {
@@ -79,6 +81,13 @@ function loadIsUpcoming() {
 
   test('a full timestamp is accepted', () => {
     assert(isUpcoming(new Date(Date.now() + 2 * day).toISOString()) === true, 'expected true');
+  });
+
+  test('matches the upcoming/past split used by the gig tables', () => {
+    // renderGigs: upcoming = g.date >= new Date().toISOString().slice(0,10)
+    const today = new Date().toISOString().slice(0, 10);
+    assert(isUpcoming(today) === (today >= today), 'today must agree with the table split');
+    assert(isUpcoming('not-a-date') === false, 'garbage must not count as upcoming');
   });
 
   test('a missing date is not upcoming', () => {

@@ -27,6 +27,16 @@ module.exports = wrap(async function handler(req, res) {
       return res.json(venues);
     }
 
+    // Filter options must cover the whole workspace, not just the page on screen.
+    if (req.query.facet === 'country') {
+      const rows = await sql`
+        SELECT DISTINCT country FROM venues
+        WHERE artist_id = ${artist.id} AND deleted = false AND country IS NOT NULL AND country <> ''
+          AND (NOT ${viewOnly} OR LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES}))
+        ORDER BY country ASC`;
+      return res.json(rows.map(r => r.country));
+    }
+
     if (req.query.all) {
       const statusFilter = req.query.status ? req.query.status.toLowerCase() : null;
       // Map payload: no comment (private CRM notes) and no audit columns.
@@ -184,45 +194,63 @@ module.exports = wrap(async function handler(req, res) {
     const DATE_FIELDS = ['last_communication', 'deadline'];
     const isDate = v => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-    let count = 0;
+    const rejected = [];
+    const accepted = [];
     for (const update of updates) {
-      const venue = byId.get(Number(update.id));
-      if (!venue) continue;
+      const id = Number(update.id);
+      const venue = byId.get(id);
+      if (!venue) { rejected.push({ id: update.id, error: 'venue not found' }); continue; }
 
-      const next = {};
-      let invalid = false;
+      const next = { id };
+      let error = null;
       for (const [field, maxLen] of Object.entries(TEXT_FIELDS)) {
         if (!(field in update)) { next[field] = venue[field]; continue; }
         const value = validateStr(update[field], maxLen);
-        if (value === false) { invalid = true; break; }
+        if (value === false) { error = `${field} too long (max ${maxLen})`; break; }
         next[field] = value;
       }
-      if (invalid) continue;
       for (const field of DATE_FIELDS) {
+        if (error) break;
         if (!(field in update)) { next[field] = venue[field]; continue; }
         const value = validateStr(update[field], 10);
-        if (value === false || !isDate(value)) { invalid = true; break; }
+        if (value === false || !isDate(value)) { error = `${field} must be a date (YYYY-MM-DD)`; break; }
         next[field] = value;
       }
-      if (invalid) continue;
-
-      const [updated] = await sql`
-        UPDATE venues SET
-          status             = ${next.status},
-          category           = ${next.category},
-          booking_channel    = ${next.booking_channel},
-          remuneration       = ${next.remuneration},
-          season             = ${next.season},
-          preferred_period   = ${next.preferred_period},
-          comment            = ${next.comment},
-          last_communication = ${next.last_communication},
-          deadline           = ${next.deadline},
-          last_updated       = NOW()
-        WHERE id = ${venue.id} AND artist_id = ${artist.id}
-        RETURNING id`;
-      if (updated) count++;
+      if (error) rejected.push({ id, error });
+      else accepted.push(next);
     }
-    return res.json({ ok: true, count });
+
+    // One statement for the whole batch instead of up to 200 round-trips, inside a
+    // transaction so a failure cannot leave half the rows written.
+    let count = 0;
+    if (accepted.length) {
+      const col = f => accepted.map(r => r[f] ?? null);
+      await sql.begin(async tx => {
+        const updated = await tx`
+          UPDATE venues SET
+            status             = u.status,
+            category           = u.category,
+            booking_channel    = u.booking_channel,
+            remuneration       = u.remuneration,
+            season             = u.season,
+            preferred_period   = u.preferred_period,
+            comment            = u.comment,
+            last_communication = u.last_communication,
+            deadline           = u.deadline,
+            last_updated       = NOW()
+          FROM unnest(${col('id')}::int[], ${col('status')}::text[], ${col('category')}::text[],
+                      ${col('booking_channel')}::text[], ${col('remuneration')}::text[], ${col('season')}::text[],
+                      ${col('preferred_period')}::text[], ${col('comment')}::text[],
+                      ${col('last_communication')}::date[], ${col('deadline')}::date[])
+               AS u(id, status, category, booking_channel, remuneration, season,
+                    preferred_period, comment, last_communication, deadline)
+          WHERE venues.id = u.id AND venues.artist_id = ${artist.id} AND venues.deleted = false
+          RETURNING venues.id`;
+        count = updated.length;
+      });
+    }
+
+    return res.json({ ok: true, count, rejected });
   }
 
   res.status(405).json({ error: 'Method not allowed' });

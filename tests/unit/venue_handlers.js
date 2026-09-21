@@ -52,7 +52,9 @@ function loadHandler(rel, route) {
       isPrivate: () => false,
     },
   };
-  return { handler: require(path.join(__dirname, '../..', rel)), calls };
+  const began = { value: false };
+  sql.begin = async fn => { began.value = true; return fn(sql); };
+  return { handler: require(path.join(__dirname, '../..', rel)), calls, began };
 }
 
 async function call(handler, method, url, body) {
@@ -188,10 +190,43 @@ async function run(r) {
     assertEq(res.statusCode, 200);
     assertEq(res.body?.count, 1);
     const update = calls.find(c => c.text.startsWith('UPDATE venues'));
-    assert(update.values.includes('contacted'), 'new status not passed');
-    assert(update.values.includes('pub'), 'untouched category not kept');
-    assert(update.values.includes('email'), 'untouched booking_channel not kept');
-    assert(update.values.includes(null), 'cleared comment should be null');
+    const sent = JSON.stringify(update.values);
+    assert(sent.includes('contacted'), 'new status not passed');
+    assert(sent.includes('pub'), 'untouched category not kept');
+    assert(sent.includes('email'), 'untouched booking_channel not kept');
+    assert(sent.includes('null'), 'cleared comment should be null');
+  });
+
+  await testAsync('PATCH reports which rows were rejected and why', async () => {
+    const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
+      season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null };
+    const { handler } = loadHandler('api/[artist]/venues.js',
+      text => (text.startsWith('SELECT * FROM venues') ? [stored] : [stored]));
+    const res = await call(handler, 'PATCH', '/api/test/venues', [
+      { id: 5, last_communication: 'gestern' },
+      { id: 6, status: 'x'.repeat(60) },
+    ]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.count, 0);
+    assertEq(res.body?.rejected?.length, 2);
+    assertEq(res.body.rejected[0].id, 5);
+    assert(/date/i.test(res.body.rejected[0].error), 'date error not reported: ' + res.body.rejected[0].error);
+    assertEq(res.body.rejected[1].id, 6);
+    assert(/not found|too long/i.test(res.body.rejected[1].error), 'reason missing: ' + res.body.rejected[1].error);
+  });
+
+  await testAsync('PATCH writes all rows in one transaction', async () => {
+    const stored = id => ({ id, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
+      season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null });
+    const { handler, calls, began } = loadHandler('api/[artist]/venues.js',
+      text => (text.startsWith('SELECT * FROM venues') ? [stored(5), stored(6)] : [{ id: 5 }, { id: 6 }]));
+    const res = await call(handler, 'PATCH', '/api/test/venues',
+      [{ id: 5, status: 'contacted' }, { id: 6, status: 'declined' }]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.count, 2);
+    assert(began.value, 'writes must run inside sql.begin');
+    const updates = calls.filter(c => c.text.startsWith('UPDATE venues'));
+    assert(updates.length <= 1, `expected one batched UPDATE, got ${updates.length}`);
   });
 
   await testAsync('PATCH skips rows with an invalid date and reports the count', async () => {
@@ -212,7 +247,7 @@ async function run(r) {
     const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, last_communication: '2026-09-21', deadline: '' }]);
     assertEq(res.body?.count, 1);
     const update = calls.find(c => c.text.startsWith('UPDATE venues'));
-    assert(update.values.includes('2026-09-21'), 'date not passed');
+    assert(JSON.stringify(update.values).includes('2026-09-21'), 'date not passed');
   });
 
   await testAsync('PATCH without an array → 400', async () => {

@@ -392,6 +392,7 @@ initPage(async function(cfg) {
     filterEl.addEventListener('input', function() {
       clearTimeout(_venuesTimer);
       _venuesTimer = setTimeout(async function() {
+        if (!_confirmDiscardBulk()) return;
         _venuesQ = filterEl.value.trim();
         _venuesOffset = 0;
         await loadVenues();
@@ -401,6 +402,7 @@ initPage(async function(cfg) {
 
   if (statusEl) {
     statusEl.addEventListener('change', async function() {
+      if (!_confirmDiscardBulk()) return;
       _venuesStatus = statusEl.value;
       _venuesOffset = 0;
       await loadVenues();
@@ -409,6 +411,7 @@ initPage(async function(cfg) {
 
   if (categoryEl) {
     categoryEl.addEventListener('change', async function() {
+      if (!_confirmDiscardBulk()) return;
       _venuesCategory = categoryEl.value;
       _venuesOffset = 0;
       await loadVenues();
@@ -418,6 +421,7 @@ initPage(async function(cfg) {
   var countryEl = document.getElementById('filter-country');
   if (countryEl) {
     countryEl.addEventListener('change', async function() {
+      if (!_confirmDiscardBulk()) return;
       _venuesCountry = countryEl.value;
       _venuesOffset = 0;
       await loadVenues();
@@ -466,10 +470,16 @@ async function openVenueFromMap(id) {
 var VENUE_BULK_KEY = 'venues_bulk_edit';
 var _venueDirty = new Set();
 var _venueBulkSortState = { field: 'name', dir: 1 };
-var _venuesPageSize = Number(localStorage.getItem('venues_page_size')) || 50;
+var _venuesPageSize = 0;   // read lazily: this file is also evaluated without a DOM in tests
 var _venuesLetter = '';
-// id → { field: value } for rows edited but not saved yet, so re-sorting keeps them.
-var _venueBulkEdits = {};
+
+// Anything that reloads the table throws away unsaved edits — ask first, every time.
+function _confirmDiscardBulk() {
+  if (!_venueDirty.size) return true;
+  if (!confirm(t('venues.bulkDiscardConfirm'))) return false;
+  _venueDirty.clear();
+  return true;
+}
 
 var BULK_COLUMNS = [
   { field: 'name',               get label() { return t('venues.colName'); },           type: 'ro',     sortable: true },
@@ -498,41 +508,23 @@ function isVenueBulkEdit() {
 }
 
 function toggleVenueBulkEdit() {
-  if (isVenueBulkEdit()) {
-    if (_venueDirty.size && !confirm(t('venues.bulkDiscardConfirm'))) return;
-    localStorage.removeItem(VENUE_BULK_KEY);
-  } else {
-    localStorage.setItem(VENUE_BULK_KEY, '1');
-  }
-  _venueDirty.clear();
-  _venueBulkEdits = {};
+  if (!_confirmDiscardBulk()) return;
+  if (isVenueBulkEdit()) localStorage.removeItem(VENUE_BULK_KEY);
+  else                   localStorage.setItem(VENUE_BULK_KEY, '1');
   renderVenueBulk();
 }
 
 async function sortVenueBulk(field) {
-  if (_venueDirty.size && !confirm(t('venues.bulkDiscardConfirm'))) return;
+  if (!_confirmDiscardBulk()) return;
   if (_venueBulkSortState.field === field) _venueBulkSortState.dir = -_venueBulkSortState.dir;
   else _venueBulkSortState = { field: field, dir: 1 };
   // Sorting happens in the DB so it covers every venue, not just the page on screen.
-  _venueDirty.clear();
-  _venueBulkEdits = {};
   _venuesOffset = 0;
   await loadVenues();
 }
 
-// Unsaved input values survive a re-sort: read them out of the DOM before re-rendering.
-function _harvestBulkEdits() {
-  document.querySelectorAll('#venues-bulk tr[data-id]').forEach(function(row) {
-    if (!_venueDirty.has(row.dataset.id)) return;
-    var edits = _venueBulkEdits[row.dataset.id] || {};
-    row.querySelectorAll('[data-field]').forEach(function(el) { edits[el.dataset.field] = el.value; });
-    _venueBulkEdits[row.dataset.id] = edits;
-  });
-}
-
 function _bulkCell(v, col) {
-  var pending = _venueBulkEdits[String(v.id)];
-  var raw = pending && col.field in pending ? pending[col.field] : v[col.field];
+  var raw = v[col.field];
   var value = raw == null ? '' : String(raw);
   if (col.type === 'ro') return escHtml(value);
   if (col.type === 'date') {
@@ -595,18 +587,12 @@ function renderVenueBulk() {
   bulkEl.querySelectorAll('th[data-sort]').forEach(function(th) {
     th.onclick = function() { sortVenueBulk(th.dataset.sort); };
   });
-  // restore the dirty marker on rows with unsaved edits after a re-sort
-  Object.keys(_venueBulkEdits).forEach(function(id) {
-    var row = bulkEl.querySelector('tr[data-id="' + id + '"]');
-    if (row) row.classList.add('dirty');
-  });
   // Property assignment, not addEventListener — renderVenueBulk() runs again after every load.
   bulkEl.oninput  = _onBulkInput;
   bulkEl.onchange = _onBulkInput;
   document.getElementById('venue-bulk-save').onclick = saveVenueBulk;
   document.getElementById('venue-bulk-discard').onclick = function() {
     _venueDirty.clear();
-    _venueBulkEdits = {};
     renderVenueBulk();
   };
   _updateBulkButtons();
@@ -643,19 +629,41 @@ async function saveVenueBulk() {
     updates.push(update);
   });
   _updateBulkButtons(t('venues.savingMsg'));
-  var r = await apiFetch('/api/' + artistSlug + '/venues', 'PATCH', updates);
-  var json = await r.json().catch(function() { return {}; });
-  if (!r.ok) { _updateBulkButtons(json.error || t('gigs.errorFallback')); return; }
+  var json;
+  try {
+    var r = await apiFetch('/api/' + artistSlug + '/venues', 'PATCH', updates);
+    json = await r.json().catch(function() { return {}; });
+    if (!r.ok) { _updateBulkButtons(json.error || t('gigs.errorFallback')); return; }
+  } catch (err) {
+    _updateBulkButtons(t('venues.bulkSaveFailed'));
+    return;
+  }
+  var rejected = json.rejected || [];
   // Re-read from the server so the table shows what was actually stored.
   _venueDirty.clear();
-  _venueBulkEdits = {};
   _venuesOffset = 0;
   await loadVenues();
-  _updateBulkButtons(t('venues.bulkSaved', { n: json.count || 0 }));
+  _updateBulkButtons(rejected.length
+    ? t('venues.bulkSavedWithErrors', { n: json.count || 0, failed: rejected.length })
+    : t('venues.bulkSaved', { n: json.count || 0 }));
+  if (rejected.length) {
+    rejected.forEach(function(rej) {
+      var row = document.querySelector('#venues-bulk tr[data-id="' + rej.id + '"]');
+      if (row) { row.classList.add('bulk-row-error'); row.title = rej.error; }
+    });
+  }
+}
+
+function venuePageSize() {
+  if (!_venuesPageSize) {
+    try { _venuesPageSize = Number(localStorage.getItem('venues_page_size')) || 50; }
+    catch { _venuesPageSize = 50; }
+  }
+  return _venuesPageSize;
 }
 
 async function loadVenues() {
-  const params = new URLSearchParams({ limit: _venuesPageSize, offset: _venuesOffset });
+  const params = new URLSearchParams({ limit: venuePageSize(), offset: _venuesOffset });
   if (_venuesQ)        params.set('q',        _venuesQ);
   if (_venuesStatus)   params.set('status',   _venuesStatus);
   if (_venuesCategory) params.set('category', _venuesCategory);
@@ -677,11 +685,20 @@ async function loadVenues() {
   _populateCountryFilter();
 }
 
-function _populateCountryFilter() {
+var _venueCountries = null;
+
+// Countries come from the whole workspace, not from allVenues — that holds one page.
+async function _populateCountryFilter() {
   var el = document.getElementById('filter-country');
   if (!el) return;
+  if (!_venueCountries) {
+    try {
+      var r = await apiFetch('/api/' + artistSlug + '/venues?facet=country');
+      _venueCountries = r.ok ? await r.json() : [];
+    } catch { _venueCountries = []; }
+  }
   var selected = el.value;
-  var countries = [...new Set(allVenues.map(function(v) { return v.country; }).filter(Boolean))].sort();
+  var countries = _venueCountries;
   el.innerHTML = '<option value="">' + t('venues.allCountries') + '</option>' +
     countries.map(function(c) {
       return '<option value="' + escHtml(c) + '"' + (c === selected ? ' selected' : '') + '>' + escHtml(c) + '</option>';
@@ -689,24 +706,24 @@ function _populateCountryFilter() {
 }
 
 async function gotoVenuePage(page) {
-  if (_venueDirty.size && !confirm(t('venues.bulkDiscardConfirm'))) return;
-  const pages = Math.max(1, Math.ceil(_venuesTotal / _venuesPageSize));
+  if (!_confirmDiscardBulk()) return;
+  const pages = Math.max(1, Math.ceil(_venuesTotal / venuePageSize()));
   const target = Math.min(Math.max(1, page), pages);
-  _venueDirty.clear();
-  _venueBulkEdits = {};
-  _venuesOffset = (target - 1) * _venuesPageSize;
+  _venuesOffset = (target - 1) * venuePageSize();
   await loadVenues();
   window.scrollTo({ top: 0 });
 }
 
 async function setVenuePageSize(size) {
+  if (!_confirmDiscardBulk()) return;
   _venuesPageSize = Number(size) || 50;
-  localStorage.setItem('venues_page_size', String(_venuesPageSize));
+  try { localStorage.setItem('venues_page_size', String(_venuesPageSize)); } catch {}
   _venuesOffset = 0;
   await loadVenues();
 }
 
 async function jumpToVenueLetter(letter) {
+  if (!_confirmDiscardBulk()) return;
   _venuesLetter = letter === _venuesLetter ? '' : letter;
   _venuesOffset = 0;
   await loadVenues();
@@ -738,7 +755,7 @@ function updateVenuesFooter() {
   const footer  = document.getElementById('venues-footer');
   const counter = document.getElementById('venues-counter');
   if (!footer || !counter) return;
-  const pageSize = _venuesPageSize;
+  const pageSize = venuePageSize();
   const pages    = Math.max(1, Math.ceil(_venuesTotal / pageSize));
   const page     = Math.floor(_venuesOffset / pageSize) + 1;
   const from     = _venuesTotal === 0 ? 0 : _venuesOffset + 1;

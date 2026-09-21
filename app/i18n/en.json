@@ -767,6 +767,8 @@
   "venues.bulkDiscardConfirm": "Discard unsaved changes?",
   "venues.bulkUnsaved": "{n} changed",
   "venues.bulkSaved": "{n} saved",
+  "venues.bulkSaveFailed": "Could not save — check your connection and try again.",
+  "venues.bulkSavedWithErrors": "{n} saved, {failed} rejected — see the marked rows",
   "venues.colLastContact": "Last contact",
   "venues.colBookingChannel": "Channel",
   "venues.colRemuneration": "Fee",

@@ -767,6 +767,8 @@
   "venues.bulkDiscardConfirm": "Nicht gespeicherte Änderungen verwerfen?",
   "venues.bulkUnsaved": "{n} geändert",
   "venues.bulkSaved": "{n} gespeichert",
+  "venues.bulkSaveFailed": "Speichern fehlgeschlagen — Verbindung prüfen und erneut versuchen.",
+  "venues.bulkSavedWithErrors": "{n} gespeichert, {failed} abgelehnt — siehe markierte Zeilen",
   "venues.colLastContact": "Letzter Kontakt",
   "venues.colBookingChannel": "Kanal",
   "venues.colRemuneration": "Gage",

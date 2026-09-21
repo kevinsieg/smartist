@@ -698,13 +698,13 @@ function _downloadGigIcs(id) {
 }
 
 // Past gigs get no calendar button — adding a date that has already happened is pointless.
+// Compares date strings exactly like renderGigs splits upcoming from past; going through
+// Date objects would mix UTC parsing with a local midnight and disagree with that split.
 function _gigIsUpcoming(date) {
   if (!date) return false;
-  var d = new Date(date);
-  if (isNaN(d)) return false;
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return d >= today;
+  var day = String(date).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  return day >= new Date().toISOString().slice(0, 10);
 }
 
 function expandGig(g) {

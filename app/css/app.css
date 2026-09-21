@@ -1928,12 +1928,27 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
   .filter-bar-row1 { padding: 0.6rem 1rem 0.5rem; }
   .filter-bar-field { min-width: 150px; }
 
-  .songs-list-row { gap: 0.75rem; }
-  .songs-list-row-genre { font-size: 0.72rem; padding: 0.15rem 0.55rem; border-radius: 10px; background: var(--primary-color); color: var(--third-color); white-space: nowrap; flex-shrink: 0; }
+  /* Fixed columns so genre, key and energy line up down the list even when a song
+     is missing one of them. */
+  .songs-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7.5rem 2.5rem 3.5rem 4.5rem;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .songs-list-row-genre {
+    font-size: var(--text-xs); padding: 0.15rem 0.55rem; border-radius: 10px;
+    background: var(--primary-color); color: var(--muted-ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    justify-self: start; max-width: 100%;
+  }
+  .songs-list-row-genre:empty { background: none; padding: 0; }   /* no empty pill */
   .songs-list-row-key,
-  .songs-list-row-tempo { font-size: 0.76rem; color: var(--third-color); flex-shrink: 0; white-space: nowrap; }
-  .songs-list-row-key   { min-width: 28px; }
-  .songs-list-row-tempo { min-width: 60px; }
+  .songs-list-row-tempo {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+    font-size: var(--text-xs); color: var(--muted-ink); white-space: nowrap;
+  }
+  .songs-list-row-icons { justify-self: end; }
 }
 
 /* ── Page tab bars (venues, setlist) ─────────────────────────────────────── */
