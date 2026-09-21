@@ -169,6 +169,78 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true, token, role: user.role, email: user.email, artists });
   }
 
+  // POST ?action=confirm-email-change — public: the link is clicked from an
+  // inbox, so there is no session. Two modes: without `confirm` it previews the
+  // change (new address + every band affected); with `confirm: true` it applies.
+  if (req.method === 'POST' && action === 'confirm-email-change') {
+    const { token, confirm } = req.body ?? {};
+    if (!token) return res.status(400).json({ error: 'token required' });
+    if (await checkRateLimit(`emailchg-confirm:${clientIp(req)}`, 10, 600))
+      return res.status(429).json({ error: 'Too many attempts — try again later' });
+
+    const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
+    const [pending] = await sql`
+      SELECT id, email, pending_email FROM users
+      WHERE email_change_token_hash = ${tokenHash}
+        AND email_change_expires_at > now()
+        AND pending_email IS NOT NULL
+    `;
+    if (!pending) return res.status(400).json({ error: 'Invalid or expired link' });
+
+    // Every band reached by the current address — the change moves all of them.
+    const bands = await sql`
+      SELECT a.slug, a.name, u.role
+      FROM users u JOIN artists a ON a.id = u.artist_id
+      WHERE u.email = ${pending.email}
+      ORDER BY a.name
+    `;
+
+    if (!confirm) return res.json({ newEmail: pending.pending_email, bands });
+
+    const oldEmail = pending.email;
+    const target   = pending.pending_email;
+    try {
+      await sql.begin(async tx => {
+        // Refuse if the address is already taken in any band this change touches.
+        const [clash] = await tx`
+          SELECT 1 FROM users u
+          WHERE u.email = ${target}
+            AND u.artist_id IN (SELECT artist_id FROM users WHERE email = ${oldEmail})
+          LIMIT 1
+        `;
+        if (clash) { const e = new Error('taken'); e.taken = true; throw e; }
+
+        // One statement moves every membership, so the person keeps all bands.
+        await tx`UPDATE users SET email = ${target} WHERE email = ${oldEmail}`;
+        await tx`
+          UPDATE users
+          SET pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL
+          WHERE id = ${pending.id}
+        `;
+      });
+    } catch (err) {
+      // 23505 = unique_violation: someone claimed the address mid-flight.
+      if (err.taken || err.code === '23505')
+        return res.status(409).json({ error: 'That email address is already in use' });
+      throw err;
+    }
+
+    // Tell the old address once the change is durable. A mail failure must not
+    // roll it back — retrying would risk applying the change twice.
+    try {
+      await sendEmail({
+        to: oldEmail,
+        subject: 'Your email address was changed',
+        html: `<p>Your smartist login email was changed to ${target}.</p>
+               <p>If you did not do this, contact support immediately.</p>`,
+      });
+    } catch (err) {
+      await logger.error('email_change_notice_failed', { band: slug, error: err.message });
+    }
+
+    return res.json({ ok: true, email: target });
+  }
+
   // ── Authenticated actions ─────────────────────────────────────────────────
   const artist = await requireAuth(req, res, slug);
   if (!artist) return;
@@ -346,77 +418,6 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true });
   }
 
-  // POST ?action=confirm-email-change — public: the link is clicked from an
-  // inbox, so there is no session. Two modes: without `confirm` it previews the
-  // change (new address + every band affected); with `confirm: true` it applies.
-  if (req.method === 'POST' && action === 'confirm-email-change') {
-    const { token, confirm } = req.body ?? {};
-    if (!token) return res.status(400).json({ error: 'token required' });
-    if (await checkRateLimit(`emailchg-confirm:${clientIp(req)}`, 10, 600))
-      return res.status(429).json({ error: 'Too many attempts — try again later' });
-
-    const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
-    const [pending] = await sql`
-      SELECT id, email, pending_email FROM users
-      WHERE email_change_token_hash = ${tokenHash}
-        AND email_change_expires_at > now()
-        AND pending_email IS NOT NULL
-    `;
-    if (!pending) return res.status(400).json({ error: 'Invalid or expired link' });
-
-    // Every band reached by the current address — the change moves all of them.
-    const bands = await sql`
-      SELECT a.slug, a.name, u.role
-      FROM users u JOIN artists a ON a.id = u.artist_id
-      WHERE u.email = ${pending.email}
-      ORDER BY a.name
-    `;
-
-    if (!confirm) return res.json({ newEmail: pending.pending_email, bands });
-
-    const oldEmail = pending.email;
-    const target   = pending.pending_email;
-    try {
-      await sql.begin(async tx => {
-        // Refuse if the address is already taken in any band this change touches.
-        const [clash] = await tx`
-          SELECT 1 FROM users u
-          WHERE u.email = ${target}
-            AND u.artist_id IN (SELECT artist_id FROM users WHERE email = ${oldEmail})
-          LIMIT 1
-        `;
-        if (clash) { const e = new Error('taken'); e.taken = true; throw e; }
-
-        // One statement moves every membership, so the person keeps all bands.
-        await tx`UPDATE users SET email = ${target} WHERE email = ${oldEmail}`;
-        await tx`
-          UPDATE users
-          SET pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL
-          WHERE id = ${pending.id}
-        `;
-      });
-    } catch (err) {
-      // 23505 = unique_violation: someone claimed the address mid-flight.
-      if (err.taken || err.code === '23505')
-        return res.status(409).json({ error: 'That email address is already in use' });
-      throw err;
-    }
-
-    // Tell the old address once the change is durable. A mail failure must not
-    // roll it back — retrying would risk applying the change twice.
-    try {
-      await sendEmail({
-        to: oldEmail,
-        subject: 'Your email address was changed',
-        html: `<p>Your smartist login email was changed to ${target}.</p>
-               <p>If you did not do this, contact support immediately.</p>`,
-      });
-    } catch (err) {
-      await logger.error('email_change_notice_failed', { band: slug, error: err.message });
-    }
-
-    return res.json({ ok: true, email: target });
-  }
 
   // PUT — update user role (admin). Login email is never admin-editable: it is
   // the cross-workspace identity (resolveUser joins users on email), so rewriting
