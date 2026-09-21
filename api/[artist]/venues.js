@@ -44,6 +44,20 @@ module.exports = wrap(async function handler(req, res) {
 
     const { limit, offset } = parsePage(req);
     const q        = (req.query.q        || '').trim();
+    // Whitelisted sort — the column name goes into the query unquoted, so it may
+    // never come straight from the request.
+    const SORTABLE = ['name', 'city', 'status', 'category', 'last_communication',
+                      'deadline', 'season', 'preferred_period'];
+    const sortField = SORTABLE.includes(req.query.sort) ? req.query.sort : null;
+    const sortDir   = req.query.dir === 'desc' ? sql`DESC` : sql`ASC`;
+    // Without an explicit sort the old order stands: placeholders first, then by name.
+    const orderBy   = sortField
+      ? sql`${sql(sortField)} ${sortDir} NULLS LAST, name ASC`
+      : sql`category = 'placeholder' DESC, name ASC`;
+    // A–Z jump: single letter, or '#' for names starting with anything else.
+    const rawLetter = (req.query.letter || '').trim();
+    const letter    = /^[A-Za-z]$/.test(rawLetter) ? `${rawLetter}%` : null;
+    const nonAlpha  = rawLetter === '#';
     const status   = (req.query.status   || '').trim() || null;
     const category = (req.query.category || '').trim() || null;
     const country  = (req.query.country  || '').trim() || null;
@@ -63,12 +77,14 @@ module.exports = wrap(async function handler(req, res) {
           AND (${status}::text   IS NULL OR status   ILIKE ${status})
           AND (${category}::text IS NULL OR category ILIKE ${category})
           AND (${country}::text  IS NULL OR country  ILIKE ${country})
+          AND (${letter}::text IS NULL OR name ILIKE ${letter})
+          AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
           AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
           AND EXISTS (
             SELECT 1 FROM gigs g
             WHERE g.venue_id = venues.id AND g.deleted = false
           )
-        ORDER BY category = 'placeholder' DESC, deleted ASC, name ASC
+        ORDER BY deleted ASC, ${orderBy}
         LIMIT ${limit} OFFSET ${offset}
       `;
     } else {
@@ -84,8 +100,10 @@ module.exports = wrap(async function handler(req, res) {
           AND (${status}::text   IS NULL OR status   ILIKE ${status})
           AND (${category}::text IS NULL OR category ILIKE ${category})
           AND (${country}::text  IS NULL OR country  ILIKE ${country})
+          AND (${letter}::text IS NULL OR name ILIKE ${letter})
+          AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
           AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
-        ORDER BY category = 'placeholder' DESC, deleted ASC, name ASC
+        ORDER BY deleted ASC, ${orderBy}
         LIMIT ${limit} OFFSET ${offset}
       `;
     }

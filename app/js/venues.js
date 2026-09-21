@@ -424,6 +424,11 @@ initPage(async function(cfg) {
     });
   }
 
+  // Put the right skeleton on screen before the first request answers — otherwise the
+  // list view renders first and visibly flips to the bulk table a moment later.
+  renderVenueBulk();
+  _renderLetterBar();
+
   await loadVenues();
 
   initGeoFields('vm-city', 'vm-country', 'vm-postcode');
@@ -460,18 +465,23 @@ async function openVenueFromMap(id) {
 
 var VENUE_BULK_KEY = 'venues_bulk_edit';
 var _venueDirty = new Set();
+var _venueBulkSortState = { field: 'name', dir: 1 };
+var _venuesPageSize = Number(localStorage.getItem('venues_page_size')) || 50;
+var _venuesLetter = '';
+// id → { field: value } for rows edited but not saved yet, so re-sorting keeps them.
+var _venueBulkEdits = {};
 
 var BULK_COLUMNS = [
-  { field: 'name',               get label() { return t('venues.colName'); },           type: 'ro' },
-  { field: 'city',               get label() { return t('venues.colCity'); },           type: 'ro' },
-  { field: 'status',             get label() { return t('venues.colStatus'); },         type: 'select', options: function() { return VENUE_STATUSES; } },
-  { field: 'category',           get label() { return t('venues.fieldCategory'); },     type: 'select', options: function() { return VENUE_CATEGORIES; } },
-  { field: 'last_communication', get label() { return t('venues.colLastContact'); },    type: 'date' },
+  { field: 'name',               get label() { return t('venues.colName'); },           type: 'ro',     sortable: true },
+  { field: 'city',               get label() { return t('venues.colCity'); },           type: 'ro',     sortable: true },
+  { field: 'status',             get label() { return t('venues.colStatus'); },         type: 'select', sortable: true, options: function() { return VENUE_STATUSES; } },
+  { field: 'category',           get label() { return t('venues.fieldCategory'); },     type: 'select', sortable: true, options: function() { return VENUE_CATEGORIES; } },
+  { field: 'last_communication', get label() { return t('venues.colLastContact'); },    type: 'date',   sortable: true },
   { field: 'booking_channel',    get label() { return t('venues.colBookingChannel'); }, type: 'select', options: function() { return BOOKING_CHANNELS; } },
-  { field: 'deadline',           get label() { return t('venues.colDeadline'); },       type: 'date' },
+  { field: 'deadline',           get label() { return t('venues.colDeadline'); },       type: 'date',   sortable: true },
   { field: 'remuneration',       get label() { return t('venues.colRemuneration'); },   type: 'text' },
-  { field: 'season',             get label() { return t('venues.colSeason'); },         type: 'text' },
-  { field: 'preferred_period',   get label() { return t('venues.colPreferredPeriod'); },type: 'text' },
+  { field: 'season',             get label() { return t('venues.colSeason'); },         type: 'text',   sortable: true },
+  { field: 'preferred_period',   get label() { return t('venues.colPreferredPeriod'); },type: 'text',   sortable: true },
   { field: 'comment',            get label() { return t('venues.colComment'); },        type: 'text' },
 ];
 
@@ -498,11 +508,35 @@ function toggleVenueBulkEdit() {
     localStorage.setItem(VENUE_BULK_KEY, '1');
   }
   _venueDirty.clear();
+  _venueBulkEdits = {};
   renderVenueBulk();
 }
 
+async function sortVenueBulk(field) {
+  if (_venueDirty.size && !confirm(t('venues.bulkDiscardConfirm'))) return;
+  if (_venueBulkSortState.field === field) _venueBulkSortState.dir = -_venueBulkSortState.dir;
+  else _venueBulkSortState = { field: field, dir: 1 };
+  // Sorting happens in the DB so it covers every venue, not just the page on screen.
+  _venueDirty.clear();
+  _venueBulkEdits = {};
+  _venuesOffset = 0;
+  await loadVenues();
+}
+
+// Unsaved input values survive a re-sort: read them out of the DOM before re-rendering.
+function _harvestBulkEdits() {
+  document.querySelectorAll('#venues-bulk tr[data-id]').forEach(function(row) {
+    if (!_venueDirty.has(row.dataset.id)) return;
+    var edits = _venueBulkEdits[row.dataset.id] || {};
+    row.querySelectorAll('[data-field]').forEach(function(el) { edits[el.dataset.field] = el.value; });
+    _venueBulkEdits[row.dataset.id] = edits;
+  });
+}
+
 function _bulkCell(v, col) {
-  var value = v[col.field] == null ? '' : String(v[col.field]);
+  var pending = _venueBulkEdits[String(v.id)];
+  var raw = pending && col.field in pending ? pending[col.field] : v[col.field];
+  var value = raw == null ? '' : String(raw);
   if (col.type === 'ro') return escHtml(value);
   if (col.type === 'date') {
     return '<input type="date" data-field="' + col.field + '" value="' + escHtml(value.slice(0, 10)) + '">';
@@ -542,8 +576,15 @@ function renderVenueBulk() {
       '<button class="btn" id="venue-bulk-discard" disabled>' + t('venues.bulkDiscard') + '</button>' +
       '<span class="status" id="venue-bulk-status"></span>' +
     '</div>' +
-    '<div class="bulk-wrap"><table><thead><tr>' +
-      BULK_COLUMNS.map(function(c) { return '<th>' + escHtml(c.label) + '</th>'; }).join('') +
+    '<div class="table-wrap"><table><thead><tr>' +
+      BULK_COLUMNS.map(function(c) {
+        var cls = 'col-' + c.field;
+        if (!c.sortable) return '<th class="' + cls + '">' + escHtml(c.label) + '</th>';
+        var active = _venueBulkSortState.field === c.field;
+        var arrow  = active ? (_venueBulkSortState.dir === 1 ? ' ▲' : ' ▼') : '';
+        return '<th class="' + cls + ' bulk-sortable' + (active ? ' bulk-sorted' : '') + '" data-sort="' + c.field + '">' +
+               escHtml(c.label) + arrow + '</th>';
+      }).join('') +
     '</tr></thead><tbody>' +
       rows.map(function(v) {
         return '<tr data-id="' + v.id + '">' + BULK_COLUMNS.map(function(c) {
@@ -552,12 +593,21 @@ function renderVenueBulk() {
       }).join('') +
     '</tbody></table></div>';
 
+  bulkEl.querySelectorAll('th[data-sort]').forEach(function(th) {
+    th.onclick = function() { sortVenueBulk(th.dataset.sort); };
+  });
+  // restore the dirty marker on rows with unsaved edits after a re-sort
+  Object.keys(_venueBulkEdits).forEach(function(id) {
+    var row = bulkEl.querySelector('tr[data-id="' + id + '"]');
+    if (row) row.classList.add('dirty');
+  });
   // Property assignment, not addEventListener — renderVenueBulk() runs again after every load.
   bulkEl.oninput  = _onBulkInput;
   bulkEl.onchange = _onBulkInput;
   document.getElementById('venue-bulk-save').onclick = saveVenueBulk;
   document.getElementById('venue-bulk-discard').onclick = function() {
     _venueDirty.clear();
+    _venueBulkEdits = {};
     renderVenueBulk();
   };
   _updateBulkButtons();
@@ -599,29 +649,32 @@ async function saveVenueBulk() {
   if (!r.ok) { _updateBulkButtons(json.error || t('gigs.errorFallback')); return; }
   // Re-read from the server so the table shows what was actually stored.
   _venueDirty.clear();
+  _venueBulkEdits = {};
   _venuesOffset = 0;
   await loadVenues();
   _updateBulkButtons(t('venues.bulkSaved', { n: json.count || 0 }));
 }
 
 async function loadVenues() {
-  const params = new URLSearchParams({ limit: 50, offset: _venuesOffset });
+  const params = new URLSearchParams({ limit: _venuesPageSize, offset: _venuesOffset });
   if (_venuesQ)        params.set('q',        _venuesQ);
   if (_venuesStatus)   params.set('status',   _venuesStatus);
   if (_venuesCategory) params.set('category', _venuesCategory);
   if (_venuesCountry)  params.set('country',  _venuesCountry);
+  if (_venuesLetter)   params.set('letter',   _venuesLetter);
+  if (isVenueBulkEdit()) {
+    params.set('sort', _venueBulkSortState.field);
+    params.set('dir',  _venueBulkSortState.dir === 1 ? 'asc' : 'desc');
+  }
   const r = await apiFetch(`/api/${artistSlug}/venues?${params}`);
   const { rows, total } = await r.json();
   _venuesTotal = total;
-  if (_venuesOffset === 0) {
-    allVenues = rows;
-  } else {
-    allVenues = [...allVenues, ...rows];
-  }
+  allVenues = rows;   // one page at a time — paging replaced the append-on-scroll list
   placeholderTable.setData(allVenues.filter(v => v.category === 'placeholder'));
   venueTable.setData(allVenues.filter(v => v.category !== 'placeholder'));
   renderVenueBulk();
   updateVenuesFooter();
+  _renderLetterBar();
   _populateCountryFilter();
 }
 
@@ -636,21 +689,84 @@ function _populateCountryFilter() {
     }).join('');
 }
 
-async function loadMoreVenues() {
-  _venuesOffset += 50;
+async function gotoVenuePage(page) {
+  if (_venueDirty.size && !confirm(t('venues.bulkDiscardConfirm'))) return;
+  const pages = Math.max(1, Math.ceil(_venuesTotal / _venuesPageSize));
+  const target = Math.min(Math.max(1, page), pages);
+  _venueDirty.clear();
+  _venueBulkEdits = {};
+  _venuesOffset = (target - 1) * _venuesPageSize;
   await loadVenues();
+  window.scrollTo({ top: 0 });
+}
+
+async function setVenuePageSize(size) {
+  _venuesPageSize = Number(size) || 50;
+  localStorage.setItem('venues_page_size', String(_venuesPageSize));
+  _venuesOffset = 0;
+  await loadVenues();
+}
+
+async function jumpToVenueLetter(letter) {
+  _venuesLetter = letter === _venuesLetter ? '' : letter;
+  _venuesOffset = 0;
+  await loadVenues();
+  _renderLetterBar();
+}
+
+function _renderLetterBar() {
+  var bar = document.getElementById('venues-letters');
+  if (!bar) return;
+  var letters = ['#'].concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''));
+  bar.innerHTML =
+    '<button class="letter-btn' + (_venuesLetter === '' ? ' letter-active' : '') + '" data-letter="">' +
+      t('venues.allLetters') + '</button>' +
+    letters.map(function(l) {
+      return '<button class="letter-btn' + (_venuesLetter === l ? ' letter-active' : '') +
+             '" data-letter="' + l + '">' + l + '</button>';
+    }).join('');
+  bar.querySelectorAll('.letter-btn').forEach(function(btn) {
+    btn.onclick = function() { jumpToVenueLetter(btn.dataset.letter); };
+  });
 }
 
 function updateVenuesFooter() {
   const footer  = document.getElementById('venues-footer');
   const counter = document.getElementById('venues-counter');
-  const btn     = document.getElementById('venues-load-more-btn');
   if (!footer || !counter) return;
-  counter.textContent = t(_venuesTotal !== 1 ? 'venues.showingVenues_other' : 'venues.showingVenues_one',
-    { shown: allVenues.length, total: _venuesTotal });
+  const pageSize = _venuesPageSize;
+  const pages    = Math.max(1, Math.ceil(_venuesTotal / pageSize));
+  const page     = Math.floor(_venuesOffset / pageSize) + 1;
+  const from     = _venuesTotal === 0 ? 0 : _venuesOffset + 1;
+  const to       = Math.min(_venuesOffset + allVenues.length, _venuesTotal);
+
+  counter.textContent = t('venues.showingRange', { from: from, to: to, total: _venuesTotal });
   footer.style.display = _venuesTotal > 0 ? '' : 'none';
-  if (btn) btn.style.display = allVenues.length < _venuesTotal ? '' : 'none';
+
+  const input = document.getElementById('venues-page-input');
+  if (input) {
+    input.value = page;
+    input.max   = pages;
+    input.onchange = function() { gotoVenuePage(Number(input.value)); };
+  }
+  const pageOf = document.getElementById('venues-page-of');
+  if (pageOf) pageOf.textContent = t('venues.pageOf', { pages: pages });
+
+  const sizeEl = document.getElementById('venues-page-size');
+  if (sizeEl) {
+    sizeEl.value = String(pageSize);
+    sizeEl.onchange = function() { setVenuePageSize(sizeEl.value); };
+  }
+
+  const nav = { 'venues-first': 1, 'venues-prev': page - 1, 'venues-next': page + 1, 'venues-last': pages };
+  Object.keys(nav).forEach(function(id) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = nav[id] === page || nav[id] < 1 || nav[id] > pages;
+    btn.onclick = function() { gotoVenuePage(nav[id]); };
+  });
 }
+
 
 function openAddModal() {
   editingId = null;
