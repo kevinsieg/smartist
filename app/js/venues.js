@@ -854,7 +854,7 @@ async function expandVenue(v) {
   var n = refs.gigs.length;
   var rows = refs.gigs.slice(0, 10).map(function(g) {
     return '<div style="padding:0.1rem 0;font-size:0.82rem;">' +
-      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) + '</div>';
   }).join('');
   var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
@@ -946,7 +946,7 @@ async function renderVenueGigs(venueId, venueName) {
   var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
   list.innerHTML = refs.gigs.map(function(g) {
     return '<div class="related-gig-item">' +
-      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) +
     '</div>';
   }).join('') +
@@ -981,7 +981,7 @@ async function openVenueGigsModal(v) {
   body.innerHTML = refs.gigs.map(function(g) {
     return '<div class="expansion-row">' +
       '<span style="color:var(--third-color);font-size:0.82rem;min-width:6.5rem;flex-shrink:0;">' +
-        (g.date ? escHtml(String(g.date).slice(0, 10)) : '—') +
+        (g.date ? escHtml(formatDate(g.date)) : '—') +
       '</span>' +
       '<span>' + escHtml(g.title) + '</span>' +
     '</div>';

@@ -67,6 +67,22 @@ function run(r) {
       'these calls send no token and fail in a private workspace:\n      ' + offenders.join('\n      '));
   });
 
+  // Dates must look the same in every corner of the app: common.js formatDate/formatTime
+  // own the formatting (stage.js keeps a documented copy — it loads no common.js).
+  test('no page script formats dates on its own', () => {
+    const ALLOWED = new Set(['common.js', 'stage.js']);
+    const offenders = [];
+    fs.readdirSync(path.join(APP, 'js')).filter(f => f.endsWith('.js') && !ALLOWED.has(f)).forEach(function(file) {
+      fs.readFileSync(path.join(APP, 'js', file), 'utf8').split('\n').forEach(function(line, i) {
+        if (/toLocaleDateString|toLocaleTimeString/.test(line)) {
+          offenders.push(`${file}:${i + 1}  ${line.trim().slice(0, 70)}`);
+        }
+      });
+    });
+    assert(offenders.length === 0,
+      'use formatDate()/formatTime() from common.js:\n      ' + offenders.join('\n      '));
+  });
+
   spaScripts.forEach(function(name) {
     test(name + '.js declares no top-level const/let', () => {
       const file = path.join(APP, 'js', name + '.js');

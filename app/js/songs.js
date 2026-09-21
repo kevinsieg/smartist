@@ -536,7 +536,7 @@ function _openSongPanelContent(item, panelEl) {
   var lastLive = getVal(song, 'last_played_at');
   var statsCells =
     (plays    ? _vspCell(t('songs.fieldPlays'),    escHtml(String(plays))) : '') +
-    (lastLive ? _vspCell(t('songs.fieldLastLive'), escHtml(String(lastLive).slice(0, 10))) : '');
+    (lastLive ? _vspCell(t('songs.fieldLastLive'), escHtml(formatDate(lastLive))) : '');
   var statsHtml = statsCells ? _vspSection(t('songs.sectionStats'), statsCells) : '';
 
   var lang   = getVal(song, 'gema_language') || (song.extra && song.extra.language) || '';
@@ -1232,7 +1232,7 @@ function renderRow(song) {
       let display = '—';
       if (val !== '' && val !== null && val !== undefined) {
         if (c.key === 'last_played_at') {
-          display = new Date(val).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' });
+          display = formatDate(val);
         } else {
           display = String(val);
         }
@@ -1617,11 +1617,10 @@ async function openAppearances(songId) {
       return;
     }
     list.innerHTML = data.map(sl => {
-      const parts = [sl.gig_name, sl.gig_date ? String(sl.gig_date).slice(0, 10) : null, sl.gig_venue]
+      const parts = [sl.gig_name, formatDate(sl.gig_date) || null, sl.gig_venue]
         .filter(Boolean);
       const label = parts.length ? parts.join(' — ') : (sl.title || `Setlist #${sl.id}`);
-      const date  = new Date(sl.created_at).toLocaleDateString('fr-FR',
-        { day: 'numeric', month: 'long', year: 'numeric' });
+      const date  = formatDate(sl.created_at);
       return `<div class="appearance-row">
         <a class="appearance-gig" href="/setlist-history#set-${sl.id}" target="_blank">${escHtml(label)}</a>
         <span class="appearance-date">${date}</span>

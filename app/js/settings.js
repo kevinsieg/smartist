@@ -92,8 +92,7 @@ function _renderUsers(users) {
 
   var pendingRows = pending.map(function(u) {
     var sentDate = u.invite_expires_at
-      ? new Date(new Date(u.invite_expires_at).getTime() - 7 * 24 * 60 * 60 * 1000)
-          .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      ? formatDate(new Date(new Date(u.invite_expires_at).getTime() - 7 * 24 * 60 * 60 * 1000), 'short')
       : '';
     return '<div class="user-row">' +
       '<span class="user-email">' + escHtml(u.email) + '</span>' +

@@ -191,6 +191,12 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 ---
 
+## Dates and numbers
+
+`formatDate(value, style)` and `formatTime(value)` in `common.js` are the only date formatters — no page calls `toLocaleDateString` itself (`tests/unit/page_scripts.js` enforces it). Styles: default `22.01.2026` (de) / `22/01/26` (en, fr), `'short'` without the year, `'long'` with the month spelled out. Values are read with UTC accessors because date columns arrive as UTC midnight. `stage.html` loads no `common.js` and keeps a documented copy (`_stageDate`). ISO strings stay raw in `<input type="date">` values and in the .ics export.
+
+---
+
 ## Styling
 
 `app/css/app.css` holds the tokens: `--font-ui` (system sans, interface text) and `--font-mono` (song key, tempo, dates, lyrics, slugs, stage view — anything read as a grid), the type scale (`--text-xs/sm/md/base`), `--radius`/`--radius-sm`, `--control-h` (36px) and `--row-h` (32px). Page-level `<style>` blocks use these tokens rather than their own hex values and pixel sizes. **Bump the `app.css?v=` query on every page when the stylesheet changes** — same rule as `i18n.js?v=`.

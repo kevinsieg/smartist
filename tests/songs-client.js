@@ -39,9 +39,9 @@ function assertEq(a, b, msg) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(msg || `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
 }
 
-function extractFunction(src, name) {
+function extractFunction(src, name, where) {
   const start = src.indexOf(`function ${name}(`);
-  if (start === -1) throw new Error(`${name} not found in app/js/songs.js`);
+  if (start === -1) throw new Error(`${name} not found in ${where || 'app/js/songs.js'}`);
   let depth = 0;
   for (let i = src.indexOf('{', start); i < src.length; i++) {
     if (src[i] === '{') depth++;
@@ -65,9 +65,25 @@ function loadEnergyLabel() {
   const context = { console, t: key => ({ 'songs.energyLow': 'low', 'songs.energyMiddle': 'middle',
                                           'songs.energyHigh': 'high' }[key] || key) };
   vm.createContext(context);
-  vm.runInContext(`${extractFunction(COMMON, 'energyLabel')}; this.fn = energyLabel;`, context);
+  vm.runInContext(`${extractFunction(COMMON, 'energyLabel', 'app/js/common.js')}; this.fn = energyLabel;`, context);
   return context.fn;
 }
+
+// formatDate lives in common.js; the locale comes from window.i18n.
+function loadDateHelpers(locale) {
+  const context = { console, window: { i18n: { getLocale: () => locale } } };
+  vm.createContext(context);
+  vm.runInContext(
+    `${extractFunction(COMMON, 'localeTag', 'app/js/common.js')}
+` +
+    `${extractFunction(COMMON, 'formatDate', 'app/js/common.js')}
+` +
+    `${extractFunction(COMMON, 'formatTime', 'app/js/common.js')}
+` +
+    'this.formatDate = formatDate; this.formatTime = formatTime;', context);
+  return context;
+}
+function loadFormatDate(locale) { return loadDateHelpers(locale).formatDate; }
 
 const SONGS = [
   { id: 1, title: 'Ab in die Welt',  interpret: 'Kevin Klang', genre: 'World',  active: true },
@@ -138,6 +154,56 @@ const SONGS = [
     assertEq(energyLabel(''), '');
     assertEq(energyLabel(null), '');
     assertEq(energyLabel(undefined), '');
+  });
+
+  console.log(B('\nsongs: dates follow the interface language'));
+
+  test('German shows 22.01.2026', () => {
+    assertEq(loadFormatDate('de')('2026-01-22'), '22.01.2026');
+  });
+
+  test('English and French show 22/01/26', () => {
+    assertEq(loadFormatDate('en')('2026-01-22'), '22/01/26');
+    assertEq(loadFormatDate('fr')('2026-01-22'), '22/01/26');
+  });
+
+  test('pads single digits', () => {
+    assertEq(loadFormatDate('de')('2015-07-11'), '11.07.2015');
+    assertEq(loadFormatDate('en')('2015-07-11'), '11/07/15');
+  });
+
+  test('accepts a full timestamp from the API', () => {
+    assertEq(loadFormatDate('de')('2016-09-03T00:00:00.000Z'), '03.09.2016');
+  });
+
+  test('empty and invalid values render as empty', () => {
+    const de = loadFormatDate('de');
+    assertEq(de(null), '');
+    assertEq(de(''), '');
+    assertEq(de('not a date'), '');
+  });
+
+  test('falls back to the international format for an unknown locale', () => {
+    assertEq(loadFormatDate('it')('2026-01-22'), '22/01/26');
+  });
+
+  test("short form drops the year, keeping each language's separator", () => {
+    assertEq(loadFormatDate('de')('2026-01-22', 'short'), '22.01.');
+    assertEq(loadFormatDate('en')('2026-01-22', 'short'), '22/01');
+    assertEq(loadFormatDate('fr')('2026-01-22', 'short'), '22/01');
+  });
+
+  test('long form spells the month in the interface language', () => {
+    assert(/Januar/.test(loadFormatDate('de')('2026-01-22', 'long')), 'German month name expected');
+    assert(/January/.test(loadFormatDate('en')('2026-01-22', 'long')), 'English month name expected');
+    assert(/janvier/.test(loadFormatDate('fr')('2026-01-22', 'long')), 'French month name expected');
+  });
+
+  test('time is 24-hour in every language', () => {
+    const { formatTime } = loadDateHelpers('en');
+    const t = formatTime(new Date('2026-01-22T19:05:00Z'));
+    assert(/^\d{2}:\d{2}$/.test(t), 'expected HH:MM, got ' + t);
+    assert(!/AM|PM/i.test(t), 'must not use AM/PM');
   });
 
   const total = passed + failed;
