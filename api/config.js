@@ -18,7 +18,11 @@ const login = require('./_domain/login');
 
 module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
-    const action = req.body?.action;
+    // Actions arrive in the body from the app, and in the query from the
+    // rewrites (/api/login → /api/config?action=login). Reading only the body
+    // let a rewritten POST fall through to the subscribe handler, which
+    // answered a login attempt with "Already subscribed".
+    const action = req.body?.action || req.query?.action;
     if (action === 'admin-set-plan')      return admin.setPlan(req, res);
     if (action === 'upgrade')             return upgrade(req, res);
     if (action === 'downgrade')           return downgrade(req, res);

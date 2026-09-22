@@ -66,9 +66,15 @@ function mockRes() {
 const post = (handler, body) =>
   handler({ method: 'POST', body: { action: 'login', ...body }, headers: {}, query: {} }, mockRes());
 
-async function call(handler, body) {
+// The rewrite /api/login → /api/config?action=login delivers the action in the
+// QUERY. Exercising only the body shape is exactly what let a rewritten login
+// fall through to the subscribe handler in production.
+async function call(handler, body, { via = 'query' } = {}) {
   const res = mockRes();
-  await handler({ method: 'POST', body: { action: 'login', ...body }, headers: {}, query: {} }, res);
+  const req = via === 'query'
+    ? { method: 'POST', body, headers: {}, query: { action: 'login' } }
+    : { method: 'POST', body: { action: 'login', ...body }, headers: {}, query: {} };
+  await handler(req, res);
   return res;
 }
 
@@ -141,6 +147,22 @@ async function run(r) {
     const res = await call(handler, { email: 'a@b.co', password: 'x'.repeat(1001) });
     assertEq(res._status, 400);
     assertEq(queries.length, 0);
+  });
+
+
+  await testAsync('the action is honoured in the body too, as the app sends it', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' }, { via: 'body' });
+    assertEq(res._status, 200);
+  });
+
+  await testAsync('a rewritten login never reaches another action', async () => {
+    // It reached subscribe once, which answered a login attempt with
+    // "Already subscribed" — and wrote the address to the mailing list.
+    const { handler } = makeHandler([]);
+    const res = await call(handler, { email: 'nobody@example.com', password: 'wrong' });
+    assertEq(res._status, 401);
+    assertEq(res._body.error, 'Invalid email or password');
   });
 
   // ── the config read the login page makes on load ──────────────────────────
