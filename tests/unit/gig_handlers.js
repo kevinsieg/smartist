@@ -50,7 +50,9 @@ function loadHandler(route) {
     exports: {
       requireAuth: async req => { req.user = { id: 1, role: 'member' }; return ARTIST; },
       getAccess: async () => ({ artist: ARTIST, user: { id: 1, role: 'member' } }),
-      isPrivate: () => false,
+      // Handlers ask these directly now; a stub that omits them throws.
+      canBrowseCatalogue: () => false,
+      canOpenStage: () => true,
     },
   };
   require.cache[r2Path] = {

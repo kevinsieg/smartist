@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { getDb, getSlug, parsePage } = require('../_db');
-const { requireAuth, getAccess, isPrivate } = require('../_auth');
+const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr } = require('../_validate');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
@@ -11,8 +11,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
   if (req.method === 'GET') {
       const { artist, user } = await getAccess(req, slug);
       if (!artist) return res.status(404).json({ error: 'Artist not found' });
-      if (!user && isPrivate(artist))
-        return res.status(401).json({ error: 'This workspace is private' });
+      if (!user && !canBrowseCatalogue(artist))
+        return res.status(401).json({ error: 'Sign in to view this' });
       let [gig] = await sql`
         SELECT g.*, v.name AS venue_name, o.name AS organizer_name
         FROM gigs g
@@ -189,8 +189,8 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'GET') {
     const { artist, user } = await getAccess(req, slug);
     if (!artist) return res.status(404).json({ error: 'Artist not found' });
-    if (!user && isPrivate(artist))
-      return res.status(401).json({ error: 'This workspace is private' });
+    if (!user && !canBrowseCatalogue(artist))
+      return res.status(401).json({ error: 'Sign in to view this' });
 
     if (req.query.format === 'ics') {
       const today = new Date().toISOString().slice(0, 10);
