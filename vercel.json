@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "demo.smartist.studio" }],
+      "destination": "https://app.smartist.studio/demo/dashboard",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     { "source": "/auth/callback",                                                                 "destination": "/api/config?action=oauth-callback" },
     { "source": "/api/:artist/request-reset",                                                     "destination": "/api/:artist/auth" },
