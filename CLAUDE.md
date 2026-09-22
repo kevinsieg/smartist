@@ -235,6 +235,12 @@ node scripts/plans.js                                      # list bands: plan, s
 node scripts/plans.js --artist <slug> --plan <free|pro>   # grant/change a band's plan
 node scripts/plans.js --recount                           # recompute storage_used_bytes from R2
 node scripts/delete_artist.js --artist <slug>             # delete an artist + all its data (asks for the slug)
+node scripts/create_user.js --artist <slug> --email <addr> [--role admin|member|viewer]
+                                                          # first login account for a band that has none
+                                                          # (signup makes a NEW band; invite needs an admin already)
+                                                          # USER_PASSWORD=… plus --yes runs it unattended
+node scripts/demo_reset.js --export                      # snapshot the demo band to scripts/demo_seed.json
+node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nightly via .github/workflows/demo-reset.yml
 ```
 
 `ARTIST_SLUG` env var targets the artist; falls back to the first artist in the DB.
