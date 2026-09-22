@@ -1,6 +1,43 @@
 // Shared utilities for all app pages
 
 const AUTH_TOKEN_KEY = 'smartist_token';
+
+// "Support the project" donation links. Edit this list to add/remove/reorder
+// providers; entries with an empty url are skipped. `img` (optional) is the
+// provider's official button image — loaded as a plain <img> (their button.js
+// scripts are intentionally NOT used: CSP blocks third-party scripts and an
+// image gives the same branding without executing third-party code). Falls back
+// to the text label when no img. Brand labels/images are not translated.
+const SUPPORT_LINKS = [
+  { id: 'liberapay',    label: 'Liberapay',       url: 'https://liberapay.com/kevkevkev/donate', img: 'https://liberapay.com/assets/widgets/donate.svg' },
+  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: 'https://www.buymeacoffee.com/kevkevkev', img: 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png' },
+];
+
+// Render the non-empty SUPPORT_LINKS as external buttons into containerEl.
+// Returns the number of links rendered (0 = caller should hide its group).
+function renderSupportLinks(containerEl) {
+  if (!containerEl) return 0;
+  containerEl.textContent = '';
+  var links = SUPPORT_LINKS.filter(function (l) { return l.url && l.url.trim(); });
+  links.forEach(function (l) {
+    var a = document.createElement('a');
+    a.href = l.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'support-link';
+    if (l.img && l.img.trim()) {
+      var img = document.createElement('img');
+      img.src = l.img;
+      img.alt = l.label;
+      img.loading = 'lazy';
+      a.appendChild(img);
+    } else {
+      a.textContent = l.label;
+    }
+    containerEl.appendChild(a);
+  });
+  return links.length;
+}
 var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
@@ -55,6 +92,22 @@ function getInitials(name) {
   return name.slice(0, 2).toUpperCase();
 }
 
+// Nav href → plan feature key. Used to lock items the band's plan doesn't include.
+var NAV_FEATURE = { '/venues': 'venues', '/organizers': 'organizers', '/pro-import': 'pro-import' };
+
+// Toggle .plan-locked on nav items to match the plan's feature list. Called at
+// page load and again after an in-place plan change (upgrade with no reload).
+function applyPlanNavLocks(planFeatures) {
+  var feats = planFeatures || [];
+  if (!feats.length) return;
+  document.querySelectorAll('.nav-links a').forEach(function(_navA) {
+    var _navHref = _navA.getAttribute('href') || '';
+    var _navKey = Object.keys(NAV_FEATURE).find(function(_p) { return _navHref.endsWith(_p); });
+    if (!_navKey) return;
+    _navA.classList.toggle('plan-locked', feats.indexOf(NAV_FEATURE[_navKey]) === -1);
+  });
+}
+
 // Inject the shared header (nav) and footer into the page body.
 // Runs immediately at script load. stage.html intentionally does not load
 // common.js, so this only fires on the three navigable app pages.
@@ -103,12 +156,15 @@ function getInitials(name) {
   document.body.insertBefore(header, document.body.firstChild);
 
   const footer = document.createElement('footer');
+  var _hasSupport = SUPPORT_LINKS.some(function (l) { return l.url && l.url.trim(); });
   footer.innerHTML =
     '<p>&copy; <span id="currentYear"></span> <span class="band-name"></span>' +
     ' &middot; <span data-i18n="footer.poweredBy">powered by</span> <a href="https://smartist.studio" target="_blank" rel="noopener" class="footer-backlink">smartist.studio</a>' +
     ' &middot; <a href="' + _base + '/contact" class="footer-backlink" data-i18n="footer.contact">Contact</a>' +
+    (_hasSupport ? ' &middot; <span class="footer-support"><span data-i18n="support.label">Support the project</span>: <span data-support-links></span></span>' : '') +
     ' &middot; <span data-lang-switcher></span></p>';
   document.body.insertBefore(footer, document.currentScript);
+  if (_hasSupport) renderSupportLinks(footer.querySelector('[data-support-links]'));
 
   document.getElementById('currentYear').textContent = new Date().getFullYear();
 
@@ -205,6 +261,15 @@ function getInitials(name) {
         var bgr2 = document.getElementById('nav-burger');
         if (bgr2) bgr2.setAttribute('aria-expanded', 'false');
       }
+    }
+    // Plan-locked nav item → redirect to settings#plan
+    var _lockedEl = e.target.closest('.plan-locked');
+    if (_lockedEl) {
+      e.preventDefault();
+      var _lockedHref = _lockedEl.getAttribute('href') || '';
+      var _lockedBase = _lockedHref.replace(/\/(venues|organizers|pro-import).*$/, '');
+      window.location.href = _lockedBase + '/settings#plan';
+      return;
     }
     // SPA nav link
     var a = e.target.closest('.nav-links a');
@@ -325,8 +390,8 @@ function printSetlistSongs(songs, title, cfg) {
   }
 
   var now = new Date();
-  var date = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-  var time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  var date = formatDate(now, 'long');
+  var time = formatTime(now);
   var tsEl = document.getElementById('print-timestamp');
   if (tsEl) tsEl.textContent = date + ' — ' + time;
 
@@ -409,6 +474,60 @@ function _isTokenExpired(token) {
     return Math.floor(Date.now() / 1000) >= parsed.exp;
   } catch (_) { return false; }                            // unparseable → plain password
 }
+
+// Full locale tag for Intl. English uses en-GB so dates stay day-first like the rest.
+function localeTag() {
+  var locale = (window.i18n && window.i18n.getLocale) ? window.i18n.getLocale() : 'en';
+  return { de: 'de-DE', fr: 'fr-FR', en: 'en-GB' }[locale] || 'en-GB';
+}
+
+// Every date in the interface goes through here — no page formats its own.
+//   default  22.01.2026 (de)   22/01/26 (en, fr)
+//   'short'  22.01.     (de)   22/01    (en, fr)
+//   'long'   22. Januar 2026 / 22 January 2026 / 22 janvier 2026
+// Accepts a date string or a full timestamp; anything unparseable renders as empty
+// rather than "Invalid Date".
+function formatDate(value, style) {
+  if (!value) return '';
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  var tag = localeTag();
+  if (style === 'long') {
+    return d.toLocaleDateString(tag, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
+  // UTC accessors: the API sends date columns as UTC midnight, and local getters would
+  // move them to the previous day for anyone behind UTC.
+  var day   = String(d.getUTCDate()).padStart(2, '0');
+  var month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  var year  = String(d.getUTCFullYear());
+  var german = tag === 'de-DE';
+  if (style === 'short') return german ? day + '.' + month + '.' : day + '/' + month;
+  return german ? day + '.' + month + '.' + year : day + '/' + month + '/' + year.slice(2);
+}
+
+// 24-hour clock in every language — the app shows set times, not wall-clock chat.
+function formatTime(value) {
+  if (!value) return '';
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+// Energy is stored as free text: 1–10 from the imported database, or a word like "Fast".
+// Numbers read better as three bands; words are shown as they are. Display only — the
+// stored value is untouched, and setlist.js still scores on the exact number.
+function energyLabel(value) {
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  var n = Number(raw);
+  if (!isFinite(n) || raw === '') return raw;
+  if (n <= 3) return t('songs.energyLow');
+  if (n <= 7) return t('songs.energyMiddle');
+  return t('songs.energyHigh');
+}
+
+// Narrow viewport: table-style editing is desktop-only (songs bulk edit, venues bulk edit).
+function isMobile() { return window.innerWidth <= 1024; }
 
 function isViewMode() {
   var token = getToken();
@@ -684,6 +803,14 @@ function getToken() {
   return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || null;
 }
 
+// Remember-me keeps the token in localStorage, a normal login in sessionStorage —
+// clearing one store alone leaves a half-logged-in state where actions fail silently.
+function clearToken() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem('setlist_token');
+}
+
 function getAuthRole() {
   var tok = getToken();
   if (!tok) return null;
@@ -744,6 +871,8 @@ async function initPage(onReady, opts) {
     return;
   }
   applyNav(cfg.name, cfg.config);
+  // Lock nav items the band's plan doesn't include.
+  applyPlanNavLocks((cfg && cfg.plan && cfg.plan.features) || []);
   document.querySelectorAll('button.auth-action, input.auth-action').forEach(function(el) {
     el.disabled = false;
   });
@@ -935,7 +1064,7 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     }
     let val;
     if      (col.type === 'number') val = row[col.field] != null ? Number(row[col.field]).toLocaleString() : '';
-    else if (col.type === 'date')   val = row[col.field] ? String(row[col.field]).slice(0, 10) : '—';
+    else if (col.type === 'date')   val = row[col.field] ? escHtml(formatDate(row[col.field])) : '—';
     else                            val = escHtml((row[col.field] ?? '').toString());
     const cls = (col.muted ? 'sl-cell sl-cell--muted' : 'sl-cell') + fieldCls;
     return `<div class="${cls}">${val}</div>`;

@@ -16,7 +16,7 @@ function _nextAction(cfg) {
   if (sets   === 0) return { href: '/setlist', label: t('dashboard.ctaBuildFirstSetlist'), hint: t('dashboard.hintSongs' + (songs !== 1 ? '_other' : '_one'), { count: songs }) };
   if (gigs   === 0) return { href: '/gigs',   label: t('dashboard.ctaLogGig'),             hint: t('dashboard.hintGig') };
   if (venues === 0) return { href: '/venues', label: t('dashboard.ctaAddVenues'),           hint: t('dashboard.hintVenues') };
-  return               { href: '/setlist', label: t('dashboard.ctaCreateSetlist'),          hint: null };
+  return null; // all set up — the "Build a setlist" task button covers setlist creation
 }
 
 function renderDashboard(cfg) {

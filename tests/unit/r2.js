@@ -2,8 +2,32 @@ const path = require('path');
 const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../../api/_r2'));
 
-function run(r) {
-  const { test, assertEq, B } = r;
+// Loads a fresh _r2 against a stubbed S3 SDK whose send() either succeeds or
+// throws, so deleteFromR2's reported result can be checked.
+function loadR2WithStubbedSdk(sendFails) {
+  const sdkPath = require.resolve('@aws-sdk/client-s3');
+  const r2Path  = require.resolve(path.join(__dirname, '../../api/_r2'));
+  const realSdk = require.cache[sdkPath];
+  delete require.cache[r2Path];
+  require.cache[sdkPath] = {
+    id: sdkPath, filename: sdkPath, loaded: true,
+    exports: {
+      S3Client: class { async send() { if (sendFails) throw new Error('storage unavailable'); return {}; } },
+      PutObjectCommand: class {}, DeleteObjectCommand: class {}, HeadObjectCommand: class {},
+    },
+  };
+  const mod = require(path.join(__dirname, '../../api/_r2'));
+  return {
+    mod,
+    restore() {
+      if (realSdk) require.cache[sdkPath] = realSdk; else delete require.cache[sdkPath];
+      delete require.cache[r2Path];
+    },
+  };
+}
+
+async function run(r) {
+  const { test, testAsync, assertEq, B } = r;
 
   console.log(B('\nR2 URL helpers'));
 
@@ -26,6 +50,24 @@ function run(r) {
     );
   });
 
+  // Callers decrement artists.storage_used_bytes only when the object really
+  // went away, so the swallowed storage error has to surface as a return value.
+  console.log(B('\ndeleteFromR2 result'));
+
+  await testAsync('reports success when the object is removed', async () => {
+    const { mod, restore } = loadR2WithStubbedSdk(false);
+    try {
+      assertEq(await mod.deleteFromR2('https://cdn.example.test/media/audio/abc.mp3'), true);
+    } finally { restore(); }
+  });
+
+  await testAsync('reports failure when storage rejects the delete', async () => {
+    const { mod, restore } = loadR2WithStubbedSdk(true);
+    try {
+      assertEq(await mod.deleteFromR2('https://cdn.example.test/media/audio/abc.mp3'), false);
+    } finally { restore(); }
+  });
+
   if (ORIGINAL === undefined) {
     delete process.env.R2_PUBLIC_URL;
   } else {
@@ -36,8 +78,7 @@ function run(r) {
 if (require.main === module) {
   const { makeRunner } = require('./_runner');
   const r = makeRunner();
-  run(r);
-  process.exit(r.summary() > 0 ? 1 : 0);
+  run(r).then(() => process.exit(r.summary() > 0 ? 1 : 0));
 }
 
 module.exports = run;

@@ -1,7 +1,15 @@
+
 // arrangement.js — per-song arrangement editor, read-only table, and stage popup.
 // Loaded by songs.html (editor + panel) and stage.html (popup only).
 // Requires: escHtml (global), apiFetch + setStatus (common.js, songs page only).
 // Caller must set window._arrSlug before calling openArrangementEditor.
+
+// stage.html loads this file without common.js; there apiFetch does not exist, so the
+// token is read straight from storage (same keys common.js uses).
+function _arrAuthHeaders() {
+  var t = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
+  return t ? { Authorization: 'Bearer ' + t } : {};
+}
 
 // Guarded translation helper — stage.html does not load i18n.js so window.t is absent there.
 // vars: optional object for {key} interpolation on the English fallback.
@@ -163,7 +171,12 @@ async function _arrLoadVersions() {
     '<div style="padding:1rem;color:var(--third-color)">' + _arrT('arr.loading', 'Loading…') + '</div>';
 
   try {
-    var r = await fetch('/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements');
+    // stage.html loads this file without common.js, so apiFetch may not exist —
+    // fall back to a plain request with the token added by hand.
+    var _arrUrl = '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements';
+    var r = typeof apiFetch === 'function'
+      ? await apiFetch(_arrUrl)
+      : await fetch(_arrUrl, { headers: _arrAuthHeaders() });
     var data = await r.json();
     _arrEditorVersions = Array.isArray(data) ? data : [];
 
