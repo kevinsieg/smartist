@@ -156,7 +156,18 @@ Songs use a `deleted` flag (soft-delete). `songs.extra` JSONB holds arbitrary pe
 
 `artists.config` JSONB drives the UI: `displayFields`, `filterFields`, `logoUrl`, and `platforms` (streaming/social links managed via `/hub`). Always use JSONB `||` merge (`config || ${update}`) when patching — never overwrite the full object.
 
-**A workspace is private unless opened up.** `isPrivate()` in `api/_auth.js` treats anything other than an explicit `private: false` as private, so a band that never touched the toggle in Settings is not readable without a session. Only the `demo` band is deliberately public. Consequence: a shared `/stage?id=N` link opened by someone who is not signed in fails for a private band — `stage.js` sends a Bearer token when one is stored, so band members are unaffected. A `share_token` on setlists (sketched in `scripts/schema.sql`, never applied) is the fix for guest access.
+**A workspace is private. Anonymous access is opt-in, one surface at a time** — `api/_auth.js` exports the two gates:
+
+| Config key | Default | Opens |
+|---|---|---|
+| `publicCatalogue` | off | `canBrowseCatalogue()` — the songs list and detail, gig list and detail, and a song's gig appearances. The config payload also ships songs only when this is on. |
+| `publicStage` | **on** | `canOpenStage()` — one setlist by id, one song by id, and that song's arrangements: exactly what a shared `/stage?id=N` link reads. |
+
+Both compare by identity (`=== true` / `=== false`) because `config` is JSONB and a string `"true"` must not pass for the boolean.
+
+**Everything else needs a session, with no setting involved:** venues (rows carry `contact_name`, `phone`, `generic_email` — this is why the old single flag was wrong), organizers, the setlists *list*, song logs and GEMA. Individual setlists are reachable for stage; the list is not, so nothing can be enumerated.
+
+A stage link carries no token, so `publicStage` is the only thing in front of it. The `share_token` sketched in `scripts/schema.sql` would replace that with per-link access.
 
 Venues and organizers are CRM-style reference tables linked to gigs via `venue_id`/`organizer_id` (FK `ON DELETE RESTRICT`). Both support soft-delete (`deleted` flag).
 

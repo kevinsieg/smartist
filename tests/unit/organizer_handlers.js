@@ -54,7 +54,9 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
         return artist;
       },
       getAccess: async () => ({ artist, user: { id: 1, role: 'member' } }),
-      isPrivate: () => false,
+      // Handlers ask these directly now; a stub that omits them throws.
+      canBrowseCatalogue: () => false,
+      canOpenStage: () => true,
     },
   };
   return { handler: require(path.join(__dirname, '../..', rel)), calls };
