@@ -11,6 +11,7 @@ const admin = require('./_domain/admin');
 const signup = require('./_domain/signup');
 const oauth = require('./_domain/oauth');
 const subscribe = require('./_domain/subscribe');
+const login = require('./_domain/login');
 
 // ── Router ────────────────────────────────────────────────────────────────────
 // Feature groups live in ./_domain/*; the core config read/write stays here.
@@ -21,6 +22,7 @@ module.exports = wrap(async function handler(req, res) {
     if (action === 'admin-set-plan')      return admin.setPlan(req, res);
     if (action === 'upgrade')             return upgrade(req, res);
     if (action === 'downgrade')           return downgrade(req, res);
+    if (action === 'login')               return login.passwordLogin(req, res);
     if (action === 'signup-link')         return signup.signupLink(req, res);
     if (action === 'verify-signup-token') return signup.verifySignup(req, res);
     if (action === 'signup')              return signup.signup(req, res);
@@ -43,7 +45,16 @@ module.exports = wrap(async function handler(req, res) {
   if (req.query.action === 'oauth-callback') return oauth.oauthCallback(req, res);
 
   const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
-  if (!slugParam) return res.status(404).json({ error: 'Artist not found' });
+  if (!slugParam) {
+    // Asking for an action still needs a band; a plain read does not. Without
+    // this the root of a multi-tenant deployment 404s on every page load.
+    if (req.query.action) return res.status(404).json({ error: 'Artist not found' });
+    return res.json({
+      singleTenant:  false,
+      googleLogin:   !!(process.env.GOOGLE_CLIENT_ID   && process.env.GOOGLE_CLIENT_SECRET),
+      facebookLogin: !!(process.env.FACEBOOK_APP_ID    && process.env.FACEBOOK_APP_SECRET),
+    });
+  }
 
   if (req.query.action === 'photo-url')      return presignedUpload(req, res, slugParam, 'photo', 'image/jpeg');
   if (req.query.action === 'favicon-url')    return presignedUpload(req, res, slugParam, 'favicon', 'image/png');
