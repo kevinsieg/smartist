@@ -156,6 +156,8 @@ Songs use a `deleted` flag (soft-delete). `songs.extra` JSONB holds arbitrary pe
 
 `artists.config` JSONB drives the UI: `displayFields`, `filterFields`, `logoUrl`, and `platforms` (streaming/social links managed via `/hub`). Always use JSONB `||` merge (`config || ${update}`) when patching — never overwrite the full object.
 
+**A workspace is private unless opened up.** `isPrivate()` in `api/_auth.js` treats anything other than an explicit `private: false` as private, so a band that never touched the toggle in Settings is not readable without a session. Only the `demo` band is deliberately public. Consequence: a shared `/stage?id=N` link opened by someone who is not signed in fails for a private band — `stage.js` sends a Bearer token when one is stored, so band members are unaffected. A `share_token` on setlists (sketched in `scripts/schema.sql`, never applied) is the fix for guest access.
+
 Venues and organizers are CRM-style reference tables linked to gigs via `venue_id`/`organizer_id` (FK `ON DELETE RESTRICT`). Both support soft-delete (`deleted` flag).
 
 GEMA: `extra.language` is editable when no GEMA work is linked; the GEMA value shadows it when linked. `extra.isrc` is always read-only (set via script). The `||` PATCH merge preserves both.

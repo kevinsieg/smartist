@@ -13,7 +13,36 @@ async function run(r) {
   }
   // Ensure APP_SECRET is set so _token imports cleanly
   process.env.APP_SECRET = process.env.APP_SECRET || 'unit-test-placeholder-secret!!';
-  const { requireRole } = require(path.join(__dirname, '../../api/_auth'));
+  const { requireRole, isPrivate } = require(path.join(__dirname, '../../api/_auth'));
+
+
+  console.log(B('\nisPrivate — a workspace is private unless opened up'));
+
+  test('a band that never touched the setting is private', () => {
+    // This was the bug: the default was public, so every band that ignored the
+    // toggle had its songs, gigs, venues and organizers readable by slug alone.
+    assertEq(isPrivate({ config: {} }), true);
+  });
+
+  test('a band with no config at all is private', () => {
+    assertEq(isPrivate({}), true);
+  });
+
+  test('private: true is private', () => {
+    assertEq(isPrivate({ config: { private: true } }), true);
+  });
+
+  test('only an explicit private: false opens a band up', () => {
+    assertEq(isPrivate({ config: { private: false } }), false);
+  });
+
+  test('a truthy-but-not-false value does not open a band up', () => {
+    // config comes from JSONB, so a string "false" is possible; it must not
+    // be mistaken for the boolean.
+    assertEq(isPrivate({ config: { private: 'false' } }), true);
+    assertEq(isPrivate({ config: { private: 0 } }), true);
+    assertEq(isPrivate({ config: { private: null } }), true);
+  });
 
   // Build a minimal res mock: status() returns this, json() captures body
   function mockRes() {
