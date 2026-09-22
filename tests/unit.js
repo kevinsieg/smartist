@@ -26,6 +26,14 @@ const suites = [
   require('./unit/auth_handler'),
   require('./unit/rbac_handlers'),
   require('./unit/tx_handlers'),
+  require('./unit/venue_handlers'),
+  require('./unit/organizer_handlers'),
+  require('./unit/song_handlers'),
+  require('./unit/gig_handlers'),
+  require('./unit/plans'),
+  require('./unit/asset_versions'),
+  require('./unit/page_scripts'),
+  require('./unit/storage_accounting'),
 ];
 
 (async () => {

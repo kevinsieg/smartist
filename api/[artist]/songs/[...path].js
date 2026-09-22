@@ -8,6 +8,7 @@ const { LYRICS_SOURCES, plainFromSynced } = require('../../_lyrics');
 const { GEMA_ROLE_TYPES } = require('../../_constants');
 const { validateStr } = require('../../_validate');
 const logger = require('../../_logger');
+const { requireFeature } = require('../../_plans');
 
 // ── GEMA import helpers (merged from gema/import.js) ─────────────────────────
 // Matches the logic in scripts/import_gema.js — keep in sync if either changes.
@@ -154,6 +155,7 @@ module.exports = wrap(async function handler(req, res) {
 
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
+    if (!requireFeature(res, band, 'pro-import')) return;
 
     const { type, csv, dryRun = false, ownerIpNameNumber } = req.body || {};
 

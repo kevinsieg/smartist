@@ -77,7 +77,7 @@ async function run(r) {
   console.log(r.B('\ntransaction handlers (sql.begin)'));
 
   await testAsync('gig hard delete commits in a transaction → 200', async () => {
-    const { handler } = loadHandler('api/[artist]/gigs/[id].js',
+    const { handler } = loadHandler('api/[artist]/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5, artist_id: 1 }] : []));
     const res = mockRes();
     await handler({ method: 'DELETE', url: '/api/test/gigs/5', query: { artist: 'test', id: '5' },
@@ -87,7 +87,7 @@ async function run(r) {
   });
 
   await testAsync('gig hard delete with cascade removes setlists then the gig', async () => {
-    const { handler, sql } = loadHandler('api/[artist]/gigs/[id].js',
+    const { handler, sql } = loadHandler('api/[artist]/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5 }] : []));
     const res = mockRes();
     await handler({ method: 'DELETE', url: '/api/test/gigs/5', query: { artist: 'test', id: '5' },

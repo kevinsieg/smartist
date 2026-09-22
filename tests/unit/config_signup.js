@@ -21,11 +21,18 @@ async function run(r) {
     const configPath = require.resolve(path.join(__dirname, '../../api/config'));
 
     const tokenPath = require.resolve(path.join(__dirname, '../../api/_token'));
+    const authPath  = require.resolve(path.join(__dirname, '../../api/_auth'));
     delete require.cache[dbPath];
+    // _auth destructures _db at load time (and other suites stub it outright),
+    // so rebuild it against the _db stub below.
+    delete require.cache[authPath];
     delete require.cache[configPath];
     delete require.cache[tokenPath];
-    ['identity', 'artist', 'registration'].forEach(function(m) {
-      try { delete require.cache[require.resolve(path.join(__dirname, '../../api/_domain/' + m))]; } catch {}
+    // config.js delegates to every module under api/_domain — bust them all so a
+    // re-require rebuilds the whole chain against the stubs set below.
+    const domainDir = path.join(__dirname, '../../api/_domain');
+    require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {
+      try { delete require.cache[require.resolve(path.join(domainDir, f))]; } catch {}
     });
 
     require.cache[rlPath] = {
@@ -291,6 +298,172 @@ async function run(r) {
     assertEq(res._status, 200);
     assert(Array.isArray(res._body && res._body.artists), 'expected artists array');
   });
+
+  // ── OAuth GET endpoints must not require a slug ──────────────────────────────
+  // They resolve the user by email, never by slug. In a multi-tenant deployment
+  // (ARTIST_SLUG unset) the client calls them with no ?slug, so they must be
+  // reachable without one — regression guard for the slug-guard ordering bug.
+  console.log(B('\nGET OAuth endpoints (slug-independent)'));
+
+  await testAsync('google-url → 200 + provider url (no slug, ARTIST_SLUG unset)', async () => {
+    delete process.env.ARTIST_SLUG;
+    const handler = makeHandler(async () => []);
+    const res = mockRes();
+    await handler({ method: 'GET', query: { action: 'google-url' }, headers: {} }, res);
+    assertEq(res._status, 200);
+    assert(res._body && /accounts\.google\.com/.test(res._body.url), 'expected a Google auth url');
+  });
+
+  await testAsync('oauth-callback with no code → 302 redirect, not 404 (no slug)', async () => {
+    delete process.env.ARTIST_SLUG;
+    const handler = makeHandler(async () => []);
+    const res = mockRes();
+    await handler({ method: 'GET', query: { action: 'oauth-callback' }, headers: {} }, res);
+    assertEq(res._status, 302);
+    assert(/oauth_error=1/.test(res._redirected || ''), 'expected redirect to login with oauth_error');
+  });
+
+  // ── Plan changes go only through dedicated actions ──────────────────────────
+  console.log(B('\nplan actions'));
+
+  // resolveUser takes the role from the users row, not the token.
+  function memberSql(role, onQuery) {
+    return async function(strings, ...values) {
+      const q = strings.join('?');
+      if (q.includes('JOIN users u2')) return [{ id: 42, role }];
+      return (onQuery && onQuery(q, values)) || [];
+    };
+  }
+  const bearer = () => 'Bearer ' + generateUserToken(42, 'admin', TTL_8H);
+
+  await testAsync('PATCH config drops plan and upgradedAt but keeps other keys', async () => {
+    let merged = null;
+    const handler = makeHandler(memberSql('admin', (q, values) => {
+      if (q.includes('UPDATE artists SET config')) merged = values[0];
+    }));
+    const res = mockRes();
+    await handler({
+      method: 'PATCH', query: { slug: 'test' },
+      body: { config: { plan: 'pro', upgradedAt: '2026-01-01T00:00:00.000Z', private: true } },
+      headers: { authorization: bearer() },
+    }, res);
+    assertEq(res._status, 200);
+    assertEq(merged, { private: true });
+  });
+
+  await testAsync('POST action=downgrade sets plan free and leaves upgradedAt alone', async () => {
+    let merged = null;
+    const handler = makeHandler(memberSql('admin', (q, values) => {
+      if (q.includes('UPDATE artists SET config')) merged = values[0];
+    }));
+    const res = mockRes();
+    await handler({
+      method: 'POST', query: { slug: 'test' }, body: { action: 'downgrade' },
+      headers: { authorization: bearer() },
+    }, res);
+    assertEq(res._status, 200);
+    assertEq(merged, { plan: 'free' });
+  });
+
+  await testAsync('POST action=downgrade by a member → 403, plan untouched', async () => {
+    let updated = false;
+    const handler = makeHandler(memberSql('member', (q) => {
+      if (q.includes('UPDATE artists')) updated = true;
+    }));
+    const res = mockRes();
+    await handler({
+      method: 'POST', query: { slug: 'test' }, body: { action: 'downgrade' },
+      headers: { authorization: bearer() },
+    }, res);
+    assertEq(res._status, 403);
+    assert(!updated, 'member must not change the plan');
+  });
+
+  await testAsync('POST action=upgrade sets plan pro with an ISO upgradedAt', async () => {
+    let merged = null;
+    const handler = makeHandler(memberSql('admin', (q, values) => {
+      if (q.includes('UPDATE artists SET config')) merged = values[0];
+    }));
+    const res = mockRes();
+    await handler({
+      method: 'POST', query: { slug: 'test' }, body: { action: 'upgrade' },
+      headers: { authorization: bearer() },
+    }, res);
+    assertEq(res._status, 200);
+    assertEq(merged && merged.plan, 'pro');
+    assert(merged && !isNaN(Date.parse(merged.upgradedAt)), 'expected ISO upgradedAt');
+  });
+
+  // ── Super-admin gate (SUPER_ADMIN_EMAILS, email read from the DB) ───────────
+  console.log(B('\nsuper-admin actions'));
+
+  function superAdminSql(email, onQuery) {
+    return async function(strings, ...values) {
+      const q = strings.join('?');
+      if (q.includes('SELECT email FROM users')) return email ? [{ email }] : [];
+      return (onQuery && onQuery(q, values)) || [];
+    };
+  }
+  const overviewReq = (headers) => ({ method: 'GET', query: { action: 'admin-overview' }, headers });
+
+  await testAsync('admin-overview without token → 401', async () => {
+    process.env.SUPER_ADMIN_EMAILS = 'boss@example.com';
+    const handler = makeHandler(superAdminSql('boss@example.com'));
+    const res = mockRes();
+    await handler(overviewReq({}), res);
+    assertEq(res._status, 401);
+  });
+
+  await testAsync('admin-overview for an email not on the allowlist → 403', async () => {
+    process.env.SUPER_ADMIN_EMAILS = 'boss@example.com';
+    const handler = makeHandler(superAdminSql('someone@example.com'));
+    const res = mockRes();
+    await handler(overviewReq({ authorization: bearer() }), res);
+    assertEq(res._status, 403);
+  });
+
+  await testAsync('admin-overview with an empty allowlist → 403', async () => {
+    process.env.SUPER_ADMIN_EMAILS = '';
+    const handler = makeHandler(superAdminSql('boss@example.com'));
+    const res = mockRes();
+    await handler(overviewReq({ authorization: bearer() }), res);
+    assertEq(res._status, 403);
+  });
+
+  await testAsync('admin-overview for an allowlisted email (case/space-insensitive) → 200 + totals', async () => {
+    process.env.SUPER_ADMIN_EMAILS = ' Boss@Example.com ,other@example.com';
+    const bands = [
+      { slug: 'a', name: 'A', plan: 'pro',  upgraded_at: '2026-06-27T10:00:00.000Z', storage_used_bytes: '100', songs: 3, users: 1 },
+      { slug: 'b', name: 'B', plan: 'free', upgraded_at: null,                        storage_used_bytes: '50',  songs: 1, users: 2 },
+    ];
+    const handler = makeHandler(superAdminSql('boss@example.com', (q) => (q.includes('FROM artists a') ? bands : null)));
+    const res = mockRes();
+    await handler(overviewReq({ authorization: bearer() }), res);
+    assertEq(res._status, 200);
+    assertEq(res._body && res._body.totals, { bands: 2, storageUsedBytes: 150, pro: 1, free: 1, upgraded: 1 });
+  });
+
+  await testAsync('admin-set-plan by a user not on the allowlist → 403, nothing written', async () => {
+    process.env.SUPER_ADMIN_EMAILS = 'boss@example.com';
+    let updated = false;
+    const handler = makeHandler(superAdminSql('someone@example.com', (q) => { if (q.includes('UPDATE artists')) updated = true; }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'admin-set-plan', slug: 'a', plan: 'pro' }, headers: { authorization: bearer() } }, res);
+    assertEq(res._status, 403);
+    assert(!updated, 'non-super-admin must not change plans');
+  });
+
+  await testAsync('admin-set-plan with an unknown plan → 400, nothing written', async () => {
+    process.env.SUPER_ADMIN_EMAILS = 'boss@example.com';
+    let updated = false;
+    const handler = makeHandler(superAdminSql('boss@example.com', (q) => { if (q.includes('UPDATE artists')) updated = true; }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'admin-set-plan', slug: 'a', plan: 'gold' }, headers: { authorization: bearer() } }, res);
+    assertEq(res._status, 400);
+    assert(!updated, 'invalid plan must not be written');
+  });
+
+  delete process.env.SUPER_ADMIN_EMAILS;
 }
 
 if (require.main === module) {

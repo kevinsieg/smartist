@@ -8,6 +8,7 @@ const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
+const { wouldExceedStorage, storageLimitBytes, songLimit } = require('../_plans');
 const logger = require('../_logger');
 
 module.exports = wrap(async function handler(req, res) {
@@ -306,12 +307,40 @@ module.exports = wrap(async function handler(req, res) {
     const [song] = await sql`SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
+    // A replacement frees the previous file's bytes, so the cap check is on the
+    // NET change (new − old), not the gross add — otherwise replacing a file with
+    // a same-size one would falsely trip the limit near the cap.
     const previousUrl = song.extra?.[config.extraKey] ?? null;
+    // Re-confirming the URL already stored (a retried request) is not a
+    // replacement and adds nothing — those bytes are counted already.
+    const isReplacement = previousUrl != null && previousUrl !== publicUrl;
+    const prevHead = isReplacement
+      ? await verifyUpload(keyFromUrl(previousUrl)) : null;
+    const prevSize = prevHead ? prevHead.size : 0;
+
+    if (wouldExceedStorage(band, (band.storage_used_bytes || 0) - prevSize, head.size)) {
+      await deleteFromR2(publicUrl);
+      return res.status(402).json({
+        error: 'storage_limit',
+        limit: storageLimitBytes(band),
+        used:  Number(band.storage_used_bytes || 0),
+      });
+    }
+
     const newExtra = { ...(song.extra ?? {}), [config.extraKey]: publicUrl };
     const [updated] = await sql`UPDATE songs SET extra = ${newExtra} WHERE id = ${songId} AND artist_id = ${band.id} RETURNING *`;
 
-    if (previousUrl && previousUrl !== publicUrl) {
-      await deleteFromR2(previousUrl);
+    // Delete first: whether the old object really went away decides the net
+    // change, so the counter settles in one round-trip instead of a +n then −m
+    // pair (which also left it briefly overstated).
+    const removed  = isReplacement ? await deleteFromR2(previousUrl) : false;
+    const freed    = (removed && prevHead) ? prevHead.size : 0;
+    const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
+
+    if (netBytes !== 0)
+      await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${netBytes}) WHERE id = ${band.id}`;
+
+    if (isReplacement) {
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_replace`, {
         previousFilename: filenameFromUrl(previousUrl),
         newFilename:      filenameFromUrl(publicUrl),
@@ -340,7 +369,9 @@ module.exports = wrap(async function handler(req, res) {
 
     const url = song.extra?.[config.extraKey];
     if (url) {
-      await deleteFromR2(url);
+      const delHead = await verifyUpload(keyFromUrl(url));
+      const removed = await deleteFromR2(url);
+      if (removed && delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
         filename:  filenameFromUrl(url),
         deletedAt: new Date().toISOString(),
@@ -391,6 +422,13 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
+    const _max = songLimit(band);
+    if (_max != null) {
+      const [{ count }] = await sql`
+        SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      if (count >= _max)
+        return res.status(402).json({ error: 'song_limit', limit: _max });
+    }
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
@@ -442,53 +480,71 @@ module.exports = wrap(async function handler(req, res) {
     if (updates.length > 100)
       return res.status(400).json({ error: 'Too many updates (max 100)' });
 
+    // Rows that fail validation are reported back: a silently skipped row looks to the
+    // user as if saving did nothing at all. Only fields present in the request are
+    // written — a partial update (e.g. the favourite toggle) must not clear the rest.
+    const TEXT_LIMITS = { title: 200, key: 20, genre: 100, energy: 50, time_signature: 20,
+                          interpret: 200, reference_interpret: 500, comment: 2000 };
+    const NUM_FIELDS = ['bpm', 'length_min'];
+
+    const ids = updates.map(u => Number(u.id)).filter(n => Number.isInteger(n) && n > 0);
+    const storedRows = ids.length
+      ? await sql`SELECT * FROM songs WHERE artist_id = ${band.id} AND id = ANY(${ids}::int[]) AND deleted = false`
+      : [];
+    const stored = new Map(storedRows.map(row => [row.id, row]));
+
     let applied = 0;
+    const rejected = [];
     for (const update of updates) {
       const songId = Number(update.id);
-      if (!Number.isInteger(songId) || songId <= 0) continue;
+      if (!Number.isInteger(songId) || songId <= 0) {
+        rejected.push({ id: update.id ?? null, error: 'invalid song id' });
+        continue;
+      }
+      const current = stored.get(songId);
+      if (!current) { rejected.push({ id: songId, error: 'song not found' }); continue; }
 
-      const title = validateStr(update.title, 200);
-      if (!title) continue;
-      const key = validateStr(update.key, 20);
-      if (key === false) continue;
-      const genre = validateStr(update.genre, 100);
-      if (genre === false) continue;
-      const energy = validateStr(update.energy, 50);
-      if (energy === false) continue;
-      const time_signature = validateStr(update.time_signature, 20);
-      if (time_signature === false) continue;
-      const bpm = validateNum(update.bpm);
-      if (bpm === false) continue;
-      const length_min = validateNum(update.length_min);
-      if (length_min === false) continue;
-      const interpret = validateStr(update.interpret, 200);
-      if (interpret === false) continue;
-      const reference_interpret = validateStr(update.reference_interpret, 500);
-      if (reference_interpret === false) continue;
-      const comment = validateStr(update.comment, 2000);
-      if (comment === false) continue;
+      const value = {};
+      let error = null;
+      for (const [field, maxLen] of Object.entries(TEXT_LIMITS)) {
+        if (!(field in update)) { value[field] = current[field]; continue; }
+        const v = validateStr(update[field], maxLen);
+        if (v === false) { error = `${field} too long (max ${maxLen})`; break; }
+        value[field] = v;
+      }
+      if (!error && !value.title) error = 'title is required';
+      if (!error) {
+        for (const field of NUM_FIELDS) {
+          if (!(field in update)) { value[field] = current[field]; continue; }
+          const v = validateNum(update[field]);
+          if (v === false) { error = `${field} must be a number`; break; }
+          value[field] = v;
+        }
+      }
+      if (error) { rejected.push({ id: songId, error }); continue; }
 
       const [updated] = await sql`
         UPDATE songs SET
-          title               = ${title},
-          active              = ${update.active ?? true},
-          heart               = ${update.heart ?? false},
-          key                 = ${key},
-          genre               = ${genre},
-          energy              = ${energy},
-          time_signature      = ${time_signature},
-          bpm                 = ${bpm},
-          length_min          = ${length_min},
-          interpret           = ${interpret},
-          reference_interpret = ${reference_interpret},
-          comment             = ${comment},
+          title               = ${value.title},
+          active              = ${'active' in update ? update.active : current.active},
+          heart               = ${'heart'  in update ? update.heart  : current.heart},
+          key                 = ${value.key},
+          genre               = ${value.genre},
+          energy              = ${value.energy},
+          time_signature      = ${value.time_signature},
+          bpm                 = ${value.bpm},
+          length_min          = ${value.length_min},
+          interpret           = ${value.interpret},
+          reference_interpret = ${value.reference_interpret},
+          comment             = ${value.comment},
           extra               = songs.extra || ${update.extra ?? {}}
         WHERE id = ${songId} AND artist_id = ${band.id}
         RETURNING *
       `;
       if (updated) { await insertAuditLog(sql, band.id, updated.id, 'update', updated); applied++; }
+      else rejected.push({ id: songId, error: 'song not found' });
     }
-    return res.json({ ok: true, count: applied });
+    return res.json({ ok: true, count: applied, rejected });
   }
 
   res.status(405).json({ error: 'Method not allowed' });

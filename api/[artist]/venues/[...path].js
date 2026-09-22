@@ -3,6 +3,7 @@ const { requireAuth, getAccess, isPrivate } = require('../../_auth');
 const { VENUE_PUBLIC_STATUSES } = require('../../_constants');
 const { wrap } = require('../../_handler');
 const { validateStr, validateNum } = require('../../_validate');
+const { requireFeature } = require('../../_plans');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -19,6 +20,7 @@ module.exports = wrap(async function handler(req, res) {
     if (!artist) return res.status(404).json({ error: 'Artist not found' });
     if (!user && isPrivate(artist))
       return res.status(401).json({ error: 'This workspace is private' });
+    if (!requireFeature(res, artist, 'venues')) return;
     let [venue] = await sql`SELECT * FROM venues WHERE id = ${id} AND artist_id = ${artist.id}`;
     if (!venue) return res.status(404).json({ error: 'Venue not found' });
     if (!user) {
@@ -42,6 +44,7 @@ module.exports = wrap(async function handler(req, res) {
 
   const artist = await requireAuth(req, res, slug, 'member');
   if (!artist) return;
+  if (!requireFeature(res, artist, 'venues')) return;
   const [venue] = await sql`SELECT * FROM venues WHERE id = ${id} AND artist_id = ${artist.id}`;
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
@@ -65,6 +68,10 @@ module.exports = wrap(async function handler(req, res) {
     if (status   === false) return res.status(400).json({ error: 'status too long' });
     const comment  = validateStr(body.comment, 2000);
     if (comment  === false) return res.status(400).json({ error: 'comment too long' });
+    const phone = validateStr(body.phone, 100);
+    if (phone === false) return res.status(400).json({ error: 'phone too long' });
+    const contact_name = validateStr(body.contact_name, 200);
+    if (contact_name === false) return res.status(400).json({ error: 'contact_name too long' });
     const lat = validateNum(body.lat);
     if (lat === false) return res.status(400).json({ error: 'lat must be a number' });
     const lng = validateNum(body.lng);
@@ -84,6 +91,8 @@ module.exports = wrap(async function handler(req, res) {
         state = ${body.state ?? venue.state},
         country = ${country ?? venue.country},
         generic_email = ${body.generic_email ?? venue.generic_email},
+        phone = ${'phone' in body ? phone : venue.phone},
+        contact_name = ${'contact_name' in body ? contact_name : venue.contact_name},
         website = ${body.website ?? venue.website},
         social_links = ${venue.social_links}::jsonb || ${body.social_links ?? {}}::jsonb,
         last_communication = ${body.last_communication ?? venue.last_communication},

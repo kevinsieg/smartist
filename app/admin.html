@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      background: #111;
+      color: #f0ede8;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    #totals { color: #aaa; margin-bottom: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 0.4rem 0.75rem; border-bottom: 1px solid #2a2a2a; }
+    th { color: #888; font-weight: normal; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    select { background: #222; color: #f0ede8; border: 1px solid #444; padding: 0.2rem 0.4rem; border-radius: 3px; }
+    select:disabled { opacity: 0.4; }
+  </style>
+</head>
+<body>
+  <h1>Admin</h1>
+  <div id="totals">Loading…</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Band</th>
+        <th>Storage</th>
+        <th>Songs</th>
+        <th>Users</th>
+        <th>Plan</th>
+      </tr>
+    </thead>
+    <tbody id="bands"></tbody>
+  </table>
+  <script src="/app/js/admin.js"></script>
+</body>
+</html>
