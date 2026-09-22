@@ -72,7 +72,9 @@ function run(r) {
   // silently — this is what made bulk save do nothing at all.
   test('page scripts read the token through getToken()', () => {
     // login/bootstrap pages read both stores on purpose; stage.js loads no common.js.
-    const ALLOWED = new Set(['common.js', 'home.js', 'onboarding.js', 'stage.js', 'share-utils.js', 'arrangement.js']);
+    // Scripts on pages that load no common.js: getToken() does not exist there,
+    // so they read both stores themselves. See the standalone-pages test below.
+    const ALLOWED = new Set(['common.js', 'home.js', 'onboarding.js', 'stage.js', 'share-utils.js', 'arrangement.js', 'workspaces.js']);
     const offenders = [];
     fs.readdirSync(path.join(APP, 'js')).filter(f => f.endsWith('.js') && !ALLOWED.has(f)).forEach(function(file) {
       fs.readFileSync(path.join(APP, 'js', file), 'utf8').split('\n').forEach(function(line, i) {
@@ -99,6 +101,73 @@ function run(r) {
     });
     assert(offenders.length === 0,
       'use formatDate()/formatTime() from common.js:\n      ' + offenders.join('\n      '));
+  });
+
+
+  // A page that does not load common.js cannot call common.js functions. When
+  // the auth-token sweep moved 16 sessionStorage reads onto getToken(), it also
+  // moved workspaces.js — which runs standalone, because there is no band yet to
+  // build a nav from. The call threw ReferenceError and the page rendered
+  // nothing at all. Such scripts keep a guarded local copy, the way
+  // share-utils.js and arrangement.js do on stage.
+  //
+  // A page is judged as a whole: the function may come from any script it
+  // loads (stage.js defines its own escHtml, which arrangement.js then uses).
+  test('standalone pages do not call common.js functions', () => {
+    const stripComments = src => src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+
+    const definedIn = src => {
+      const names = new Set();
+      const re = /function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+      let m;
+      while ((m = re.exec(src)) !== null) names.add(m[1]);
+      return names;
+    };
+
+    const commonFns = definedIn(stripComments(fs.readFileSync(path.join(APP, 'js', 'common.js'), 'utf8')));
+
+    const scriptsOf = html => {
+      const out = [];
+      const re = /<script[^>]+src="\/app\/js\/([A-Za-z0-9_\/-]+)\.js/g;
+      let m;
+      while ((m = re.exec(html)) !== null) out.push(m[1]);
+      return out;
+    };
+
+    const offenders = [];
+    fs.readdirSync(APP).filter(f => f.endsWith('.html')).forEach(htmlName => {
+      const scripts = scriptsOf(fs.readFileSync(path.join(APP, htmlName), 'utf8'));
+      if (scripts.includes('common')) return;
+
+      const sources = scripts
+        .map(n => ({ name: n, file: path.join(APP, 'js', n + '.js') }))
+        .filter(x => fs.existsSync(x.file))
+        .map(x => ({ name: x.name, src: stripComments(fs.readFileSync(x.file, 'utf8')) }));
+
+      const available = new Set();
+      sources.forEach(x => definedIn(x.src).forEach(n => available.add(n)));
+
+      // arrangement.js is shared between the songs page (which has common.js)
+      // and stage (which does not). Its editing paths — the only callers of
+      // apiFetch/setStatus — are unreachable on the read-only stage view, as its
+      // own header states. Anything else it reaches for is a real bug.
+      const KNOWN_UNREACHABLE = { 'arrangement': new Set(['apiFetch', 'setStatus']) };
+
+      sources.forEach(({ name, src }) => {
+        commonFns.forEach(fn => {
+          if (available.has(fn)) return;
+          if ((KNOWN_UNREACHABLE[name] || new Set()).has(fn)) return;
+          if (new RegExp('(^|[^.\\w$])' + fn + '\\s*\\(', 'm').test(src)) {
+            offenders.push(`${htmlName} → ${name}.js calls ${fn}()`);
+          }
+        });
+      });
+    });
+    assert(offenders.length === 0,
+      'these pages load no common.js, so the call throws at runtime:\n      ' +
+      [...new Set(offenders)].join('\n      '));
   });
 
   spaScripts.forEach(function(name) {
