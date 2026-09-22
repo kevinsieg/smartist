@@ -13,35 +13,58 @@ async function run(r) {
   }
   // Ensure APP_SECRET is set so _token imports cleanly
   process.env.APP_SECRET = process.env.APP_SECRET || 'unit-test-placeholder-secret!!';
-  const { requireRole, isPrivate } = require(path.join(__dirname, '../../api/_auth'));
+  const { requireRole, canBrowseCatalogue, canOpenStage } = require(path.join(__dirname, '../../api/_auth'));
 
 
-  console.log(B('\nisPrivate — a workspace is private unless opened up'));
+  console.log(B('\ncanBrowseCatalogue — songs and gig history'));
 
-  test('a band that never touched the setting is private', () => {
-    // This was the bug: the default was public, so every band that ignored the
-    // toggle had its songs, gigs, venues and organizers readable by slug alone.
-    assertEq(isPrivate({ config: {} }), true);
+  test('a band that never touched the setting is not browsable', () => {
+    assertEq(canBrowseCatalogue({ config: {} }), false);
   });
 
-  test('a band with no config at all is private', () => {
-    assertEq(isPrivate({}), true);
+  test('a band with no config at all is not browsable', () => {
+    assertEq(canBrowseCatalogue({}), false);
   });
 
-  test('private: true is private', () => {
-    assertEq(isPrivate({ config: { private: true } }), true);
+  test('only an explicit publicCatalogue: true opens the catalogue', () => {
+    assertEq(canBrowseCatalogue({ config: { publicCatalogue: true } }), true);
   });
 
-  test('only an explicit private: false opens a band up', () => {
-    assertEq(isPrivate({ config: { private: false } }), false);
+  test('a truthy-but-not-true value does not open the catalogue', () => {
+    // config is JSONB, so a string "true" is possible and must not pass for
+    // the boolean — the kind of slip that silently publishes a band.
+    assertEq(canBrowseCatalogue({ config: { publicCatalogue: 'true' } }), false);
+    assertEq(canBrowseCatalogue({ config: { publicCatalogue: 1 } }), false);
   });
 
-  test('a truthy-but-not-false value does not open a band up', () => {
-    // config comes from JSONB, so a string "false" is possible; it must not
-    // be mistaken for the boolean.
-    assertEq(isPrivate({ config: { private: 'false' } }), true);
-    assertEq(isPrivate({ config: { private: 0 } }), true);
-    assertEq(isPrivate({ config: { private: null } }), true);
+  test('the old private flag no longer grants anything', () => {
+    // Migration turns private:false into publicCatalogue:true; a leftover
+    // flag on its own must not open a band up.
+    assertEq(canBrowseCatalogue({ config: { private: false } }), false);
+  });
+
+  console.log(B('\ncanOpenStage — shared stage links'));
+
+  test('stage links work by default, since that is what they are for', () => {
+    assertEq(canOpenStage({ config: {} }), true);
+    assertEq(canOpenStage({}), true);
+  });
+
+  test('publicStage: false turns shared links off', () => {
+    assertEq(canOpenStage({ config: { publicStage: false } }), false);
+  });
+
+  test('only the boolean false closes it', () => {
+    assertEq(canOpenStage({ config: { publicStage: 'false' } }), true);
+    assertEq(canOpenStage({ config: { publicStage: 0 } }), true);
+  });
+
+  test('the two settings are independent', () => {
+    // A private catalogue with stage links still working is the default, and
+    // the whole point of splitting the old flag in two.
+    const band = { config: { publicStage: true } };
+    assertEq(canBrowseCatalogue(band), false);
+    assertEq(canOpenStage(band), true);
   });
 
   // Build a minimal res mock: status() returns this, json() captures body

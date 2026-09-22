@@ -1,5 +1,5 @@
 const { getDb, getSlug } = require('../_db');
-const { requireAuth, getAccess, isPrivate } = require('../_auth');
+const { requireAuth, getAccess } = require('../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../_validate');
 const { buildSetlistPdf, setlistTitle } = require('../_pdf');
 const { sendEmail } = require('../_email');
@@ -14,8 +14,9 @@ module.exports = wrap(async function handler(req, res) {
     const { artist, user } = await getAccess(req, slug);
     if (!artist) return res.status(404).json({ error: 'Band not found' });
     const viewMode = !user;
-    if (viewMode && isPrivate(artist))
-      return res.status(401).json({ error: 'This workspace is private' });
+    // The list of setlists is never public — only an individual one, reached
+    // from a stage link (see setlists/[...path].js).
+    if (viewMode) return res.status(401).json({ error: 'Sign in to view this' });
     const setlists = await sql`
       SELECT
         s.*,
