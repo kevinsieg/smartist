@@ -239,6 +239,8 @@ node scripts/create_user.js --artist <slug> --email <addr> [--role admin|member|
                                                           # first login account for a band that has none
                                                           # (signup makes a NEW band; invite needs an admin already)
                                                           # USER_PASSWORD=… plus --yes runs it unattended
+node scripts/create_user.js --artist <slug> --email <addr> --set-password
+                                                          # change an existing account's password (no email needed)
 node scripts/demo_reset.js --export                      # snapshot the demo band to scripts/demo_seed.json
 node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nightly via .github/workflows/demo-reset.yml
 ```
