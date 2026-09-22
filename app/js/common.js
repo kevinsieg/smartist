@@ -724,17 +724,23 @@ function updateAuthIndicator() {
   }
 }
 
+// Logging out has to leave the page, not just restyle it. Hiding the authed
+// controls left the dashboard on screen with all its data still rendered, which
+// reads as "still signed in" — and on a private workspace keeps data visible
+// that the session no longer entitles anyone to. The cached config goes too, so
+// the next person does not inherit the previous band's name and logo.
 function doLogout() {
-  sessionStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  sessionStorage.removeItem('smartist_admin_email');
-  var _navH = document.querySelector('.app-header');
-  if (_navH) _navH.classList.remove('nav-open');
   var _menu = document.getElementById('nav-auth-menu');
   if (_menu) _menu.remove();
-  updateAuthIndicator();
-  applyViewMode();
-  if (typeof refreshAllActionBtns === 'function') refreshAllActionBtns();
+  var _navH = document.querySelector('.app-header');
+  if (_navH) _navH.classList.remove('nav-open');
+  clearToken();
+  try {
+    sessionStorage.removeItem('smartist_admin_email');
+    invalidateConfigCache();
+  } catch (e) {}
+  // No next= on the way out: a logout should not remember where it was.
+  window.location.assign('/login');
 }
 
 // Go to the workspace picker. The skip-autoredirect flag stops workspaces.js
