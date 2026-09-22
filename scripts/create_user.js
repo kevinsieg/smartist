@@ -99,11 +99,17 @@ function ask(question) {
 // Reads a line without echoing it, so the password never lands in the terminal
 // scrollback or in shell history.
 function askSecret(question) {
-  process.stdout.write(`  ${question}`);
   return new Promise(resolve => {
+    let muted = false;
     const restore = rl._writeToOutput;
-    rl._writeToOutput = () => {};
-    rl.question('', a => { rl._writeToOutput = restore; process.stdout.write('\n'); resolve(a.trim()); });
+    // Muting has to start *after* rl.question() has drawn the prompt, or the
+    // prompt itself is swallowed and the caller types into an invisible line.
+    rl._writeToOutput = function (s) {
+      if (!muted) return restore.call(rl, s);
+      if (s.includes('\n')) restore.call(rl, '\n');   // keep Enter moving the cursor
+    };
+    rl.question(`  ${question}`, a => { rl._writeToOutput = restore; resolve(a.trim()); });
+    muted = true;
   });
 }
 
