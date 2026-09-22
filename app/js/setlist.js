@@ -36,7 +36,9 @@ function songFeel(song) {
 }
 
 // Setlist score labels — shown as a badge on the generated result
-const FEEL_LABELS = [
+// var, not const: SPA navigation re-executes this file in the same document,
+// and a repeated top-level const/let throws before init() runs.
+var FEEL_LABELS = [
   { max: 0.12, icon: '🧘', get label() { return t('setlist.feelSavasana'); }      },
   { max: 0.28, icon: '🌙', get label() { return t('setlist.feelLateNight'); }     },
   { max: 0.44, icon: '🛶', get label() { return t('setlist.feelMorningPaddle'); } },
@@ -462,7 +464,7 @@ function renderResult(songs) {
       s(song.extra?.lead || '',  'extra.lead',   t('setlist.leadTitle')),
       s(song.key ? formatKey(song.key) : '',  'key',           t('setlist.keyTitle')),
       capoSpan,
-      s(song.energy       || '',  'energy',        t('setlist.energyTitle')),
+      s(energyLabel(song.energy), 'energy',        t('setlist.energyTitle')),
       s(song.genre       || '',  'genre',         t('setlist.genreTitle')),
       song.extra?.harp ? s(t('setlist.harmonica'), 'extra.harp', t('setlist.harmonicaTitle')) : '',
       song.extra?.git2 ? s(t('setlist.guitar2'),   'extra.git2', t('setlist.guitar2Title')) : '',
@@ -722,7 +724,7 @@ document.getElementById('password-input').addEventListener('keydown', e => {
 
 async function loadGigs() {
   try {
-    const r = await fetch(`/api/${artistSlug}/gigs?limit=500`);
+    const r = await apiFetch(`/api/${artistSlug}/gigs?limit=500`);
     if (!r.ok) return;
     const { rows } = await r.json();
     const sel = document.getElementById('gig-select');
@@ -730,7 +732,7 @@ async function loadGigs() {
     for (const g of rows) {
       const opt = document.createElement('option');
       opt.value = g.id;
-      opt.textContent = g.title + (g.date ? ' — ' + String(g.date).slice(0, 10) : '');
+      opt.textContent = g.title + (g.date ? ' — ' + formatDate(g.date) : '');
       sel.appendChild(opt);
     }
   } catch {}
@@ -755,7 +757,7 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
     const sel = document.getElementById('gig-select');
     const opt = document.createElement('option');
     opt.value = gig.id;
-    opt.textContent = gig.title + (gig.date ? ' — ' + String(gig.date).slice(0, 10) : '');
+    opt.textContent = gig.title + (gig.date ? ' — ' + formatDate(gig.date) : '');
     sel.appendChild(opt);
     sel.value = String(gig.id);
     document.getElementById('new-gig-form').classList.remove('open');
@@ -792,7 +794,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   });
 
   if (r.status === 401) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    clearToken();
     localStorage.removeItem(AUTH_TOKEN_KEY);
     document.getElementById('save-step').style.display = 'none';
     document.getElementById('auth-step').style.display = 'block';
@@ -897,7 +899,7 @@ function _openHistPanelContent(item, panelEl) {
       '<div class="vsp-cell vsp-cell--full" style="display:flex;align-items:flex-start;gap:0.5rem;">' +
         '<div class="vsp-cell-value" style="flex:1">' +
           '<strong>' + escHtml(gig.title) + '</strong>' +
-          (gig.date ? '<br><span style="color:var(--third-color);font-size:0.8rem">' + escHtml(String(gig.date).slice(0, 10)) + '</span>' : '') +
+          (gig.date ? '<br><span style="color:var(--third-color);font-size:0.8rem">' + escHtml(formatDate(gig.date)) + '</span>' : '') +
         '</div>' +
         (_viewMode ? '' : '<button class="hist-nav-btn" onclick="navigate(\'/gigs?open=' + gig.id + '\')" title="' + t('setlist.openInGigs') + '">&#8599;</button>') +
       '</div>'
@@ -975,7 +977,7 @@ async function _renderHistoryTab() {
   if (!_histLoaded) {
     try {
       var setsRes = await apiFetch('/api/' + artistSlug + '/setlists');
-      var gigsRes = await fetch('/api/' + artistSlug + '/gigs?limit=500');
+      var gigsRes = await apiFetch('/api/' + artistSlug + '/gigs?limit=500');
       _histSets = await setsRes.json();
       if (!Array.isArray(_histSets)) _histSets = [];
       var gigsData = await gigsRes.json();
@@ -1047,7 +1049,7 @@ function _renderHistRow(s) {
   var count = s.song_count != null ? Number(s.song_count) : 0;
   var countBadge = '<span class="hist-badge hist-badge--count">' + count + ' ' + t(count !== 1 ? 'setlist.songs' : 'setlist.song') + '</span>';
   var dateBadge  = gigDate
-    ? '<span class="hist-badge hist-badge--date">' + new Date(gigDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + '</span>'
+    ? '<span class="hist-badge hist-badge--date">' + formatDate(gigDate, 'short') + '</span>'
     : '';
 
   var orgName = (gig && gig.organizer_name) || '';
@@ -1272,7 +1274,7 @@ async function _histEdit(sid) {
   var gigOptions = '<option value="">' + t('setlist.noGig') + '</option>' +
     _histGigs.map(function(g) {
       var sel = String(g.id) === String(s.gig_id) ? ' selected' : '';
-      var label = escHtml(g.title || '') + (g.date ? ' — ' + String(g.date).slice(0, 10) : '');
+      var label = escHtml(g.title || '') + (g.date ? ' — ' + formatDate(g.date) : '');
       return '<option value="' + g.id + '"' + sel + '>' + label + '</option>';
     }).join('');
 
@@ -1347,7 +1349,7 @@ async function _saveHistEdit(sid) {
     });
 
     if (r.status === 401) {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       var errEl3 = document.getElementById('hist-edit-error');
       if (errEl3) { errEl3.textContent = t('setlist.editSessionExpired'); errEl3.className = 'status-msg error'; }
@@ -1404,7 +1406,7 @@ function _promptDeleteSetlist(sid) {
 
   var gigNote = '';
   if (s.gig_id && s.gig_name) {
-    var gigLabel = escHtml(s.gig_name) + (s.gig_date ? ' (' + String(s.gig_date).slice(0, 10) + ')' : '');
+    var gigLabel = escHtml(s.gig_name) + (s.gig_date ? ' (' + formatDate(s.gig_date) + ')' : '');
     if (s.gig_venue) gigLabel += ' — ' + escHtml(s.gig_venue);
     gigNote = '<p style="font-size:0.82rem;color:var(--third-color);margin:0.5rem 0 0;">' + t('setlist.deleteLinkedGig', { gigLabel: gigLabel }) + '</p>';
   }
@@ -1674,7 +1676,7 @@ async function _histShareSend(sid) {
     });
 
     if (r.status === 401) {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       if (st) { st.textContent = t('setlist.shareWrongPassword'); st.className = 'status-msg error'; }
       if (btn) { btn.disabled = false; btn.textContent = t('setlist.shareSendBtn'); }
@@ -1720,7 +1722,7 @@ async function _histDuplicate(sid) {
     });
 
     if (r.status === 401) {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = t('setlist.duplicateTooltip'); }
       return;

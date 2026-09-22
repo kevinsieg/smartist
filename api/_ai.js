@@ -53,8 +53,8 @@ function _stripMarkdown(text) {
     .trim();
 }
 
-// language: ISO code ('FR', 'DE', 'EN', …) from GEMA data or songs.extra.language.
-// genre:    GEMA genre string ('FOLK', 'SCHLAGER', …) if available.
+// language: ISO code ('FR', 'DE', 'EN', …) 
+// genre:    string ('FOLK', 'SCHLAGER', …)
 // Returns { lyrics: string } on success, { lyrics: null, skipped: true } when the
 // AI provider is unavailable (no key / quota exceeded), or { lyrics: null } on miss.
 async function suggestLyricsWithAI(title, artist, { language, genre } = {}) {

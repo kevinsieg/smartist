@@ -392,6 +392,7 @@ initPage(async function(cfg) {
     filterEl.addEventListener('input', function() {
       clearTimeout(_venuesTimer);
       _venuesTimer = setTimeout(async function() {
+        if (!_confirmDiscardBulk()) return;
         _venuesQ = filterEl.value.trim();
         _venuesOffset = 0;
         await loadVenues();
@@ -401,6 +402,7 @@ initPage(async function(cfg) {
 
   if (statusEl) {
     statusEl.addEventListener('change', async function() {
+      if (!_confirmDiscardBulk()) return;
       _venuesStatus = statusEl.value;
       _venuesOffset = 0;
       await loadVenues();
@@ -409,6 +411,7 @@ initPage(async function(cfg) {
 
   if (categoryEl) {
     categoryEl.addEventListener('change', async function() {
+      if (!_confirmDiscardBulk()) return;
       _venuesCategory = categoryEl.value;
       _venuesOffset = 0;
       await loadVenues();
@@ -418,11 +421,17 @@ initPage(async function(cfg) {
   var countryEl = document.getElementById('filter-country');
   if (countryEl) {
     countryEl.addEventListener('change', async function() {
+      if (!_confirmDiscardBulk()) return;
       _venuesCountry = countryEl.value;
       _venuesOffset = 0;
       await loadVenues();
     });
   }
+
+  // Put the right skeleton on screen before the first request answers — otherwise the
+  // list view renders first and visibly flips to the bulk table a moment later.
+  renderVenueBulk();
+  _renderLetterBar();
 
   await loadVenues();
 
@@ -454,57 +463,336 @@ async function openVenueFromMap(id) {
   } catch {}
 }
 
+// ── Bulk edit (CRM fields) ────────────────────────────────────────────────
+// Spreadsheet-style editing of the fields that change while booking. Name, address
+// and contact data stay in the modal. Saving sends one PATCH for all changed rows.
+
+var VENUE_BULK_KEY = 'venues_bulk_edit';
+var _venueDirty = new Set();
+var _venueBulkSortState = { field: 'name', dir: 1 };
+var _venuesPageSize = 0;   // read lazily: this file is also evaluated without a DOM in tests
+var _venuesLetter = '';
+
+// Anything that reloads the table throws away unsaved edits — ask first, every time.
+function _confirmDiscardBulk() {
+  if (!_venueDirty.size) return true;
+  if (!confirm(t('venues.bulkDiscardConfirm'))) return false;
+  _venueDirty.clear();
+  return true;
+}
+
+var BULK_COLUMNS = [
+  { field: 'name',               get label() { return t('venues.colName'); },           type: 'ro',     sortable: true },
+  { field: 'city',               get label() { return t('venues.colCity'); },           type: 'ro',     sortable: true },
+  { field: 'status',             get label() { return t('venues.colStatus'); },         type: 'select', sortable: true, options: function() { return VENUE_STATUSES; } },
+  { field: 'category',           get label() { return t('venues.fieldCategory'); },     type: 'select', sortable: true, options: function() { return VENUE_CATEGORIES; } },
+  { field: 'last_communication', get label() { return t('venues.colLastContact'); },    type: 'date',   sortable: true },
+  { field: 'booking_channel',    get label() { return t('venues.colBookingChannel'); }, type: 'select', options: function() { return BOOKING_CHANNELS; } },
+  { field: 'deadline',           get label() { return t('venues.colDeadline'); },       type: 'date',   sortable: true },
+  { field: 'remuneration',       get label() { return t('venues.colRemuneration'); },   type: 'text' },
+  { field: 'season',             get label() { return t('venues.colSeason'); },         type: 'text',   sortable: true },
+  { field: 'preferred_period',   get label() { return t('venues.colPreferredPeriod'); },type: 'text',   sortable: true },
+  { field: 'comment',            get label() { return t('venues.colComment'); },        type: 'text' },
+];
+
+var BOOKING_CHANNELS = [
+  { value: 'email',           get label() { return t('venues.channelEmail'); } },
+  { value: 'contactForm',     get label() { return t('venues.channelContactForm'); } },
+  { value: 'applicationForm', get label() { return t('venues.channelApplicationForm'); } },
+  { value: 'facebook',        get label() { return t('venues.channelFacebook'); } },
+  { value: 'phone',           get label() { return t('venues.channelPhone'); } },
+];
+
+function isVenueBulkEdit() {
+  return localStorage.getItem(VENUE_BULK_KEY) === '1' && !isMobile() && !isViewMode();
+}
+
+function toggleVenueBulkEdit() {
+  if (!_confirmDiscardBulk()) return;
+  if (isVenueBulkEdit()) localStorage.removeItem(VENUE_BULK_KEY);
+  else                   localStorage.setItem(VENUE_BULK_KEY, '1');
+  renderVenueBulk();
+}
+
+async function sortVenueBulk(field) {
+  if (!_confirmDiscardBulk()) return;
+  if (_venueBulkSortState.field === field) _venueBulkSortState.dir = -_venueBulkSortState.dir;
+  else _venueBulkSortState = { field: field, dir: 1 };
+  // Sorting happens in the DB so it covers every venue, not just the page on screen.
+  _venuesOffset = 0;
+  await loadVenues();
+}
+
+function _bulkCell(v, col) {
+  var raw = v[col.field];
+  var value = raw == null ? '' : String(raw);
+  if (col.type === 'ro') return escHtml(value);
+  if (col.type === 'date') {
+    return '<input type="date" data-field="' + col.field + '" value="' + escHtml(value.slice(0, 10)) + '">';
+  }
+  if (col.type === 'select') {
+    return '<select data-field="' + col.field + '"><option value=""></option>' +
+      col.options().map(function(o) {
+        return '<option value="' + escHtml(o.value) + '"' + (o.value === value ? ' selected' : '') + '>' + escHtml(o.label) + '</option>';
+      }).join('') +
+      // keep a stored value the list does not know, so saving cannot silently drop it
+      (value && !col.options().some(function(o) { return o.value === value; })
+        ? '<option value="' + escHtml(value) + '" selected>' + escHtml(value) + '</option>' : '') +
+      '</select>';
+  }
+  return '<input type="text" data-field="' + col.field + '" value="' + escHtml(value) + '">';
+}
+
+function renderVenueBulk() {
+  var bulkEl = document.getElementById('venues-bulk');
+  var on     = isVenueBulkEdit();
+  document.body.classList.toggle('venues-bulk', on);
+  [document.getElementById('sort-bar'),
+   document.getElementById('venues-list'),
+   document.querySelector('.placeholder-section')].forEach(function(el) {
+    if (el) el.style.display = on ? 'none' : '';
+  });
+  var btn = document.getElementById('venue-bulk-btn');
+  if (btn) btn.classList.toggle('active', on);
+  if (!bulkEl) return;
+  if (!on) { bulkEl.style.display = 'none'; bulkEl.innerHTML = ''; return; }
+
+  var rows = allVenues.filter(function(v) { return !v.deleted && v.category !== 'placeholder'; });
+  bulkEl.style.display = '';
+  bulkEl.innerHTML =
+    '<div class="toolbar">' +
+      '<button class="btn active" id="venue-bulk-save" disabled>' + t('venues.saveBtn') + '</button>' +
+      '<button class="btn" id="venue-bulk-discard" disabled>' + t('venues.bulkDiscard') + '</button>' +
+      '<span class="status" id="venue-bulk-status"></span>' +
+    '</div>' +
+    '<div class="table-wrap"><table><thead><tr>' +
+      BULK_COLUMNS.map(function(c) {
+        var cls = 'col-' + c.field;
+        if (!c.sortable) return '<th scope="col" class="' + cls + '">' + escHtml(c.label) + '</th>';
+        var active = _venueBulkSortState.field === c.field;
+        var asc    = _venueBulkSortState.dir === 1;
+        var arrow  = active ? (asc ? ' ▲' : ' ▼') : '';
+        return '<th scope="col" class="' + cls + ' bulk-sortable' + (active ? ' bulk-sorted' : '') + '"' +
+               ' data-sort="' + c.field + '" aria-sort="' + (active ? (asc ? 'ascending' : 'descending') : 'none') + '">' +
+               '<button type="button" class="th-sort-btn">' + escHtml(c.label) + arrow + '</button></th>';
+      }).join('') +
+    '</tr></thead><tbody>' +
+      rows.map(function(v) {
+        return '<tr data-id="' + v.id + '">' + BULK_COLUMNS.map(function(c) {
+          return '<td class="col-' + c.field + '">' + _bulkCell(v, c) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') +
+    '</tbody></table></div>';
+
+  bulkEl.querySelectorAll('th[data-sort]').forEach(function(th) {
+    th.onclick = function() { sortVenueBulk(th.dataset.sort); };
+  });
+  // Property assignment, not addEventListener — renderVenueBulk() runs again after every load.
+  bulkEl.oninput  = _onBulkInput;
+  bulkEl.onchange = _onBulkInput;
+  document.getElementById('venue-bulk-save').onclick = saveVenueBulk;
+  document.getElementById('venue-bulk-discard').onclick = function() {
+    _venueDirty.clear();
+    renderVenueBulk();
+  };
+  _updateBulkButtons();
+}
+
+function _onBulkInput(e) {
+  var row = e.target.closest('tr[data-id]');
+  if (!row) return;
+  _venueDirty.add(row.dataset.id);
+  row.classList.add('dirty');
+  _updateBulkButtons();
+}
+
+function _updateBulkButtons(msg) {
+  var save    = document.getElementById('venue-bulk-save');
+  var discard = document.getElementById('venue-bulk-discard');
+  var status  = document.getElementById('venue-bulk-status');
+  if (save)    save.disabled    = _venueDirty.size === 0;
+  if (discard) discard.disabled = _venueDirty.size === 0;
+  if (status)  status.textContent = msg !== undefined ? msg
+    : (_venueDirty.size ? t('venues.bulkUnsaved', { n: _venueDirty.size }) : '');
+}
+
+async function saveVenueBulk() {
+  if (!_venueDirty.size) return;
+  var updates = [];
+  _venueDirty.forEach(function(id) {
+    var row = document.querySelector('#venues-bulk tr[data-id="' + id + '"]');
+    if (!row) return;
+    var update = { id: Number(id) };
+    row.querySelectorAll('[data-field]').forEach(function(el) {
+      update[el.dataset.field] = el.value.trim() === '' ? null : el.value.trim();
+    });
+    updates.push(update);
+  });
+  _updateBulkButtons(t('venues.savingMsg'));
+  var json;
+  try {
+    var r = await apiFetch('/api/' + artistSlug + '/venues', 'PATCH', updates);
+    json = await r.json().catch(function() { return {}; });
+    if (!r.ok) { _updateBulkButtons(json.error || t('gigs.errorFallback')); return; }
+  } catch (err) {
+    _updateBulkButtons(t('venues.bulkSaveFailed'));
+    return;
+  }
+  var rejected = json.rejected || [];
+  // Re-read from the server so the table shows what was actually stored.
+  _venueDirty.clear();
+  _venuesOffset = 0;
+  await loadVenues();
+  _updateBulkButtons(rejected.length
+    ? t('venues.bulkSavedWithErrors', { n: json.count || 0, failed: rejected.length })
+    : t('venues.bulkSaved', { n: json.count || 0 }));
+  if (rejected.length) {
+    rejected.forEach(function(rej) {
+      var row = document.querySelector('#venues-bulk tr[data-id="' + rej.id + '"]');
+      if (row) { row.classList.add('bulk-row-error'); row.title = rej.error; }
+    });
+  }
+}
+
+function venuePageSize() {
+  if (!_venuesPageSize) {
+    try { _venuesPageSize = Number(localStorage.getItem('venues_page_size')) || 50; }
+    catch { _venuesPageSize = 50; }
+  }
+  return _venuesPageSize;
+}
+
 async function loadVenues() {
-  const params = new URLSearchParams({ limit: 50, offset: _venuesOffset });
+  const params = new URLSearchParams({ limit: venuePageSize(), offset: _venuesOffset });
   if (_venuesQ)        params.set('q',        _venuesQ);
   if (_venuesStatus)   params.set('status',   _venuesStatus);
   if (_venuesCategory) params.set('category', _venuesCategory);
   if (_venuesCountry)  params.set('country',  _venuesCountry);
+  if (_venuesLetter)   params.set('letter',   _venuesLetter);
+  if (isVenueBulkEdit()) {
+    params.set('sort', _venueBulkSortState.field);
+    params.set('dir',  _venueBulkSortState.dir === 1 ? 'asc' : 'desc');
+  }
   const r = await apiFetch(`/api/${artistSlug}/venues?${params}`);
   const { rows, total } = await r.json();
   _venuesTotal = total;
-  if (_venuesOffset === 0) {
-    allVenues = rows;
-  } else {
-    allVenues = [...allVenues, ...rows];
-  }
+  allVenues = rows;   // one page at a time — paging replaced the append-on-scroll list
   placeholderTable.setData(allVenues.filter(v => v.category === 'placeholder'));
   venueTable.setData(allVenues.filter(v => v.category !== 'placeholder'));
+  renderVenueBulk();
   updateVenuesFooter();
+  _renderLetterBar();
   _populateCountryFilter();
 }
 
-function _populateCountryFilter() {
+var _venueCountries = null;
+
+// Countries come from the whole workspace, not from allVenues — that holds one page.
+async function _populateCountryFilter() {
   var el = document.getElementById('filter-country');
   if (!el) return;
+  if (!_venueCountries) {
+    try {
+      var r = await apiFetch('/api/' + artistSlug + '/venues?facet=country');
+      _venueCountries = r.ok ? await r.json() : [];
+    } catch { _venueCountries = []; }
+  }
   var selected = el.value;
-  var countries = [...new Set(allVenues.map(function(v) { return v.country; }).filter(Boolean))].sort();
+  var countries = _venueCountries;
   el.innerHTML = '<option value="">' + t('venues.allCountries') + '</option>' +
     countries.map(function(c) {
       return '<option value="' + escHtml(c) + '"' + (c === selected ? ' selected' : '') + '>' + escHtml(c) + '</option>';
     }).join('');
 }
 
-async function loadMoreVenues() {
-  _venuesOffset += 50;
+async function gotoVenuePage(page) {
+  if (!_confirmDiscardBulk()) return;
+  const pages = Math.max(1, Math.ceil(_venuesTotal / venuePageSize()));
+  const target = Math.min(Math.max(1, page), pages);
+  _venuesOffset = (target - 1) * venuePageSize();
   await loadVenues();
+  window.scrollTo({ top: 0 });
+}
+
+async function setVenuePageSize(size) {
+  if (!_confirmDiscardBulk()) return;
+  _venuesPageSize = Number(size) || 50;
+  try { localStorage.setItem('venues_page_size', String(_venuesPageSize)); } catch {}
+  _venuesOffset = 0;
+  await loadVenues();
+}
+
+async function jumpToVenueLetter(letter) {
+  if (!_confirmDiscardBulk()) return;
+  _venuesLetter = letter === _venuesLetter ? '' : letter;
+  _venuesOffset = 0;
+  await loadVenues();
+  _renderLetterBar();
+}
+
+function _renderLetterBar() {
+  var bar = document.getElementById('venues-letters');
+  if (!bar) return;
+  var letters = ['#'].concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''));
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', t('venues.letterBarLabel'));
+  var btn = function(value, label, aria) {
+    var on = _venuesLetter === value;
+    return '<button type="button" class="letter-btn' + (on ? ' letter-active' : '') + '"' +
+           ' data-letter="' + escHtml(value) + '" aria-pressed="' + on + '"' +
+           ' aria-label="' + escHtml(aria) + '">' + escHtml(label) + '</button>';
+  };
+  bar.innerHTML = btn('', t('venues.allLetters'), t('venues.allLetters')) +
+    letters.map(function(l) {
+      return btn(l, l, l === '#' ? t('venues.letterOther') : l);
+    }).join('');
+  bar.querySelectorAll('.letter-btn').forEach(function(btn) {
+    btn.onclick = function() { jumpToVenueLetter(btn.dataset.letter); };
+  });
 }
 
 function updateVenuesFooter() {
   const footer  = document.getElementById('venues-footer');
   const counter = document.getElementById('venues-counter');
-  const btn     = document.getElementById('venues-load-more-btn');
   if (!footer || !counter) return;
-  counter.textContent = t(_venuesTotal !== 1 ? 'venues.showingVenues_other' : 'venues.showingVenues_one',
-    { shown: allVenues.length, total: _venuesTotal });
+  const pageSize = venuePageSize();
+  const pages    = Math.max(1, Math.ceil(_venuesTotal / pageSize));
+  const page     = Math.floor(_venuesOffset / pageSize) + 1;
+  const from     = _venuesTotal === 0 ? 0 : _venuesOffset + 1;
+  const to       = Math.min(_venuesOffset + allVenues.length, _venuesTotal);
+
+  counter.textContent = t('venues.showingRange', { from: from, to: to, total: _venuesTotal });
   footer.style.display = _venuesTotal > 0 ? '' : 'none';
-  if (btn) btn.style.display = allVenues.length < _venuesTotal ? '' : 'none';
+
+  const input = document.getElementById('venues-page-input');
+  if (input) {
+    input.value = page;
+    input.max   = pages;
+    input.onchange = function() { gotoVenuePage(Number(input.value)); };
+  }
+  const pageOf = document.getElementById('venues-page-of');
+  if (pageOf) pageOf.textContent = t('venues.pageOf', { pages: pages });
+
+  const sizeEl = document.getElementById('venues-page-size');
+  if (sizeEl) {
+    sizeEl.value = String(pageSize);
+    sizeEl.onchange = function() { setVenuePageSize(sizeEl.value); };
+  }
+
+  const nav = { 'venues-first': 1, 'venues-prev': page - 1, 'venues-next': page + 1, 'venues-last': pages };
+  Object.keys(nav).forEach(function(id) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = nav[id] === page || nav[id] < 1 || nav[id] > pages;
+    btn.onclick = function() { gotoVenuePage(nav[id]); };
+  });
 }
+
 
 function openAddModal() {
   editingId = null;
   document.getElementById('venue-modal-title').textContent = t('venues.addVenue');
-  ['name','street-number','street','postcode','city','country','category','email','website','comment'].forEach(f => {
+  ['name','street-number','street','postcode','city','country','category','email','website','phone','contact-name','comment'].forEach(f => {
     const el = document.getElementById(`vm-${f}`); if (el) el.value = '';
   });
   document.getElementById('vm-status').value = '';
@@ -531,6 +819,8 @@ function openEditModal(id) {
   document.getElementById('vm-category').value = v.category      || '';
   document.getElementById('vm-email').value    = v.generic_email || '';
   document.getElementById('vm-website').value  = v.website       || '';
+  document.getElementById('vm-phone').value        = v.phone         || '';
+  document.getElementById('vm-contact-name').value = v.contact_name  || '';
   document.getElementById('vm-comment').value  = v.comment       || '';
   document.getElementById('vm-delete-btn').style.display = (v.deleted || isViewMode()) ? 'none' : '';
   document.getElementById('vm-dup-warning').style.display = 'none';
@@ -564,7 +854,7 @@ async function expandVenue(v) {
   var n = refs.gigs.length;
   var rows = refs.gigs.slice(0, 10).map(function(g) {
     return '<div style="padding:0.1rem 0;font-size:0.82rem;">' +
-      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) + '</div>';
   }).join('');
   var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
@@ -612,6 +902,8 @@ async function saveVenue() {
     category:      document.getElementById('vm-category').value.trim() || null,
     generic_email: document.getElementById('vm-email').value.trim()    || null,
     website:       document.getElementById('vm-website').value.trim()  || null,
+    phone:         document.getElementById('vm-phone').value.trim()        || null,
+    contact_name:  document.getElementById('vm-contact-name').value.trim() || null,
     comment:       document.getElementById('vm-comment').value.trim()  || null,
     lat:  _geocodeAccepted ? _pendingLat : null,
     lng:  _geocodeAccepted ? _pendingLng : null,
@@ -654,7 +946,7 @@ async function renderVenueGigs(venueId, venueName) {
   var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
   list.innerHTML = refs.gigs.map(function(g) {
     return '<div class="related-gig-item">' +
-      (g.date ? escHtml(String(g.date).slice(0, 10)) + ' — ' : '') +
+      (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) +
     '</div>';
   }).join('') +
@@ -689,7 +981,7 @@ async function openVenueGigsModal(v) {
   body.innerHTML = refs.gigs.map(function(g) {
     return '<div class="expansion-row">' +
       '<span style="color:var(--third-color);font-size:0.82rem;min-width:6.5rem;flex-shrink:0;">' +
-        (g.date ? escHtml(String(g.date).slice(0, 10)) : '—') +
+        (g.date ? escHtml(formatDate(g.date)) : '—') +
       '</span>' +
       '<span>' + escHtml(g.title) + '</span>' +
     '</div>';
