@@ -74,8 +74,13 @@ async function getAccess(req, slug) {
 }
 
 // A workspace with config.private only serves data to authenticated members.
+// A workspace is private unless it has deliberately been opened up. The default
+// used to be public, so a band that never touched the setting had its songs,
+// gigs, venues and organizers readable by anyone who knew the slug. Only an
+// explicit `private: false` — the toggle in Settings — makes a band browsable
+// without a session.
 function isPrivate(artist) {
-  return !!(artist.config && artist.config.private);
+  return !(artist && artist.config && artist.config.private === false);
 }
 
 module.exports = { requireAuth, requireRole, checkCredentials, getAccess, isPrivate };
