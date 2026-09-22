@@ -1,5 +1,5 @@
 const { getDb, getSlug, parsePage } = require('../_db');
-const { requireAuth, getAccess, isPrivate } = require('../_auth');
+const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr, validateNum } = require('../_validate');
 const { VENUE_PUBLIC_STATUSES } = require('../_constants');
@@ -10,11 +10,11 @@ module.exports = wrap(async function handler(req, res) {
   const sql = getDb();
 
   if (req.method === 'GET') {
-    const { artist, user } = await getAccess(req, slug);
-    if (!artist) return res.status(404).json({ error: 'Artist not found' });
-    const viewOnly = !user;
-    if (viewOnly && isPrivate(artist))
-      return res.status(401).json({ error: 'This workspace is private' });
+    // Venue rows carry contact_name, phone and generic_email. No flag opens
+    // that up — a session is always required, as for organizers.
+    const artist = await requireAuth(req, res, slug);
+    if (!artist) return;
+    const viewOnly = false;
     if (!requireFeature(res, artist, 'venues')) return;
 
     if (req.query.slim) {

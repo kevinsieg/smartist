@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=36">
-  <script src="/app/js/i18n.js?v=18"></script>
+  <script src="/app/js/i18n.js?v=19"></script>
   <style>
     .settings-wrap { max-width: 680px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .invite-bar { display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;padding:1rem 1.1rem;background:var(--surface-color);border:1px solid var(--border-color);border-radius:4px; }
@@ -237,7 +237,7 @@
   </style>
 </head>
 <body>
-<script src="/app/js/common.js?v=14"></script>
+<script src="/app/js/common.js?v=15"></script>
 
 <div class="app-wrap settings-wrap">
   <h1 data-i18n="nav.settings">Settings</h1>
@@ -297,11 +297,17 @@
       <!-- Privacy -->
       <div class="profile-section">
         <label data-i18n="settings.privacyLabel">Privacy</label>
+        <p class="auth-hint" style="margin-top:0.3rem" data-i18n="settings.privacyIntro">Your workspace is private. Venues, organizers, setlists and GEMA data always need a login — these two settings are the only exceptions.</p>
         <label class="config-check-row" style="margin-top:0.4rem;">
-          <input type="checkbox" id="private-toggle" disabled>
-          <span data-i18n="settings.privateWorkspaceDesc">Private workspace — only logged-in members can see songs, setlists, gigs and venues</span>
+          <input type="checkbox" id="public-catalogue-toggle" disabled>
+          <span data-i18n="settings.publicCatalogueDesc">Let anyone browse my songs and past gigs</span>
         </label>
-        <span class="save-msg" id="private-msg"></span>
+        <span class="save-msg" id="public-catalogue-msg"></span>
+        <label class="config-check-row" style="margin-top:0.4rem;">
+          <input type="checkbox" id="public-stage-toggle" disabled>
+          <span data-i18n="settings.publicStageDesc">Let anyone open a stage link I share</span>
+        </label>
+        <span class="save-msg" id="public-stage-msg"></span>
       </div>
 
       <!-- Song table fields -->
@@ -386,6 +392,6 @@
 
   </div>
 </div>
-<script src="/app/js/settings.js?v=3"></script>
+<script src="/app/js/settings.js?v=4"></script>
 </body>
 </html>
