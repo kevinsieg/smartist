@@ -4,6 +4,7 @@
  *
  * Usage:
  *   node scripts/create_user.js --artist <slug> --email <address> [--role admin|member|viewer] [--yes]
+ *   node scripts/create_user.js --artist <slug> --email <address> --set-password   # existing account
  *   USER_PASSWORD=… node scripts/create_user.js --artist <slug> --email <address> --yes   # unattended
  *   DATABASE_URL=<url> node scripts/create_user.js --artist klang --email me@example.com
  *
@@ -66,6 +67,7 @@ const slug  = arg('artist');
 const email = (arg('email') || '').trim().toLowerCase();
 const role  = arg('role') || 'admin';
 const assumeYes = args.includes('--yes');
+const setPassword = args.includes('--set-password');
 
 if (!slug || !email) {
   err('Usage: node scripts/create_user.js --artist <slug> --email <address> [--role admin|member|viewer] [--yes]');
@@ -130,13 +132,26 @@ async function main() {
     if (existing.length) {
       console.log(`  ${D('existing users:')} ${existing.map(u => `${u.email} (${u.role})`).join(', ')}`);
       const clash = existing.find(u => u.email.toLowerCase() === email);
-      if (clash) { err(`${email} is already a user of this band.`); process.exit(1); }
+      if (clash && !setPassword) {
+        err(`${email} is already a user of this band.`);
+        console.log(D('  To change their password instead, add --set-password.'));
+        process.exit(1);
+      }
+      if (clash) console.log(`  ${D('changing the password for:')} ${B(clash.email)} ${D(`(${clash.role})`)}`);
       warn('This band already has users — the invite flow in the app is the normal way to add more.');
     } else {
       console.log(`  ${D('existing users:')} none — this will be the first, replacing the band-password login`);
     }
 
-    if (!assumeYes && (await ask(`Create ${B(email)} as ${B(role)}? (y/n): `)).toLowerCase() !== 'y') {
+    if (setPassword && !existing.some(u => u.email.toLowerCase() === email)) {
+      err(`${email} is not a user of this band — drop --set-password to create the account.`);
+      process.exit(1);
+    }
+
+    const prompt = setPassword
+      ? `Set a new password for ${B(email)}? (y/n): `
+      : `Create ${B(email)} as ${B(role)}? (y/n): `;
+    if (!assumeYes && (await ask(prompt)).toLowerCase() !== 'y') {
       console.log(D('  Aborted.')); process.exit(0);
     }
 
@@ -152,13 +167,17 @@ async function main() {
     if (password.length < 8) { err('Password must be at least 8 characters.'); process.exit(1); }
 
     const hash = await bcrypt.hash(password, 10);
-    const [user] = await sql`
-      INSERT INTO users (artist_id, email, role, password_hash)
-      VALUES (${artist.id}, ${email}, ${role}, ${hash})
-      RETURNING id, email, role
-    `;
+    const [user] = setPassword
+      ? await sql`
+          UPDATE users SET password_hash = ${hash}
+          WHERE artist_id = ${artist.id} AND email = ${email}
+          RETURNING id, email, role`
+      : await sql`
+          INSERT INTO users (artist_id, email, role, password_hash)
+          VALUES (${artist.id}, ${email}, ${role}, ${hash})
+          RETURNING id, email, role`;
 
-    ok(`Created user ${user.email} (${user.role}, id ${user.id}) for ${artist.slug}.`);
+    ok(`${setPassword ? 'Password changed for' : 'Created user'} ${user.email} (${user.role}, id ${user.id}) for ${artist.slug}.`);
     console.log(D('\n  Log in with this address and password at the band\'s domain.'));
     if (role === 'admin') {
       console.log(D('  For /admin access, this address must also be in SUPER_ADMIN_EMAILS on that Vercel project.'));
