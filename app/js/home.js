@@ -31,7 +31,10 @@ async function init() {
     cfg = await loadConfig(slugFromNext || undefined);
     artistSlug = cfg.slug || slugFromNext;
     if (!artistSlug) {
-      window.location.replace('/signup');
+      // Multi-tenant root: nothing to brand the page with, and login goes
+      // through /api/login instead of /api/:artist/auth. Signup is a link on
+      // the form, so returning users are not pushed into onboarding.
+      renderLogin(null, cfg);
       return;
     }
     applyNav(cfg.name, cfg.config);
@@ -265,11 +268,13 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
     const cfg = await loadConfig();
-    artistSlug = cfg.slug;
+    if (cfg.slug) artistSlug = cfg.slug;
     const body = email
       ? { email, password: pw, rememberMe: remember }
       : { password: pw };
-    const r = await fetch(`/api/${artistSlug}/auth`, {
+    // Without a band, email is the only identity we have — /api/login resolves
+    // it across workspaces. Never build `/api/${undefined}/auth`.
+    const r = await fetch(artistSlug ? `/api/${artistSlug}/auth` : '/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

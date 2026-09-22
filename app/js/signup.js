@@ -4,12 +4,23 @@
 
   async function _loadOAuthUrls() {
     try {
-      const [gRes, fbRes] = await Promise.all([
-        fetch('/api/config?action=google-url&mode=signup'),
-        fetch('/api/config?action=facebook-url&mode=signup'),
-      ]);
-      if (gRes.ok)  { const d = await gRes.json();  _googleUrl   = d.url; }
-      if (fbRes.ok) { const d = await fbRes.json(); _facebookUrl = d.url; }
+      // Ask what this deployment offers before requesting URLs for it. Probing
+      // blind costs two 503s in the console on every load of a deployment
+      // without OAuth credentials, which buries real errors.
+      const cRes = await fetch('/api/config');
+      const cfg  = cRes.ok ? await cRes.json() : {};
+      const want = [];
+      if (cfg.googleLogin)   want.push(['google',   'google-url']);
+      if (cfg.facebookLogin) want.push(['facebook', 'facebook-url']);
+      if (!want.length) return;
+      const results = await Promise.all(
+        want.map(([, action]) => fetch('/api/config?action=' + action + '&mode=signup'))
+      );
+      for (let i = 0; i < want.length; i++) {
+        if (!results[i].ok) continue;
+        const d = await results[i].json();
+        if (want[i][0] === 'google') _googleUrl = d.url; else _facebookUrl = d.url;
+      }
     } catch {}
   }
 
