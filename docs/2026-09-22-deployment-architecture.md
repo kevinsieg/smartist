@@ -68,6 +68,37 @@ and deploys independently of the app, which is the point of it having its own
 repo. The application lives at `app.smartist.studio`, where anyone can sign up,
 each signup creates a band, and `/workspaces` switches between them.
 
+### One landing page, not two
+
+The marketing page existed in **both** repos and they diverged. The `smartist`
+repo's copy was restyled in September (system sans, lighter paper) but still
+advertised a "Tour planning" feature that does not exist; the `smartist-website`
+copy had the accurate feature list, the favicons, the OG image and the app
+mockups, but was still in the old Courier design from May. Neither was simply
+"the good one".
+
+Resolved by keeping the `smartist-website` copy — it had more to lose — porting
+the September restyle onto it, and **deleting `app/landing.html`**. Two copies
+of a page is what let one rot for four months; the split between repos was not
+the problem.
+
+So the app repo now has no marketing page at all, and `vercel.json` serves the
+login screen at `/`:
+
+```json
+{ "source": "/", "destination": "/app/index.html" }
+```
+
+That is correct for every deployment of this repo: a band's domain, the public
+app (where marketing lives at `smartist.studio`), and a self-hosted install.
+
+This also removes a redirect that could not work. `app/landing.html` used to
+send single-band deployments to `/login` from an inline script that first called
+`/api/config?light=1`. It cost a flash of the marketing page on first visit, and
+on `smartist-klang` it never fired at all, because that call is one of the routes
+returning 500 without `APP_SECRET` — which is why that domain showed marketing
+permanently. A static rewrite needs no JavaScript and no API.
+
 ### Why the demo is a redirect, not a deployment
 
 `demo.smartist.studio` and `app.smartist.studio` would be two domains on the
@@ -183,5 +214,11 @@ re-adding the variable restores the previous behaviour.
 - **Neon credentials.** Both production strings have been pasted into terminal
   history and chat. Rotate them.
 - **The demo reset cadence** is unset. Nightly is the assumption above.
+- **The marketing page is now English only.** `app/landing.html` carried 68
+  `landing.*` keys translated into French and German; the `smartist-website`
+  page has no i18n. Those keys stay in the locale files because
+  `dashboard.html` and `demo.html` still use them, but the public marketing
+  page no longer has FR/DE. Porting the translations to the website repo is a
+  separate piece of work.
 - **`demo.smartist.studio` today** serves the app directly. It keeps working
   until step 7; the redirect is tidying, not a prerequisite.
