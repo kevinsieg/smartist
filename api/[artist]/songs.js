@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { getDb, getArtist, insertAuditLog, getSlug, parsePage } = require('../_db');
-const { requireAuth, getAccess, isPrivate } = require('../_auth');
+const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
 const { suggestLyricsWithAI } = require('../_ai');
@@ -18,10 +18,8 @@ module.exports = wrap(async function handler(req, res) {
   // ── song-logs (merged from song-logs.js via vercel.json rewrite) ──────────
   if (req.url.includes('song-logs')) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-    const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
-    if (!user && isPrivate(band))
-      return res.status(401).json({ error: 'This workspace is private' });
+    const band = await requireAuth(req, res, slug);
+    if (!band) return;
     const { songId } = req.query;
     let logs;
     if (songId) {
@@ -49,8 +47,8 @@ module.exports = wrap(async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid song id' });
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
-    if (!user && isPrivate(band))
-      return res.status(401).json({ error: 'This workspace is private' });
+    if (!user && !canBrowseCatalogue(band))
+      return res.status(401).json({ error: 'Sign in to view this' });
     const setlists = await sql`
       SELECT sl.id, sl.title, sl.comment, sl.created_at,
              g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
@@ -68,8 +66,8 @@ module.exports = wrap(async function handler(req, res) {
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
     const viewMode = !user;
-    if (viewMode && isPrivate(band))
-      return res.status(401).json({ error: 'This workspace is private' });
+    if (viewMode && !canBrowseCatalogue(band))
+      return res.status(401).json({ error: 'Sign in to view this' });
     if (viewMode) {
       const { limit: rawLimit, offset } = parsePage(req);
       const limit = Math.min(rawLimit, 30);
