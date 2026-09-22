@@ -1,5 +1,5 @@
 const { getDb, getSlug } = require('../../_db');
-const { requireAuth, getAccess, isPrivate } = require('../../_auth');
+const { requireAuth, getAccess, canOpenStage } = require('../../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../../_validate');
 const { buildSetlistPdf, setlistTitle } = require('../../_pdf');
 const { sendEmail } = require('../../_email');
@@ -67,8 +67,10 @@ module.exports = wrap(async function handler(req, res) {
     } else {
       const { artist, user } = await getAccess(req, slug);
       if (!artist) return res.status(404).json({ error: 'Band not found' });
-      if (!user && isPrivate(artist))
-        return res.status(401).json({ error: 'This workspace is private' });
+      // A single setlist by id is what a shared /stage link opens. The list of
+      // setlists stays private, so nobody can enumerate them from here.
+      if (!user && !canOpenStage(artist))
+        return res.status(401).json({ error: 'Sign in to view this' });
       band = artist;
     }
 

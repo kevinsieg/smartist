@@ -57,7 +57,9 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
     exports: {
       requireAuth: async req => { req.user = user; return ARTIST; },
       getAccess: async () => ({ artist: ARTIST, user }),
-      isPrivate: () => false,
+      // Handlers ask these directly now; a stub that omits them throws.
+      canBrowseCatalogue: () => false,
+      canOpenStage: () => true,
       requireRole: () => true,
     },
   };

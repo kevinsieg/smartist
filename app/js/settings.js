@@ -408,34 +408,46 @@ function renderWorkspace(cfg) {
   // Slug
   document.getElementById('slug-value').textContent = cfg.slug;
 
-  // Privacy toggle
-  var privToggle = document.getElementById('private-toggle');
-  privToggle.checked  = !!(cfg.config && cfg.config.private);
-  privToggle.disabled = false;
-  privToggle.addEventListener('change', function () {
-    var msg = document.getElementById('private-msg');
-    msg.textContent = t('settings.saving');
-    msg.className = 'save-msg';
-    fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + getToken(),
-      },
-      body: JSON.stringify({ config: { private: privToggle.checked } }),
-    })
-      .then(function (r) {
-        if (!r.ok) throw new Error('');
-        invalidateConfigCache();
-        msg.textContent = privToggle.checked ? t('settings.workspaceNowPrivate') : t('settings.workspaceNowPublic');
-        setTimeout(function () { msg.textContent = ''; }, 2500);
+  // Privacy toggles. Two settings, not one: publishing a song list used to
+  // publish the gig schedule and the venue CRM with it.
+  function _wirePrivacyToggle(id, msgId, key, onLabel, offLabel) {
+    var toggle = document.getElementById(id);
+    if (!toggle) return;
+    // publicStage defaults to on, publicCatalogue to off — read each the way
+    // the server does, so the switch matches what is actually enforced.
+    toggle.checked = key === 'publicStage'
+      ? (cfg.config || {}).publicStage !== false
+      : (cfg.config || {}).publicCatalogue === true;
+    toggle.disabled = false;
+    toggle.addEventListener('change', function () {
+      var msg = document.getElementById(msgId);
+      msg.textContent = t('settings.saving');
+      msg.className = 'save-msg';
+      var patch = {};
+      patch[key] = toggle.checked;
+      fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+        body: JSON.stringify({ config: patch }),
       })
-      .catch(function (err) {
-        privToggle.checked = !privToggle.checked;
-        msg.textContent = err.message || t('settings.failedToSave');
-        msg.className = 'save-msg err';
-      });
-  });
+        .then(function (r) {
+          if (!r.ok) throw new Error('');
+          invalidateConfigCache();
+          msg.textContent = toggle.checked ? t(onLabel) : t(offLabel);
+          setTimeout(function () { msg.textContent = ''; }, 2500);
+        })
+        .catch(function (err) {
+          toggle.checked = !toggle.checked;
+          msg.textContent = err.message || t('settings.failedToSave');
+          msg.className = 'save-msg err';
+        });
+    });
+  }
+
+  _wirePrivacyToggle('public-catalogue-toggle', 'public-catalogue-msg', 'publicCatalogue',
+    'settings.catalogueNowPublic', 'settings.catalogueNowPrivate');
+  _wirePrivacyToggle('public-stage-toggle', 'public-stage-msg', 'publicStage',
+    'settings.stageNowPublic', 'settings.stageNowPrivate');
 
   renderFieldTags('display-fields', cfg.config && cfg.config.displayFields);
   renderFieldTags('filter-fields',  cfg.config && cfg.config.filterFields);

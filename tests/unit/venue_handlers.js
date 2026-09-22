@@ -20,7 +20,7 @@ function mockRes() {
 }
 
 // Records every statement with its interpolated values; route(text) answers.
-function loadHandler(rel, route) {
+function loadHandler(rel, route, opts) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), handlerPath = mp(rel);
   for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
   const calls = [];
@@ -47,9 +47,14 @@ function loadHandler(rel, route) {
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true,
     exports: {
-      requireAuth: async req => { req.user = { id: 1, role: 'member' }; return ARTIST; },
+      requireAuth: async (req, res) => {
+        if (opts && opts.authFails) { res.status(401).json({ error: 'Unauthorized' }); return null; }
+        req.user = { id: 1, role: 'member' }; return ARTIST;
+      },
       getAccess: async () => ({ artist: ARTIST, user: { id: 1, role: 'member' } }),
-      isPrivate: () => false,
+      // Handlers ask these directly now; a stub that omits them throws.
+      canBrowseCatalogue: () => false,
+      canOpenStage: () => true,
     },
   };
   const began = { value: false };
@@ -67,6 +72,15 @@ const STORED = { id: 5, artist_id: 1, name: 'Old', deleted: false, phone: '+49 1
 const byId = text => (text.startsWith('SELECT * FROM venues') ? [STORED] : [{ ...STORED }]);
 
 async function run(r) {
+  await r.testAsync('venue reads always need a session — no setting opens them', async () => {
+    // Venue rows carry contact_name, phone and generic_email. The old private
+    // flag published them when switched off; there is deliberately no flag now.
+    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => [], { authFails: true });
+    const res = await call(handler, 'GET', '/api/test/venues');
+    r.assertEq(res.statusCode, 401);
+    r.assertEq(calls.length, 0, 'must not query before the auth gate');
+  });
+
   const { testAsync, assert, assertEq } = r;
   console.log(r.B('\nvenue handlers (phone, contact_name)'));
 

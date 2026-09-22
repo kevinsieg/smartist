@@ -74,13 +74,23 @@ async function getAccess(req, slug) {
 }
 
 // A workspace with config.private only serves data to authenticated members.
-// A workspace is private unless it has deliberately been opened up. The default
-// used to be public, so a band that never touched the setting had its songs,
-// gigs, venues and organizers readable by anyone who knew the slug. Only an
-// explicit `private: false` — the toggle in Settings — makes a band browsable
-// without a session.
-function isPrivate(artist) {
-  return !(artist && artist.config && artist.config.private === false);
+// Anonymous access is opt in, one surface at a time. A single private flag was
+// too coarse: turning it off to publish a song list also published the gig
+// schedule and the venue CRM, contact names and phone numbers included.
+//
+// Anything not covered here — venues, organizers, the setlists list, song logs,
+// GEMA — needs a session, no setting involved.
+
+// Songs and gig history, for fans browsing a band's repertoire. Off unless asked for.
+function canBrowseCatalogue(artist) {
+  return !!(artist && artist.config && artist.config.publicCatalogue === true);
 }
 
-module.exports = { requireAuth, requireRole, checkCredentials, getAccess, isPrivate };
+// A shared /stage link, for someone learning the songs. On by default, since a
+// stage link is meant to be handed out; switch it off to require a session.
+// The link carries no token, so this is the only thing standing in front of it.
+function canOpenStage(artist) {
+  return !(artist && artist.config && artist.config.publicStage === false);
+}
+
+module.exports = { requireAuth, requireRole, checkCredentials, getAccess, canBrowseCatalogue, canOpenStage };
