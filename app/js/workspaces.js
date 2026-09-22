@@ -1,8 +1,22 @@
 (async function() {
   var AUTH_TOKEN_KEY = 'smartist_token';
 
+  // This page loads no common.js (it runs before a workspace is chosen, so
+  // there is no band to build a nav from), which means getToken/clearToken are
+  // not defined here — calling them threw and the page rendered nothing at all.
+  // Same guarded-local-copy rule as share-utils.js and arrangement.js on stage.
   function _storedAuthToken() {
-    return getToken() || localStorage.getItem(AUTH_TOKEN_KEY) || null;
+    try {
+      return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || null;
+    } catch { return null; }
+  }
+
+  function _clearAuthToken() {
+    try {
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      sessionStorage.removeItem('setlist_token');
+    } catch {}
   }
 
   function _esc(s) {
@@ -56,7 +70,7 @@
     logoutEl.style.display = '';
     logoutEl.addEventListener('click', function(e) {
       e.preventDefault();
-      clearToken();
+      _clearAuthToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       window.location.replace('/login');
     });
