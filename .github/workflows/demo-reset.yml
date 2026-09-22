@@ -1,0 +1,40 @@
+name: Reset demo band
+
+# The public demo is a band inside the production database that anyone can
+# edit. This puts it back to scripts/demo_seed.json every night.
+#
+# A GitHub Action rather than a Vercel cron: a cron costs one of the 12
+# serverless functions the Hobby plan allows, and 11 are in use with the
+# twelfth reserved for the billing webhook.
+#
+# Needs one repository secret: DEMO_DATABASE_URL — the Neon `smartist`
+# production connection string.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 03:00 UTC daily
+  workflow_dispatch:       # and on demand from the Actions tab
+
+jobs:
+  reset:
+    name: Restore the demo band from the snapshot
+    runs-on: ubuntu-latest
+    # Without the secret the script would fall back to whatever DATABASE_URL is
+    # in the environment — skip instead of touching the wrong database.
+    if: ${{ github.repository == 'kevinsieg/smartist' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Reset
+        env:
+          DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+          DEMO_ARTIST_SLUG: demo
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DEMO_DATABASE_URL is not set — nothing to do."
+            exit 0
+          fi
+          node scripts/demo_reset.js --yes
