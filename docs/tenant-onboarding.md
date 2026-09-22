@@ -365,12 +365,14 @@ Delivery is blocked until all three show green in the Resend dashboard. Each sen
 
 ### Deployment-to-domain map
 
+Renamed 2026-09-22. Target state and migration: `2026-09-22-deployment-architecture.md`.
+
 | Vercel project | Repo | Branch | Domain | Status |
 |---|---|---|---|---|
-| `smartist-salmons` | `smartist` | `main` | `smartist.salmons.fr` | live |
-| `smartist-demo` | `smartist` | `main` | `demo.smartist.studio` | live |
-| `smartist-studio` | `smartist-studio` | `main` | `smartist.studio` | live |
-| `smartist-klang` | `smartist` | `main` | `smartist.kevinklang.de` | ⚠ in progress — Cloudflare DNS active, R2 custom domain `media.kevinklang.de` to configure, `R2_PUBLIC_URL` to update in Vercel |
+| `smartist-salb` | `smartist` | `main` | `smartist.salmons.fr` | live |
+| `smartist-klang` | `smartist` | `main` | `smartist.kevinklang.de` | ⚠ 500 on every route until `APP_SECRET` is set |
+| `smartist` | `smartist` | `main` | `demo.smartist.studio`, `app.smartist.studio` planned | ⚠ same — `APP_SECRET` missing |
+| `smartist-website` | `smartist-website` | `main` | `smartist.studio` | live — static, needs no env vars |
 
 ---
 
