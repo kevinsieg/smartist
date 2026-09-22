@@ -209,8 +209,10 @@ re-adding the variable restores the previous behaviour.
 - **Backups.** The Neon `smartist` main branch will hold other people's data.
   Its point-in-time restore window should be checked against what is acceptable
   to lose, before the first real signup.
-- **First account on the personal projects.** Needs `scripts/create_user.js`
-  before `salb` and `klang` can leave the legacy band-password login.
+- **First account on the personal projects.** `scripts/create_user.js` exists
+  now — run it against `smartist-kevin` for `salb` and `klang` to leave the
+  legacy band-password login behind. Until then those two have no `users` rows
+  and `SUPER_ADMIN_EMAILS` cannot match on them.
 - **Neon credentials.** Both production strings have been pasted into terminal
   history and chat. Rotate them.
 - **The demo reset cadence** is unset. Nightly is the assumption above.
