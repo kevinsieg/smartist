@@ -184,11 +184,14 @@ the rest and fix a live outage.
    `env DATABASE_URL='<url>' node scripts/apply_schema.js`.
    `smartist-kevin` was done on 2026-09-21.
 3. **Rename the Neon projects** in the dashboard (see Naming above).
-4. **Seed the `demo` band** in the production branch and write
-   `scripts/reset_demo.js` — scoped to the demo slug, never a table-wide delete.
-   Schedule it from a GitHub Action rather than a Vercel cron: a cron costs a
-   serverless function, and the Hobby plan allows 12, of which 11 are used and
-   the twelfth is reserved for the billing webhook.
+4. ~~**Seed the `demo` band** and write a reset job.~~ **Done.** The band was
+   already seeded (47 songs, 29 gigs, 31 setlists, 33 venues, 30 organizers).
+   `scripts/demo_reset.js` snapshots it to `scripts/demo_seed.json` and restores
+   it, scoped to one `artist_id` with no table-wide delete, leaving the `artists`
+   row and `users` untouched. Ids are preserved and sequences bumped past the
+   restored maximum, so the next insert from the app cannot collide.
+   `.github/workflows/demo-reset.yml` runs it at 03:00 UTC and on demand; it
+   needs the repository secret **`DEMO_DATABASE_URL`**.
 5. **Add `app.smartist.studio`** to the `smartist` project, point `APP_ORIGIN`
    at it, and redeploy.
 6. **Remove `ARTIST_SLUG`** from the `smartist` project's production environment
