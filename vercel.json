@@ -15,7 +15,7 @@
     { "source": "/api/:artist/songs/:songId/restore",                                             "destination": "/api/:artist/songs/restore?songId=:songId" },
     { "source": "/api/:artist/export",                                                            "destination": "/api/:artist/setlists/export" },
 
-    { "source": "/",                "destination": "/app/landing.html" },
+    { "source": "/",                "destination": "/app/index.html" },
     { "source": "/login",           "destination": "/app/index.html" },
     { "source": "/signup",          "destination": "/app/signup.html" },
     { "source": "/onboarding",      "destination": "/app/onboarding.html" },
@@ -63,12 +63,6 @@
       "source": "/(.*)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
-      ]
-    },
-    {
-      "source": "/",
-      "headers": [
-        { "key": "X-Robots-Tag", "value": "index, follow" }
       ]
     },
     {

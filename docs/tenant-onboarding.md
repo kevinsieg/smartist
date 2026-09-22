@@ -23,6 +23,22 @@ For dev/prod isolation, Neon projects have a built-in `main` branch. Create a `d
 |---|---|
 | `DATABASE_URL` | Pooled connection string, e.g. `postgresql://user:pass@ep-xxx-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require` |
 
+### App secret (session signing) — required
+
+Generate one per Vercel project:
+
+```bash
+openssl rand -hex 32
+```
+
+| Env var | Value |
+|---|---|
+| `APP_SECRET` | 32 random bytes as hex. Not a passphrase — it is an HMAC key, never typed by a human. |
+
+This signs the user session tokens (`{userId, role, exp}`) that every authenticated request carries. `api/_token.js` **throws at module load when it is missing**, and `api/_auth.js` requires that module, so without it every serverless function crashes on cold start and the whole API returns 500 — including `/api/config`, so the app will not even render. A deployment that is missing only this variable looks completely dead.
+
+Give each project its own value. Tokens are only ever verified by the deployment that issued them, so separate keys mean a leak in one workspace cannot forge sessions in another. Set it for **all environments**. Treat it as permanent: changing it invalidates every active session on that deployment.
+
 ### Cloudflare R2 (file storage) — required
 
 `dash.cloudflare.com` → R2 → Create bucket → Enable **Public Access** → copy the public URL.
@@ -171,9 +187,16 @@ Vercel project → Settings → Environment Variables:
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | prod R2 token | dev R2 token |
 | `R2_PUBLIC_URL` | prod bucket public URL | dev bucket public URL |
 
-Set as "All Environments": `ARTIST_SLUG`, `R2_ACCOUNT_ID`, `RESEND_API_KEY`, `RESEND_FROM`, `GEMINI_API_KEY`.
+Set as "All Environments": `APP_SECRET`, `ARTIST_SLUG`, `R2_ACCOUNT_ID`, `RESEND_API_KEY`, `RESEND_FROM`, `GEMINI_API_KEY`.
 
 Set as "Production" only: `BETTERSTACK_TOKEN`.
+
+Env vars are per Vercel project. Adding a required variable to the code means setting it on **every** project, not just the one you are working in:
+
+```bash
+vercel project ls                                   # every project running this code
+vercel env ls production --project <name>           # what that project actually has
+```
 
 ### Step 4 — Add the domain
 
@@ -184,6 +207,25 @@ See the DNS section below for the CNAME record to add in Cloudflare.
 ### Step 5 — Redeploy
 
 Click Redeploy in Vercel (or push any commit). Once DNS propagates, `smartist.kevinklang.de` serves the artist.
+
+Environment changes only reach **new** deployments — setting a variable does not fix a deployment that is already live.
+
+### Step 6 — Verify the API answers
+
+Opening the page is not enough: it is static and renders before any API call fails.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://smartist.kevinklang.de/api/config
+```
+
+`200` means the functions boot. Anything else, read the real error — the Vercel dashboard shows `FUNCTION_INVOCATION_FAILED` without the cause, and a crash at module load produces no entry in the runtime *errors* view:
+
+```bash
+vercel inspect https://smartist.kevinklang.de     # get the deployment id
+vercel logs <deployment-url>                      # the stack trace
+```
+
+Run this for every project after any env var change, not only new tenants.
 
 ---
 
@@ -323,12 +365,14 @@ Delivery is blocked until all three show green in the Resend dashboard. Each sen
 
 ### Deployment-to-domain map
 
+Renamed 2026-09-22. Target state and migration: `2026-09-22-deployment-architecture.md`.
+
 | Vercel project | Repo | Branch | Domain | Status |
 |---|---|---|---|---|
-| `smartist-salmons` | `smartist` | `main` | `smartist.salmons.fr` | live |
-| `smartist-demo` | `smartist` | `main` | `demo.smartist.studio` | live |
-| `smartist-studio` | `smartist-studio` | `main` | `smartist.studio` | live |
-| `smartist-klang` | `smartist` | `main` | `smartist.kevinklang.de` | ⚠ in progress — Cloudflare DNS active, R2 custom domain `media.kevinklang.de` to configure, `R2_PUBLIC_URL` to update in Vercel |
+| `smartist-salb` | `smartist` | `main` | `smartist.salmons.fr` | live |
+| `smartist-klang` | `smartist` | `main` | `smartist.kevinklang.de` | ⚠ 500 on every route until `APP_SECRET` is set |
+| `smartist` | `smartist` | `main` | `demo.smartist.studio`, `app.smartist.studio` planned | ⚠ same — `APP_SECRET` missing |
+| `smartist-website` | `smartist-website` | `main` | `smartist.studio` | live — static, needs no env vars |
 
 ---
 

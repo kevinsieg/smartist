@@ -11,6 +11,8 @@ Artist management app — Vercel serverless (no build step) + Neon PostgreSQL. S
 | `dev` | Preview | Neon dev | default; push freely |
 | `main` | Production | Neon main | PR-merge only |
 
+**This code runs as several Vercel projects, one per artist** (`smartist-salb`, `smartist-klang`, `smartist-demo`, …), each with its own env vars and its own `DATABASE_URL`. A new required env var must be set on *every* project — `vercel project ls`, then `vercel env ls production --project <name>` — and a schema change applied to every production DB. Missing `APP_SECRET` took `smartist-klang` and `smartist-demo` down for months — every API route 500ing — because only the linked project had it. Required vars and the post-deploy check: `docs/tenant-onboarding.md`.
+
 ---
 
 ## Local dev
