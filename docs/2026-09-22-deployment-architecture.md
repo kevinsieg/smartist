@@ -1,12 +1,32 @@
 # Deployment architecture
 
-Target state for the four Vercel projects, the databases behind them, and how a
+Target state for the Vercel projects, the databases behind them, and how a
 deployment decides whether it serves one band or the public.
 
-Written 2026-09-22, after `smartist-klang` and `smartist-demo` were found
-returning 500 on every route for months because `APP_SECRET` was set on only one
-project. The cause was not the missing variable — it was that nobody could say,
-from any document, what the projects were or what each one needed.
+Written 2026-09-22, after `smartist-klang` and the then-`smartist-demo` were
+found returning 500 on every route for months because `APP_SECRET` was set on
+only one project. The cause was not the missing variable — it was that nobody
+could say, from any document, what the projects were or what each one needed.
+
+---
+
+## Naming
+
+Renamed 2026-09-22 so the names say what the things are:
+
+| Was | Now | Is |
+|---|---|---|
+| Vercel `smartist-studio` | `smartist-website` | the marketing site, its own repo |
+| Vercel `smartist-demo` | `smartist` | the product |
+| Neon `smartist` | `smartist-kevin` | Kevin's own data only |
+| Neon `smartist-demo` | `smartist` | the public product's data |
+
+The Vercel renames are done. The Neon renames are dashboard actions (Project
+Settings → General → Name) and may still be pending — there is no Neon CLI in
+this repo's toolchain.
+
+Renaming a Vercel project changes its `*.vercel.app` URLs. Custom domains,
+deployment IDs and `VERCEL_PROJECT_ID` (what CI uses) are unaffected.
 
 ---
 
@@ -27,9 +47,9 @@ other slugs. What it really controls is the **front door**: with it set, a
 visitor is dropped into one fixed workspace and never sees signup
 (`home.js:113`).
 
-**This is the single most important setting to get right on the public
-deployment.** Leaving `ARTIST_SLUG` on it would send every new visitor to the
-demo band's dashboard instead of the signup flow.
+**This is the most important setting to get right on the public deployment.**
+Leaving `ARTIST_SLUG` on it would send every new visitor to one band's dashboard
+instead of the signup flow.
 
 ---
 
@@ -37,37 +57,46 @@ demo band's dashboard instead of the signup flow.
 
 | Domain | Vercel project | Repo | `ARTIST_SLUG` | Database |
 |---|---|---|---|---|
-| `smartist.studio` | the renamed `smartist-demo` | `smartist` | **unset** | `ep-summer-smoke` main |
-| `demo.smartist.studio` | same project, second domain | `smartist` | `demo` | `ep-summer-smoke` main |
-| `smartist.salmons.fr` | `smartist-salb` | `smartist` | `salb` | `ep-fancy-mud` |
-| `smartist.kevinklang.de` | `smartist-klang` | `smartist` | `klang` | `ep-fancy-mud` |
+| `smartist.studio` | `smartist-website` | `smartist-website` | — | none (static) |
+| `app.smartist.studio` | `smartist` | `smartist` | **unset** | Neon `smartist` main |
+| `demo.smartist.studio` | redirect → `app.smartist.studio/demo/dashboard` | — | — | — |
+| `smartist.salmons.fr` | `smartist-salb` | `smartist` | `salb` | Neon `smartist-kevin` |
+| `smartist.kevinklang.de` | `smartist-klang` | `smartist` | `klang` | Neon `smartist-kevin` |
 
-`smartist.studio` is the product: anyone can sign up, each signup creates a band,
-and `/workspaces` switches between them. The marketing content moves into the app
-repo's own landing page (`app/landing.html`, served at `/`), and the separate
-`kevinsieg/smartist-studio` repo is retired — one repo, one place to look.
+Marketing and product stay separate: `smartist.studio` is the public front door
+and deploys independently of the app, which is the point of it having its own
+repo. The application lives at `app.smartist.studio`, where anyone can sign up,
+each signup creates a band, and `/workspaces` switches between them.
 
-`demo.smartist.studio` stays as a front door to the demo band. It is the same
-deployment; only the domain differs.
+### Why the demo is a redirect, not a deployment
+
+`demo.smartist.studio` and `app.smartist.studio` would be two domains on the
+**same Vercel project**, and environment variables are scoped per project, not
+per domain. The demo domain therefore cannot set `ARTIST_SLUG=demo` while the
+app domain leaves it unset — one project, one value.
+
+It does not need to. The app already resolves the band from the URL path, so the
+demo band lives at `/demo/...` like any other workspace. `demo.smartist.studio`
+becomes a domain-level redirect to `app.smartist.studio/demo/dashboard`, which
+needs no project, no environment and no function.
 
 ### Databases
 
-| Database | Serves | Rules |
-|---|---|---|
-| `ep-fancy-mud` | `salb`, `klang` | Kevin's own data. One database, no dev branch, not shared with anything public. |
-| `ep-summer-smoke` main | public signups **and** the `demo` band | Real user data. Backups matter here. |
-| `ep-summer-smoke` dev | development and the test suite | Never public. The suite writes `[TEST]` rows to it. |
+| Neon project | Branch | Serves | Rules |
+|---|---|---|---|
+| `smartist-kevin` | main | `salb`, `klang` | Kevin's own data. One branch, no dev, not shared with anything public. |
+| `smartist` | main | public signups **and** the `demo` band | Real user data. Backups matter here. |
+| `smartist` | dev | development and the test suite | Never public. The suite writes `[TEST]` rows to it. |
 
-The demo lives as a **band inside the production database**, reset on a schedule,
-rather than on the development branch. The development branch is where the test
-suite writes and where schema changes land first: pointing the public demo at it
-would show visitors test rows and break the demo every time a migration is in
-flight.
+The demo lives as a **band inside the production branch**, reset on a schedule,
+rather than on the development branch. Development is where the test suite writes
+and where schema changes land first: pointing the public demo at it would show
+visitors test rows and break the demo whenever a migration is in flight.
 
-The cost of this choice is that visitor writes land in the same database as real
-customer data. That is acceptable because every query is already scoped by
-`artist_id` and the demo band is just another tenant — but it does mean the reset
-job must be scoped by slug and can never be a table-wide `DELETE`.
+The cost is that visitor writes share a database with real customer data. That is
+acceptable because every query is already scoped by `artist_id` and the demo band
+is just another tenant — but the reset job must be scoped by slug and can never
+be a table-wide `DELETE`.
 
 ---
 
@@ -76,38 +105,40 @@ job must be scoped by slug and can never be a table-wide `DELETE`.
 `/admin` (`SUPER_ADMIN_EMAILS`) needs two things: a session from a **user token**,
 and that user's `users.email` on the allowlist (`api/_domain/admin.js:7-14`).
 
-Both of Kevin's personal deployments have **zero `users` rows** — they log in
-through the legacy band-password path, which returns no token at all
-(`auth.js:161`). So on those two projects the allowlist can never match, and
-setting `SUPER_ADMIN_EMAILS` there does nothing today.
+Both personal deployments have **zero `users` rows** — they log in through the
+legacy band-password path, which returns no token at all (`auth.js:161`). So on
+those two the allowlist can never match, and setting `SUPER_ADMIN_EMAILS` there
+does nothing today.
 
-`SUPER_ADMIN_EMAILS` therefore belongs on the **public deployment**, where real
-accounts exist. Setting it on the personal projects only becomes useful once
-those workspaces have `users` rows, which also means leaving the legacy login
-behind. There is currently no supported path to create the first account for an
-existing band: signup creates a *new* band, and invite needs an authenticated
-admin. That gap needs a script before the personal projects can move.
+`SUPER_ADMIN_EMAILS` therefore belongs on the **`smartist` project**, where real
+accounts exist. It becomes useful on the personal projects only once those
+workspaces have `users` rows, which also means leaving the legacy login behind.
+There is currently no supported path to create the first account for an existing
+band: signup creates a *new* band, and invite needs an authenticated admin. That
+gap needs a script before the personal projects can move.
 
 ---
 
 ## Required environment variables
 
 Per project, because Vercel scopes them per project. A variable the code requires
-must be set on **every** project:
+must be set on **every** project running this repo:
 
 ```bash
-vercel project ls                            # every project running this code
+vercel project ls                            # every project
 vercel env ls production --project <name>    # what that one actually has
 ```
 
-| Variable | Public | Personal | Notes |
+| Variable | `smartist` | `smartist-salb` / `smartist-klang` | Notes |
 |---|---|---|---|
-| `APP_SECRET` | yes | yes | `openssl rand -hex 32`, unique per project. Missing it takes the whole API down — see `tenant-onboarding.md`. |
+| `APP_SECRET` | yes | yes | `openssl rand -hex 32`, unique per project. Missing it takes the whole API down. |
 | `DATABASE_URL` | yes | yes | Per environment. |
 | `ARTIST_SLUG` | **no** | yes | Presence is what pins a deployment to one band. |
 | `SUPER_ADMIN_EMAILS` | yes | not yet | Needs a `users` row to match. |
 | `APP_ORIGIN`, `R2_*`, `RESEND_*`, `GEMINI_API_KEY` | yes | yes | As in `tenant-onboarding.md`. |
 | `BETTERSTACK_TOKEN` | production only | production only | |
+
+`smartist-website` is static and needs none of these.
 
 ---
 
@@ -116,39 +147,41 @@ vercel env ls production --project <name>    # what that one actually has
 Ordered so that nothing is public before it works. Steps 1–2 are independent of
 the rest and fix a live outage.
 
-1. **Set `APP_SECRET`** on `smartist-klang` and `smartist-demo`, then redeploy
-   both. They are down until this is done.
-2. **Apply the schema** to `ep-summer-smoke` main:
+1. **Set `APP_SECRET`** on `smartist-klang` and `smartist`, then redeploy both.
+   They are down until this is done.
+2. **Apply the schema** to the Neon `smartist` main branch:
    `env DATABASE_URL='<url>' node scripts/apply_schema.js`.
-   `ep-fancy-mud` was done on 2026-09-21.
-3. **Rename the Vercel project** `smartist-demo` → something honest
-   (`smartist-app`). Renaming does not change domains or deployments.
-4. **Seed the `demo` band** in the production database and write
+   `smartist-kevin` was done on 2026-09-21.
+3. **Rename the Neon projects** in the dashboard (see Naming above).
+4. **Seed the `demo` band** in the production branch and write
    `scripts/reset_demo.js` — scoped to the demo slug, never a table-wide delete.
    Schedule it from a GitHub Action rather than a Vercel cron: a cron costs a
    serverless function, and the Hobby plan allows 12, of which 11 are used and
    the twelfth is reserved for the billing webhook.
-5. **Move the marketing content** into `app/landing.html`, and check what
-   `smartist.studio` serves today is not lost.
-6. **Move the domain.** Remove `smartist.studio` from the `smartist-studio`
-   project, add it to the app project, update `APP_ORIGIN`. Short DNS gap.
-7. **Remove `ARTIST_SLUG`** from the app project's production environment and
-   redeploy. Only after this does signup become the front door.
-8. **Set `SUPER_ADMIN_EMAILS`** on the app project and confirm `/admin` loads.
-9. **Retire** the `kevinsieg/smartist-studio` repo (archive, don't delete).
+5. **Add `app.smartist.studio`** to the `smartist` project, point `APP_ORIGIN`
+   at it, and redeploy.
+6. **Remove `ARTIST_SLUG`** from the `smartist` project's production environment
+   and redeploy. Only after this does signup become the front door.
+7. **Turn `demo.smartist.studio` into a redirect** to
+   `app.smartist.studio/demo/dashboard`.
+8. **Set `SUPER_ADMIN_EMAILS`** on the `smartist` project and confirm `/admin`
+   loads.
+9. **Point the marketing site's calls to action** at `app.smartist.studio`.
 
-Steps 6 and 7 are the only ones a visitor can see going wrong, and they are
-reversible: re-adding the domain or the variable restores the previous behaviour.
+Step 6 is the only one a visitor can see going wrong, and it is reversible:
+re-adding the variable restores the previous behaviour.
 
 ---
 
 ## Open questions
 
-- **Backups.** `ep-summer-smoke` main will hold other people's data. Neon's
-  point-in-time restore window should be checked against what is acceptable to
-  lose, before the first real signup.
+- **Backups.** The Neon `smartist` main branch will hold other people's data.
+  Its point-in-time restore window should be checked against what is acceptable
+  to lose, before the first real signup.
 - **First account on the personal projects.** Needs `scripts/create_user.js`
   before `salb` and `klang` can leave the legacy band-password login.
 - **Neon credentials.** Both production strings have been pasted into terminal
   history and chat. Rotate them.
 - **The demo reset cadence** is unset. Nightly is the assumption above.
+- **`demo.smartist.studio` today** serves the app directly. It keeps working
+  until step 7; the redirect is tidying, not a prerequisite.

@@ -54,10 +54,12 @@ Google/Facebook login buttons on the login page when `cfg.googleLogin`/`cfg.face
 
 ### Multi-tenant infrastructure
 
-- `smartist-salmons` → `smartist.salmons.fr` (live, production)
-- `smartist-studio` → `smartist.studio` (live — static landing page, separate repo)
-- `smartist-demo` → `demo.smartist.studio` (live — seeded demo artist, dedicated Neon DB)
-- `smartist-klang` → `smartist.kevinklang.de` (Vercel ready — ⚠ DNS pending, kevinklang.de nameservers not yet on Cloudflare)
+Renamed 2026-09-22. See `2026-09-22-deployment-architecture.md` for the target state.
+
+- `smartist-salb` → `smartist.salmons.fr` (live — Neon `smartist-kevin`, `ARTIST_SLUG=salb`)
+- `smartist-klang` → `smartist.kevinklang.de` (live — same DB, `ARTIST_SLUG=klang`; ⚠ down until `APP_SECRET` is set)
+- `smartist` → `demo.smartist.studio`, `app.smartist.studio` planned (the product — Neon `smartist`; ⚠ down until `APP_SECRET` is set)
+- `smartist-website` → `smartist.studio` (live — static marketing site, separate repo, no env vars)
 
 ---
 
