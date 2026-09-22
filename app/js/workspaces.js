@@ -2,7 +2,7 @@
   var AUTH_TOKEN_KEY = 'smartist_token';
 
   function _storedAuthToken() {
-    return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || null;
+    return getToken() || localStorage.getItem(AUTH_TOKEN_KEY) || null;
   }
 
   function _esc(s) {
@@ -56,7 +56,7 @@
     logoutEl.style.display = '';
     logoutEl.addEventListener('click', function(e) {
       e.preventDefault();
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearToken();
       localStorage.removeItem(AUTH_TOKEN_KEY);
       window.location.replace('/login');
     });
