@@ -1,5 +1,5 @@
 const { getDb, insertAuditLog, getSlug } = require('../../_db');
-const { requireAuth, getAccess, isPrivate } = require('../../_auth');
+const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { checkRateLimit, clientIp } = require('../../_ratelimit');
 const { suggestLyricsWithAI } = require('../../_ai');
@@ -431,8 +431,9 @@ module.exports = wrap(async function handler(req, res) {
   if (action === 'arrangements' && !arrId && req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
-    if (!user && isPrivate(band))
-      return res.status(401).json({ error: 'This workspace is private' });
+    // Stage reads this for the active chart, and a public catalogue shows it.
+    if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
+      return res.status(401).json({ error: 'Sign in to view this' });
     const sql = getDb();
     const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
@@ -533,8 +534,10 @@ module.exports = wrap(async function handler(req, res) {
   if (!action && req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
-    if (!user && isPrivate(band))
-      return res.status(401).json({ error: 'This workspace is private' });
+    // One song by id: what a stage link opens, and what a public catalogue
+    // lists. The song list itself is gated separately in songs.js.
+    if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
+      return res.status(401).json({ error: 'Sign in to view this' });
     const sql = getDb();
     const [song] = await sql`
       SELECT s.*,
@@ -626,8 +629,9 @@ module.exports = wrap(async function handler(req, res) {
 
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
-    if (!user && isPrivate(band))
-      return res.status(401).json({ error: 'This workspace is private' });
+    // Which setlists a song appears in — gig history for that song.
+    if (!user && !canBrowseCatalogue(band))
+      return res.status(401).json({ error: 'Sign in to view this' });
 
     const sql = getDb();
     const setlists = await sql`
@@ -649,8 +653,9 @@ module.exports = wrap(async function handler(req, res) {
 
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
-    if (!user && isPrivate(band))
-      return res.status(401).json({ error: 'This workspace is private' });
+    // GEMA registration data is rights administration, never public.
+    if (!user)
+      return res.status(401).json({ error: 'Sign in to view this' });
 
     const sql = getDb();
     const works = await sql`
