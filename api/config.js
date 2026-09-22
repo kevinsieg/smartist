@@ -2,7 +2,7 @@ const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr } = require('./_validate');
 const { checkRateLimit, clientIp } = require('./_ratelimit');
-const { requireAuth, getAccess, isPrivate, checkCredentials } = require('./_auth');
+const { requireAuth, getAccess, canBrowseCatalogue, checkCredentials } = require('./_auth');
 const { createPresignedUrl } = require('./_r2');
 const { verifyUserToken } = require('./_token');
 const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
@@ -166,7 +166,8 @@ async function publicConfig(req, res, slugParam) {
   const sql = getDb();
   const { artist: band, user } = await getAccess(req, slugParam);
   if (!band) return res.status(404).json({ error: 'Band not found in database' });
-  const priv  = !user && isPrivate(band);
+  // Without a session the songs payload only ships for a public catalogue.
+  const priv  = !user && !canBrowseCatalogue(band);
   const light = priv || req.query.light === '1';
 
   const [songs, [counts]] = await Promise.all([
