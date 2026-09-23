@@ -104,11 +104,15 @@ async function oauthCallback(req, res) {
     const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H);
     const hint = Buffer.from(email.toLowerCase()).toString('base64url');
     await logger.info('oauth_login', { provider, email });
-    if (artists.length > 1) {
-      return res.redirect(302, `${o}/login#magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/home`);
-    }
-    const slug = artists[0]?.slug || '';
-    return res.redirect(302, `${o}/login#magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/${slug}/dashboard`);
+    // This is a finished session, not a link to be redeemed. It used to travel
+    // as `magic=`, which sent home.js to the password-based magic endpoint —
+    // and that looks the user up WITH password_hash IS NOT NULL and checks the
+    // token against that hash. An account created through Google has no
+    // password and a user token is keyed on APP_SECRET, so it always came back
+    // "Invalid or expired login link". `session=` is verified as what it is.
+    const next = artists.length > 1 ? '/workspaces' : `/${artists[0]?.slug || ''}/dashboard`;
+    return res.redirect(302,
+      `${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
   }
 
   // Single-tenant fallback (ARTIST_ADMIN_EMAIL)

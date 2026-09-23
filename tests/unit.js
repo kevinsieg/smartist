@@ -20,6 +20,7 @@ const suites = [
   require('./unit/user_token'),
   require('./unit/auth'),
   require('./unit/identity'),
+  require('./unit/oauth_callback'),
   require('./unit/artist'),
   require('./unit/registration'),
   require('./unit/config_signup'),
