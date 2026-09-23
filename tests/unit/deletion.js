@@ -9,13 +9,21 @@ stubLogger();
 const VICTIM    = 'player@example.com';
 const NEIGHBOUR = 'other@example.com';
 
+// Mirrors real Postgres: an exact-string column compares case-sensitively
+// unless the SQL text itself wraps the column in lower(...). This is what
+// catches an implementation that forgets the lower() and silently matches
+// nothing for a mixed-case stored address.
+function emailMatches(queryText, rowEmail, paramValue) {
+  return /lower\s*\(/i.test(queryText) ? rowEmail.toLowerCase() === paramValue : rowEmail === paramValue;
+}
+
 // rows: [{ artist_id, slug, name, email, role }]
 function fakeSql(rows) {
   return (strings, ...values) => {
     const text = strings.join('?');
-    if (/FROM users u\s+JOIN artists a/i.test(text) || /JOIN artists/i.test(text)) {
+    if (/JOIN artists/i.test(text)) {
       const email = values[0];
-      return Promise.resolve(rows.filter(r => r.email === email)
+      return Promise.resolve(rows.filter(r => emailMatches(text, r.email, email))
         .map(r => ({ artist_id: r.artist_id, slug: r.slug, name: r.name, role: r.role })));
     }
     if (/FROM users/i.test(text)) {
@@ -73,6 +81,19 @@ async function run(r) {
     const p = await planDeletion('kev@x.com', sql);
     assertEq(p.destroy.map(a => a.slug).join(','), 'thrs');
   });
+
+  // oauth.js and registration.js insert whatever the provider/form sent, not
+  // a lowercased address — the lookup must fold case or this address is
+  // simply never found, and executeDeletion would report success for a
+  // no-op (see the "not found" tests below).
+  await testAsync('a mixed-case stored address is still matched', async () => {
+    const sql = fakeSql([
+      { artist_id: 1, slug: 'mine', name: 'Mine', email: 'Jane@EXAMPLE.com', role: 'admin' },
+    ]);
+    const p = await planDeletion('jane@example.com', sql);
+    assertEq(p.destroy.map(a => a.slug).join(','), 'mine');
+  });
+
   console.log(B('\ncollectR2Urls'));
 
   function fakeMediaSql({ songs = [], gigs = [], artists = [] }) {
@@ -107,6 +128,18 @@ async function run(r) {
     assertEq([...urls].sort().join(','), 'u1,u2,u3,u4,u5,u6');
   });
 
+  // config.js also uploads a band favicon (config.faviconUrl) alongside the
+  // logo. Unlike the UUID-keyed song files, its R2 key is slug-derived and
+  // therefore guessable — leaving it behind after deletion is a real gap.
+  await testAsync('the band favicon is collected alongside the logo', async () => {
+    const { collectR2Urls } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = fakeMediaSql({
+      artists: [{ id: 1, config: { logoUrl: 'logo.png', faviconUrl: 'fav.png' } }],
+    });
+    const urls = await collectR2Urls([1], sql);
+    assertEq([...urls].sort().join(','), 'fav.png,logo.png');
+  });
+
   // The hazard this whole feature has to avoid: audio/ is one namespace shared
   // by every tenant, so a neighbour's file must never appear in this list.
   await testAsync('a neighbouring band\'s files are never collected', async () => {
@@ -128,27 +161,35 @@ async function run(r) {
 
   // Records every statement so the tests can assert on scope. A deletion bug
   // shows up as a statement whose values do not name the victim's artist.
-  function recordingSql(rows, media = {}) {
+  // `subs` tracks a fake subscribers table so tests can assert a neighbour's
+  // row survives a DELETE FROM subscribers, not just that one was issued.
+  function recordingSql(rows, media = {}, subs = []) {
+    let subscribers = subs.slice();
     const issued = [];
     const fn = (strings, ...values) => {
       const text = strings.join('?').replace(/\s+/g, ' ').trim();
       issued.push({ text, values });
       if (/JOIN artists/i.test(text)) {
         const email = values[0];
-        return Promise.resolve(rows.filter(r => r.email === email)
+        return Promise.resolve(rows.filter(r => emailMatches(text, r.email, email))
           .map(r => ({ artist_id: r.artist_id, slug: r.slug, name: r.name, role: r.role })));
       }
-      if (/FROM users/i.test(text)) {
+      if (/SELECT artist_id, email, role FROM users/i.test(text)) {
         const ids = values[0] || [];
         return Promise.resolve(rows.filter(r => ids.includes(r.artist_id)));
       }
       if (/FROM songs/i.test(text))   return Promise.resolve(media.songs   || []);
       if (/FROM gigs/i.test(text))    return Promise.resolve(media.gigs    || []);
       if (/FROM artists/i.test(text)) return Promise.resolve(media.artists || []);
+      if (/DELETE FROM subscribers/i.test(text)) {
+        const addr = values[0];
+        subscribers = subscribers.filter(s => !emailMatches(text, s.email, addr));
+      }
       return Promise.resolve([]);
     };
     fn.begin = async (cb) => cb(fn);
     fn.issued = issued;
+    Object.defineProperty(fn, 'subscribers', { get: () => subscribers });
     return fn;
   }
 
@@ -172,7 +213,12 @@ async function run(r) {
     assertEq(removed.length, 0);
   });
 
-  await testAsync('every write names the artists being deleted', async () => {
+  // Real assertion, not a presence test: every artist id in every write's
+  // values must be one this deletion is allowed to touch, and every
+  // email-shaped value must be exactly the victim's — not "contains the
+  // digit 1" and "doesn't contain the digit 9", which a coincidental id
+  // could satisfy or dodge by accident.
+  await testAsync('every write is scoped to the artists being destroyed and the victim alone', async () => {
     const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
     const sql = recordingSql([
       { artist_id: 1, slug: 'mine',  name: 'Mine',  email: VICTIM,    role: 'admin' },
@@ -182,18 +228,25 @@ async function run(r) {
       deleteFromR2: async () => true,
       logger: { info: async () => {}, error: async () => {} },
     });
+    const destroySet = new Set([1]); // artist 1 is VICTIM's only workspace and it's solo
     const writes = sql.issued.filter(q => /^(DELETE|UPDATE)/i.test(q.text));
     assert(writes.length > 0, 'nothing was deleted');
     for (const w of writes) {
-      const flat = JSON.stringify(w.values);
-      assert(/\b1\b/.test(flat) || /player@example\.com/.test(flat),
-        `a write did not name the victim: ${w.text} ${flat}`);
-      assert(!/\b9\b/.test(flat),
-        `a write named the neighbouring artist: ${w.text} ${flat}`);
+      for (const v of w.values) {
+        if (Array.isArray(v)) {
+          for (const id of v) assert(destroySet.has(id),
+            `a write named an artist outside the destroy set: ${w.text} ${JSON.stringify(w.values)}`);
+        } else if (typeof v === 'number') {
+          assert(destroySet.has(v),
+            `a write named an artist outside the destroy set: ${w.text} ${JSON.stringify(w.values)}`);
+        } else if (typeof v === 'string' && v.includes('@')) {
+          assertEq(v, VICTIM, `a write used the wrong email: ${w.text} ${JSON.stringify(w.values)}`);
+        }
+      }
     }
   });
 
-  await testAsync('files are removed only after the rows are gone', async () => {
+  await testAsync('the file list is logged before the transaction, then files are removed only after the rows are gone', async () => {
     const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
     const order = [];
     const sql = recordingSql(
@@ -204,9 +257,96 @@ async function run(r) {
     inner.begin = async (cb) => { order.push('tx'); return cb(inner); };
     await executeDeletion(VICTIM, sql, {
       deleteFromR2: async (u) => { order.push('r2:' + u); return true; },
+      logger: {
+        info: async (event) => { if (event === 'account_delete_files_pending') order.push('logged'); },
+        error: async () => {},
+      },
+    });
+    assertEq(order.join(','), 'logged,tx,r2:f1');
+  });
+
+  // Alice (admin) invites Bob into her band; Bob becomes admin too, so
+  // deleting Alice's account only leaves that workspace (Bob stays). Bob's
+  // users row has invited_by = Alice's user id, and that FK has no ON DELETE
+  // clause — without clearing it first, deleting Alice's row throws
+  // users_invited_by_fkey and nobody who ever invited a teammate could ever
+  // delete their own account.
+  await testAsync('invited_by is cleared before the inviting row is removed', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql([
+      { artist_id: 1, slug: 'band', name: 'Band', email: VICTIM,    role: 'admin' },
+      { artist_id: 1, slug: 'band', name: 'Band', email: NEIGHBOUR, role: 'admin' },
+    ]);
+    await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async () => true,
       logger: { info: async () => {}, error: async () => {} },
     });
-    assertEq(order.join(','), 'tx,r2:f1');
+    const texts          = sql.issued.map(q => q.text);
+    const invitedByIdx   = texts.findIndex(t => /invited_by\s*=\s*NULL/i.test(t));
+    const deleteUsersIdx = texts.findIndex(t => /^DELETE FROM users\b/i.test(t));
+    assert(invitedByIdx !== -1, 'invited_by was never nulled: ' + texts.join(' | '));
+    assert(deleteUsersIdx !== -1, "the victim's membership row was never deleted");
+    assert(invitedByIdx < deleteUsersIdx,
+      'invited_by must be cleared before the row it references is deleted');
+  });
+
+  // The DB stores whatever case a provider or the signup form sent — the
+  // deletes must fold case the same way the lookup does, or a row that
+  // planDeletion found is left behind by the write that's supposed to remove it.
+  await testAsync('the row deletes match the stored email regardless of case', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql([
+      { artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' },
+    ]);
+    await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async () => true,
+      logger: { info: async () => {}, error: async () => {} },
+    });
+    const deleteUsers = sql.issued.find(q => /^DELETE FROM users\b/i.test(q.text));
+    const deleteSubs  = sql.issued.find(q => /^DELETE FROM subscribers\b/i.test(q.text));
+    assert(deleteUsers && /lower\(/i.test(deleteUsers.text),
+      'DELETE FROM users must match case-insensitively: ' + (deleteUsers && deleteUsers.text));
+    assert(deleteSubs && /lower\(/i.test(deleteSubs.text),
+      'DELETE FROM subscribers must match case-insensitively: ' + (deleteSubs && deleteSubs.text));
+  });
+
+  // "delete my account" includes the mailing-list/contact-form row, matched
+  // by exact address — and only that address, not the rest of that table.
+  await testAsync('deleting the account removes only its own subscribers row', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql(
+      [{ artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' }],
+      {},
+      [{ email: VICTIM }, { email: NEIGHBOUR }],
+    );
+    await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async () => true,
+      logger: { info: async () => {}, error: async () => {} },
+    });
+    assert(!sql.subscribers.some(s => s.email === VICTIM), "the victim's subscriber row survived");
+    assert(sql.subscribers.some(s => s.email === NEIGHBOUR), "a different address's subscriber row was removed");
+  });
+
+  // The HTTP handler needs to tell "nothing to delete" from "deleted" apart —
+  // and an address that was never here must not open a transaction or be
+  // logged as an account that got deleted.
+  await testAsync('an address with no workspaces reports not found, and writes nothing', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql([
+      { artist_id: 1, slug: 'mine', name: 'Mine', email: NEIGHBOUR, role: 'admin' },
+    ]);
+    const logged = [];
+    const out = await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async () => true,
+      logger: { info: async (e) => { logged.push(e); }, error: async () => {} },
+    });
+    assertEq(out.ok, true);
+    assertEq(out.found, false);
+    assertEq(out.destroyed.length, 0);
+    assertEq(out.left.length, 0);
+    assert(!sql.issued.some(q => /DELETE|UPDATE/i.test(q.text)),
+      'an unknown address still wrote: ' + sql.issued.map(q => q.text).join(' | '));
+    assert(!logged.includes('account_deleted'), 'an unknown address was logged as deleted');
   });
 
   await testAsync('a failed file delete does not undo the row deletion, and is logged', async () => {
@@ -230,19 +370,48 @@ async function run(r) {
   const { test } = r;
   test('no DELETE or UPDATE runs without naming its rows', () => {
     const fs  = require('fs');
-    const src = fs.readFileSync(path.join(__dirname, '../../api/_domain/deletion.js'), 'utf8');
+    const raw = fs.readFileSync(path.join(__dirname, '../../api/_domain/deletion.js'), 'utf8');
+    // Strip line comments first — this file keeps none inside its SQL, but a
+    // stray "DELETE FROM" in prose should never be able to count as a write.
+    const src = raw.split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
 
-    // Template-literal SQL, statement by statement.
-    const stmts = [...src.matchAll(/(DELETE\s+FROM|UPDATE)\s+[\s\S]*?`/gi)].map(m => m[0]);
-    assert(stmts.length > 0, 'found no write statements — has the module moved?');
+    const KEYWORD = /\b(DELETE\s+FROM|UPDATE)\b/i;
+    const countKeywords = (text) => (text.match(new RegExp(KEYWORD.source, 'gi')) || []).length;
+    const totalKeywords = countKeywords(src);
+    assert(totalKeywords > 0, 'found no write statements — has the module moved?');
 
-    const unscoped = stmts.filter(s =>
-      !/artist_id\s*=/i.test(s) &&
-      !/\bid\s*=\s*ANY/i.test(s) &&
-      !/email\s*=\s*\$\{addr\}/.test(s));
+    // Match whole self-terminated strings (template literal or quoted) rather
+    // than hunting forward from the keyword for the next backtick: the old
+    // approach let a write with no closing backtick after it — e.g.
+    // `tx.unsafe('DELETE FROM users')` as the last statement in the file —
+    // run the lazy match past end of scope into unrelated code, or off the
+    // end of the file entirely, producing zero matches for that statement.
+    // Anchoring both delimiters means such a statement is still captured
+    // (as a quoted string containing the keyword) instead of vanishing.
+    const STRING = /`(?:[^`\\]|\\.)*`|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g;
+    const strings = src.match(STRING) || [];
+    const stmts = strings.filter(s => KEYWORD.test(s));
 
+    // If every keyword occurrence in the source landed inside one of the
+    // strings above, nothing was dropped. A mismatch means a write exists
+    // outside any self-terminated string — the exact "vanished" case — and
+    // that must fail loudly rather than silently pass with fewer statements.
+    const keywordsInStmts = stmts.reduce((n, s) => n + countKeywords(s), 0);
+    assert(keywordsInStmts === totalKeywords,
+      `${totalKeywords - keywordsInStmts} write statement(s) are not inside a single ` +
+      'self-terminated string, so this check cannot see them — a delimiter is probably missing');
+
+    // Checked against the statement's own text only, not the source span
+    // around it, so a comment sitting near a write can't satisfy this by
+    // coincidence.
+    const scoped = (s) =>
+      /artist_id\s*=/i.test(s) ||
+      /\bid\s*=\s*any\s*\(/i.test(s) ||
+      (/\$\{addr\}/.test(s) && /email/i.test(s));
+
+    const unscoped = stmts.filter(s => !scoped(s));
     assert(unscoped.length === 0,
-      'these writes name no artist, and one database holds two bands:\n      ' +
+      'these writes name no artist and no victim email, and one database holds two bands:\n      ' +
       unscoped.map(s => s.replace(/\s+/g, ' ').slice(0, 90)).join('\n      '));
   });
 }
