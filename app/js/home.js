@@ -10,6 +10,7 @@ async function init() {
   const hashParams   = new URLSearchParams(window.location.hash.slice(1));
   const qp           = function(k) { return hashParams.get(k) || params.get(k); };
   const magic        = qp('magic');
+  const session      = qp('session');
   const hint         = qp('hint');
   const invite       = qp('invite');
   const oauthError   = qp('oauth_error');
@@ -19,12 +20,36 @@ async function init() {
   _loginNext = next; // survives the URL strip below
 
   const hasToken = !!(sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY));
-  if (path === '/' && !magic && !oauthError && !invite && !hasToken) {
+  if (path === '/' && !magic && !session && !oauthError && !invite && !hasToken) {
     window.location.replace('/login' + window.location.search);
     return;
   }
 
-  if (magic || oauthError || invite) history.replaceState(null, '', window.location.pathname);
+  if (magic || session || oauthError || invite) history.replaceState(null, '', window.location.pathname);
+
+  // A finished session handed over by the OAuth callback. Handled before
+  // loadConfig because it needs no workspace: verifySession authenticates
+  // against the slug-independent my-artists endpoint. Doing it later would
+  // break the multi-workspace case, where `next` is /workspaces and there is no
+  // slug to load a config for.
+  if (session) {
+    storeToken(session, false);
+    if (hint) {
+      try { sessionStorage.setItem('smartist_admin_email', atob(hint.replace(/-/g, '+').replace(/_/g, '/'))); } catch (e) {}
+    }
+    const { ok, artists } = await verifySession(session);
+    if (ok) { renderLoggedIn(null, artists); return; }
+    // Say so here rather than falling through: `next` may be /workspaces, which
+    // is not a slug, so the code below would fail to load a config and render a
+    // bare login form with no hint that the sign-in was refused. The root config
+    // is only for the form's own buttons — without it the error screen would
+    // offer no way back in through the provider that just failed.
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    let rootCfg;
+    try { rootCfg = await loadConfig(); } catch (e) {}
+    renderLogin(t('home.invalidLink'), rootCfg);
+    return;
+  }
 
   let cfg;
   try {
