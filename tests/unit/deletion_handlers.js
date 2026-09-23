@@ -62,8 +62,12 @@ function makeDb(rows) {
     // requestDeletion: store the hash on the requester's row(s).
     if (/UPDATE users SET delete_token_hash/i.test(text)) {
       const [hash, expires, email] = values;
-      users.forEach(u => { if (u.email === email) { u.delete_token_hash = hash; u.delete_token_expires = expires; } });
-      return Promise.resolve([]);
+      // Same lower(email) matching as the real column — a bare === here would
+      // let this fake pass even without the fix, since it would silently
+      // agree with a bug that matches nothing for a mixed-case stored address.
+      const matched = users.filter(u => emailMatches(text, u.email, email));
+      matched.forEach(u => { u.delete_token_hash = hash; u.delete_token_expires = expires; });
+      return Promise.resolve(matched.map(u => ({ id: u.id })));
     }
     // planDeletion: this address's own memberships.
     if (/JOIN artists/i.test(text)) {
@@ -183,6 +187,27 @@ async function run(r) {
     assertEq(res._status, 409);
     assertEq(res._body.blocked[0].slug, 'band');
     assertEq(sent.length, 0); // no email for a request that cannot proceed
+  });
+
+  // OAuth signup stores whatever casing the provider sent (registration.js
+  // inserts verified.email unchanged) — the request path must still find and
+  // update that row, or the token is never stored while the handler still
+  // mails a link that can never work.
+  await testAsync('a mixed-case stored address still gets a deletion token it can use', async () => {
+    const mixed = [{ id: 7, artist_id: 1, slug: 'mine', name: 'Mine', email: 'Kevin.Sieg@Gmx.de', role: 'admin' }];
+    const { handlers, token, sent, db } = load(mixed);
+    const sessionToken = token.generateUserToken(7, 'admin', 60_000);
+    const res = mockRes();
+    await handlers.requestDeletion({ headers: { authorization: 'Bearer ' + sessionToken }, body: {}, query: {} }, res);
+    assertEq(res._status, 200);
+    assertEq(sent.length, 1);
+    const stored = db.users.find(u => u.id === 7);
+    assert(stored.delete_token_hash, 'the token was never stored against the mixed-case row');
+
+    const raw = sent[0].html.match(/token=([a-f0-9]+)/)[1];
+    const confirmRes = mockRes();
+    await handlers.confirmDeletion({ headers: {}, body: { token: raw }, query: {} }, confirmRes);
+    assertEq(confirmRes._status, 200);
   });
 
   // Shared across the next two tests: a request stores a token, and the
