@@ -8,6 +8,10 @@
 //   destroy — nobody else is in it; it goes entirely, rows and files
 //   leave   — others are in it and someone else can still administer it
 //   blocked — others are in it and this is the only admin
+//
+// Matched case-insensitively: what's stored is whatever a provider or the
+// signup form sent (oauth.js, registration.js insert the raw address), so a
+// literal `=` here would silently find nothing for `Kevin@GMX.de`.
 async function planDeletion(email, sql) {
   const addr = String(email).toLowerCase();
 
@@ -15,7 +19,7 @@ async function planDeletion(email, sql) {
     SELECT u.artist_id, a.slug, a.name, u.role
     FROM users u
     JOIN artists a ON a.id = u.artist_id
-    WHERE u.email = ${addr}
+    WHERE lower(u.email) = ${addr}
     ORDER BY a.name
   `;
   if (!mine.length) return { destroy: [], leave: [], blocked: [] };
@@ -68,7 +72,10 @@ async function collectR2Urls(artistIds, sql) {
     add(e.listenUrl); add(e.sheetUrl); add(e.playbackUrl);
   }
   for (const g of gigs) { add(g.poster_url); add(g.thumb_url); }
-  for (const b of bands) { add((b.config || {}).logoUrl); }
+  // config.js uploads two band images (photo → logoUrl, favicon → faviconUrl);
+  // faviconUrl's key is slug-derived, not a UUID, so it's the one guessable
+  // R2 object this account owns — leaving it behind would still be reachable.
+  for (const b of bands) { add((b.config || {}).logoUrl); add((b.config || {}).faviconUrl); }
 
   return [...urls];
 }
@@ -82,14 +89,31 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
   const addr = String(email).toLowerCase();
   const plan = await planDeletion(addr, sql);
 
+  // No workspace at all — the address doesn't match anything. Callers (the
+  // HTTP handler) need to tell this apart from an actual deletion, and
+  // nothing should be written or logged as deleted for an address that
+  // was never here.
+  if (!plan.destroy.length && !plan.leave.length && !plan.blocked.length) {
+    return { ok: true, found: false, destroyed: [], left: [] };
+  }
+
   if (plan.blocked.length) {
-    return { ok: false, blocked: plan.blocked.map(b => ({ slug: b.slug, name: b.name })) };
+    return { ok: false, found: true, blocked: plan.blocked.map(b => ({ slug: b.slug, name: b.name })) };
   }
 
   const destroyIds = plan.destroy.map(a => a.artistId);
 
   // Enumerated first: once the rows are gone there is nothing to enumerate.
   const urls = await collectR2Urls(destroyIds, sql);
+
+  // Logged before the transaction, not after: scripts/plans.js --recount
+  // cannot reconcile these afterwards — it HEADs URLs read from songs/artists
+  // rows, and by the time it would run, DELETE FROM artists has removed them.
+  // This log line is the only surviving record of what should exist, so a
+  // crash between commit and the R2 loop below still leaves the keys findable.
+  if (urls.length) {
+    await logger.info('account_delete_files_pending', { email: addr, urls });
+  }
 
   await sql.begin(async (tx) => {
     if (destroyIds.length) {
@@ -101,14 +125,28 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
       // artists cascades songs, gigs, venues, organizers, users, logs.
       await tx`DELETE FROM artists WHERE id = ANY(${destroyIds})`;
     }
+    // users.invited_by has no ON DELETE clause (schema.sql:322), and invites
+    // are always issued within the inviter's own artist (auth.js ?action=invite
+    // inserts invited_by = req.user.id under that same artist_id). So in a
+    // "leave" workspace, whoever this person invited is still there after the
+    // row below removes this person's own membership — clear the reference
+    // first or that DELETE raises users_invited_by_fkey and the whole thing
+    // throws, leaving deletion permanently broken for anyone who ever invited
+    // someone. Scoped to this person's own user ids, not to an artist_id, since
+    // the rows it must reach span every surviving workspace.
+    await tx`UPDATE users SET invited_by = NULL WHERE invited_by IN (SELECT id FROM users WHERE lower(email) = ${addr})`;
     // Workspaces that survive: drop only this person's membership.
-    await tx`DELETE FROM users WHERE email = ${addr}`;
+    await tx`DELETE FROM users WHERE lower(email) = ${addr}`;
+    // The contact-form / mailing-list row is this person's own data too —
+    // erasure means it goes as well, matched the same way, nothing wider.
+    await tx`DELETE FROM subscribers WHERE lower(email) = ${addr}`;
   });
 
   // Outside the transaction on purpose: R2 has no rollback. An orphaned file is
   // a storage leak behind an unguessable UUID in a non-listable bucket; a row
-  // deleted to match a failed file delete would be worse. Log every failure —
-  // scripts/plans.js --recount is the reconciliation pass.
+  // deleted to match a failed file delete would be worse. Every failure is
+  // logged — see account_delete_files_pending above for why that log line,
+  // not a later reconciliation pass, is what finds an orphan after a crash.
   for (const url of urls) {
     try {
       await deleteFromR2(url);
@@ -124,7 +162,7 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
     files:     urls.length,
   });
 
-  return { ok: true, destroyed: plan.destroy.map(a => a.slug), left: plan.leave.map(a => a.slug) };
+  return { ok: true, found: true, destroyed: plan.destroy.map(a => a.slug), left: plan.leave.map(a => a.slug) };
 }
 
 module.exports = { planDeletion, collectR2Urls, executeDeletion };
