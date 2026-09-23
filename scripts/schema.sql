@@ -365,3 +365,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_expires_at TIMESTAMPTZ;
 -- 2026-09-21: venue contact data
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS phone        TEXT;
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS contact_name TEXT;
+
+-- 2026-09-23: self-service account deletion. The emailed confirmation link is
+-- single-use and short-lived; the hash is stored, never the token. Mirrors
+-- invite_token_hash / invite_expires_at directly above.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_token_hash    TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_token_expires TIMESTAMPTZ;
