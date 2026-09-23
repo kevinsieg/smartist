@@ -60,6 +60,11 @@ async function init() {
       // Multi-tenant root: nothing to brand the page with, and login goes
       // through /api/login instead of /api/:artist/auth. Signup is a link on
       // the form, so returning users are not pushed into onboarding.
+      //
+      // A reset link is the one arrival that must survive this: it carries no
+      // slug, so returning here would drop the token and show a plain login
+      // form — which is how the OAuth confirm link was broken earlier.
+      if (reset) { renderSetPassword(reset, cfg, hint); return; }
       renderLogin(null, cfg);
       return;
     }
@@ -292,10 +297,13 @@ async function doSetPassword(token, hint, cfg) {
   const restore = () => { btn.disabled = false; btn.textContent = t('home.savePassword'); };
   try {
     const slug = cfg?.slug || artistSlug;
-    const r    = await fetch(`/api/${slug}/auth?action=set-password`, {
+    const url  = slug ? `/api/${slug}/auth?action=set-password` : '/api/config';
+    const body = slug ? { token, hint, password: pw }
+                      : { action: 'set-password', token, hint, password: pw };
+    const r    = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, hint, password: pw }),
+      body: JSON.stringify(body),
     });
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); restore(); return; }
@@ -399,10 +407,15 @@ async function doRequestReset() {
   btn.disabled = true; btn.textContent = '…'; msg.textContent = '';
   try {
     if (!artistSlug) { const cfg = await loadConfig(); artistSlug = cfg.slug; }
-    await fetch(`/api/${artistSlug}/request-reset`, {
+    // With no workspace there is no /api/:artist/ to post to — this used to send
+    // to /api//request-reset, a 308 to a 404, so nothing happened and nothing
+    // said so. The slug-independent action finds the account by address instead.
+    const url  = artistSlug ? `/api/${artistSlug}/request-reset` : '/api/config';
+    const body = artistSlug ? { email } : { action: 'request-reset', email };
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(body),
     });
     msg.style.color = 'var(--secondary-color)';
     msg.textContent = t('home.resetSent');

@@ -12,6 +12,7 @@ const signup = require('./_domain/signup');
 const oauth = require('./_domain/oauth');
 const subscribe = require('./_domain/subscribe');
 const login = require('./_domain/login');
+const reset = require('./_domain/reset');
 const deletion = require('./_domain/deletion_handlers');
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -28,6 +29,8 @@ module.exports = wrap(async function handler(req, res) {
     if (action === 'upgrade')             return upgrade(req, res);
     if (action === 'downgrade')           return downgrade(req, res);
     if (action === 'login')               return login.passwordLogin(req, res);
+    if (action === 'request-reset')       return reset.requestReset(req, res);
+    if (action === 'set-password')        return reset.setPassword(req, res);
     if (action === 'signup-link')         return signup.signupLink(req, res);
     if (action === 'verify-signup-token') return signup.verifySignup(req, res);
     if (action === 'signup')              return signup.signup(req, res);
