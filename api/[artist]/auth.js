@@ -211,7 +211,7 @@ module.exports = wrap(async function handler(req, res) {
         if (clash) { const e = new Error('taken'); e.taken = true; throw e; }
 
         // One statement moves every membership, so the person keeps all bands.
-        await tx`UPDATE users SET email = ${target} WHERE email = ${oldEmail}`;
+        await tx`UPDATE users SET email = ${target}, delete_token_hash = NULL, delete_token_expires = NULL WHERE email = ${oldEmail}`;
         await tx`
           UPDATE users
           SET pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL
