@@ -1526,6 +1526,14 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 /* pw-wrapper's input must fill the wrapper, not flex as a row item */
 .auth-row .pw-wrapper input { width: 100%; flex: none; }
 .auth-error { color: #7a2a2a; font-size: 0.82rem; margin-top: 0.5rem; min-height: 1em; }
+/* Arrival error: the sign-in that sent the visitor here failed. Sits above the
+   form rather than under the password field, which is below the fold of
+   attention for someone who did not expect to land back on a login page. */
+.auth-banner {
+    color: #7a2a2a; background: #fbf0ee; border: 1px solid #e3c4bd;
+    border-radius: var(--radius); padding: 0.7rem 0.9rem; margin-bottom: 1rem;
+    font-size: var(--text-sm); line-height: 1.5; text-align: center;
+}
 .reset-link {
     background: none; border: none; color: var(--third-color); font-size: 0.78rem;
     font-family: var(--font-ui); cursor: pointer;

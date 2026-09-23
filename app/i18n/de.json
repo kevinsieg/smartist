@@ -239,7 +239,7 @@
   "home.hidePw": "verbergen",
   "home.invalidLink": "Ungültiger oder abgelaufener Anmeldelink.",
   "home.noAccount": "Noch kein Konto?",
-  "home.oauthErrorMsg": "Anmeldung fehlgeschlagen — die Konto-E-Mail stimmt nicht mit der konfigurierten Admin-Adresse überein.",
+  "home.oauthErrorMsg": "Anmeldung fehlgeschlagen. Bitte erneut versuchen oder mit deiner E-Mail-Adresse anmelden.",
   "home.oauthNotConfigured": "{provider}-Anmeldung ist nicht konfiguriert",
   "home.orDivider": "oder",
   "home.passwordLabel": "Passwort",

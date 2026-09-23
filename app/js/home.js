@@ -179,8 +179,18 @@ function renderLogin(errorMsg, cfg) {
     '</div>' +
     '<div class="auth-divider"><span>' + t('home.orDivider') + '</span></div>';
 
+  // An error passed in here is an arrival error — the sign-in that brought the
+  // visitor to this page failed. It gets a banner above everything, because the
+  // thin line under the password field is missed by someone whose eye is at the
+  // top of a page they did not expect to be on. The inline .auth-error below
+  // stays empty for the form's own messages, written as the visitor types.
+  const bannerHtml = errorMsg
+    ? '<div class="auth-banner" role="alert">' + errorMsg + '</div>'
+    : '';
+
   el.innerHTML =
     '<div class="landing-login">' +
+      bannerHtml +
       oauthHtml +
       '<div class="auth-field">' +
         '<label class="auth-label" for="email-input">' + t('home.emailLabel') + '</label>' +
@@ -196,7 +206,7 @@ function renderLogin(errorMsg, cfg) {
       '<div class="auth-remember">' +
         '<label class="auth-remember-label"><input type="checkbox" id="remember-me"> ' + t('home.rememberMe') + '</label>' +
       '</div>' +
-      '<div class="auth-error" id="auth-error">' + (errorMsg || '') + '</div>' +
+      '<div class="auth-error" id="auth-error"></div>' +
       '<button class="btn active auth-submit" id="pw-btn">' + t('home.signIn') + '</button>' +
       '<button class="reset-link" id="reset-toggle">' + t('home.forgotPassword') + '</button>' +
       '<div class="reset-form" id="reset-form" style="display:none">' +
