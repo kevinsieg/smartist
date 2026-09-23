@@ -1,4 +1,9 @@
 (async function() {
+  // Before anything renders: t() returns the key when the dictionary has not
+  // landed, and no later pass repairs a string already inside generated HTML.
+  // Resolves synchronously from localStorage on a repeat visit.
+  if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
+
   var AUTH_TOKEN_KEY = 'smartist_token';
 
   // This page loads no common.js (it runs before a workspace is chosen, so

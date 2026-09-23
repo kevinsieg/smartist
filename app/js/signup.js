@@ -92,6 +92,11 @@
     });
   }
 
+  // The dictionary must be in hand before the first render: t() falls back to
+  // the key, and nothing re-translates a string once it is inside generated
+  // HTML. On a repeat visit this resolves synchronously from localStorage.
+  if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
+
   // Render the form immediately — the OAuth URLs come from two serverless
   // calls (slow on cold start) and slot in once they arrive.
   _render('form');
