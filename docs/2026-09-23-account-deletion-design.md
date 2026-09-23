@@ -183,6 +183,34 @@ bumped on every page, plus `app.css?v=` if the danger zone needs styles.
 | R2 enumeration includes soft-deleted songs | Their files are still in the bucket. |
 | R2 failure leaves the DB deleted and logs the key | The deliberate failure mode of step 4. |
 
+### Nothing else may be deleted
+
+This matters more than any positive test, and it is not hypothetical. **One
+production database holds two bands**: `smartist-kevin` serves both salb and
+klang. A statement missing its `artist_id` filter reaches the other band's data.
+That exact bug has already happened in this repo once — `ACTIVE.md` records
+"cascade setlist delete on gig delete was missing `AND artist_id` filter".
+
+The fixture for every deletion test therefore contains **two** artists with
+overlapping-looking data — same song titles, adjacent ids, a shared venue name,
+a member whose address differs by one character — and each test asserts on the
+survivor as well as the victim.
+
+| Test | Why |
+|---|---|
+| Every table's rows for the *other* artist are identical before and after — counted per table, not spot-checked | The blast-radius test. A per-table count catches a missing filter that a targeted assertion would step over. |
+| `deleteFromR2` is called with **exactly** the enumerated set, asserted as a whole set rather than by membership | A prefix delete or a too-broad query shows up as extra keys, and `audio/` is shared by every tenant. |
+| A neighbouring band's file URL is never passed to `deleteFromR2` | Names the flat-namespace hazard directly, so a future refactor to prefix deletion fails here. |
+| Other members of a shared workspace keep their `users` rows | Deleting by email must not match by artist. |
+| A different address that shares a prefix or differs in case is untouched | The lookup is by exact, lowercased email; `kev@x.com` must not take `kevin@x.com`. |
+| Nullifying `gigs.venue_id` / `organizer_id` touches only the deleted artist's gigs | The RESTRICT workaround is the step most likely to be written without a filter. |
+| Every statement in the deletion path names `artist_id` (or is scoped by a primary key) — enforced as a static guard over the source, in the style of `tests/unit/page_scripts.js` | Catches the missing-filter class at the source rather than hoping a fixture exercises it. |
+
+The static guard is deliberate: fixtures only catch what they happen to model,
+and the failure mode here is silent and unrecoverable. A test that reads the
+deletion code itself and fails on an unscoped `DELETE` or `UPDATE` keeps working
+when someone adds a table next year.
+
 Unit tests follow the existing handler pattern (`tests/unit/oauth_callback.js`,
 `login_handler.js`): mock `_db`, `_ratelimit`, `_email` and `_r2` in the require
 cache. **Evict `_token` too** — earlier files in the suite leave a stub there
