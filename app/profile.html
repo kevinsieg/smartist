@@ -103,16 +103,30 @@
 
   window.onNavAuthEmpty = function() { goToLogin(); };
 
-  initPage(async function(cfg) {
-    // A confirmation link may be opened in a browser with no session at all —
-    // the token alone authenticates it — so this runs before requireLogin().
-    var delToken = _extractDeleteToken();
-    if (delToken) {
-      var destroyed = await _confirmAccountDeletion(delToken);
-      // Nothing left to render for an account that no longer exists.
-      if (destroyed) return;
-    }
+  // Runs before initPage(), not inside its callback. initPage() calls
+  // isViewMode() first and redirects to /login the instant there is no valid
+  // session (common.js:866) — before the page callback, and so before any
+  // code that only runs inside it, ever executes. The confirmation link is
+  // designed to work with no session at all (it may be opened on a different
+  // device than the one that requested it, or the original session may have
+  // expired inside the 30-minute window) — so waiting for initPage to let us
+  // in would drop the token exactly in the case this exists for. It would
+  // also be dropped a second way: loginPageUrl() (common.js:63-67) builds
+  // `next` from pathname+search only, never the hash, so even the bounce to
+  // /login loses it for good.
+  var _pendingDeleteToken = _peekDeleteToken();
+  if (_pendingDeleteToken) {
+    _confirmAccountDeletion(_pendingDeleteToken).then(function (destroyed) {
+      // A destroyed account has nothing left to render; anything else (a
+      // dead link, a blocker, a network blip) falls through to the normal
+      // page, which still gates on requireLogin() as before.
+      if (!destroyed) initPage(_onReady);
+    });
+  } else {
+    initPage(_onReady);
+  }
 
+  async function _onReady(cfg) {
     if (requireLogin()) return;
     _slug = cfg.slug;
     document.getElementById('profile-email').textContent =
@@ -133,7 +147,7 @@
     // Same reasoning: deletion acts on a users row, so bootstrap logins skip it too.
     document.getElementById('delete-account-btn').addEventListener('click', _requestDeletion);
     _loadDeletionZone();
-  });
+  }
 
   async function changePassword() {
     var cur = document.getElementById('pw-current').value;
@@ -183,19 +197,25 @@
 
   // ── Account deletion ────────────────────────────────────────────────────
 
-  // Pulls delete-token=<raw> out of the URL hash and strips it immediately so
-  // it does not linger in history. Returns null when there is none.
-  function _extractDeleteToken() {
+  // Reads delete-token=<raw> out of the URL hash without touching it — the
+  // fragment must survive a network blip or an unexpected response so a
+  // reload can retry with the same token. Returns null when there is none.
+  function _peekDeleteToken() {
     var m = /(?:^|[#&])delete-token=([^&]+)/.exec(window.location.hash);
-    if (!m) return null;
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  function _clearDeleteTokenFromUrl() {
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    return decodeURIComponent(m[1]);
   }
 
   // Confirms the emailed link. No session required — the token authenticates
   // it — so this uses apiFetch only to keep the guard happy, not because a
-  // token is needed. Returns true when the account was destroyed.
+  // token is needed. Runs before initPage(), so — unlike every other t()
+  // call on this page — it cannot rely on initPage having already awaited
+  // the dictionary. Returns true when the account was destroyed.
   async function _confirmAccountDeletion(token) {
+    if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
     var banner = document.getElementById('delete-result-banner');
     banner.style.display = '';
     banner.className = 'auth-banner';
@@ -204,20 +224,33 @@
       var r = await apiFetch('/api/config', 'POST', { action: 'confirm-deletion', token: token });
       var data = await r.json().catch(function () { return {}; });
       if (r.ok) {
+        _clearDeleteTokenFromUrl();
         clearToken();
         banner.className = 'auth-banner ok';
         banner.textContent = t('profile.dangerDone');
         return true;
       }
       if (r.status === 409 && data.blocked && data.blocked.length) {
+        // Not consumed server-side (executeDeletion returns before touching
+        // the token when blocked — api/_domain/deletion.js), so the same
+        // link still works once the block is resolved. Leave it in the URL.
         banner.textContent = t('profile.dangerBlocked') + ' ' +
           data.blocked.map(function (a) { return a.name; }).join(', ');
         return false;
       }
-      banner.textContent = t('profile.dangerFailed');
+      if (r.status === 400) {
+        // Definitive: invalid, expired, already used, or the account is gone
+        // — this token will never work again, so nothing is lost by clearing it.
+        _clearDeleteTokenFromUrl();
+        banner.textContent = t('profile.dangerFailed');
+        return false;
+      }
+      // Anything else (5xx, a malformed response) is a transport failure, not
+      // a verdict on the link — say so honestly and keep the token for a retry.
+      banner.textContent = t('profile.connError');
       return false;
     } catch (e) {
-      banner.textContent = t('profile.dangerFailed');
+      banner.textContent = t('profile.connError');
       return false;
     }
   }
@@ -293,7 +326,7 @@
     var msg = document.getElementById('danger-msg');
     btn.disabled = true;
     msg.className = 'save-msg';
-    msg.textContent = t('profile.saving');
+    msg.textContent = t('profile.dangerRequesting');
     try {
       var r = await apiFetch('/api/config', 'POST', { action: 'request-deletion' });
       var data = await r.json().catch(function () { return {}; });
@@ -302,10 +335,16 @@
         msg.className = 'save-msg ok';
         return; // stays disabled — a link is already on its way
       }
-      if (r.status === 409) { await _loadDeletionZone(); }
       msg.textContent = data.error || t('profile.failed');
       msg.className = 'save-msg err';
-      btn.disabled = false;
+      if (r.status === 409) {
+        // _loadDeletionZone() sets disabled = plan.blocked.length > 0 itself —
+        // re-enabling here unconditionally would put the button right back in
+        // front of the newly-appeared blocker it just found.
+        await _loadDeletionZone();
+      } else {
+        btn.disabled = false;
+      }
     } catch (e) {
       msg.textContent = t('profile.connError');
       msg.className = 'save-msg err';
