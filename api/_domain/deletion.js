@@ -80,6 +80,35 @@ async function collectR2Urls(artistIds, sql) {
   return [...urls];
 }
 
+// Bounded-concurrency R2 deletes. One await per file is the wrong shape here:
+// this loop runs AFTER the transaction has committed, so a Pro band with a few
+// hundred media files walks the function past its time limit with the rows
+// already gone — the client sees a connection error, keeps its token, and the
+// retry answers 400 "invalid link", telling someone their deletion failed when
+// it actually succeeded. A small fixed pool keeps that walk short without
+// opening hundreds of sockets at once; no dependency, the pool is four lines.
+const R2_CONCURRENCY = 8;
+
+async function removeFiles(urls, deleteFromR2, logger) {
+  let next = 0;
+  const worker = async () => {
+    while (next < urls.length) {
+      const url = urls[next++];
+      try {
+        // api/_r2.js's deleteFromR2 swallows its own errors and reports failure
+        // by returning false, so checking the return value is the only way this
+        // log line ever fires in production. The catch stays for a caller that
+        // injects a throwing double, and for a future implementation that throws.
+        if (!(await deleteFromR2(url)))
+          await logger.error('account_delete_file_orphaned', { url, error: 'delete reported failure' });
+      } catch (err) {
+        await logger.error('account_delete_file_orphaned', { url, error: err.message });
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(R2_CONCURRENCY, urls.length) }, worker));
+}
+
 // Delete the account. Refuses entirely if any workspace is blocked — a
 // half-deleted account is a state nobody can reason about afterwards.
 //
@@ -140,6 +169,13 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
     // The contact-form / mailing-list row is this person's own data too —
     // erasure means it goes as well, matched the same way, nothing wider.
     await tx`DELETE FROM subscribers WHERE lower(email) = ${addr}`;
+    // rate_limits keys are `<prefix>:<address>` and nothing ever reaps them, so
+    // without this a bare email address sits in the database for an hour after
+    // the account it belonged to was erased. Only the two prefixes that are
+    // keyed on an address (delete-req here, signup-link in signup.js/oauth.js);
+    // every other key is keyed on an IP or an artist id. lower(key) because the
+    // key was built from whatever casing the row stored.
+    await tx`DELETE FROM rate_limits WHERE lower(key) IN ('delete-req:' || ${addr}, 'signup-link:' || ${addr})`;
   });
 
   // Outside the transaction on purpose: R2 has no rollback. An orphaned file is
@@ -147,13 +183,7 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
   // deleted to match a failed file delete would be worse. Every failure is
   // logged — see account_delete_files_pending above for why that log line,
   // not a later reconciliation pass, is what finds an orphan after a crash.
-  for (const url of urls) {
-    try {
-      await deleteFromR2(url);
-    } catch (err) {
-      await logger.error('account_delete_file_orphaned', { url, error: err.message });
-    }
-  }
+  await removeFiles(urls, deleteFromR2, logger);
 
   await logger.info('account_deleted', {
     email: addr,
@@ -165,4 +195,4 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
   return { ok: true, found: true, destroyed: plan.destroy.map(a => a.slug), left: plan.leave.map(a => a.slug) };
 }
 
-module.exports = { planDeletion, collectR2Urls, executeDeletion };
+module.exports = { planDeletion, collectR2Urls, executeDeletion, removeFiles };

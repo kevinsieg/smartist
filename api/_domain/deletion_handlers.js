@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const { getDb } = require('../_db');
 const { verifyUserToken } = require('../_token');
-const { checkRateLimit } = require('../_ratelimit');
+const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { deleteFromR2 } = require('../_r2');
 const { sendEmail } = require('../_email');
 const logger = require('../_logger');
@@ -41,18 +41,27 @@ async function requestDeletion(req, res) {
   const email = await _sessionEmail(req, sql);
   if (!email) return res.status(401).json({ error: 'Unauthorized' });
 
+  // Checked before the rate limit: a blocked account cannot send anything, so
+  // counting its attempts would burn all 3/hour without a single email leaving
+  // — someone who promotes a co-admin and tries again is then locked out of
+  // their own deletion for an hour by requests that never sent a link.
+  const plan = await planDeletion(email, sql);
+  if (plan.blocked.length)
+    return res.status(409).json({
+      // The client shows data.error; without it a 409 renders the generic
+      // "failed" line before the reloaded danger zone explains the blocker.
+      error: 'You are the only admin of a workspace that still has members',
+      blocked: plan.blocked.map(a => ({ slug: a.slug, name: a.name })),
+    });
+  if (!plan.destroy.length && !plan.leave.length)
+    return res.status(404).json({ error: 'No account found' });
+
   // Keyed on the address, not the IP (same convention as oauth.js's
   // signup-link:${email}) — a shared IP (CGNAT, an office NAT) must not cap
   // everyone behind it together, and there is no enumeration risk here since
   // this handler requires a session and only ever mails its own address.
   if (await checkRateLimit(`delete-req:${email}`, 3, 3600))
     return res.status(429).json({ error: 'Too many requests — try again later' });
-
-  const plan = await planDeletion(email, sql);
-  if (plan.blocked.length)
-    return res.status(409).json({ blocked: plan.blocked.map(a => ({ slug: a.slug, name: a.name })) });
-  if (!plan.destroy.length && !plan.leave.length)
-    return res.status(404).json({ error: 'No account found' });
 
   const raw     = crypto.randomBytes(32).toString('hex');
   const hash    = crypto.createHash('sha256').update(raw).digest('hex');
@@ -95,9 +104,20 @@ async function requestDeletion(req, res) {
 
 // POST ?action=confirm-deletion — the link. Authenticated by the token alone,
 // because it may well be opened in a different browser from the one that asked.
+//
+// Two-phase, exactly like auth.js's confirm-email-change: without `confirm:true`
+// this only previews what the link would destroy. Opening a URL is not a
+// gesture — a history revisit, a restored tab, the Back button after a 409, or
+// a mail scanner that runs JS all re-issue whatever the page fires on load, and
+// for this endpoint that would be an irreversible deletion nobody clicked.
 async function confirmDeletion(req, res) {
   const raw = req.body?.token || req.query?.token;
   if (!raw) return res.status(400).json({ error: 'Invalid or expired link' });
+
+  // Same shape as emailchg-confirm (auth.js): the link carries no session, so
+  // the IP is all there is to key on, and both phases go through here.
+  if (await checkRateLimit(`delete-confirm:${clientIp(req)}`, 10, 600))
+    return res.status(429).json({ error: 'Too many attempts — try again later' });
 
   const sql  = getDb();
   const hash = crypto.createHash('sha256').update(String(raw)).digest('hex');
@@ -108,8 +128,30 @@ async function confirmDeletion(req, res) {
   `;
   if (!row) return res.status(400).json({ error: 'Invalid or expired link' });
 
-  const out = await executeDeletion(String(row.email).toLowerCase(), sql, { deleteFromR2, logger });
-  if (!out.ok) return res.status(409).json({ blocked: out.blocked });
+  const addr = String(row.email).toLowerCase();
+
+  // Preview. Nothing is written and the token is not consumed, so the page can
+  // be reloaded as often as it likes before anyone commits to anything.
+  if (req.body?.confirm !== true) {
+    const plan = await planDeletion(addr, sql);
+    if (plan.blocked.length)
+      return res.status(409).json({
+        error: 'You are the only admin of a workspace that still has members',
+        blocked: plan.blocked.map(a => ({ slug: a.slug, name: a.name })),
+      });
+    return res.json({
+      preview: true,
+      email:   addr,
+      destroy: plan.destroy.map(a => ({ slug: a.slug, name: a.name })),
+      leave:   plan.leave.map(a => ({ slug: a.slug, name: a.name })),
+    });
+  }
+
+  const out = await executeDeletion(addr, sql, { deleteFromR2, logger });
+  if (!out.ok) return res.status(409).json({
+    error: 'You are the only admin of a workspace that still has members',
+    blocked: out.blocked,
+  });
   // The row existed a moment ago (the SELECT above found it), so found:false
   // here means something else removed it between that SELECT and this call —
   // a second confirm on the same link, an admin removing this member via
