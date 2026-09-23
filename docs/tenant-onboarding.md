@@ -376,6 +376,25 @@ Renamed 2026-09-22. Target state and migration: `2026-09-22-deployment-architect
 
 ---
 
+## Schema migrations
+
+### 2026-09-23 — account deletion columns
+
+`users.delete_token_hash` and `users.delete_token_expires`. Apply to **every**
+production database before the profile page ships, not just the linked one:
+
+- `smartist-shared` — serves both bandone and bandtwo
+- `smartist` — serves app.smartist.studio and the demo
+
+`node scripts/apply_schema.js` against each. The statements are
+`ADD COLUMN IF NOT EXISTS`, so re-running is safe.
+
+The feature needs working transactional email. Until `band-two.example` is verified
+in the Resend account bandtwo and bandone use, the confirmation link never
+arrives there.
+
+---
+
 ## Checklist
 
 **Database**

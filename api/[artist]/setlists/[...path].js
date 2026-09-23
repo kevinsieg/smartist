@@ -22,8 +22,12 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const sql = getDb();
-    const [songs, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs] = await Promise.all([
+    const [songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs] = await Promise.all([
       sql`SELECT * FROM songs WHERE artist_id = ${band.id} ORDER BY id`,
+      // Arrangements are real, hand-entered data and this export is offered on
+      // /profile as the last chance before permanent deletion — anything the
+      // deletion destroys has to be in here.
+      sql`SELECT * FROM song_arrangements WHERE artist_id = ${band.id} ORDER BY song_id, id`,
       sql`SELECT * FROM gigs WHERE artist_id = ${band.id} ORDER BY id`,
       sql`SELECT * FROM setlists WHERE artist_id = ${band.id} ORDER BY id`,
       sql`
@@ -47,7 +51,9 @@ module.exports = wrap(async function handler(req, res) {
     const safeSlug = String(slug ?? 'artist').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'artist';
     res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}-export-${date}.json"`);
     res.setHeader('Content-Type', 'application/json');
-    return res.json({ artist: { slug: band.slug, name: band.name }, songs, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs });
+    // config carries the band's own settings (displayFields, platforms, logo) —
+    // destroyed with the artists row, and not reconstructible from any other table.
+    return res.json({ artist: { slug: band.slug, name: band.name, config: band.config }, songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs });
   }
 
   const setlistId = Number(rawId);
