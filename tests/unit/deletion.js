@@ -224,6 +224,27 @@ async function run(r) {
     assert(logged.some(l => l.e === 'account_delete_file_orphaned'),
       'an orphaned file was not logged: ' + JSON.stringify(logged));
   });
+
+  console.log(B('\ndeletion.js — every write is scoped'));
+
+  const { test } = r;
+  test('no DELETE or UPDATE runs without naming its rows', () => {
+    const fs  = require('fs');
+    const src = fs.readFileSync(path.join(__dirname, '../../api/_domain/deletion.js'), 'utf8');
+
+    // Template-literal SQL, statement by statement.
+    const stmts = [...src.matchAll(/(DELETE\s+FROM|UPDATE)\s+[\s\S]*?`/gi)].map(m => m[0]);
+    assert(stmts.length > 0, 'found no write statements — has the module moved?');
+
+    const unscoped = stmts.filter(s =>
+      !/artist_id\s*=/i.test(s) &&
+      !/\bid\s*=\s*ANY/i.test(s) &&
+      !/email\s*=\s*\$\{addr\}/.test(s));
+
+    assert(unscoped.length === 0,
+      'these writes name no artist, and one database holds two bands:\n      ' +
+      unscoped.map(s => s.replace(/\s+/g, ' ').slice(0, 90)).join('\n      '));
+  });
 }
 
 if (require.main === module) {
