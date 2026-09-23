@@ -537,6 +537,7 @@
   "profile.dangerFailed": "Dieser Link ist ungültig oder abgelaufen.",
   "profile.dangerIntro": "Dies löscht Ihr Konto und alles, was nur Sie sehen können. Dies kann nicht rückgängig gemacht werden.",
   "profile.dangerLeave": "Sie werden aus diesen entfernt, sie bestehen ohne Sie weiter:",
+  "profile.dangerRequesting": "Lösch-Link wird gesendet…",
   "profile.dangerSent": "Prüfen Sie Ihre E-Mails — wir haben einen Bestätigungslink an {email} gesendet. Er läuft in 30 Minuten ab.",
   "profile.dangerTitle": "Konto löschen",
   "profile.emNew": "Neue E-Mail-Adresse",
