@@ -239,7 +239,7 @@
   "home.hidePw": "masquer",
   "home.invalidLink": "Lien de connexion invalide ou expiré.",
   "home.noAccount": "Pas de compte ?",
-  "home.oauthErrorMsg": "Connexion échouée — l'e-mail du compte ne correspond pas à l'adresse administrateur configurée.",
+  "home.oauthErrorMsg": "Échec de la connexion. Réessayez ou connectez-vous avec votre adresse e-mail.",
   "home.oauthNotConfigured": "La connexion {provider} n'est pas configurée",
   "home.orDivider": "ou",
   "home.passwordLabel": "Mot de passe",
