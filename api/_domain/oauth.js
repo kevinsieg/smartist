@@ -51,12 +51,22 @@ async function facebookUrl(req, res) {
 
 // GET ?action=oauth-callback — OAuth provider redirects here (routed from
 // /auth/callback via vercel.json rewrite). Validates state, exchanges code for
-// email, and on success redirects to /login#magic=<token> so the existing
-// home.js magic-link flow handles login.
+// email, and on success redirects to /login#session=<token>, which home.js
+// stores and verifies against the slug-independent my-artists endpoint.
 async function oauthCallback(req, res) {
-  const o    = origin(req);
-  const fail = (reason) => {
-    logger.error('oauth_callback_failed', { reason, provider: req.query.state ? 'unknown' : undefined });
+  const o = origin(req);
+  // Everything that can go wrong answers the visitor identically. The reason
+  // separates "no account for that address" from "expired state", and telling
+  // them apart out loud would say whether an address is registered here — so
+  // the distinction lives in the log and nowhere else.
+  //
+  // The log is awaited: the transport is an HTTP call to the log service, and
+  // a serverless invocation can be frozen the moment the response is sent.
+  // Left un-awaited, the failures worth reading are the ones most likely to be
+  // dropped.
+  let provider = 'unknown';
+  const fail = async (reason) => {
+    await logger.error('oauth_callback_failed', { reason, provider });
     return res.redirect(302, `${o}/login?oauth_error=1`);
   };
 
@@ -67,11 +77,10 @@ async function oauthCallback(req, res) {
 
   const stateResult = verifyState(state);
   if (!stateResult) return fail('invalid_or_expired_state');
-  const provider = stateResult.provider;
-  const mode     = stateResult.mode || 'login';
+  provider   = stateResult.provider;
+  const mode = stateResult.mode || 'login';
 
-  if (await checkRateLimit(`oauth:${clientIp(req)}`, 10, 60))
-    return res.redirect(302, `${o}/login?oauth_error=1`);
+  if (await checkRateLimit(`oauth:${clientIp(req)}`, 10, 60)) return fail('rate_limited');
 
   let email;
   try {
