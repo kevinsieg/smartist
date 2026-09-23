@@ -170,6 +170,44 @@ function run(r) {
       [...new Set(offenders)].join('\n      '));
   });
 
+  // Pages that load common.js get their i18n wait for free: initPage() awaits
+  // window.i18n.ready before rendering. Pages without it must do that themselves.
+  //
+  // Skipping it only shows up on a COLD visit. i18n.js primes its dictionary
+  // synchronously from localStorage, so on any repeat visit t() works and the
+  // page looks fine — which is why this survived review. With an empty cache the
+  // dictionary is still in flight when the script renders, t() returns the key
+  // itself, and the visitor reads "signup.sendBtn". ready's applyTranslations()
+  // does not repair it: that only touches elements carrying data-i18n, and
+  // strings baked into generated HTML by t() carry nothing to re-translate.
+  // A reload hides it. This hit the whole signup funnel.
+  test('pages without common.js await i18n.ready before calling t()', () => {
+    const standalone = new Set();
+    fs.readdirSync(APP).filter(f => f.endsWith('.html')).forEach(function(page) {
+      const html  = fs.readFileSync(path.join(APP, page), 'utf8');
+      if (!/js\/i18n\.js/.test(html)) return;          // English-only page
+      const names = bodyScriptNames(html);
+      if (names.includes('common')) return;            // initPage() handles it
+      names.forEach(n => standalone.add(n));
+    });
+
+    const offenders = [];
+    standalone.forEach(function(name) {
+      const file = path.join(APP, 'js', name + '.js');
+      if (!fs.existsSync(file)) return;
+      const src = fs.readFileSync(file, 'utf8');
+      // Calls to t(…) that are not part of a longer identifier like format(...)
+      if (!/(^|[^A-Za-z0-9_.$])t\s*\(/m.test(src)) return;
+      if (/i18n\.ready/.test(src)) return;
+      offenders.push(name + '.js');
+    });
+
+    assert(offenders.length === 0,
+      'these render t() strings before the dictionary can arrive, so a cold\n' +
+      '      visit shows raw keys until the visitor reloads:\n      ' +
+      offenders.join('\n      '));
+  });
+
   spaScripts.forEach(function(name) {
     test(name + '.js declares no top-level const/let', () => {
       const file = path.join(APP, 'js', name + '.js');
