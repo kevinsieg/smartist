@@ -349,7 +349,30 @@ async function run(r) {
     assert(!logged.includes('account_deleted'), 'an unknown address was logged as deleted');
   });
 
-  await testAsync('a failed file delete does not undo the row deletion, and is logged', async () => {
+  // This is what the real dependency does: api/_r2.js's deleteFromR2 catches
+  // its own errors and reports failure by RETURNING FALSE — it never throws. A
+  // test that only makes the injected double throw asserts a contract the real
+  // module does not honour, and the orphan log stays unreachable in production.
+  await testAsync('a file delete that reports false is logged as orphaned', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql(
+      [{ artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' }],
+      { songs: [{ extra: { listenUrl: 'boom' } }] },
+    );
+    const logged = [];
+    const out = await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async () => false,   // exactly what api/_r2.js returns on failure
+      logger: { info: async () => {}, error: async (e, d) => { logged.push({ e, d }); } },
+    });
+    assertEq(out.ok, true);
+    const orphan = logged.find(l => l.e === 'account_delete_file_orphaned');
+    assert(orphan, 'a file delete that returned false was not logged: ' + JSON.stringify(logged));
+    assertEq(orphan.d.url, 'boom');
+  });
+
+  // The throw path is kept as well — a future _r2 implementation, or any other
+  // injected deleter, may throw rather than return false.
+  await testAsync('a throwing file delete does not undo the row deletion, and is logged', async () => {
     const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
     const sql = recordingSql(
       [{ artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' }],
@@ -365,17 +388,53 @@ async function run(r) {
       'an orphaned file was not logged: ' + JSON.stringify(logged));
   });
 
-  console.log(B('\ndeletion.js — every write is scoped'));
+  // One await per file runs a Pro band's few hundred media files past the
+  // function's time limit AFTER the transaction has committed — the rows are
+  // gone, the client sees a connection error, and the retry answers "invalid
+  // link" for a deletion that actually succeeded. The pool must be bounded too:
+  // firing all of them at once is the other way to fall over.
+  await testAsync('files are removed with bounded concurrency, and none is skipped', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const songs = Array.from({ length: 40 }, (_, i) => ({ extra: { listenUrl: 'f' + i } }));
+    const sql = recordingSql(
+      [{ artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' }],
+      { songs },
+    );
+    let inFlight = 0, peak = 0;
+    const removed = [];
+    await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async (u) => {
+        inFlight++; peak = Math.max(peak, inFlight);
+        await new Promise(r2 => setTimeout(r2, 1));
+        inFlight--; removed.push(u);
+        return true;
+      },
+      logger: { info: async () => {}, error: async () => {} },
+    });
+    assertEq(removed.length, 40, 'not every file was deleted');
+    assert(peak > 1, 'the deletes ran one at a time — a few hundred files would time out');
+    assert(peak <= 8, `the pool was unbounded: ${peak} deletes in flight at once`);
+  });
+
+  console.log(B('\ndeletion.js + deletion_handlers.js — every write is scoped'));
 
   const { test } = r;
-  test('no DELETE or UPDATE runs without naming its rows', () => {
+  // Both files, not just the domain module: deletion_handlers.js issues an
+  // `UPDATE users` of its own (the delete-token hash), and a guard that reads
+  // only one of the two files silently stops covering the feature the moment a
+  // write moves across the seam.
+  const WRITE_SOURCES = ['deletion.js', 'deletion_handlers.js'];
+  for (const file of WRITE_SOURCES) test(`${file}: no DELETE or UPDATE runs without naming its rows`, () => {
     const fs  = require('fs');
-    const raw = fs.readFileSync(path.join(__dirname, '../../api/_domain/deletion.js'), 'utf8');
-    // Strip line comments first — this file keeps none inside its SQL, but a
+    const raw = fs.readFileSync(path.join(__dirname, '../../api/_domain/', file), 'utf8');
+    // Strip line comments first — these files keep none inside their SQL, but a
     // stray "DELETE FROM" in prose should never be able to count as a write.
     const src = raw.split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
 
-    const KEYWORD = /\b(DELETE\s+FROM|UPDATE)\b/i;
+    // Not preceded by a dot: `crypto.createHash(…).update(raw)` is a method
+    // call, not a statement, and counting it makes the "did this check see
+    // every write?" reconciliation below fail on a file that is perfectly fine.
+    const KEYWORD = /(?<![.\w])(DELETE\s+FROM|UPDATE)\b/i;
     const countKeywords = (text) => (text.match(new RegExp(KEYWORD.source, 'gi')) || []).length;
     const totalKeywords = countKeywords(src);
     assert(totalKeywords > 0, 'found no write statements — has the module moved?');
@@ -403,11 +462,23 @@ async function run(r) {
 
     // Checked against the statement's own text only, not the source span
     // around it, so a comment sitting near a write can't satisfy this by
-    // coincidence.
-    const scoped = (s) =>
-      /artist_id\s*=/i.test(s) ||
-      /\bid\s*=\s*any\s*\(/i.test(s) ||
-      (/\$\{addr\}/.test(s) && /email/i.test(s));
+    // coincidence — and only against the part from WHERE onwards, because
+    // scoping is what the WHERE clause does. `UPDATE gigs SET artist_id = …`
+    // with no WHERE at all writes every band's rows while still containing the
+    // string `artist_id =`, and the old check accepted it.
+    const whereOf = (s) => {
+      const i = s.search(/\bWHERE\b/i);
+      return i === -1 ? '' : s.slice(i);
+    };
+    const scoped = (s) => {
+      const w = whereOf(s);
+      return /artist_id\s*=/i.test(w) ||
+        /\bid\s*=\s*any\s*\(/i.test(w) ||
+        // The victim's own address, bound as a parameter, against one of the
+        // two columns that carry it: `email` on users/subscribers, `key` on
+        // rate_limits (whose keys are `<prefix>:<address>`).
+        (/\$\{(addr|email)\}/.test(w) && /\b(email|key)\b/i.test(w));
+    };
 
     const unscoped = stmts.filter(s => !scoped(s));
     assert(unscoped.length === 0,

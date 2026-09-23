@@ -34,7 +34,7 @@ Key implementation notes:
 
 ### Export — all tables
 
-`GET /api/:artist/export` now returns all 9 artist-scoped tables: `songs`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
+`GET /api/:artist/export` now returns all 10 artist-scoped tables: `songs`, `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs` — plus `artist.config`. It is offered on `/profile` as the last chance before account deletion, so it has to cover everything the deletion destroys.
 
 ### Reusable table component (`createSortableList`)
 
