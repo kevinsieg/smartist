@@ -217,7 +217,8 @@ re-adding the variable restores the previous behaviour.
   three app projects. **The klang password is a temporary one set from the CLI
   and needs changing in /profile.**
 - **Neon credentials.** Both production strings have been pasted into terminal
-  history and chat repeatedly. Rotate them.
+  history and chat repeatedly. Rotate them — see the checklist below, because a
+  connection string lives in more places than the project that uses it.
 - **The demo reset cadence** is unset. Nightly is the assumption above.
 - **The marketing page is now English only.** `app/landing.html` carried 68
   `landing.*` keys translated into French and German; the `smartist-website`
@@ -251,3 +252,46 @@ re-adding the variable restores the previous behaviour.
   Works, but needs a decision about what those domains mean.
 - **The plans section on smartist.studio** never mentions the hosted free tier,
   so a visitor reads it as self-host-or-pay.
+
+---
+
+## Rotating a Neon connection string
+
+A `DATABASE_URL` is not held in one place. Surveyed 2026-09-23; re-check with
+`vercel env ls --project <name> | grep DATABASE_URL` and `gh secret list`, because
+nothing enforces this list.
+
+### Where each database's string lives
+
+| Neon database | Serves | Every place its string is stored |
+|---|---|---|
+| `smartist-kevin` | salmons.fr and kevinklang.de, **both bands in one database** | `smartist-salb` → Production; `smartist-klang` → Production |
+| `smartist` | app.smartist.studio and the demo | `smartist` → Production; **GitHub repo secret `DEMO_DATABASE_URL`** |
+| dev | every Preview deployment, and local `vercel dev` | `smartist`, `smartist-salb`, `smartist-klang` → Preview/Development; local `.env` |
+
+**The GitHub secret is the one that gets forgotten.** `.github/workflows/demo-reset.yml`
+runs the nightly demo reset with `secrets.DEMO_DATABASE_URL`, pointing at the Neon
+`smartist` database. Rotate that database without updating the secret and the
+workflow fails every night — silently, unless someone reads the Actions tab.
+
+### The order that matters
+
+1. Rotate in the Neon console.
+2. Update every row above for that database, **before** anything redeploys.
+3. **Redeploy each affected Vercel project.** Env vars are baked in at build time,
+   so a live deployment keeps using the old string until it is rebuilt — and then
+   breaks at a moment nobody connects to the rotation. This has already cost two
+   outages here, once with `APP_SECRET` and once with the Resend key:
+   `vercel ls <project>` then `vercel redeploy <the Production URL>`.
+4. Update local `.env` by hand. Never `vercel env pull` — `.env` is maintained
+   manually and pulling overwrites it with quoted values.
+
+### Two things to verify rather than assume
+
+- **Production entries are type `Secret`** (write-only, set by hand). **Preview and
+  Development entries are type `Config`** with values like `eyJ2IjoidjIi…`, which
+  is the shape the Neon-Vercel integration writes. If that integration owns them,
+  rotating in Neon may update them on its own — confirm in the Vercel dashboard
+  before editing them manually, and confirm after rotating that they actually moved.
+- Re-run `vercel env ls` per project afterwards. Missing one project is exactly how
+  `smartist-klang` and `smartist-demo` sat broken for months on `APP_SECRET`.
