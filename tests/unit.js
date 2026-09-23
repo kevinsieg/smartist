@@ -21,6 +21,7 @@ const suites = [
   require('./unit/auth'),
   require('./unit/identity'),
   require('./unit/oauth_callback'),
+  require('./unit/deletion'),
   require('./unit/artist'),
   require('./unit/registration'),
   require('./unit/config_signup'),
