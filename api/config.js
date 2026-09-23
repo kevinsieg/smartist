@@ -12,6 +12,7 @@ const signup = require('./_domain/signup');
 const oauth = require('./_domain/oauth');
 const subscribe = require('./_domain/subscribe');
 const login = require('./_domain/login');
+const deletion = require('./_domain/deletion_handlers');
 
 // ── Router ────────────────────────────────────────────────────────────────────
 // Feature groups live in ./_domain/*; the core config read/write stays here.
@@ -30,6 +31,8 @@ module.exports = wrap(async function handler(req, res) {
     if (action === 'signup-link')         return signup.signupLink(req, res);
     if (action === 'verify-signup-token') return signup.verifySignup(req, res);
     if (action === 'signup')              return signup.signup(req, res);
+    if (action === 'request-deletion')    return deletion.requestDeletion(req, res);
+    if (action === 'confirm-deletion')    return deletion.confirmDeletion(req, res);
     if (req.body?.source === 'contact')   return subscribe.contact(req, res);
     return subscribe.subscribe(req, res);
   }
@@ -43,6 +46,7 @@ module.exports = wrap(async function handler(req, res) {
   // client and the /auth/callback rewrite never send one).
   if (req.query.action === 'check-slug')     return checkSlug(req, res);
   if (req.query.action === 'my-artists')     return myArtists(req, res);
+  if (req.query.action === 'deletion-preflight') return deletion.preflight(req, res);
   if (req.query.action === 'admin-overview') return admin.overview(req, res);
   if (req.query.action === 'google-url')     return oauth.googleUrl(req, res);
   if (req.query.action === 'facebook-url')   return oauth.facebookUrl(req, res);
