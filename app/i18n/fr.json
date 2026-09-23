@@ -537,6 +537,7 @@
   "profile.dangerFailed": "Ce lien est invalide ou a expiré.",
   "profile.dangerIntro": "Cela supprime votre compte et tout ce que vous seul pouvez voir. Cette action est irréversible.",
   "profile.dangerLeave": "Vous serez retiré de ceux-ci, qui continueront sans vous :",
+  "profile.dangerRequesting": "Envoi du lien de suppression…",
   "profile.dangerSent": "Vérifiez vos e-mails — nous avons envoyé un lien de confirmation à {email}. Il expire dans 30 minutes.",
   "profile.dangerTitle": "Supprimer le compte",
   "profile.emNew": "Nouvelle adresse e-mail",
