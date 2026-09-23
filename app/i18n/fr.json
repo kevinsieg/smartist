@@ -246,7 +246,7 @@
   "home.pwPlaceholder": "8 caractères ou plus",
   "home.rememberMe": "Se souvenir de moi",
   "home.resetFailed": "Échec de l'envoi. Réessayez.",
-  "home.resetSent": "Si cet e-mail est correct, un lien de connexion a été envoyé.",
+  "home.resetSent": "Si cette adresse est correcte, un lien pour définir un nouveau mot de passe a été envoyé.",
   "home.sendLink": "Envoyer le lien",
   "home.showPw": "afficher",
   "home.signIn": "Connexion",
@@ -1169,5 +1169,6 @@
   "workspaces.roleMember": "Membre",
   "workspaces.roleViewer": "Lecteur",
   "workspaces.title": "Vos espaces",
-  "workspaces.unauthHint": "Vous devez être connecté pour voir vos espaces."
+  "workspaces.unauthHint": "Vous devez être connecté pour voir vos espaces.",
+  "home.savePassword": "Enregistrer le mot de passe"
 }
