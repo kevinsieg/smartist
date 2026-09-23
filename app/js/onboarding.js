@@ -1,4 +1,9 @@
 (async function() {
+  // Before anything renders: t() returns the key when the dictionary has not
+  // landed, and no later pass repairs a string already inside generated HTML.
+  // Resolves synchronously from localStorage on a repeat visit.
+  if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
+
   var _token    = null;  // signup token
   var _authTok  = null;  // session auth token (add-artist mode)
   var _email    = null;
