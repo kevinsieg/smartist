@@ -246,7 +246,7 @@
   "home.pwPlaceholder": "8 oder mehr Zeichen",
   "home.rememberMe": "Angemeldet bleiben",
   "home.resetFailed": "Senden fehlgeschlagen. Erneut versuchen.",
-  "home.resetSent": "Falls diese E-Mail-Adresse korrekt ist, wurde ein Anmeldelink gesendet.",
+  "home.resetSent": "Wenn diese E-Mail-Adresse stimmt, wurde ein Link zum Festlegen eines neuen Passworts gesendet.",
   "home.sendLink": "Link senden",
   "home.showPw": "anzeigen",
   "home.signIn": "Anmelden",
@@ -1169,5 +1169,6 @@
   "workspaces.roleMember": "Mitglied",
   "workspaces.roleViewer": "Betrachter",
   "workspaces.title": "Ihre Workspaces",
-  "workspaces.unauthHint": "Sie müssen angemeldet sein, um Ihre Workspaces zu sehen."
+  "workspaces.unauthHint": "Sie müssen angemeldet sein, um Ihre Workspaces zu sehen.",
+  "home.savePassword": "Passwort speichern"
 }

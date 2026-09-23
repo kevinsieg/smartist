@@ -46,6 +46,46 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
   }
 
+  // ── Set a password from an emailed reset link ─────────────────────────────
+  // Deliberately separate from change-password, which still demands the current
+  // password. This authenticates on the emailed token instead, which is the only
+  // thing someone who has forgotten their password actually holds.
+  if (req.method === 'POST' && action === 'set-password') {
+    const { token, hint, password } = req.body ?? {};
+    if (!token || !hint || !password)    return res.status(400).json({ error: 'token, hint and password required' });
+    if (String(password).length < 8)     return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (String(password).length > 1000)  return res.status(400).json({ error: 'Password too long' });
+    if (await checkRateLimit(`setpw:${clientIp(req)}`, 5, 600))
+      return res.status(429).json({ error: 'Too many attempts — try again later' });
+
+    const band = await getArtist(slug);
+    if (!band) return res.status(404).json({ error: 'Not found' });
+
+    let hintEmail;
+    try { hintEmail = Buffer.from(String(hint), 'base64url').toString().toLowerCase(); }
+    catch { return res.status(400).json({ error: 'Invalid or expired link' }); }
+
+    const [user] = await sql`
+      SELECT * FROM users WHERE artist_id = ${band.id} AND lower(email) = ${hintEmail}
+    `;
+    // The hint is attacker-supplied, so the token is checked against the seed of
+    // the row the hint names. A valid token for one account plus someone else's
+    // address therefore proves nothing and rewrites nothing.
+    const seed = user ? (user.password_hash || `${process.env.APP_SECRET}:${user.id}`) : null;
+    if (!user || !verifyMagicToken(String(token), seed))
+      return res.status(400).json({ error: 'Invalid or expired link' });
+
+    const hash = await bcrypt.hash(String(password), 12);
+    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${user.id}`;
+
+    // Setting the password is what logs them in — they came here because they
+    // could not, and sending them back to a login form would be a joke.
+    const sessionToken = generateUserToken(user.id, user.role, TTL_8H);
+    const artists      = await getArtistsForUser(user.id, sql);
+    await logger.info('password_set_via_reset', { band: slug, email: user.email });
+    return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
+  }
+
   // ── Password reset request (via /api/:artist/request-reset rewrite) ───────
   if (req.method === 'POST' && req.url.includes('request-reset')) {
     const { email } = req.body ?? {};
@@ -56,15 +96,25 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return res.status(404).json({ error: 'Not found' });
 
     const cleanEmail = String(email || '').trim().toLowerCase();
+    // No `password_hash IS NOT NULL` here. An account created through Google or
+    // Facebook has no password at all, and excluding those meant the one group
+    // most in need of this got the reassuring "if that email is correct…" and
+    // no email ever. For them this sets a first password rather than replacing one.
     const [user] = await sql`
       SELECT * FROM users
-      WHERE artist_id = ${band.id} AND email = ${cleanEmail} AND password_hash IS NOT NULL
+      WHERE artist_id = ${band.id} AND email = ${cleanEmail}
     `;
 
     let resetEmail, tokenSeed;
     if (user) {
       resetEmail = user.email;
-      tokenSeed  = user.password_hash;
+      // The seed is the signing key, and it doubles as the expiry: setting a
+      // password changes the hash, so the link that set it stops verifying and
+      // any other outstanding link dies with it. A password-less account has no
+      // hash to sign with — an empty key would make those tokens forgeable — so
+      // it borrows APP_SECRET, bound to the user id so one such token cannot be
+      // replayed against another account.
+      tokenSeed = user.password_hash || `${process.env.APP_SECRET}:${user.id}`;
     } else {
       // Bootstrap fallback: match ARTIST_ADMIN_EMAIL
       const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
@@ -80,13 +130,20 @@ module.exports = wrap(async function handler(req, res) {
     // Encode email as hint so client can pass it back for user lookup
     const hint   = Buffer.from(resetEmail).toString('base64url');
     // Fragment, not query — tokens must not land in server/CDN logs.
-    const link   = `${origin}/login#magic=${encodeURIComponent(resetToken)}&hint=${hint}`;
+    // `reset=`, not `magic=`: this lands on the set-password screen rather than
+    // logging someone in with the password they just told us they had forgotten.
+    // `magic=` stays in use by the "you already have an account" signup mail.
+    // `next` carries the slug: home.js derives the workspace from it, and
+    // without one a multi-tenant deployment bails at its "no slug" guard before
+    // it ever looks at the reset token. It also lands the person on their
+    // dashboard once the password is set.
+    const link   = `${origin}/login#reset=${encodeURIComponent(resetToken)}&hint=${hint}&next=/${slug}/dashboard`;
 
     try {
       await sendEmail({
         to: resetEmail,
-        subject: 'Login link',
-        html: `<p>Here is your login link:</p><p><a href="${link}">${link}</a></p><p>Valid for 30 minutes. Do not share this link.</p>`,
+        subject: 'Set a new password',
+        html: `<p>Choose a new password for your smartist account:</p><p><a href="${link}">${link}</a></p><p>Valid for 30 minutes. Do not share this link. If you did not ask for this, ignore this email — nothing changes until you set a password.</p>`,
       });
     } catch (err) {
       await logger.error('request_reset_failed', { band: slug, error: err.message });

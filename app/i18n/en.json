@@ -246,7 +246,7 @@
   "home.pwPlaceholder": "8 or more characters",
   "home.rememberMe": "Remember me",
   "home.resetFailed": "Failed to send. Try again.",
-  "home.resetSent": "If that email is correct, a login link has been sent.",
+  "home.resetSent": "If that email is correct, a link to set a new password has been sent.",
   "home.sendLink": "Send link",
   "home.showPw": "show",
   "home.signIn": "Sign in",
@@ -1169,5 +1169,6 @@
   "workspaces.roleMember": "Member",
   "workspaces.roleViewer": "Viewer",
   "workspaces.title": "Your workspaces",
-  "workspaces.unauthHint": "You need to be logged in to see your workspaces."
+  "workspaces.unauthHint": "You need to be logged in to see your workspaces.",
+  "home.savePassword": "Save password"
 }
