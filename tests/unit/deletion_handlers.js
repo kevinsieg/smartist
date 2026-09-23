@@ -125,7 +125,7 @@ function mockRes() {
 // _token stub whose generateUserToken returns a fixed string, and without
 // evicting it these tests would mint that fixed string and assert against the
 // stub instead of a real token.
-function load(rows) {
+function load(rows, opts) {
   const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const emailPath  = require.resolve(path.join(__dirname, '../../api/_email'));
@@ -147,9 +147,15 @@ function load(rows) {
     id: dbPath, filename: dbPath, loaded: true,
     exports: { getDb: () => db.sql },
   };
+  // Records the keys it is asked about, so a test can assert *when* a limit is
+  // consumed and not merely that one exists.
+  const rateKeys = [];
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
+    exports: {
+      checkRateLimit: async (key) => { rateKeys.push(key); return !!(opts && opts.rateLimited); },
+      clientIp: () => '127.0.0.1',
+    },
   };
   require.cache[emailPath] = {
     id: emailPath, filename: emailPath, loaded: true,
@@ -163,7 +169,7 @@ function load(rows) {
   return {
     handlers: require(path.join(__dirname, '../../api/_domain/deletion_handlers')),
     token: require(tokenPath),   // the real one, loaded after the eviction above
-    db, sent, deletedFiles,
+    db, sent, deletedFiles, rateKeys,
   };
 }
 
@@ -180,13 +186,37 @@ async function run(r) {
   });
 
   await testAsync('a blocked account is told which workspaces block it', async () => {
-    const { handlers, token, sent } = load(BLOCKED);
+    const { handlers, token, sent, rateKeys } = load(BLOCKED);
     const raw = token.generateUserToken(7, 'admin', 60_000);
     const res = mockRes();
     await handlers.requestDeletion({ headers: { authorization: 'Bearer ' + raw }, body: {}, query: {} }, res);
     assertEq(res._status, 409);
     assertEq(res._body.blocked[0].slug, 'band');
     assertEq(sent.length, 0); // no email for a request that cannot proceed
+    // The client renders data.error; without one a 409 shows the generic
+    // "failed" line before the reloaded danger zone explains the blocker.
+    assert(res._body.error, '409 carried no error field for the client to show');
+    // A request that cannot send anything must not spend one of the 3/hour:
+    // otherwise someone who promotes a co-admin and retries is locked out of
+    // their own deletion for an hour by attempts that mailed nothing.
+    assertEq(rateKeys.length, 0,
+      'a blocked request consumed the rate limit: ' + rateKeys.join(', '));
+  });
+
+  await testAsync('a request that can proceed does consume the rate limit', async () => {
+    const { handlers, token, rateKeys } = load(A);
+    const raw = token.generateUserToken(7, 'admin', 60_000);
+    const res = mockRes();
+    await handlers.requestDeletion({ headers: { authorization: 'Bearer ' + raw }, body: {}, query: {} }, res);
+    assertEq(res._status, 200);
+    assert(rateKeys.some(k => k.startsWith('delete-req:')), 'the send path was not rate-limited');
+  });
+
+  await testAsync('confirming is rate limited too', async () => {
+    const { handlers } = load(A, { rateLimited: true });
+    const res = mockRes();
+    await handlers.confirmDeletion({ headers: {}, body: { token: 'anything' }, query: {} }, res);
+    assertEq(res._status, 429);
   });
 
   // OAuth signup stores whatever casing the provider sent (registration.js
@@ -206,8 +236,54 @@ async function run(r) {
 
     const raw = sent[0].html.match(/token=([a-f0-9]+)/)[1];
     const confirmRes = mockRes();
-    await handlers.confirmDeletion({ headers: {}, body: { token: raw }, query: {} }, confirmRes);
+    await handlers.confirmDeletion({ headers: {}, body: { token: raw, confirm: true }, query: {} }, confirmRes);
     assertEq(confirmRes._status, 200);
+  });
+
+  // The whole point of the two-phase split: opening the link is not a gesture.
+  // The Back button after a 409, a restored tab, any history revisit and a
+  // JS-executing mail scanner all re-issue whatever the page fires on load, so
+  // a load-time confirm must delete nothing and leave the token usable.
+  await testAsync('confirming without confirm:true previews and deletes nothing', async () => {
+    const rawToken  = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const { handlers, db, deletedFiles } = load(A.map(u => ({
+      ...u, delete_token_hash: tokenHash, delete_token_expires: new Date(Date.now() + 60_000),
+    })));
+
+    const preview = mockRes();
+    await handlers.confirmDeletion({ headers: {}, body: { token: rawToken }, query: {} }, preview);
+    assertEq(preview._status, 200);
+    assertEq(preview._body.preview, true);
+    assertEq(preview._body.destroy.map(a => a.slug).join(','), 'mine');
+    assert(!db.writes.some(w => /^(DELETE|UPDATE)/i.test(w.text)),
+      'a preview wrote to the database: ' + db.writes.map(w => w.text).join(' | '));
+    assertEq(deletedFiles.length, 0);
+    assert(db.users.some(u => u.email === VICTIM), 'a preview removed the account');
+
+    // Previewing repeatedly must not spend the link either — the same token
+    // still deletes when someone finally clicks.
+    const again = mockRes();
+    await handlers.confirmDeletion({ headers: {}, body: { token: rawToken }, query: {} }, again);
+    assertEq(again._status, 200);
+    const done = mockRes();
+    await handlers.confirmDeletion({ headers: {}, body: { token: rawToken, confirm: true }, query: {} }, done);
+    assertEq(done._status, 200);
+    assert(!db.users.some(u => u.email === VICTIM), 'the confirmed deletion did not happen');
+  });
+
+  await testAsync('a blocked plan is refused at preview, before anyone can click', async () => {
+    const rawToken  = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const rows = BLOCKED.map((u, i) => i === 0
+      ? { ...u, delete_token_hash: tokenHash, delete_token_expires: new Date(Date.now() + 60_000) }
+      : u);
+    const { handlers } = load(rows);
+    const res = mockRes();
+    await handlers.confirmDeletion({ headers: {}, body: { token: rawToken }, query: {} }, res);
+    assertEq(res._status, 409);
+    assertEq(res._body.blocked[0].slug, 'band');
+    assert(res._body.error, '409 carried no error field for the client to show');
   });
 
   // Shared across the next two tests: a request stores a token, and the
@@ -231,10 +307,10 @@ async function run(r) {
   await testAsync('the confirm link works once', async () => {
     const { handlers } = scenario;
     const res1 = mockRes();
-    await handlers.confirmDeletion({ headers: {}, body: { token: raw }, query: {} }, res1);
+    await handlers.confirmDeletion({ headers: {}, body: { token: raw, confirm: true }, query: {} }, res1);
     assertEq(res1._status, 200);
     const res2 = mockRes();
-    await handlers.confirmDeletion({ headers: {}, body: { token: raw }, query: {} }, res2);
+    await handlers.confirmDeletion({ headers: {}, body: { token: raw, confirm: true }, query: {} }, res2);
     assertEq(res2._status, 400);
   });
 
@@ -261,7 +337,7 @@ async function run(r) {
       : u);
     const { handlers, deletedFiles } = load(rows);
     const res = mockRes();
-    await handlers.confirmDeletion({ headers: {}, body: { token: staleRaw }, query: {} }, res);
+    await handlers.confirmDeletion({ headers: {}, body: { token: staleRaw, confirm: true }, query: {} }, res);
     assertEq(res._status, 409);
     assertEq(deletedFiles.length, 0);
   });
