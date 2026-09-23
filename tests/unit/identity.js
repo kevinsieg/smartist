@@ -5,6 +5,8 @@ process.env.GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || 'test-goo
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-secret';
 process.env.FACEBOOK_APP_ID      = process.env.FACEBOOK_APP_ID      || 'test-fb-id';
 process.env.FACEBOOK_APP_SECRET  = process.env.FACEBOOK_APP_SECRET  || 'test-fb-secret';
+// oauth.js pulls in _token transitively, which demands APP_SECRET at load.
+process.env.APP_SECRET           = process.env.APP_SECRET           || 'test-app-secret';
 
 async function run(r) {
   const { test, testAsync, assert, assertEq, B } = r;
@@ -99,6 +101,101 @@ async function run(r) {
     const s = generateState('google');
     const result = verifyState(s);
     assertEq(result.mode, 'login');
+  });
+
+  console.log(B('\nresolveOAuthEmail (facebook)'));
+
+  // Captures every URL the facebook branch requests, so the tests can assert on
+  // what we actually send rather than on what we meant to send.
+  async function withFacebookGraph(meBody, fn) {
+    const realFetch = global.fetch;
+    const urls = [];
+    global.fetch = async (url) => {
+      urls.push(String(url));
+      return {
+        json: async () => (String(url).includes('/oauth/access_token')
+          ? { access_token: 'fb-token', token_type: 'bearer', expires_in: 5183944 }
+          : meBody),
+      };
+    };
+    try { return { result: await fn(), urls }; } finally { global.fetch = realFetch; }
+  }
+
+  const meUrl = (urls) => urls.find(u => u.includes('/me'));
+
+  await testAsync('facebook: the email is returned', async () => {
+    const { result } = await withFacebookGraph(
+      { id: '77', email: 'player@example.com' },
+      () => resolveOAuthEmail('facebook', 'code', 'https://app/auth/callback'));
+    assertEq(result, 'player@example.com');
+  });
+
+  // Facebook omits the field entirely when it has no confirmed address, so a
+  // missing email is the documented "do not trust this" signal.
+  await testAsync('facebook: a missing email yields null', async () => {
+    const { result } = await withFacebookGraph(
+      { id: '77' },
+      () => resolveOAuthEmail('facebook', 'code', 'https://app/auth/callback'));
+    assertEq(result, null);
+  });
+
+  // Meta's security checklist: "Sign all server-to-server Graph API calls with
+  // your App Secret." The proof is a sha256 HMAC of `<token>|<unix seconds>`.
+  await testAsync('facebook: the /me call is signed with appsecret_proof', async () => {
+    const crypto = require('crypto');
+    const { urls } = await withFacebookGraph(
+      { id: '77', email: 'player@example.com' },
+      () => resolveOAuthEmail('facebook', 'code', 'https://app/auth/callback'));
+
+    const url = new URL(meUrl(urls));
+    const time = url.searchParams.get('appsecret_time');
+    assert(/^\d+$/.test(time || ''), `appsecret_time missing or not an integer: ${time}`);
+
+    const expected = crypto
+      .createHmac('sha256', process.env.FACEBOOK_APP_SECRET)
+      .update(`fb-token|${time}`)
+      .digest('hex');
+    assertEq(url.searchParams.get('appsecret_proof'), expected);
+  });
+
+  // An unversioned Graph call resolves to the oldest version still live and
+  // changes behaviour under us without any code change.
+  await testAsync('facebook: both Graph calls name an explicit API version', async () => {
+    const { urls } = await withFacebookGraph(
+      { id: '77', email: 'player@example.com' },
+      () => resolveOAuthEmail('facebook', 'code', 'https://app/auth/callback'));
+    for (const u of urls) {
+      assert(/graph\.facebook\.com\/v\d+\.\d+\//.test(u), `unversioned Graph call: ${u}`);
+    }
+  });
+
+  console.log(B('\nfacebookUrl (login dialog)'));
+
+  function mockRes() {
+    const r = { _status: 200 };
+    r.status = (s) => { r._status = s; return r; };
+    r.json   = (b) => { r._body  = b; return r; };
+    return r;
+  }
+
+  async function dialogUrl() {
+    const { facebookUrl } = require(path.join(__dirname, '../../api/_domain/oauth'));
+    const res = mockRes();
+    await facebookUrl({ query: {}, headers: {}, url: '/api/config' }, res);
+    return res._body && res._body.url;
+  }
+
+  // email is the ONLY permission we ask for and the whole login depends on it.
+  // Meta will not re-ask for a permission someone has declined unless told to,
+  // so without this one untick locks that person out of Facebook login for good.
+  await testAsync('facebook: the dialog re-asks for a declined email permission', async () => {
+    const url = new URL(await dialogUrl());
+    assertEq(url.searchParams.get('auth_type'), 'rerequest');
+  });
+
+  await testAsync('facebook: the dialog names an explicit API version', async () => {
+    const url = await dialogUrl();
+    assert(/facebook\.com\/v\d+\.\d+\//.test(url), `unversioned dialog URL: ${url}`);
   });
 }
 

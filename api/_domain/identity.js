@@ -1,4 +1,18 @@
 const crypto = require('crypto');
+const { FB_GRAPH_VERSION } = require('../_constants');
+
+// Meta requires server-to-server Graph calls to be signed with the app secret:
+// a sha256 HMAC of `<access token>|<unix seconds>`, sent alongside the timestamp
+// it was built from. Proofs expire after five minutes, so this is generated per
+// call rather than cached.
+function _appsecretProof(accessToken) {
+  const time  = Math.floor(Date.now() / 1000);
+  const proof = crypto
+    .createHmac('sha256', process.env.FACEBOOK_APP_SECRET || '')
+    .update(`${accessToken}|${time}`)
+    .digest('hex');
+  return { appsecret_proof: proof, appsecret_time: String(time) };
+}
 
 function _stateSecret(provider) {
   if (provider === 'google')   return process.env.GOOGLE_CLIENT_SECRET   || '';
@@ -59,10 +73,20 @@ async function resolveOAuthEmail(provider, code, redirectUri) {
       redirect_uri:  redirectUri,
       code,
     });
-    const tokenRes = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?${params}`);
+    const tokenRes = await fetch(`https://graph.facebook.com/${FB_GRAPH_VERSION}/oauth/access_token?${params}`);
     const { access_token, error } = await tokenRes.json();
     if (error || !access_token) throw new Error(`Facebook token error: ${error?.message}`);
-    const userRes = await fetch(`https://graph.facebook.com/me?fields=email&access_token=${encodeURIComponent(access_token)}`);
+    // Facebook exposes no equivalent of Google's verified_email. Meta documents
+    // matching this address against an existing account as a supported pattern,
+    // and withholds the field entirely when it has none to give — so a missing
+    // email is the only "don't trust this" signal there is. See
+    // docs/2026-09-22-oauth-setup.md for what that does and does not guarantee.
+    const meParams = new URLSearchParams({
+      fields: 'email',
+      access_token,
+      ..._appsecretProof(access_token),
+    });
+    const userRes = await fetch(`https://graph.facebook.com/${FB_GRAPH_VERSION}/me?${meParams}`);
     const { email } = await userRes.json();
     return email || null;
   }
