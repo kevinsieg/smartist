@@ -26,7 +26,20 @@ process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-goo
 
 const EMAIL = 'player@example.com';
 
+const logged = [];
+
 function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name: 'Band' }] } = {}) {
+  logged.length = 0;
+  const logPath = require.resolve(path.join(__dirname, '../../api/_logger'));
+  require.cache[logPath] = {
+    id: logPath, filename: logPath, loaded: true,
+    exports: {
+      info:  async (event, data) => { logged.push({ level: 'info',  event, data }); },
+      warn:  async (event, data) => { logged.push({ level: 'warn',  event, data }); },
+      error: async (event, data) => { logged.push({ level: 'error', event, data }); },
+    },
+  };
+
   const dbPath    = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath    = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const idPath    = require.resolve(path.join(__dirname, '../../api/_domain/identity'));
@@ -95,11 +108,15 @@ function fragment(url) {
   return new URLSearchParams(String(url).split('#')[1] || '');
 }
 
-async function callback(opts) {
+async function callback(opts = {}, query) {
   const { oauth, state, token } = load(opts);
   const res = mockRes();
   await oauth.oauthCallback(
-    { query: { code: 'auth-code', state }, headers: { host: 'app.smartist.studio' }, url: '/auth/callback' },
+    {
+      query: query ? query(state) : { code: 'auth-code', state },
+      headers: { host: 'app.smartist.studio' },
+      url: '/auth/callback',
+    },
     res,
   );
   res._token = token;
@@ -153,6 +170,33 @@ async function run(r) {
     assert(f.get('session'), 'no session token for a multi-workspace user');
     assertEq(f.get('next'), '/workspaces');
   });
+
+  console.log(B('\nOAuth callback — what the visitor is told, and what the log is told'));
+
+  // Telling "no account for that address" apart from "your link expired" would
+  // answer, to anyone who asks, whether an address has an account here. Both
+  // answer identically; only the log distinguishes them.
+  const failures = [
+    ['no account for this address', { user: null }, undefined, 'email_not_authorised'],
+    ['an expired or forged state',  {},             () => ({ code: 'c', state: 'nonsense' }), 'invalid_or_expired_state'],
+    ['a provider-side refusal',     {},             (s) => ({ error: 'access_denied', state: s }), 'provider_error:access_denied'],
+    ['no code at all',              {},             (s) => ({ state: s }), 'missing_code_or_state'],
+  ];
+
+  for (const [label, opts, query, reason] of failures) {
+    await testAsync(`${label} is answered with the same generic error`, async () => {
+      const res = await callback(opts, query);
+      assertEq(res._url, 'https://app.smartist.studio/login?oauth_error=1');
+      assert(!/reason|email|account/i.test(res._url), `the URL leaks why: ${res._url}`);
+    });
+
+    await testAsync(`${label} is written to the log as "${reason}"`, async () => {
+      await callback(opts, query);
+      const entry = logged.find(l => l.event === 'oauth_callback_failed');
+      assert(entry, `nothing logged; events were: ${logged.map(l => l.event).join(', ') || 'none'}`);
+      assertEq(entry.data.reason, reason);
+    });
+  }
 }
 
 if (require.main === module) {

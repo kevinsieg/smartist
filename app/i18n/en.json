@@ -239,7 +239,7 @@
   "home.hidePw": "hide",
   "home.invalidLink": "Invalid or expired login link.",
   "home.noAccount": "No account?",
-  "home.oauthErrorMsg": "Sign-in failed — the account email does not match the configured admin address.",
+  "home.oauthErrorMsg": "Sign-in failed. Please try again, or sign in with your email address.",
   "home.oauthNotConfigured": "{provider} login is not configured",
   "home.orDivider": "or",
   "home.passwordLabel": "Password",
