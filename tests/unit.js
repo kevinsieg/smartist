@@ -27,6 +27,7 @@ const suites = [
   require('./unit/registration'),
   require('./unit/config_signup'),
   require('./unit/login_handler'),
+  require('./unit/reset_handlers'),
   require('./unit/auth_handler'),
   require('./unit/rbac_handlers'),
   require('./unit/tx_handlers'),
