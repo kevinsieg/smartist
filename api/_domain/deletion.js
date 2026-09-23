@@ -73,4 +73,58 @@ async function collectR2Urls(artistIds, sql) {
   return [...urls];
 }
 
-module.exports = { planDeletion, collectR2Urls };
+// Delete the account. Refuses entirely if any workspace is blocked — a
+// half-deleted account is a state nobody can reason about afterwards.
+//
+// deleteFromR2 and logger are injected so the tests can watch them; production
+// passes the real ones from api/_r2 and api/_logger.
+async function executeDeletion(email, sql, { deleteFromR2, logger }) {
+  const addr = String(email).toLowerCase();
+  const plan = await planDeletion(addr, sql);
+
+  if (plan.blocked.length) {
+    return { ok: false, blocked: plan.blocked.map(b => ({ slug: b.slug, name: b.name })) };
+  }
+
+  const destroyIds = plan.destroy.map(a => a.artistId);
+
+  // Enumerated first: once the rows are gone there is nothing to enumerate.
+  const urls = await collectR2Urls(destroyIds, sql);
+
+  await sql.begin(async (tx) => {
+    if (destroyIds.length) {
+      // gigs.venue_id / organizer_id are ON DELETE RESTRICT — nullify first, and
+      // only for these artists. Same ordering as scripts/delete_artist.js.
+      await tx`UPDATE gigs SET venue_id = NULL, organizer_id = NULL WHERE artist_id = ANY(${destroyIds})`;
+      // setlist_songs.song_id has no cascade, so setlists go before songs.
+      await tx`DELETE FROM setlists WHERE artist_id = ANY(${destroyIds})`;
+      // artists cascades songs, gigs, venues, organizers, users, logs.
+      await tx`DELETE FROM artists WHERE id = ANY(${destroyIds})`;
+    }
+    // Workspaces that survive: drop only this person's membership.
+    await tx`DELETE FROM users WHERE email = ${addr}`;
+  });
+
+  // Outside the transaction on purpose: R2 has no rollback. An orphaned file is
+  // a storage leak behind an unguessable UUID in a non-listable bucket; a row
+  // deleted to match a failed file delete would be worse. Log every failure —
+  // scripts/plans.js --recount is the reconciliation pass.
+  for (const url of urls) {
+    try {
+      await deleteFromR2(url);
+    } catch (err) {
+      await logger.error('account_delete_file_orphaned', { url, error: err.message });
+    }
+  }
+
+  await logger.info('account_deleted', {
+    email: addr,
+    destroyed: plan.destroy.map(a => a.slug),
+    left:      plan.leave.map(a => a.slug),
+    files:     urls.length,
+  });
+
+  return { ok: true, destroyed: plan.destroy.map(a => a.slug), left: plan.leave.map(a => a.slug) };
+}
+
+module.exports = { planDeletion, collectR2Urls, executeDeletion };
