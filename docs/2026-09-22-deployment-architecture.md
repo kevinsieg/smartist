@@ -232,9 +232,17 @@ re-adding the variable restores the previous behaviour.
   different Resend account, and `kevinklang.de` is not verified in it. Only
   smartist.studio's account was fixed. Nothing is broken for anyone already
   signed in, but nobody can recover an account on those two deployments.
-- **Facebook addresses are trusted without a verification check**, unlike
-  Google. Fine on a single-band deployment, worth revisiting now that signup is
-  public — see the OAuth doc.
+- ~~**Facebook addresses are trusted without a verification check.**~~ Checked
+  against Meta's current docs on 2026-09-23. There is no per-request
+  verification field to call — Facebook has no equivalent of Google's
+  `verified_email` — but Meta explicitly documents email-matched passwordless
+  login into an existing account as a supported pattern, which is what we do.
+  Sanctioned, not guaranteed; the reasoning, the quotes and the two heavier
+  alternatives are in `2026-09-22-oauth-setup.md`. **What that review did turn
+  up is three real code gaps** (missing `appsecret_proof`, a stale pinned Graph
+  API version, and a missing `auth_type=rerequest` that permanently locks out
+  anyone who unticks the email permission once) plus a console and pre-Live
+  checklist — same doc.
 - **`arrangement.js` calls `apiFetch()` and `setStatus()`**, neither of which
   exists on stage. Unreachable today because those editing paths are not used in
   the read-only view; recorded in `tests/unit/page_scripts.js` rather than fixed.
