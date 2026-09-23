@@ -13,6 +13,7 @@ async function init() {
   const session      = qp('session');
   const hint         = qp('hint');
   const invite       = qp('invite');
+  const reset        = qp('reset');
   const oauthError   = qp('oauth_error');
   const path         = window.location.pathname.replace(/\/+$/, '') || '/';
   const next         = qp('next') || '';
@@ -20,12 +21,12 @@ async function init() {
   _loginNext = next; // survives the URL strip below
 
   const hasToken = !!(sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY));
-  if (path === '/' && !magic && !session && !oauthError && !invite && !hasToken) {
+  if (path === '/' && !magic && !session && !oauthError && !invite && !reset && !hasToken) {
     window.location.replace('/login' + window.location.search);
     return;
   }
 
-  if (magic || session || oauthError || invite) history.replaceState(null, '', window.location.pathname);
+  if (magic || session || oauthError || invite || reset) history.replaceState(null, '', window.location.pathname);
 
   // A finished session handed over by the OAuth callback. Handled before
   // loadConfig because it needs no workspace: verifySession authenticates
@@ -71,6 +72,10 @@ async function init() {
 
   if (oauthError) { renderLogin(t('home.oauthErrorMsg'), cfg); return; }
   if (invite)     { renderSetPassword(invite, cfg); return; }
+  // Arrived from "Forgot password?". Landing here rather than on the dashboard
+  // is the whole point: being logged in with the password you forgot still in
+  // place is what made the old flow a dead end.
+  if (reset)      { renderSetPassword(reset, cfg, hint); return; }
 
   if (magic) {
     const { ok, artists } = await verifyToken(magic, hint || null);
@@ -242,7 +247,14 @@ function renderLogin(errorMsg, cfg) {
   setTimeout(() => document.getElementById('email-input')?.focus(), 50);
 }
 
-function renderSetPassword(inviteToken, cfg) {
+// Two arrivals share this screen: accepting an invite, and setting a password
+// after forgetting one. Same form, different endpoint — `resetHint` is what
+// tells them apart, because only the reset link carries the address it was
+// issued for.
+function renderSetPassword(token, cfg, resetHint) {
+  const isReset = !!resetHint;
+  const submit  = () => (isReset ? doSetPassword(token, resetHint, cfg) : doAcceptInvite(token, cfg));
+  const label   = isReset ? t('home.savePassword') : t('home.createAccount');
   const el = document.getElementById('landing-auth');
   if (!el) return;
   el.innerHTML =
@@ -255,7 +267,7 @@ function renderSetPassword(inviteToken, cfg) {
         '</div>' +
       '</div>' +
       '<div class="auth-error" id="auth-error"></div>' +
-      '<button class="btn active auth-submit" id="accept-btn">' + t('home.createAccount') + '</button>' +
+      '<button class="btn active auth-submit" id="accept-btn">' + label + '</button>' +
     '</div>';
   document.getElementById('pw-toggle-new').addEventListener('click', () => {
     const input = document.getElementById('pw-new');
@@ -264,9 +276,36 @@ function renderSetPassword(inviteToken, cfg) {
     input.type      = show ? 'text' : 'password';
     btn.textContent = show ? t('home.hidePw') : t('home.showPw');
   });
-  document.getElementById('accept-btn').addEventListener('click', () => doAcceptInvite(inviteToken, cfg));
-  document.getElementById('pw-new').addEventListener('keydown', e => { if (e.key === 'Enter') doAcceptInvite(inviteToken, cfg); });
+  document.getElementById('accept-btn').addEventListener('click', submit);
+  document.getElementById('pw-new').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
   setTimeout(() => document.getElementById('pw-new')?.focus(), 50);
+}
+
+// Setting the password is also what logs them in — they are here because they
+// could not log in, so handing them back to the form would be absurd.
+async function doSetPassword(token, hint, cfg) {
+  const pw  = document.getElementById('pw-new').value;
+  const btn = document.getElementById('accept-btn');
+  const err = document.getElementById('auth-error');
+  if (!pw) { err.textContent = t('home.enterPassword'); return; }
+  btn.disabled = true; btn.textContent = '…'; err.textContent = '';
+  const restore = () => { btn.disabled = false; btn.textContent = t('home.savePassword'); };
+  try {
+    const slug = cfg?.slug || artistSlug;
+    const r    = await fetch(`/api/${slug}/auth?action=set-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, hint, password: pw }),
+    });
+    const data = await r.json();
+    if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); restore(); return; }
+    storeToken(data.token, false);
+    sessionStorage.setItem('smartist_admin_email', data.email || '');
+    renderLoggedIn(cfg, data.artists || []);
+  } catch {
+    err.textContent = t('home.connError');
+    restore();
+  }
 }
 
 async function doAcceptInvite(inviteToken, cfg) {
