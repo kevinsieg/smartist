@@ -123,6 +123,107 @@ async function run(r) {
     assert(!urls.some(u => /THEIRS/.test(u)), `collected another band's files: ${urls.join(', ')}`);
     assertEq(urls.join(','), 'mine.mp3');
   });
+
+  console.log(B('\nexecuteDeletion — and what it must leave alone'));
+
+  // Records every statement so the tests can assert on scope. A deletion bug
+  // shows up as a statement whose values do not name the victim's artist.
+  function recordingSql(rows, media = {}) {
+    const issued = [];
+    const fn = (strings, ...values) => {
+      const text = strings.join('?').replace(/\s+/g, ' ').trim();
+      issued.push({ text, values });
+      if (/JOIN artists/i.test(text)) {
+        const email = values[0];
+        return Promise.resolve(rows.filter(r => r.email === email)
+          .map(r => ({ artist_id: r.artist_id, slug: r.slug, name: r.name, role: r.role })));
+      }
+      if (/FROM users/i.test(text)) {
+        const ids = values[0] || [];
+        return Promise.resolve(rows.filter(r => ids.includes(r.artist_id)));
+      }
+      if (/FROM songs/i.test(text))   return Promise.resolve(media.songs   || []);
+      if (/FROM gigs/i.test(text))    return Promise.resolve(media.gigs    || []);
+      if (/FROM artists/i.test(text)) return Promise.resolve(media.artists || []);
+      return Promise.resolve([]);
+    };
+    fn.begin = async (cb) => cb(fn);
+    fn.issued = issued;
+    return fn;
+  }
+
+  await testAsync('a blocked workspace stops the whole deletion', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql([
+      { artist_id: 1, slug: 'solo', name: 'Solo', email: VICTIM,    role: 'admin'  },
+      { artist_id: 2, slug: 'band', name: 'Band', email: VICTIM,    role: 'admin'  },
+      { artist_id: 2, slug: 'band', name: 'Band', email: NEIGHBOUR, role: 'member' },
+    ]);
+    const removed = [];
+    const out = await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async (u) => { removed.push(u); return true; },
+      logger: { info: async () => {}, error: async () => {} },
+    });
+    assertEq(out.ok, false);
+    assertEq(out.blocked.map(b => b.slug).join(','), 'band');
+    // Nothing at all may have happened — not even the workspace that was fine.
+    assert(!sql.issued.some(q => /DELETE|UPDATE/i.test(q.text)),
+      'a blocked deletion still wrote: ' + sql.issued.map(q => q.text).join(' | '));
+    assertEq(removed.length, 0);
+  });
+
+  await testAsync('every write names the artists being deleted', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql([
+      { artist_id: 1, slug: 'mine',  name: 'Mine',  email: VICTIM,    role: 'admin' },
+      { artist_id: 9, slug: 'other', name: 'Other', email: NEIGHBOUR, role: 'admin' },
+    ]);
+    await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async () => true,
+      logger: { info: async () => {}, error: async () => {} },
+    });
+    const writes = sql.issued.filter(q => /^(DELETE|UPDATE)/i.test(q.text));
+    assert(writes.length > 0, 'nothing was deleted');
+    for (const w of writes) {
+      const flat = JSON.stringify(w.values);
+      assert(/\b1\b/.test(flat) || /player@example\.com/.test(flat),
+        `a write did not name the victim: ${w.text} ${flat}`);
+      assert(!/\b9\b/.test(flat),
+        `a write named the neighbouring artist: ${w.text} ${flat}`);
+    }
+  });
+
+  await testAsync('files are removed only after the rows are gone', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const order = [];
+    const sql = recordingSql(
+      [{ artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' }],
+      { songs: [{ extra: { listenUrl: 'f1' } }] },
+    );
+    const inner = sql;
+    inner.begin = async (cb) => { order.push('tx'); return cb(inner); };
+    await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async (u) => { order.push('r2:' + u); return true; },
+      logger: { info: async () => {}, error: async () => {} },
+    });
+    assertEq(order.join(','), 'tx,r2:f1');
+  });
+
+  await testAsync('a failed file delete does not undo the row deletion, and is logged', async () => {
+    const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const sql = recordingSql(
+      [{ artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' }],
+      { songs: [{ extra: { listenUrl: 'boom' } }] },
+    );
+    const logged = [];
+    const out = await executeDeletion(VICTIM, sql, {
+      deleteFromR2: async () => { throw new Error('r2 down'); },
+      logger: { info: async () => {}, error: async (e, d) => { logged.push({ e, d }); } },
+    });
+    assertEq(out.ok, true);
+    assert(logged.some(l => l.e === 'account_delete_file_orphaned'),
+      'an orphaned file was not logged: ' + JSON.stringify(logged));
+  });
 }
 
 if (require.main === module) {
