@@ -73,7 +73,6 @@ async function getAccess(req, slug) {
   return { artist, user };
 }
 
-// A workspace with config.private only serves data to authenticated members.
 // Anonymous access is opt in, one surface at a time. A single private flag was
 // too coarse: turning it off to publish a song list also published the gig
 // schedule and the venue CRM, contact names and phone numbers included.

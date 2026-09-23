@@ -6,6 +6,7 @@ const { resolveOAuthEmail, generateState, verifyState } = require('./identity');
 const { resolveArtist, getArtistsForUser } = require('./artist');
 const { createSignupToken } = require('./registration');
 const { origin } = require('./http');
+const { FB_GRAPH_VERSION } = require('../_constants');
 
 function callbackUri(req) {
   return `${origin(req)}/auth/callback`;
@@ -37,8 +38,15 @@ async function facebookUrl(req, res) {
     response_type: 'code',
     scope:        'email',
     state:        generateState('facebook', req.query.mode || 'login'),
+    // email is the only permission we ask for and the login cannot work
+    // without it. Facebook will not re-ask for a permission someone has
+    // declined unless told to, so without this one untick locks that person
+    // out of Facebook login permanently — every retry would fail with
+    // no_email_from_provider and the dialog would never offer it again.
+    // Harmless for everyone else: nothing declined, nothing to re-ask.
+    auth_type:    'rerequest',
   });
-  return res.json({ url: `https://www.facebook.com/v18.0/dialog/oauth?${params}` });
+  return res.json({ url: `https://www.facebook.com/${FB_GRAPH_VERSION}/dialog/oauth?${params}` });
 }
 
 // GET ?action=oauth-callback — OAuth provider redirects here (routed from
@@ -96,11 +104,15 @@ async function oauthCallback(req, res) {
     const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H);
     const hint = Buffer.from(email.toLowerCase()).toString('base64url');
     await logger.info('oauth_login', { provider, email });
-    if (artists.length > 1) {
-      return res.redirect(302, `${o}/login#magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/home`);
-    }
-    const slug = artists[0]?.slug || '';
-    return res.redirect(302, `${o}/login#magic=${encodeURIComponent(userToken)}&hint=${hint}&next=/${slug}/dashboard`);
+    // This is a finished session, not a link to be redeemed. It used to travel
+    // as `magic=`, which sent home.js to the password-based magic endpoint —
+    // and that looks the user up WITH password_hash IS NOT NULL and checks the
+    // token against that hash. An account created through Google has no
+    // password and a user token is keyed on APP_SECRET, so it always came back
+    // "Invalid or expired login link". `session=` is verified as what it is.
+    const next = artists.length > 1 ? '/workspaces' : `/${artists[0]?.slug || ''}/dashboard`;
+    return res.redirect(302,
+      `${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
   }
 
   // Single-tenant fallback (ARTIST_ADMIN_EMAIL)

@@ -212,12 +212,12 @@ re-adding the variable restores the previous behaviour.
 - **Backups.** The Neon `smartist` main branch will hold other people's data.
   Its point-in-time restore window should be checked against what is acceptable
   to lose, before the first real signup.
-- **First account on the personal projects.** `scripts/create_user.js` exists
-  now — run it against `smartist-kevin` for `salb` and `klang` to leave the
-  legacy band-password login behind. Until then those two have no `users` rows
-  and `SUPER_ADMIN_EMAILS` cannot match on them.
+- ~~**First account on the personal projects.**~~ Done — `kontakt@kevinklang.de`
+  is an admin on both klang and salb, and `SUPER_ADMIN_EMAILS` is set on all
+  three app projects. **The klang password is a temporary one set from the CLI
+  and needs changing in /profile.**
 - **Neon credentials.** Both production strings have been pasted into terminal
-  history and chat. Rotate them.
+  history and chat repeatedly. Rotate them.
 - **The demo reset cadence** is unset. Nightly is the assumption above.
 - **The marketing page is now English only.** `app/landing.html` carried 68
   `landing.*` keys translated into French and German; the `smartist-website`
@@ -225,5 +225,29 @@ re-adding the variable restores the previous behaviour.
   `dashboard.html` and `demo.html` still use them, but the public marketing
   page no longer has FR/DE. Porting the translations to the website repo is a
   separate piece of work.
-- **`demo.smartist.studio` today** serves the app directly. It keeps working
-  until step 7; the redirect is tidying, not a prerequisite.
+- **Google and Facebook sign-in** is not configured on the `smartist` project,
+  so email is the only way to create an account. Fresh OAuth apps are the plan:
+  `2026-09-22-oauth-setup.md`.
+- **Password reset and invites are dead on klang and salmons.** Those use a
+  different Resend account, and `kevinklang.de` is not verified in it. Only
+  smartist.studio's account was fixed. Nothing is broken for anyone already
+  signed in, but nobody can recover an account on those two deployments.
+- ~~**Facebook addresses are trusted without a verification check.**~~ Checked
+  against Meta's current docs on 2026-09-23. There is no per-request
+  verification field to call — Facebook has no equivalent of Google's
+  `verified_email` — but Meta explicitly documents email-matched passwordless
+  login into an existing account as a supported pattern, which is what we do.
+  Sanctioned, not guaranteed; the reasoning, the quotes and the two heavier
+  alternatives are in `2026-09-22-oauth-setup.md`. **What that review did turn
+  up is three real code gaps** (missing `appsecret_proof`, a stale pinned Graph
+  API version, and a missing `auth_type=rerequest` that permanently locks out
+  anyone who unticks the email permission once) plus a console and pre-Live
+  checklist — same doc.
+- **`arrangement.js` calls `apiFetch()` and `setStatus()`**, neither of which
+  exists on stage. Unreachable today because those editing paths are not used in
+  the read-only view; recorded in `tests/unit/page_scripts.js` rather than fixed.
+- **Cross-domain workspace links.** `/workspaces` links are relative, so opening
+  salb from smartist.kevinklang.de shows that band on the other band's domain.
+  Works, but needs a decision about what those domains mean.
+- **The plans section on smartist.studio** never mentions the hosted free tier,
+  so a visitor reads it as self-host-or-pay.
