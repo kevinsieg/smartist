@@ -38,4 +38,39 @@ async function planDeletion(email, sql) {
   return out;
 }
 
-module.exports = { planDeletion };
+// Every R2 object belonging to these artists, gathered BEFORE any row is
+// deleted — once the rows are gone there is nothing left to enumerate from.
+//
+// Never do this by key prefix. _media.js writes song media as
+// `audio/<uuid>-<name>`, `sheets/…`, `playback/…` — one flat namespace shared
+// by every tenant — so a prefix delete would take every band's recordings.
+// Only gigs/<slug>/ and bands/<slug>/ carry a slug, and even those are not
+// worth the inconsistency.
+async function collectR2Urls(artistIds, sql) {
+  if (!artistIds.length) return [];
+
+  // deleted songs included on purpose: soft-deleted rows still own their files.
+  const songs = await sql`
+    SELECT extra FROM songs WHERE artist_id = ANY(${artistIds})
+  `;
+  const gigs = await sql`
+    SELECT poster_url, thumb_url FROM gigs WHERE artist_id = ANY(${artistIds})
+  `;
+  const bands = await sql`
+    SELECT config FROM artists WHERE id = ANY(${artistIds})
+  `;
+
+  const urls = new Set();
+  const add  = (u) => { if (u && typeof u === 'string') urls.add(u); };
+
+  for (const s of songs) {
+    const e = s.extra || {};
+    add(e.listenUrl); add(e.sheetUrl); add(e.playbackUrl);
+  }
+  for (const g of gigs) { add(g.poster_url); add(g.thumb_url); }
+  for (const b of bands) { add((b.config || {}).logoUrl); }
+
+  return [...urls];
+}
+
+module.exports = { planDeletion, collectR2Urls };
