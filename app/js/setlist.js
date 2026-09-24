@@ -13,17 +13,9 @@ function bpmNorm(song) {
 }
 
 // song.energy 0–10 → 0–1 (calm 0 … intense 1)
-// Words are still read until every database is migrated.
 function energyNorm(song) {
-  const raw = String(song.energy ?? '').trim();
-  if (!raw) return null;
-  const n = Number(raw);
-  if (isFinite(n)) return Math.min(1, Math.max(0, n / 10));
-  const e = raw.toLowerCase();
-  if (/low|soft|calm|quiet|gentle|acoustic|mellow|ballad/.test(e))   return 0.15;
-  if (/med|mid|moderate|normal/.test(e))                              return 0.5;
-  if (/high|intense|epic|powerful|energetic|anthem|dance|heavy/.test(e)) return 0.85;
-  return 0.5;
+  if (song.energy == null) return null;
+  return Math.min(1, Math.max(0, Number(song.energy) / 10));
 }
 
 // Combined feel: 0 = yoga-calm, 1 = triathlon-intense.

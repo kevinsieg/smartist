@@ -1,4 +1,4 @@
-const { energyToScale, genreKey, titleCaseGenre, matchGenre, proposeGenreMap } = require('../../api/_song_values');
+const { energyToScale, matchGenre } = require('../../api/_song_values');
 
 function run(r) {
   const { test, assertEq, B } = r;
@@ -35,12 +35,6 @@ function run(r) {
     assertEq(energyToScale('101'), undefined);
   });
 
-  test('genreKey ignores case, spaces and punctuation', () => {
-    assertEq(genreKey("Rock'n'Roll"), genreKey('rock n roll'));
-    assertEq(genreKey('SINGER-SONGWRITER'), genreKey('Singer Songwriter'));
-  });
-  test('genreKey keeps & so R&B and RB differ', () => assertEq(genreKey('R&B') === genreKey('RB'), false));
-
   test('matchGenre reuses the stored spelling', () => {
     const known = ['Folk Rock', 'R&B'];
     assertEq(matchGenre('FOLK ROCK', known), 'Folk Rock');
@@ -52,20 +46,6 @@ function run(r) {
     assertEq(matchGenre(null, ['Folk']), null);
   });
 
-  test('proposeGenreMap: most used spelling wins, shouting and lower case are Title-Cased', () => {
-    const map = proposeGenreMap([
-      { value: 'Folk Rock', n: 5 }, { value: 'FOLK ROCK', n: 2 }, { value: 'folk-rock', n: 1 },
-      { value: 'POP', n: 3 }, { value: 'Jazz', n: 1 },
-    ]);
-    assertEq(JSON.stringify(map), JSON.stringify({ 'FOLK ROCK': 'Folk Rock', 'folk-rock': 'Folk Rock', POP: 'Pop' }));
-  });
-
-  test('titleCaseGenre', () => {
-    assertEq(titleCaseGenre('ROCK'), 'Rock');
-    assertEq(titleCaseGenre('singer-songwriter'), 'Singer-Songwriter');
-    assertEq(titleCaseGenre('  folk   rock '), 'Folk Rock');
-    assertEq(titleCaseGenre('country/western'), 'Country/Western');
-  });
 }
 
 module.exports = run;

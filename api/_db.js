@@ -13,8 +13,11 @@ const postgres = require('postgres');
 // To switch drivers, replace the connect line only:
 //   neon HTTP (no transactions): connect: url => require('@neondatabase/serverless').neon(url)
 //   pg Pool:                     connect: url => { ... }  (see DATABASE.md)
+// prepare: false — Neon's pooler keeps named prepared statements on its server
+// connections, so after a column changes type every `SELECT *` on that table
+// failed with "cached plan must not change result type" until the pool recycled.
 const DB = {
-  connect: url => postgres(url, { ssl: 'require', max: 1 }),
+  connect: url => postgres(url, { ssl: 'require', max: 1, prepare: false }),
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
