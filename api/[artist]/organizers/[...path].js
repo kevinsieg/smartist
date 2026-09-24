@@ -19,18 +19,18 @@ module.exports = wrap(async function handler(req, res) {
     const artist = await requireAuth(req, res, slug);
     if (!artist) return;
     if (!requireFeature(res, artist, 'organizers')) return;
-    const [org] = await sql`SELECT * FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`;
-    if (!org) return res.status(404).json({ error: 'Organizer not found' });
-    if (req.query.refs) {
-      const gigs = await sql`
+    const [[org], gigs] = await Promise.all([
+      sql`SELECT * FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`,
+      req.query.refs ? sql`
         SELECT g.id, g.title, g.date, v.name AS venue_name, v.city AS venue_city
         FROM gigs g
         LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
         WHERE g.organizer_id = ${id} AND g.artist_id = ${artist.id} AND g.deleted = false
         ORDER BY g.date DESC NULLS LAST
-      `;
-      return res.json({ organizer: org, refs: { gigs } });
-    }
+      ` : null,
+    ]);
+    if (!org) return res.status(404).json({ error: 'Organizer not found' });
+    if (req.query.refs) return res.json({ organizer: org, refs: { gigs } });
     return res.json(org);
   }
 
