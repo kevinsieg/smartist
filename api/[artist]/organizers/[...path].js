@@ -25,7 +25,7 @@ module.exports = wrap(async function handler(req, res) {
       const gigs = await sql`
         SELECT g.id, g.title, g.date, v.name AS venue_name, v.city AS venue_city
         FROM gigs g
-        LEFT JOIN venues v ON v.id = g.venue_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
         WHERE g.organizer_id = ${id} AND g.artist_id = ${artist.id} AND g.deleted = false
         ORDER BY g.date DESC NULLS LAST
       `;

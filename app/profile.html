@@ -190,9 +190,15 @@
     btn.disabled = true; msg.textContent = t('profile.saving');
     try {
       var r = await apiFetch('/api/' + _slug + '/auth?action=change-password', 'POST',
-        { currentPassword: cur, newPassword: nw });
+        { currentPassword: cur, newPassword: nw, rememberMe: !!localStorage.getItem(AUTH_TOKEN_KEY) });
       var data = await r.json();
       if (!r.ok) { msg.textContent = data.error || t('profile.failed'); msg.className = 'save-msg err'; return; }
+      // The new password revokes every earlier session, this one included; the
+      // response carries its replacement. Keep it in the store the old one was in.
+      if (data.token) {
+        if (localStorage.getItem(AUTH_TOKEN_KEY)) localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+        else sessionStorage.setItem(AUTH_TOKEN_KEY, data.token);
+      }
       msg.textContent = t('profile.changed'); msg.className = 'save-msg ok';
       document.getElementById('pw-current').value = '';
       document.getElementById('pw-new').value = '';

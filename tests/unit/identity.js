@@ -175,6 +175,7 @@ async function run(r) {
     const r = { _status: 200 };
     r.status = (s) => { r._status = s; return r; };
     r.json   = (b) => { r._body  = b; return r; };
+    r.setHeader = (k, v) => { r._headers = { ...(r._headers || {}), [k]: v }; };
     return r;
   }
 

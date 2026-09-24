@@ -930,10 +930,12 @@ async function testFileValidation(slug, token, songId) {
         { publicUrl: `${R2_BASE}/sheets/fake.mp3` }, { token });
       assertStatus(res, json, 400);
     });
-    await test('PUT /audio valid prefix, nonexistent song → 404', async () => {
+    // Keys are scoped to the band (`audio/<artist id>/…`); an unscoped key is
+    // refused before the song is even looked up.
+    await test('PUT /audio unscoped key → 400', async () => {
       const { res, json } = await PUT(`/api/${slug}/songs/999999999/audio`,
         { publicUrl: `${R2_BASE}/audio/fake.mp3` }, { token });
-      assertStatus(res, json, 404);
+      assertStatus(res, json, 400);
     });
 
     await test('PUT /sheet wrong key prefix → 400', async () => {
@@ -941,10 +943,12 @@ async function testFileValidation(slug, token, songId) {
         { publicUrl: `${R2_BASE}/audio/fake.pdf` }, { token });
       assertStatus(res, json, 400);
     });
-    await test('PUT /sheet valid prefix, nonexistent song → 404', async () => {
+    // Keys are scoped to the band (`sheets/<artist id>/…`); an unscoped key is
+    // refused before the song is even looked up.
+    await test('PUT /sheet unscoped key → 400', async () => {
       const { res, json } = await PUT(`/api/${slug}/songs/999999999/sheet`,
         { publicUrl: `${R2_BASE}/sheets/fake.pdf` }, { token });
-      assertStatus(res, json, 404);
+      assertStatus(res, json, 400);
     });
 
     await test('PUT /playback wrong key prefix → 400', async () => {
@@ -952,10 +956,12 @@ async function testFileValidation(slug, token, songId) {
         { publicUrl: `${R2_BASE}/audio/fake.mp3` }, { token });
       assertStatus(res, json, 400);
     });
-    await test('PUT /playback valid prefix, nonexistent song → 404', async () => {
+    // Keys are scoped to the band (`playback/<artist id>/…`); an unscoped key is
+    // refused before the song is even looked up.
+    await test('PUT /playback unscoped key → 400', async () => {
       const { res, json } = await PUT(`/api/${slug}/songs/999999999/playback`,
         { publicUrl: `${R2_BASE}/playback/fake.mp3` }, { token });
-      assertStatus(res, json, 404);
+      assertStatus(res, json, 400);
     });
 
     // Presigned URL generation — verifies R2 client is wired correctly

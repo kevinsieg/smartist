@@ -4,11 +4,24 @@ const { getArtist, getDb, getSlug }            = require('../_db');
 const { checkCredentials, requireAuth, requireRole } = require('../_auth');
 const { generateUserToken, generateMagicToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('../_domain/artist');
+const { DUMMY_HASH } = require('../_domain/login');
 const { sendEmail }    = require('../_email');
+const { escHtml }      = require('../_html');
+const { origin: appOrigin }  = require('../_domain/http');
 const { wrap }         = require('../_handler');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { validateStr }  = require('../_validate');
 const logger           = require('../_logger');
+
+// Invites send mail to any address with the band's name in it, so they are
+// capped per band and per IP — an admin session must not be a mail relay.
+async function inviteLimited(artist, req) {
+  return (await checkRateLimit(`invite:${artist.id}`, 20, 3600))
+      || (await checkRateLimit(`invite-ip:${clientIp(req)}`, 30, 3600));
+}
+
+// Header values (subjects) must stay on one line.
+function oneLine(s) { return String(s ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200); }
 
 module.exports = wrap(async function handler(req, res) {
   const slug   = getSlug(req);
@@ -41,7 +54,7 @@ module.exports = wrap(async function handler(req, res) {
       SET password_hash = ${hash}, invite_token_hash = NULL, invite_expires_at = NULL
       WHERE id = ${user.id}
     `;
-    const sessionToken = generateUserToken(user.id, user.role, TTL_8H);
+    const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
     const artists      = await getArtistsForUser(user.id, sql);
     return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
   }
@@ -72,7 +85,7 @@ module.exports = wrap(async function handler(req, res) {
     // the row the hint names. A valid token for one account plus someone else's
     // address therefore proves nothing and rewrites nothing.
     const seed = user ? (user.password_hash || `${process.env.APP_SECRET}:${user.id}`) : null;
-    if (!user || !verifyMagicToken(String(token), seed))
+    if (!user || !verifyMagicToken(String(token), seed, 'reset'))
       return res.status(400).json({ error: 'Invalid or expired link' });
 
     const hash = await bcrypt.hash(String(password), 12);
@@ -80,7 +93,7 @@ module.exports = wrap(async function handler(req, res) {
 
     // Setting the password is what logs them in — they came here because they
     // could not, and sending them back to a login form would be a joke.
-    const sessionToken = generateUserToken(user.id, user.role, TTL_8H);
+    const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
     const artists      = await getArtistsForUser(user.id, sql);
     await logger.info('password_set_via_reset', { band: slug, email: user.email });
     return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
@@ -90,6 +103,8 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST' && req.url.includes('request-reset')) {
     const { email } = req.body ?? {};
     if (await checkRateLimit(`reset:${clientIp(req)}`, 3, 600))
+      return res.json({ ok: true }); // silent
+    if (await checkRateLimit(`reset:${String(email || '').trim().toLowerCase()}`, 3, 3600))
       return res.json({ ok: true }); // silent
 
     const band = await getArtist(slug);
@@ -118,15 +133,13 @@ module.exports = wrap(async function handler(req, res) {
     } else {
       // Bootstrap fallback: match ARTIST_ADMIN_EMAIL
       const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
-      if (!adminEmail || cleanEmail !== adminEmail.toLowerCase()) return res.json({ ok: true });
+      if (!adminEmail || cleanEmail !== adminEmail.toLowerCase() || !band.password_hash) return res.json({ ok: true });
       resetEmail = adminEmail;
       tokenSeed  = band.password_hash;
     }
 
-    const resetToken = generateMagicToken(tokenSeed);
-    const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
-    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
+    const resetToken = generateMagicToken(tokenSeed, 'reset');
+    const origin = appOrigin(req);
     // Encode email as hint so client can pass it back for user lookup
     const hint   = Buffer.from(resetEmail).toString('base64url');
     // Fragment, not query — tokens must not land in server/CDN logs.
@@ -170,8 +183,8 @@ module.exports = wrap(async function handler(req, res) {
           SELECT * FROM users
           WHERE artist_id = ${band.id} AND email = ${hintEmail} AND password_hash IS NOT NULL
         `;
-        if (user && verifyMagicToken(magic, user.password_hash)) {
-          const sessionToken = generateUserToken(user.id, user.role, TTL_8H);
+        if (user && verifyMagicToken(magic, user.password_hash, 'login')) {
+          const sessionToken = generateUserToken(user.id, user.role, TTL_8H, user.password_hash);
           const artists      = await getArtistsForUser(user.id, sql);
           return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
         }
@@ -208,7 +221,10 @@ module.exports = wrap(async function handler(req, res) {
         AND email = ${String(email).trim().toLowerCase()}
         AND password_hash IS NOT NULL
     `;
-    if (!user || !await bcrypt.compare(password, user.password_hash)) {
+    // No row still costs one bcrypt round, so timing does not reveal accounts.
+    const ok = user ? await bcrypt.compare(password, user.password_hash)
+                    : (await bcrypt.compare(String(password), DUMMY_HASH), false);
+    if (!ok) {
       // Bootstrap fallback: legacy single-tenant installs have no users rows —
       // accept ARTIST_ADMIN_EMAIL with the artist password.
       const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
@@ -221,7 +237,7 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const ttl     = rememberMe ? TTL_30D : TTL_8H;
-    const token   = generateUserToken(user.id, user.role, ttl);
+    const token   = generateUserToken(user.id, user.role, ttl, user.password_hash);
     const artists = await getArtistsForUser(user.id, sql);
     return res.json({ ok: true, token, role: user.role, email: user.email, artists });
   }
@@ -288,7 +304,7 @@ module.exports = wrap(async function handler(req, res) {
       await sendEmail({
         to: oldEmail,
         subject: 'Your email address was changed',
-        html: `<p>Your smartist login email was changed to ${target}.</p>
+        html: `<p>Your smartist login email was changed to ${escHtml(target)}.</p>
                <p>If you did not do this, contact support immediately.</p>`,
       });
     } catch (err) {
@@ -328,6 +344,7 @@ module.exports = wrap(async function handler(req, res) {
 
     const [existing] = await sql`SELECT id FROM users WHERE artist_id = ${artist.id} AND email = ${cleanEmail.toLowerCase()}`;
     if (existing) return res.status(409).json({ error: 'User already exists' });
+    if (await inviteLimited(artist, req)) return res.status(429).json({ error: 'Too many invites — try again later' });
 
     const rawToken  = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -339,16 +356,14 @@ module.exports = wrap(async function handler(req, res) {
       RETURNING id, email, role
     `;
 
-    const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
-    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
+    const origin = appOrigin(req);
     const link   = `${origin}/login#invite=${rawToken}`;
 
     try {
       await sendEmail({
         to: cleanEmail,
-        subject: `You've been invited to ${artist.name}`,
-        html: `<p>You've been invited to access ${artist.name} on smartist.</p>
+        subject: `You've been invited to ${oneLine(artist.name)}`,
+        html: `<p>You've been invited to access ${escHtml(artist.name)} on smartist.</p>
                <p><a href="${link}">Accept invite and set your password</a></p>
                <p>This link expires in 7 days.</p>`,
       });
@@ -369,6 +384,7 @@ module.exports = wrap(async function handler(req, res) {
       SELECT * FROM users WHERE id = ${Number(userId)} AND artist_id = ${artist.id} AND password_hash IS NULL
     `;
     if (!user) return res.status(404).json({ error: 'Pending invite not found' });
+    if (await inviteLimited(artist, req)) return res.status(429).json({ error: 'Too many invites — try again later' });
 
     const rawToken  = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -376,16 +392,14 @@ module.exports = wrap(async function handler(req, res) {
 
     await sql`UPDATE users SET invite_token_hash = ${tokenHash}, invite_expires_at = ${expires} WHERE id = ${user.id}`;
 
-    const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
-    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
+    const origin = appOrigin(req);
     const link   = `${origin}/login#invite=${rawToken}`;
 
     try {
       await sendEmail({
         to: user.email,
-        subject: `Invite reminder — ${artist.name}`,
-        html: `<p>Here is your updated invite link for ${artist.name}:</p>
+        subject: `Invite reminder — ${oneLine(artist.name)}`,
+        html: `<p>Here is your updated invite link for ${escHtml(artist.name)}:</p>
                <p><a href="${link}">Accept invite and set your password</a></p>
                <p>This link expires in 7 days.</p>`,
       });
@@ -396,7 +410,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // POST ?action=change-password — caller changes their own password
   if (req.method === 'POST' && action === 'change-password') {
-    const { currentPassword, newPassword } = req.body ?? {};
+    const { currentPassword, newPassword, rememberMe } = req.body ?? {};
     if (!currentPassword || !newPassword)
       return res.status(400).json({ error: 'currentPassword and newPassword required' });
     if (String(newPassword).length < 8)
@@ -414,7 +428,10 @@ module.exports = wrap(async function handler(req, res) {
 
     const hash = await bcrypt.hash(String(newPassword), 12);
     await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${user.id}`;
-    return res.json({ ok: true });
+    // The new hash invalidates every session issued before it, this one
+    // included — hand back a replacement so the caller stays signed in.
+    const token = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, hash);
+    return res.json({ ok: true, token });
   }
 
   // POST ?action=request-email-change — caller asks to change their own login
@@ -453,9 +470,7 @@ module.exports = wrap(async function handler(req, res) {
       WHERE id = ${user.id}
     `;
 
-    const h      = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
-    const proto  = req.headers['x-forwarded-proto'] || (h.includes('localhost') ? 'http' : 'https');
-    const origin = process.env.APP_ORIGIN || `${proto}://${h}`;
+    const origin = appOrigin(req);
     // Fragment, not query — tokens must not land in server/CDN logs.
     const link   = `${origin}/confirm-email#token=${encodeURIComponent(rawToken)}&slug=${encodeURIComponent(slug)}`;
 

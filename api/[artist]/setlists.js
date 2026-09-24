@@ -1,6 +1,8 @@
 const { getDb, getSlug } = require('../_db');
 const { requireAuth, getAccess } = require('../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../_validate');
+const { ownsSongs, ownsGig } = require('../_ownership');
+const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { buildSetlistPdf, setlistTitle } = require('../_pdf');
 const { sendEmail } = require('../_email');
 const { wrap } = require('../_handler');
@@ -25,8 +27,8 @@ module.exports = wrap(async function handler(req, res) {
         v.name  AS gig_venue,
         COUNT(ss.song_id)::int AS song_count
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
-      LEFT JOIN venues v ON v.id = g.venue_id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
       WHERE s.artist_id = ${artist.id}
       GROUP BY s.id, g.title, g.date, v.name
@@ -72,8 +74,8 @@ module.exports = wrap(async function handler(req, res) {
         SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue,
                COUNT(ss.song_id)::int AS song_count
         FROM setlists s
-        LEFT JOIN gigs g ON s.gig_id = g.id
-        LEFT JOIN venues v ON v.id = g.venue_id
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
         LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
         WHERE s.id = ${copy.id}
         GROUP BY s.id, g.title, g.date, v.name
@@ -89,8 +91,8 @@ module.exports = wrap(async function handler(req, res) {
       const [setlist] = await sql`
         SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
         FROM setlists s
-        LEFT JOIN gigs g ON s.gig_id = g.id
-        LEFT JOIN venues v ON v.id = g.venue_id
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
         WHERE s.id = ${shareId} AND s.artist_id = ${band.id}
       `;
       if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
@@ -99,18 +101,22 @@ module.exports = wrap(async function handler(req, res) {
         SELECT songs.*, ss.position
         FROM setlist_songs ss
         JOIN songs ON ss.song_id = songs.id
-        WHERE ss.setlist_id = ${shareId}
+        WHERE ss.setlist_id = ${shareId} AND songs.artist_id = ${band.id}
         ORDER BY ss.position
       `;
 
       const email = validateEmail(req.body?.email);
       if (!email) return res.status(400).json({ error: 'Valid email required' });
+      // Mail to any address: capped per band and per IP so a session is not a relay.
+      if (await checkRateLimit(`share:${band.id}`, 30, 3600)
+          || await checkRateLimit(`share-ip:${clientIp(req)}`, 30, 3600))
+        return res.status(429).json({ error: 'Too many shares — try again later' });
 
       await logger.info('setlist_share', { setlistId: shareId, band: slug, to: email, songCount: songs.length });
 
       const pdf     = await buildSetlistPdf(setlist, songs, band.name);
       const title   = setlistTitle(setlist);
-      const subject = title ? `Setlist — ${title}` : `Setlist #${shareId}`;
+      const subject = title ? `Setlist — ${String(title).replace(/[\r\n]+/g, ' ')}` : `Setlist #${shareId}`;
 
       try {
         await sendEmail({
@@ -139,6 +145,10 @@ module.exports = wrap(async function handler(req, res) {
     const gigId = rawGigId != null ? Number(rawGigId) : null;
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
+    if (!await ownsSongs(sql, band.id, validIds))
+      return res.status(400).json({ error: 'Invalid song_ids' });
+    if (!await ownsGig(sql, band.id, gigId))
+      return res.status(400).json({ error: 'Invalid gig_id' });
 
     const [setlist] = await sql`
       INSERT INTO setlists (artist_id, title, gig_id, comment)
@@ -155,8 +165,8 @@ module.exports = wrap(async function handler(req, res) {
       SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue,
              COUNT(ss.song_id)::int AS song_count
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id
-      LEFT JOIN venues v ON v.id = g.venue_id
+      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
       LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
       WHERE s.id = ${setlist.id}
       GROUP BY s.id, g.title, g.date, v.name

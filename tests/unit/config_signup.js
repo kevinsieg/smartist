@@ -412,7 +412,7 @@ async function run(r) {
   function superAdminSql(email, onQuery) {
     return async function(strings, ...values) {
       const q = strings.join('?');
-      if (q.includes('SELECT email FROM users')) return email ? [{ email }] : [];
+      if (/SELECT email(, password_hash)? FROM users/.test(q)) return email ? [{ email }] : [];
       return (onQuery && onQuery(q, values)) || [];
     };
   }

@@ -45,23 +45,25 @@ async function run(r) {
 
   console.log(B('\ncanOpenStage — shared stage links'));
 
-  test('stage links work by default, since that is what they are for', () => {
-    assertEq(canOpenStage({ config: {} }), true);
-    assertEq(canOpenStage({}), true);
+  test('stage links are private by default — ids are enumerable', () => {
+    assertEq(canOpenStage({ config: {} }), false);
+    assertEq(canOpenStage({}), false);
+    assertEq(canOpenStage(null), false);
   });
 
-  test('publicStage: false turns shared links off', () => {
+  test('publicStage: true opens shared links', () => {
+    assertEq(canOpenStage({ config: { publicStage: true } }), true);
     assertEq(canOpenStage({ config: { publicStage: false } }), false);
   });
 
-  test('only the boolean false closes it', () => {
-    assertEq(canOpenStage({ config: { publicStage: 'false' } }), true);
-    assertEq(canOpenStage({ config: { publicStage: 0 } }), true);
+  test('only the boolean true opens it', () => {
+    assertEq(canOpenStage({ config: { publicStage: 'true' } }), false);
+    assertEq(canOpenStage({ config: { publicStage: 1 } }), false);
   });
 
   test('the two settings are independent', () => {
-    // A private catalogue with stage links still working is the default, and
-    // the whole point of splitting the old flag in two.
+    // Stage links without a public catalogue is the point of splitting the
+    // old flag in two.
     const band = { config: { publicStage: true } };
     assertEq(canBrowseCatalogue(band), false);
     assertEq(canOpenStage(band), true);
@@ -153,6 +155,7 @@ async function run(r) {
         verifyMagicToken: () => false,
         generateMagicToken: () => '',
         generateUserToken: () => '',
+        passwordMatches: () => true,
         TTL_8H: 28800000, TTL_30D: 2592000000,
       },
     };
@@ -255,6 +258,7 @@ async function run(r) {
         verifyMagicToken: () => false,
         generateMagicToken: () => '',
         generateUserToken: () => 'stub-session-token',
+        passwordMatches: () => true,
         TTL_8H: 28800000, TTL_30D: 2592000000,
       },
     };

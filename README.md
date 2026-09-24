@@ -95,18 +95,32 @@ psql $PROD_DATABASE_URL < scripts/schema.sql
 
 ### Environment variables
 
-Set these in the Vercel dashboard (Settings → Environment Variables).
+Set these in the Vercel dashboard (Settings → Environment Variables). `.env.example` documents every one of them.
+
+**Tenancy.** With `ARTIST_SLUG` set, a deployment serves that one band (its URLs, login page and config all resolve to it). Leave it unset for a multi-tenant deployment: anyone can sign up at `/signup`, and each band lives at `/<slug>/…`.
 
 **Shared across all environments** — check "All Environments":
 
 
 | Variable         | Value                                                                                |
 | ---------------- | ------------------------------------------------------------------------------------ |
-| `ARTIST_SLUG`    | Your artist's slug (e.g. `myband`)                                                   |
+| `APP_SECRET`     | **Required.** HMAC key for session tokens — `openssl rand -hex 32`, a different value per deployment. Without it every API route returns 500. |
+| `ARTIST_SLUG`    | Your artist's slug (e.g. `myband`) — omit for a multi-tenant deployment              |
 | `R2_ACCOUNT_ID`  | Cloudflare account ID (found on R2 overview page, right sidebar — not the API token) |
 | `RESEND_API_KEY` | Resend API key                                                                       |
 | `RESEND_FROM`    | Sender address                                                                       |
 | `GEMINI_API_KEY` | Google AI Studio key                                                                 |
+
+**Optional:**
+
+| Variable                                     | Effect |
+| -------------------------------------------- | ------ |
+| `CONTACT_EMAIL`                              | Where contact-form messages go (default `hi@smartist.studio`) |
+| `SUPER_ADMIN_EMAILS`                         | Comma-separated logins allowed into `/admin` (each needs a `users` row) |
+| `DEMO_ARTIST_SLUG`                           | Band the public `/demo` gate opens (default `demo`); demo visitors get a **member** session |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`  | Enables "Sign in with Google" — see `docs/oauth-setup.md` |
+| `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`    | Enables Facebook sign-in (new accounts only) |
+| `FACEBOOK_TRUST_EMAIL=true`                  | Also let Facebook sign into *existing* accounts by email. Facebook does not say whether an address is verified — read `docs/oauth-setup.md` first |
 
 
 **Per-environment** — add two entries for each (one scoped to Production, one to Preview + Development):
@@ -116,6 +130,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables).
 | ---------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
 | `DATABASE_URL`         | Production Neon connection string                            | Dev Neon connection string                     |
 | `APP_ORIGIN`           | `https://yourdomain.com`                                     | Preview URL (`<project>-git-dev-*.vercel.app`) |
+|                        | *Set it:* links in password-reset, invite and sign-up emails are built from it (fallback: the request's `Host`) | |
 | `ARTIST_ADMIN_EMAIL`   | `you@yourdomain.com`                                         | `you+dev@yourdomain.com`                       |
 | `R2_BUCKET_NAME`       | Production bucket name                                       | Dev bucket name                                |
 | `R2_ACCESS_KEY_ID`     | Prod R2 Access Key ID                                        | Dev R2 Access Key ID                           |
@@ -194,7 +209,11 @@ Vercel will deploy the Preview environment. Copy the stable preview URL (`smarti
 
 ### 6. Run locally
 
+Needs Node 20+ and the Vercel CLI (`npm i -g vercel`).
+
 ```bash
+npm ci                       # API dependencies (the only install; tests/ has none of its own)
+node tests/unit.js           # unit tests — no database needed
 vercel env pull .env.local   # pulls Preview vars — copy values into .env (vercel dev reads .env, not .env.local)
 vercel dev                   # starts local server on port 3000
 ```

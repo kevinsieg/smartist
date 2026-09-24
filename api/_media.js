@@ -3,6 +3,7 @@ const { getDb, insertAuditLog, getSlug } = require('./_db');
 const { requireAuth } = require('./_auth');
 const { wrap } = require('./_handler');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
+const { isOwnMediaUrl } = require('./_ownership');
 const { wouldExceedStorage, storageLimitBytes } = require('./_plans');
 
 // Shared handler factory for the three R2-backed media endpoints (audio, sheet, playback).
@@ -46,12 +47,13 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
           return res.status(400).json({ error: 'Only PDF files are allowed' });
       }
 
-      if (!size || Number(size) > maxBytes)
+      if (!Number.isInteger(Number(size)) || Number(size) <= 0 || Number(size) > maxBytes)
         return res.status(400).json({ error: `size required, max ${maxMB} MB` });
 
       const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
-      const key = `${keyPrefix}${crypto.randomUUID()}-${safeName}`;
-      return res.json(await createPresignedUrl(key, allowedExts ? contentType : 'application/pdf'));
+      // The band id in the key is what the confirm step below checks.
+      const key = `${keyPrefix}${band.id}/${crypto.randomUUID()}-${safeName}`;
+      return res.json(await createPresignedUrl(key, allowedExts ? contentType : 'application/pdf', Number(size)));
     }
 
     // ── PUT: confirm upload — save URL to DB, delete previous file ─────────
@@ -61,7 +63,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
         return res.status(400).json({ error: 'publicUrl required' });
 
       const base = process.env.R2_PUBLIC_URL;
-      if (!base || !publicUrl.startsWith(`${base}/${keyPrefix}`))
+      if (!base || !publicUrl.startsWith(`${base}/${keyPrefix}${band.id}/`))
         return res.status(400).json({ error: 'Invalid publicUrl' });
 
       const [song] = await sql`
@@ -110,7 +112,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       // Delete first: whether the old object really went away decides the net
       // change, so the counter settles in one round-trip instead of a +n then −m
       // pair (which also left it briefly overstated).
-      const removed  = isReplacement ? await deleteFromR2(previousUrl) : false;
+      const removed  = (isReplacement && isOwnMediaUrl(previousUrl, band.id, keyFromUrl)) ? await deleteFromR2(previousUrl) : false;
       const freed    = (removed && prevHead) ? prevHead.size : 0;
       const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
 
@@ -140,7 +142,7 @@ function makeMediaFn({ keyPrefix, extraKey, maxBytes, actionPrefix, allowedExts,
       const url = song.extra?.[extraKey];
       if (url) {
         const delHead = await verifyUpload(keyFromUrl(url));
-        const removed = await deleteFromR2(url);
+        const removed = isOwnMediaUrl(url, band.id, keyFromUrl) ? await deleteFromR2(url) : false;
         if (removed && delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
         await insertAuditLog(sql, band.id, songId, `${actionPrefix}_delete`, {
           filename:  filenameFromUrl(url),
