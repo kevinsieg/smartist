@@ -19,6 +19,7 @@ Go to **Settings → Secrets and variables → Actions → New repository secret
 | `VERCEL_ORG_ID` | From `.vercel/project.json` |
 | `VERCEL_PROJECT_ID` | From `.vercel/project.json` |
 | `ARTIST_PASSWORD` | Dev artist password (same as local `ARTIST_PASSWORD`) |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | Vercel project → Settings → Deployment Protection → **Protection Bypass for Automation**. Preview deployments are protected, so without it every request gets Vercel's own 401; the integration job skips itself (with a warning) when this secret is missing. |
 
 Go to **Settings → Secrets and variables → Variables → New repository variable**:
 

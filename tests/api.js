@@ -40,6 +40,13 @@ const R2_BASE  = process.env.R2_PUBLIC_URL;
 const TOKEN = PASSWORD || null;
 const AUTH  = { token: TOKEN };
 
+// Vercel Deployment Protection answers every request to a protected preview
+// with its own 401 before the app sees it. Its "Protection Bypass for
+// Automation" secret, sent as this header, lets the suite through.
+const BYPASS = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+  ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET }
+  : {};
+
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G  = s => `\x1b[32m${s}\x1b[0m`;
 const R  = s => `\x1b[31m${s}\x1b[0m`;
@@ -82,7 +89,7 @@ function assertStatus(res, json, expected) {
 
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
 async function req(method, path, { body, token } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', ...BYPASS };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -180,7 +187,7 @@ async function testPrivacy(slug, config) {
   ];
   for (const [label, url, want] of cases) {
     await test(`${label} without token → ${want}`, async () => {
-      const res = await fetch(`${BASE_URL}${url}`);
+      const res = await fetch(`${BASE_URL}${url}`, { headers: BYPASS });
       assert(res.status === want, `Expected ${want}, got ${res.status}`);
     });
   }
@@ -444,7 +451,7 @@ async function testGigs(slug) {
 
   await test('GET ?format=ics returns iCalendar → 200', async () => {
     const res = await fetch(`${BASE_URL}/api/${slug}/gigs?format=ics`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } });
+      { headers: { ...BYPASS, Authorization: `Bearer ${TOKEN}` } });
     assert(res.status === 200, `Expected 200, got ${res.status}`);
     const ct = res.headers.get('content-type') || '';
     assert(ct.includes('text/calendar'), `expected text/calendar, got: ${ct}`);
@@ -1301,7 +1308,7 @@ async function testWrite(slug, token, firstSong, config) {
   // Export
   await test('GET /export returns a ZIP of CSV tables', async () => {
     const res = await fetch(`${BASE_URL}/api/${slug}/export`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { ...BYPASS, 'Authorization': `Bearer ${token}` },
     });
     assert(res.status === 200, `Expected 200, got ${res.status}`);
     const cd = res.headers.get('content-disposition') || '';
