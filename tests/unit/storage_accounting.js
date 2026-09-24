@@ -12,9 +12,9 @@ stubLogger();
 
 const SECRET  = 'storage-accounting-secret-32-bytes!';
 const BASE    = 'https://cdn.example.test';
-const NEW_URL = `${BASE}/audio/new.mp3`;
-const OLD_URL = `${BASE}/audio/old.mp3`;
-const SIZES   = { 'audio/new.mp3': 100, 'audio/old.mp3': 40 };
+const NEW_URL = `${BASE}/audio/1/new.mp3`;
+const OLD_URL = `${BASE}/audio/1/old.mp3`;
+const SIZES   = { 'audio/1/new.mp3': 100, 'audio/1/old.mp3': 40 };
 
 // Pro plan: unlimited storage, so the cap never interferes with these tests.
 const ARTIST = { id: 1, slug: 'testband', name: 'Test Band', config: { plan: 'pro' }, storage_used_bytes: 1000 };

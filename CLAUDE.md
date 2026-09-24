@@ -102,7 +102,8 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `_media.js` | `makeMediaFn(config)` for use inside catch-alls; `makeMediaHandler` for standalone files |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
-| `_token.js` | `generateMagicToken(hash)`, `verifyMagicToken(token, hash)` — 30-min HMAC |
+| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint: changing a password revokes older sessions (`passwordMatches`). |
+| `_ownership.js` | `ownsSongs/ownsGig/ownsVenue/ownsOrganizer` — **every foreign id from a request body must pass one** (ids are one sequence across tenants); `isOwnMediaUrl` gates R2 deletes |
 
 ---
 
@@ -166,13 +167,15 @@ Songs use a `deleted` flag (soft-delete). `songs.extra` JSONB holds arbitrary pe
 | Config key | Default | Opens |
 |---|---|---|
 | `publicCatalogue` | off | `canBrowseCatalogue()` — the songs list and detail, gig list and detail, and a song's gig appearances. The config payload also ships songs only when this is on. |
-| `publicStage` | **on** | `canOpenStage()` — one setlist by id, one song by id, and that song's arrangements: exactly what a shared `/stage?id=N` link reads. |
+| `publicStage` | off | `canOpenStage()` — one setlist by id, one song by id, and that song's arrangements: exactly what a shared `/stage?id=N` link reads. |
 
-Both compare by identity (`=== true` / `=== false`) because `config` is JSONB and a string `"true"` must not pass for the boolean.
+Both compare by identity (`=== true`) because `config` is JSONB and a string `"true"` must not pass for the boolean.
 
 **Everything else needs a session, with no setting involved:** venues (rows carry `contact_name`, `phone`, `generic_email` — this is why the old single flag was wrong), organizers, the setlists *list*, song logs and GEMA. Individual setlists are reachable for stage; the list is not, so nothing can be enumerated.
 
-A stage link carries no token, so `publicStage` is the only thing in front of it. The `share_token` sketched in `scripts/schema.sql` would replace that with per-link access.
+A stage link carries no token and ids are sequential, so with `publicStage` on anyone can walk that band's songs and setlists by id — that is why it is off by default. Anonymous stage responses drop song `comment`s. The `share_token` sketched in `scripts/schema.sql` would replace this with per-link access.
+
+**Song `extra.*Url` values** must be http(s); a URL into our bucket is only accepted when it is the one already stored (uploads go through presign → confirm). New media keys are `audio|sheets|playback/<artist id>/<uuid>-<name>`, and confirm checks that prefix.
 
 Venues and organizers are CRM-style reference tables linked to gigs via `venue_id`/`organizer_id` (FK `ON DELETE RESTRICT`). Both support soft-delete (`deleted` flag).
 

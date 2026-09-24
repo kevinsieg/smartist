@@ -141,12 +141,12 @@ function openPlayer(sid) {
   const content  = document.getElementById('player-content');
 
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(url)}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
-    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}"
+    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}"
       allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
-    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
+    content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }
 
   // Reset delete confirm state
@@ -245,11 +245,11 @@ async function handleReplaceFile(input) {
     const embedUrl = toEmbedUrl(publicUrl);
     const content = document.getElementById('player-content');
     if (isAudio) {
-      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     } else if (embedUrl) {
-      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
     } else {
-      content.innerHTML = `<p class="player-link"><a href="${escHtml(publicUrl)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
+      content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(publicUrl))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
     }
     apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlayerHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.audioReplaced'));
@@ -333,9 +333,9 @@ function openSheet(sid) {
 
   currentSheetSid = sid;
   document.getElementById('sheet-title').textContent = `≡ ${title}`;
-  document.getElementById('sheet-open-link').href = url;
+  document.getElementById('sheet-open-link').href = safeUrl(url);
   document.getElementById('sheet-content').innerHTML =
-    `<div class="sheet-embed"><iframe src="${escHtml(url)}" title="Sheet"></iframe></div>`;
+    `<div class="sheet-embed"><iframe src="${escHtml(safeUrl(url))}" title="Sheet"></iframe></div>`;
 
   document.getElementById('sheet-delete-confirm').style.display = 'none';
   if (getToken()) document.getElementById('sheet-delete-btn').style.display = '';
@@ -426,7 +426,7 @@ async function handleReplaceSheet(input) {
     if (song) song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .sheet-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
-    document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(publicUrl)}" title="Sheet"></iframe></div>`;
+    document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(safeUrl(publicUrl))}" title="Sheet"></iframe></div>`;
     apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.sheetReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
@@ -520,11 +520,11 @@ function openPlayback(sid) {
   const embedUrl = toEmbedUrl(url);
   const content  = document.getElementById('playback-content');
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(url)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
-    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(embedUrl)}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
-    content.innerHTML = `<p class="player-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
+    content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }
 
   document.getElementById('playback-delete-confirm').style.display = 'none';
@@ -617,7 +617,7 @@ async function handleReplacePlayback(input) {
     const td = document.querySelector(`#row-${sid} .playback-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('playback-content').innerHTML =
-      `<div class="audio-speed-wrap"><audio controls src="${escHtml(publicUrl)}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.playbackReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
