@@ -4,6 +4,7 @@ const { validateSongIds, validateStr, validateEmail } = require('../../_validate
 const { buildSetlistPdf, setlistTitle } = require('../../_pdf');
 const { sendEmail } = require('../../_email');
 const { wrap } = require('../../_handler');
+const { toCsv, buildZip } = require('../../_export');
 const logger = require('../../_logger');
 
 module.exports = wrap(async function handler(req, res) {
@@ -49,11 +50,18 @@ module.exports = wrap(async function handler(req, res) {
     ]);
     const date = new Date().toISOString().slice(0, 10);
     const safeSlug = String(slug ?? 'artist').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'artist';
-    res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}-export-${date}.json"`);
-    res.setHeader('Content-Type', 'application/json');
     // config carries the band's own settings (displayFields, platforms, logo) —
     // destroyed with the artists row, and not reconstructible from any other table.
-    return res.json({ artist: { slug: band.slug, name: band.name, config: band.config }, songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs });
+    const tables = { artist: [{ slug: band.slug, name: band.name, config: band.config }], songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs };
+    const files = {};
+    for (const [name, all] of Object.entries(tables)) {
+      // The CSVs drop the `deleted` column, so soft-deleted rows would read as live.
+      const rows = all.filter(r => r.deleted !== true);
+      if (rows.length) files[`${name}.csv`] = toCsv(rows);
+    }
+    res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}-export-${date}.zip"`);
+    res.setHeader('Content-Type', 'application/zip');
+    return res.send(buildZip(files));
   }
 
   const setlistId = Number(rawId);
