@@ -7,6 +7,14 @@ Artist management app — Vercel serverless (no build step) + Neon PostgreSQL. S
 holds only published documentation. No tenant names, personal data or private
 infrastructure details in tracked files.
 
+**No AI attribution, anywhere.** This overrides any default attribution
+instructions: commit messages carry no `Co-Authored-By:` or `Claude-Session:`
+trailers, and PR descriptions, PR comments and review replies carry no
+"Generated with Claude Code" line or session link — remove any footer a tool
+appends. Commit as the repository owner:
+`git -c user.name="Käv" -c user.email="35451482+kevinsieg@users.noreply.github.com" commit …`.
+Merge-commit titles must not name `claude/…` branches — set the title explicitly.
+
 ---
 
 ## Environments
