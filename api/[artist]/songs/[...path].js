@@ -435,14 +435,16 @@ module.exports = wrap(async function handler(req, res) {
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
     const sql = getDb();
-    const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
+    const [[song], arrangements] = await Promise.all([
+      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
+      sql`
+        SELECT id, name, is_active, hidden_instruments, rows, created_at, updated_at
+        FROM song_arrangements
+        WHERE song_id = ${songId} AND artist_id = ${band.id}
+        ORDER BY created_at ASC
+      `,
+    ]);
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    const arrangements = await sql`
-      SELECT id, name, is_active, hidden_instruments, rows, created_at, updated_at
-      FROM song_arrangements
-      WHERE song_id = ${songId} AND artist_id = ${band.id}
-      ORDER BY created_at ASC
-    `;
     return res.json(arrangements);
   }
 
@@ -451,15 +453,19 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const sql = getDb();
-    const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
-    if (!song) return res.status(404).json({ error: 'Song not found' });
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
+    const [[song], [src]] = await Promise.all([
+      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
+      copy_from
+        ? sql`SELECT rows, hidden_instruments FROM song_arrangements WHERE id = ${Number(copy_from)} AND song_id = ${songId} AND artist_id = ${band.id}`
+        : [],
+    ]);
+    if (!song) return res.status(404).json({ error: 'Song not found' });
     const rawName = req.body?.name;
     const name = rawName === undefined ? 'Default' : (validateStr(rawName, 200) || 'Default');
     let sourceRows = rows;
     let sourceHidden = hidden_instruments;
     if (copy_from) {
-      const [src] = await sql`SELECT rows, hidden_instruments FROM song_arrangements WHERE id = ${Number(copy_from)} AND song_id = ${songId} AND artist_id = ${band.id}`;
       if (!src) return res.status(400).json({ error: 'copy_from arrangement not found' });
       sourceRows = src.rows;
       sourceHidden = src.hidden_instruments;
@@ -539,23 +545,25 @@ module.exports = wrap(async function handler(req, res) {
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
     const sql = getDb();
-    const [song] = await sql`
-      SELECT s.*,
-        g.iswc, g.gema_work_number, g.language AS gema_language
-      FROM songs s
-      LEFT JOIN LATERAL (
-        SELECT iswc, gema_work_number, language
-        FROM gema_works WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
-      ) g ON true
-      WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
-    `;
+    const [[song], arrangements] = await Promise.all([
+      sql`
+        SELECT s.*,
+          g.iswc, g.gema_work_number, g.language AS gema_language
+        FROM songs s
+        LEFT JOIN LATERAL (
+          SELECT iswc, gema_work_number, language
+          FROM gema_works WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
+        ) g ON true
+        WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
+      `,
+      sql`
+        SELECT id, name, is_active, updated_at
+        FROM song_arrangements
+        WHERE song_id = ${songId} AND artist_id = ${band.id}
+        ORDER BY created_at ASC
+      `,
+    ]);
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    const arrangements = await sql`
-      SELECT id, name, is_active, updated_at
-      FROM song_arrangements
-      WHERE song_id = ${songId} AND artist_id = ${band.id}
-      ORDER BY created_at ASC
-    `;
     // A visitor without a session never sees the band's private notes.
     if (!user) delete song.comment;
     return res.json({ ...song, arrangements });
@@ -576,8 +584,10 @@ module.exports = wrap(async function handler(req, res) {
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
-    await sql`DELETE FROM song_arrangements WHERE song_id = ${songId} AND artist_id = ${band.id}`;
-    await insertAuditLog(sql, band.id, songId, 'delete', song);
+    await Promise.all([
+      sql`DELETE FROM song_arrangements WHERE song_id = ${songId} AND artist_id = ${band.id}`,
+      insertAuditLog(sql, band.id, songId, 'delete', song),
+    ]);
     return res.status(204).end();
   }
 
@@ -589,18 +599,18 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
 
     const sql = getDb();
-    const [log] = await sql`
-      SELECT * FROM song_logs
-      WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete'
-      ORDER BY changed_at DESC
-      LIMIT 1
-    `;
+    const [[log], [existing]] = await Promise.all([
+      sql`
+        SELECT * FROM song_logs
+        WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete'
+        ORDER BY changed_at DESC
+        LIMIT 1
+      `,
+      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = true`,
+    ]);
     if (!log) return res.status(404).json({ error: 'No delete record found for this song' });
 
     let song;
-    const [existing] = await sql`
-      SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = true
-    `;
     if (existing) {
       [song] = await sql`
         UPDATE songs SET deleted = false
@@ -660,21 +670,20 @@ module.exports = wrap(async function handler(req, res) {
       return res.status(401).json({ error: 'Sign in to view this' });
 
     const sql = getDb();
-    const works = await sql`
-      SELECT * FROM gema_works
-      WHERE artist_id = ${band.id} AND song_id = ${songId}
-      ORDER BY gema_work_number
-    `;
-    if (!works.length) return res.json({ works: [], rightholders: [] });
-
-    const workIds = works.map(w => w.id);
-    const rightholders = await sql`
-      SELECT r.*, g.gema_work_number
-      FROM gema_rightholders r
-      JOIN gema_works g ON g.id = r.gema_work_id
-      WHERE r.gema_work_id = ANY(${workIds})
-      ORDER BY g.gema_work_number, r.role, r.role_order NULLS LAST, r.name
-    `;
+    const [works, rightholders] = await Promise.all([
+      sql`
+        SELECT * FROM gema_works
+        WHERE artist_id = ${band.id} AND song_id = ${songId}
+        ORDER BY gema_work_number
+      `,
+      sql`
+        SELECT r.*, g.gema_work_number
+        FROM gema_rightholders r
+        JOIN gema_works g ON g.id = r.gema_work_id
+        WHERE g.artist_id = ${band.id} AND g.song_id = ${songId}
+        ORDER BY g.gema_work_number, r.role, r.role_order NULLS LAST, r.name
+      `,
+    ]);
     return res.json({ works, rightholders });
   }
 

@@ -44,17 +44,33 @@ async function checkCredentials(token, artist) {
 // email-linked users rows, so a token issued for one workspace never grants
 // access to a workspace the user does not belong to. Role comes from the DB
 // row (per-workspace, revocable), not from the token.
-async function resolveUser(token, artist, req = null) {
-  const claim = verifyUserToken(token);
+//
+// The membership row is looked up by slug, not artist id, so it can run in
+// parallel with getArtist (see loadArtistAndMember) — one round trip, not two.
+async function findMember(userId, slug) {
+  const sql = getDb();
+  const [member] = await sql`
+    SELECT u2.id, u2.role, u1.password_hash
+    FROM users u1
+    JOIN users u2 ON u2.email = u1.email
+    JOIN artists a ON a.id = u2.artist_id
+    WHERE u1.id = ${userId} AND a.slug = ${slug}
+    LIMIT 1
+  `;
+  return member ?? null;
+}
+
+async function loadArtistAndMember(token, slug) {
+  const claim = token ? verifyUserToken(token) : null;
+  const [artist, member] = await Promise.all([
+    getArtist(slug),
+    claim ? findMember(claim.userId, slug) : null,
+  ]);
+  return { artist, claim, member };
+}
+
+async function resolveUser(token, artist, req, claim, member) {
   if (claim) {
-    const sql = getDb();
-    const [member] = await sql`
-      SELECT u2.id, u2.role, u1.password_hash
-      FROM users u1
-      JOIN users u2 ON u2.email = u1.email
-      WHERE u1.id = ${claim.userId} AND u2.artist_id = ${artist.id}
-      LIMIT 1
-    `;
     if (!member || !passwordMatches(claim, member)) return null;
     return { id: member.id, role: member.role };
   }
@@ -81,10 +97,10 @@ async function requireAuth(req, res, slug, minRole = null) {
   const token = bearerToken(req);
   if (!token) { res.status(401).json({ error: 'Unauthorized' }); return null; }
 
-  const artist = await getArtist(slug);
+  const { artist, claim, member } = await loadArtistAndMember(token, slug);
   if (!artist) { res.status(404).json({ error: 'Artist not found' }); return null; }
 
-  const user = await resolveUser(token, artist, req);
+  const user = await resolveUser(token, artist, req, claim, member);
   if (!user) { res.status(401).json({ error: 'Unauthorized' }); return null; }
   req.user = user;
 
@@ -106,10 +122,10 @@ function requireRole(req, res, minRole) {
 // artist. Never writes to the response — for GET handlers that downgrade
 // to public view mode instead of rejecting.
 async function getAccess(req, slug) {
-  const artist = await getArtist(slug);
-  if (!artist) return { artist: null, user: null };
   const token = bearerToken(req);
-  const user = token ? await resolveUser(token, artist, req) : null;
+  const { artist, claim, member } = await loadArtistAndMember(token, slug);
+  if (!artist) return { artist: null, user: null };
+  const user = token ? await resolveUser(token, artist, req, claim, member) : null;
   return { artist, user };
 }
 

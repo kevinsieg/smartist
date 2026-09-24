@@ -373,11 +373,12 @@ function arrTechKeydown(e, instIdx) {
   renderArrInstruments(cfg.instruments);
 }
 
-async function saveArrangementConfig() {
+async function saveArrangementConfig(btn) {
   var cfg = _arrCfg();
   var msg = document.getElementById('arr-save-msg');
   msg.textContent = t('settings.saving'); msg.className = 'arr-save-msg';
-  var ok = await patchConfig({ arrangementConfig: cfg });
+  var ok = await withBusy(btn, () => patchConfig({ arrangementConfig: cfg }));
+  if (ok === undefined) return;
   if (ok) {
     if (!_profileCfg.config) _profileCfg.config = {};
     _profileCfg.config.arrangementConfig = cfg;
@@ -683,7 +684,7 @@ function openDisplayFieldsEditor() {
       '<button class="btn" onclick="addCustomDisplayField()">' + t('songs.add') + '</button>' +
     '</div>' +
     '<div class="config-editor-actions">' +
-      '<button class="btn active" onclick="saveDisplayFields()">' + t('songs.save') + '</button>' +
+      '<button class="btn active" onclick="saveDisplayFields(this)">' + t('songs.save') + '</button>' +
       '<button class="btn" onclick="closeDisplayFieldsEditor()">' + t('songs.cancel') + '</button>' +
     '</div>' +
     '<div class="save-msg" id="df-msg"></div>';
@@ -739,7 +740,7 @@ function closeDisplayFieldsEditor() {
   document.getElementById('display-fields-editor').style.display = 'none';
 }
 
-async function saveDisplayFields() {
+async function saveDisplayFields(btn) {
   var fields = [];
   STANDARD_FIELDS.forEach(function (f) {
     var cb = document.getElementById('df-' + f.field);
@@ -756,7 +757,8 @@ async function saveDisplayFields() {
 
   var msg = document.getElementById('df-msg');
   msg.textContent = t('settings.saving'); msg.className = 'save-msg';
-  var ok = await patchConfig({ displayFields: fields });
+  var ok = await withBusy(btn, () => patchConfig({ displayFields: fields }));
+  if (ok === undefined) return;
   if (ok) {
     if (_profileCfg) _profileCfg.config.displayFields = fields;
     renderFieldTags('display-fields', fields);
@@ -792,7 +794,7 @@ function openFilterFieldsEditor() {
   document.getElementById('filter-fields-editor').innerHTML =
     rows +
     '<div class="config-editor-actions">' +
-      '<button class="btn active" onclick="saveFilterFields()">' + t('songs.save') + '</button>' +
+      '<button class="btn active" onclick="saveFilterFields(this)">' + t('songs.save') + '</button>' +
       '<button class="btn" onclick="closeFilterFieldsEditor()">' + t('songs.cancel') + '</button>' +
     '</div>' +
     '<div class="save-msg" id="ff-msg"></div>';
@@ -803,7 +805,7 @@ function closeFilterFieldsEditor() {
   document.getElementById('filter-fields-editor').style.display = 'none';
 }
 
-async function saveFilterFields() {
+async function saveFilterFields(btn) {
   var fields = [];
   document.getElementById('filter-fields-editor').querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
     if (cb.checked) fields.push({ field: cb.value, label: cb.dataset.label });
@@ -811,7 +813,8 @@ async function saveFilterFields() {
 
   var msg = document.getElementById('ff-msg');
   msg.textContent = t('settings.saving'); msg.className = 'save-msg';
-  var ok = await patchConfig({ filterFields: fields });
+  var ok = await withBusy(btn, () => patchConfig({ filterFields: fields }));
+  if (ok === undefined) return;
   if (ok) {
     if (_profileCfg) _profileCfg.config.filterFields = fields;
     renderFieldTags('filter-fields', fields);

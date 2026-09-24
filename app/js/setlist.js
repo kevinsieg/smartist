@@ -747,11 +747,12 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
   if (!name) return;
   const date  = document.getElementById('gig-date').value || null;
   const token = getToken();
-  const r = await fetch(`/api/${artistSlug}/gigs`, {
+  const r = await withBusy(document.getElementById('create-gig-btn'), () => fetch(`/api/${artistSlug}/gigs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ title: name, date }),
-  });
+  }));
+  if (!r) return;
   if (r.ok) {
     const gig = await r.json();
     const sel = document.getElementById('gig-select');
@@ -787,11 +788,12 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     return;
   }
 
-  const r = await fetch(`/api/${artistSlug}/setlists`, {
+  const r = await withBusy(document.getElementById('save-btn'), () => fetch(`/api/${artistSlug}/setlists`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ title: title || null, gig_id: gigId ? Number(gigId) : null, comment, song_ids: songIds }),
-  });
+  }));
+  if (!r) return;
 
   if (r.status === 401) {
     clearToken();
