@@ -2,7 +2,7 @@ var artistSlug = '';
 
 initPage(async function(cfg) {
   artistSlug = cfg.slug;
-  document.title = cfg.name || 'Dashboard';
+  document.title = 'smartist · Dashboard' + (cfg.name ? ' · ' + cfg.name : '');
   renderDashboard(cfg);
 });
 
