@@ -35,7 +35,7 @@ openssl rand -hex 32
 |---|---|
 | `APP_SECRET` | 32 random bytes as hex. Not a passphrase — it is an HMAC key, never typed by a human. |
 
-This signs the user session tokens (`{userId, role, exp}`) that every authenticated request carries. `api/_token.js` **throws at module load when it is missing**, and `api/_auth.js` requires that module, so without it every serverless function crashes on cold start and the whole API returns 500 — including `/api/config`, so the app will not even render. A deployment that is missing only this variable looks completely dead.
+This signs the user session tokens (`{userId, role, exp, pwv}` — `pwv` is a password fingerprint, so a password change ends older sessions) that every authenticated request carries. `api/_token.js` **throws at module load when it is missing**, and `api/_auth.js` requires that module, so without it every serverless function crashes on cold start and the whole API returns 500 — including `/api/config`, so the app will not even render. A deployment that is missing only this variable looks completely dead.
 
 Give each project its own value. Tokens are only ever verified by the deployment that issued them, so separate keys mean a leak in one workspace cannot forge sessions in another. Set it for **all environments**. Treat it as permanent: changing it invalidates every active session on that deployment.
 
@@ -76,13 +76,13 @@ After connecting, update `R2_PUBLIC_URL` in Vercel (Production environment) to `
   {
     "AllowedOrigins": ["https://your-artist-domain.com", "http://localhost:3000"],
     "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-    "AllowedHeaders": ["*"],
+    "AllowedHeaders": ["Content-Type", "Authorization", "X-Amz-Content-Sha256", "X-Amz-Date", "X-Amz-Security-Token"],
     "MaxAgeSeconds": 3600
   }
 ]
 ```
 
-List only the origins that use this bucket. Each bucket gets its own CORS policy — do not include domains from other artists' buckets.
+R2 ignores `"*"` in `AllowedHeaders`, so list the header names. List only the origins that use this bucket. Each bucket gets its own CORS policy — do not include domains from other artists' buckets.
 
 ### Resend (transactional email) — required
 
@@ -92,7 +92,7 @@ List only the origins that use this bucket. Each bucket gets its own CORS policy
 |---|---|
 | `RESEND_API_KEY` | `re_...` |
 | `RESEND_FROM` | Verified sender address, e.g. `noreply@band.example.com` |
-| `CONTACT_EMAIL` | Where contact form submissions go (defaults to `ARTIST_ADMIN_EMAIL`) |
+| `CONTACT_EMAIL` | Where contact form submissions go (defaults to `hi@smartist.studio`) |
 
 Set as "All Environments" in Vercel.
 
@@ -155,6 +155,14 @@ The wizard will:
 5. Write the `artists` row
 
 The slug must match `ARTIST_SLUG` in the Vercel env vars exactly.
+
+Then create the first real account. The wizard's band password is a legacy
+shared login with no `users` row, so it cannot invite anyone or change its
+password from `/profile`:
+
+```bash
+DATABASE_URL=<neon-main-url> node scripts/create_user.js --artist myband --email you@example.com
+```
 
 Repeat for the dev branch:
 
@@ -385,6 +393,7 @@ change) need the tenant's sending domain verified in Resend first.
 **Database**
 - [ ] Neon DB exists — `main` and `dev` branches — schema applied to both
 - [ ] Artist row created in both DBs — slug matches `ARTIST_SLUG` exactly — password 6+ chars
+- [ ] First account created with `scripts/create_user.js` (admin)
 
 **File storage (R2)**
 - [ ] R2 bucket created, public access enabled, API token generated
@@ -408,6 +417,8 @@ change) need the tenant's sending domain verified in Resend first.
 
 **Verification**
 - [ ] At least one successful production deploy — Vercel shows green
-- [ ] Login works at the custom domain with the password set during `setup.js`
+- [ ] Login works at the custom domain with the account from `create_user.js`
+- [ ] `curl …/api/config` returns 200 (see Step 6)
+- [ ] Settings → public catalogue / public stage links set as the band wants (both off by default)
 - [ ] File uploads work and files are served from `R2_PUBLIC_URL`
 - [ ] (When ready) Resend domain verified — SPF, DKIM, DMARC all green in Resend dashboard

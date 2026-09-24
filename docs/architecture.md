@@ -34,7 +34,11 @@ rewrites.
   - Admins cannot edit a member's email.
   - Changing your own email sends a link to the *new* address, and nothing
     changes until it is confirmed.
-  - Google sign-in requires `verified_email === true`.
+  - Google sign-in requires `verified_email === true`. Facebook reports no
+    such flag, so it may only sign into an existing account when the
+    deployment sets `FACEBOOK_TRUST_EMAIL=true`.
+  - OAuth `state` is bound to an `oauth_nonce` cookie set when the flow
+    starts, so a callback URL cannot be replayed in someone else's browser.
   - Emails are stored lowercased, enforced by a database CHECK.
 - **Roles:**
   - `admin`: everything, including members.
@@ -43,11 +47,32 @@ rewrites.
 
   They are enforced in the API with `requireRole`. The client only hides what
   the role cannot use (`.admin-only`, `.auth-only`).
+- **Sessions end when the password changes.** A session token carries a
+  fingerprint of the password hash it was issued against; changing or resetting
+  the password makes every earlier session stop verifying.
+- **Email links are single-purpose.** Magic tokens are signed for `login`,
+  `reset` or `demo`, and one cannot be redeemed as another. The public demo
+  gate hands out a `demo` token, which is a *member* session: no settings,
+  invites or uploads.
 - **Signup** creates a new workspace. **Invites** add a person to an existing
   one. `scripts/create_user.js` creates the first account for a band that has
   none.
 - **A workspace is private by default.** Anonymous access is opt-in per surface
-  (`publicCatalogue`, `publicStage`); see `CLAUDE.md`.
+  (`publicCatalogue`, `publicStage`, both off); see `CLAUDE.md`.
+
+---
+
+## Tenant isolation
+
+All bands share one database, and row ids are one sequence across all of them.
+So an id is never proof of ownership:
+
+- Every query is scoped by `artist_id`, including the joins.
+- Every foreign id that arrives in a request body — `song_ids`, `gig_id`,
+  `venue_id`, `organizer_id` — is checked against the caller's band
+  (`api/_ownership.js`) before anything is written.
+- Links stored in a song's `extra` (`*Url`) must be http(s), and a link into our
+  bucket is accepted only if the upload flow put it there.
 
 ---
 
@@ -67,10 +92,12 @@ half-deleted. A confirmation link is emailed, and opening it only *shows* what
 would be deleted; a separate click deletes. That way mail scanners and the Back
 button cannot delete anything.
 
-Song media keys are **not scoped by workspace**: `audio/<uuid>-name` is one flat
-namespace shared by every band. Files are therefore deleted by enumerating
-them from the database, never by prefix. Deleting `audio/` would delete every
-band's recordings.
+Files are deleted by enumerating them from the database, never by key prefix.
+Song media uploaded before keys were scoped lives in one flat namespace
+(`audio/<uuid>-name`) shared by every band, so deleting `audio/` would delete
+everyone's recordings. New uploads are `audio/<artist id>/<uuid>-name` (likewise
+`sheets/`, `playback/`), and deletes only touch keys that are the band's own or
+predate scoping.
 
 A workspace can be exported first: a ZIP with one CSV per table
 (`api/_export.js`).
@@ -91,7 +118,8 @@ directly. Paid billing would only change what writes `config.plan`, through the
 ## Media and storage
 
 Uploads go straight from the browser to R2 using presigned URLs, and the server
-confirms each one afterwards. `artists.storage_used_bytes` is maintained
+confirms each one afterwards. The presigned URL signs the byte count, and the
+confirm step checks that the key carries the band's id. `artists.storage_used_bytes` is maintained
 atomically on confirm and delete (net of a replaced file), so the plan's
 storage cap needs no bucket listing. Gig posters get a thumbnail generated in
 the browser before upload.

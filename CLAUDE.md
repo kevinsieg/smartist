@@ -202,15 +202,15 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 ## Client-side rules
 
-- **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A private workspace (`config.private`) answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/page_scripts.js` enforces this; `stage.js`/`arrangement.js` run without `common.js` and add the header themselves.
+- **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A workspace is private (see the two gates under Database) and answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/page_scripts.js` enforces this; `stage.js`/`arrangement.js` run without `common.js` and add the header themselves.
 - Venues list is **paged** (`limit`/`offset` + A–Z `letter`), not append-on-scroll; sorting is server-side so it covers all rows. Bulk edit (`venues_bulk_edit` in localStorage, desktop only) reloads the table on every sort, page, filter or letter change, so it asks before discarding unsaved rows (`_confirmDiscardBulk`). `PATCH` writes the whole batch in one `unnest` statement inside `sql.begin` and returns `{count, rejected:[{id,error}]}`; rejected rows are marked in the table.
 
 - `loadConfig()` in `common.js` — stale-while-revalidate via `sessionStorage` key `artist_config_cache`. First call blocks on network; subsequent calls in the same tab return immediately.
 - After any `PATCH /api/config` that changes `artists.config`, call `invalidateConfigCache()` so the next `loadConfig()` fetches fresh data.
-- Auth token: `sessionStorage.setlist_token` → `Authorization: Bearer <token>` on every mutating request.
+- Auth token: `smartist_token` (`AUTH_TOKEN_KEY` in `common.js`) — in `sessionStorage`, or `localStorage` with "remember me"; `apiFetch()` sends it as `Authorization: Bearer <token>`. `clearToken()` removes both copies and the legacy `setlist_token`. Change-password returns a replacement token (the old one stops verifying) — store it where the old one was.
 - **Do not call `loadLogs()` inside `renderTable()`** — `renderTable()` is also called by `discardAll()`. Logs only need refreshing after a real data change.
 - Songs table: toolbar is `position:sticky`; `table-wrap` has JS-computed `maxHeight` for independent scroll. `thead th` uses `box-shadow` instead of `border-bottom` to avoid the sticky/border-collapse disappearing-border bug.
-- OAuth login: Google/Facebook buttons appear on the login page only when `cfg.googleLogin`/`cfg.facebookLogin` are true (set from env vars). On success the server redirects to `/?magic=<token>` reusing the existing magic-link flow. Required env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `ARTIST_ADMIN_EMAIL`.
+- OAuth login: Google/Facebook buttons appear on the login and signup pages only when `cfg.googleLogin`/`cfg.facebookLogin` are true (both variables of a provider set). On success the server redirects to `/login#session=<token>&hint=…&next=…` — a finished session in the fragment, never a query string. `state` is bound to an `oauth_nonce` cookie; Facebook signs into existing accounts only with `FACEBOOK_TRUST_EMAIL=true`. Setup: `docs/oauth-setup.md`.
 
 ---
 
@@ -279,4 +279,4 @@ cd tests && ARTIST_PASSWORD=… npm test      # full integration suite against v
 npm run test:dev                          # against Vercel Preview URL
 ```
 
-Write tests (require `ARTIST_PASSWORD`) create two `[TEST]` setlists that persist. Remove them manually from `/setlist-history` if needed.
+Workspaces are private, so every read and write test runs with a session (`ARTIST_PASSWORD` as bearer); without it only the anonymous checks run. Write tests create `[TEST]` rows and delete them again; an interrupted run can leave some behind (see `docs/ci-cd.md`). CI previews sit behind Vercel Deployment Protection — the suite sends `VERCEL_AUTOMATION_BYPASS_SECRET` as `x-vercel-protection-bypass`.
