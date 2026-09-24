@@ -42,6 +42,7 @@ const suites = [
   require('./unit/export'),
   require('./unit/tenant_isolation'),
   require('./unit/with_busy'),
+  require('./unit/song_values'),
 ];
 
 (async () => {

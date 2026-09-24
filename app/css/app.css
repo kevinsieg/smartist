@@ -1005,6 +1005,17 @@ td input[type="checkbox"] {
 .url-edit-btn--set { color: var(--secondary-ink); border-color: var(--secondary-ink); }
 .url-edit-btn:hover { border-color: var(--secondary-ink); color: var(--secondary-ink); }
 
+/* ── Energy slider (songs table + panel) ─────────────────────────────────────── */
+.energy-input { display: inline-flex; align-items: center; gap: 0.35rem; }
+.energy-range { width: 80px; accent-color: var(--secondary-color); }
+.energy-range--unset { opacity: 0.35; }
+.energy-end { font-size: var(--text-xs); color: var(--third-color); white-space: nowrap; }
+.energy-clear {
+    background: none; border: none; cursor: pointer; padding: 0 0.2rem;
+    color: var(--third-color); font-size: var(--text-sm); line-height: 1;
+}
+.energy-clear:hover { color: var(--danger-color); }
+
 /* ── Media columns (listen / sheet / playback / lyrics) ──────────────────────── */
 .listen-cell, .sheet-cell, .playback-cell, .lyrics-cell, .arr-cell { text-align: center; padding: 0; }
 .listen-play-btn,   .listen-upload-btn,

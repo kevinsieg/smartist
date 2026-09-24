@@ -211,7 +211,7 @@ var COLS = [
   { key: 'extra.gitCapo',       label: 'gitCapo',            type: 'number', cls: 'col-kcapo',   width: 58  },
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
   { key: 'genre',               get label() { return t('songs.colLabelGenre'); },      type: 'text',   cls: 'col-cat',     width: 100 },
-  { key: 'energy',              get label() { return t('songs.colLabelEnergy'); },     type: 'text',   cls: 'col-energy',  width: 70  },
+  { key: 'energy',              get label() { return t('songs.colLabelEnergy'); },     type: 'energy', cls: 'col-energy',  width: 190 },
   { key: 'time_signature',      get label() { return t('songs.colLabelTimeSig'); },    type: 'select', cls: 'col-timesig', width: 68, options: TIME_SIGNATURES },
   { key: 'bpm',                 get label() { return t('songs.colLabelBpm'); },        type: 'number', cls: 'col-bpm',     width: 55  },
   { key: 'length_min',          get label() { return t('songs.colLabelLength'); },     type: 'time',   cls: 'col-len',     width: 68  },
