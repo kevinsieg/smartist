@@ -15,10 +15,9 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'GET') {
     const { artist, user } = await getAccess(req, slug);
     if (!artist) return res.status(404).json({ error: 'Band not found' });
-    const viewMode = !user;
     // The list of setlists is never public — only an individual one, reached
     // from a stage link (see setlists/[...path].js).
-    if (viewMode) return res.status(401).json({ error: 'Sign in to view this' });
+    if (!user) return res.status(401).json({ error: 'Sign in to view this' });
     const setlists = await sql`
       SELECT
         s.*,
@@ -34,8 +33,7 @@ module.exports = wrap(async function handler(req, res) {
       GROUP BY s.id, g.title, g.date, v.name
       ORDER BY s.created_at DESC
     `;
-    if (viewMode) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
-    return res.json(viewMode ? setlists.slice(0, 20) : setlists);
+    return res.json(setlists);
   }
 
   if (req.method === 'POST') {

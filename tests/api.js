@@ -567,7 +567,6 @@ async function testSetlists(slug) {
     const { res, json } = await GET(`/api/${slug}/setlists`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json), 'not an array');
-    assert(json.length <= 20, `expected ≤20, got ${json.length}`);
     if (json.length) {
       firstSetlist = json[0];
       assert('song_count' in json[0], 'missing song_count');
