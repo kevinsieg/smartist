@@ -299,6 +299,18 @@ async function run(r) {
     assert(Array.isArray(res._body && res._body.artists), 'expected artists array');
   });
 
+  await testAsync('valid token whose user was deleted → 401, not an empty list', async () => {
+    const token   = generateUserToken(42, 'admin', TTL_8H);
+    const handler = makeHandler(async () => []);
+    const res = mockRes();
+    await handler({
+      method: 'GET',
+      query:  { action: 'my-artists' },
+      headers: { authorization: 'Bearer ' + token },
+    }, res);
+    assertEq(res._status, 401);
+  });
+
   // ── OAuth GET endpoints must not require a slug ──────────────────────────────
   // They resolve the user by email, never by slug. In a multi-tenant deployment
   // (ARTIST_SLUG unset) the client calls them with no ?slug, so they must be
