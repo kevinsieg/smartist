@@ -806,10 +806,21 @@ async function saveGig() {
     additional_link: document.getElementById('gm-link').value.trim()      || null,
     comment:         document.getElementById('gm-comment').value.trim()   || null,
   };
-  setStatus('gm-status', t('gigs.saving'));
-  const url = editingId ? `/api/${artistSlug}/gigs/${editingId}` : `/api/${artistSlug}/gigs`;
-  const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
-  const json = await r.json();
+  const saveBtn = document.getElementById('gm-save-btn');
+  if (saveBtn.disabled) return;
+  const saveLabel = saveBtn.textContent;
+  saveBtn.disabled = true;
+  saveBtn.textContent = t('gigs.saving');
+  setStatus('gm-status', '');
+  let r, json;
+  try {
+    const url = editingId ? `/api/${artistSlug}/gigs?id=${editingId}` : `/api/${artistSlug}/gigs`;
+    r    = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
+    json = await r.json();
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = saveLabel;
+  }
   if (!r.ok) { setStatus('gm-status', json.error || t('gigs.errorFallback'), true); return; }
   closeGigModal();
   await loadGigs();
@@ -826,7 +837,7 @@ async function renderGigRelated(gigId) {
 
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await apiFetch(`/api/${artistSlug}/gigs/${gigId}?refs=1`);
+      const r = await apiFetch(`/api/${artistSlug}/gigs?id=${gigId}&refs=1`);
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
