@@ -81,13 +81,13 @@ async function run({ session = {}, local = {}, fetchImpl } = {}) {
     const out = await run({
       session: { smartist_token: 'tok' },
       fetchImpl: async () => ({ status: 200, json: async () => ({ artists: [
-        { slug: 'klang', name: 'Kevin Klang', role: 'admin' },
-        { slug: 'salb',  name: 'Salmon & the Laundry Bear', role: 'admin' },
+        { slug: 'band-one', name: 'Band One', role: 'admin' },
+        { slug: 'band-two', name: 'Band Two', role: 'admin' },
       ] }) }),
     });
     assert(!out.thrown, 'script threw: ' + (out.thrown && out.thrown.message));
-    assert(out.html.includes('/klang/dashboard'), 'no link to the first band');
-    assert(out.html.includes('/salb/dashboard'), 'no link to the second band');
+    assert(out.html.includes('/band-one/dashboard'), 'no link to the first band');
+    assert(out.html.includes('/band-two/dashboard'), 'no link to the second band');
     assertEq((out.html.match(/workspace-card/g) || []).length, 2);
   });
 

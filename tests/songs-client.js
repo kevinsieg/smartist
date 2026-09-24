@@ -86,7 +86,7 @@ function loadDateHelpers(locale) {
 function loadFormatDate(locale) { return loadDateHelpers(locale).formatDate; }
 
 const SONGS = [
-  { id: 1, title: 'Ab in die Welt',  interpret: 'Kevin Klang', genre: 'World',  active: true },
+  { id: 1, title: 'Ab in die Welt',  interpret: 'My Band', genre: 'World',  active: true },
   { id: 2, title: 'Wonderwall',      interpret: 'Oasis',       genre: 'Pop',    active: true },
   { id: 3, title: 'Skinny Love',     interpret: 'Bon Iver',    genre: 'Folk',   active: false },
   { id: 4, title: 'Toxicity',        interpret: 'SOAD',        genre: 'Rock',   active: false },

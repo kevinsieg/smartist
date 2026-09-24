@@ -62,7 +62,7 @@ function runLogout({ session = {}, local = {} } = {}) {
   const context = {
     console,
     AUTH_TOKEN_KEY: 'smartist_token',
-    _artistSlug: 'klang',
+    _artistSlug: 'myband',
     sessionStorage: makeStorage(session),
     localStorage: makeStorage(local),
     window: { location: { assign: url => assigned.push(url) } },
@@ -119,11 +119,11 @@ test('drops the cached band config', () => {
   // name and logo in the nav before their own config loads.
   const out = runLogout({ session: {
     smartist_token: 'a',
-    artist_config_cache_klang: '{"name":"Kevin Klang"}',
-    artist_config_cache_klang_light: '{"name":"Kevin Klang"}',
+    artist_config_cache_myband: '{"name":"My Band"}',
+    artist_config_cache_myband_light: '{"name":"My Band"}',
   } });
-  assertEq(out.sessionStorage.getItem('artist_config_cache_klang'), null);
-  assertEq(out.sessionStorage.getItem('artist_config_cache_klang_light'), null);
+  assertEq(out.sessionStorage.getItem('artist_config_cache_myband'), null);
+  assertEq(out.sessionStorage.getItem('artist_config_cache_myband_light'), null);
 });
 
 test('closes the nav menu on the way out', () => {

@@ -25,7 +25,7 @@ still comes back there. Nothing else needs registering.
 
 ---
 
-## Why new apps rather than reusing salmons'
+## Why new apps rather than reusing an existing tenant's
 
 Vercel stores env vars of type **Secret** write-only. They cannot be read back
 through the CLI or the dashboard:
@@ -81,7 +81,7 @@ confirmed with Google before suspecting the wiring.
 > explicitly, even though the public docs only mention it for advanced access).
 > No business is registered yet (no SIRET), and none of the existing Facebook
 > apps with this use case is Live, so the Facebook env vars were removed from
-> `smartist-salb` and are not set anywhere. The code (appsecret_proof, v25.0,
+> the one tenant project that had them and are not set anywhere. The code (appsecret_proof, v25.0,
 > rerequest) is ready. After the SIRET: verify the business portfolio, connect
 > it to the "smartist studio" app, add the redirect URI, set the env vars, go
 > Live. The privacy policy (smartist.studio/privacy) and self-service account
@@ -162,8 +162,8 @@ load leaves nothing in the runtime *errors* view — only the logs show it.
 
 ## Open afterwards
 
-- The four variables exist only on the `smartist` project. klang and salmons
-  keep their own, and `smartist-website` needs none.
+- The four variables exist only on the `smartist` project. Other tenant
+  projects keep their own, and the static marketing site needs none.
 - If the consent screen should say something other than "smartist", it is the
   OAuth consent screen app name, editable at any time.
 
@@ -221,8 +221,8 @@ Two caveats before anyone reaches for this:
 The heavier alternative is provider-link columns on `users` (identify by
 `facebook:<id>`, confirm the address once by email). Note that Facebook user IDs
 are **app-scoped**: separate Facebook apps per deployment means the same person
-has a different ID on each. Since salb and klang share the `smartist-kevin`
-database, that would put two different IDs for one person in one database.
+has a different ID on each. Where two tenants share one database, that would
+put two different IDs for one person in one database.
 
 ---
 
