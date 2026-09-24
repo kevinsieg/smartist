@@ -371,3 +371,14 @@ ALTER TABLE venues ADD COLUMN IF NOT EXISTS contact_name TEXT;
 -- invite_token_hash / invite_expires_at directly above.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_token_hash    TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_token_expires TIMESTAMPTZ;
+
+-- 2026-09-24: emails are stored lowercased. OAuth signup used to keep the
+-- provider's casing, and every lookup is an exact match, so a mixed-case row
+-- could neither log in by password nor be found by some paths. The UPDATE fails
+-- on a (artist_id, email) collision rather than merging accounts — resolve by
+-- hand if it does. The CHECK keeps any future write path honest (a re-run
+-- reports "already exists", which apply_schema.js skips).
+UPDATE users       SET email         = lower(email)         WHERE email         <> lower(email);
+UPDATE users       SET pending_email = lower(pending_email) WHERE pending_email <> lower(pending_email);
+UPDATE subscribers SET email         = lower(email)         WHERE email         <> lower(email);
+ALTER TABLE users ADD CONSTRAINT users_email_lowercase CHECK (email = lower(email));

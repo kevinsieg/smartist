@@ -39,6 +39,7 @@ async function checkEmailDeliverable(email, resolveMx) {
 }
 
 async function createSignupToken(email, sql) {
+  email = String(email).trim().toLowerCase();
   const rawToken  = crypto.randomBytes(32).toString('hex');
   const hash      = crypto.createHash('sha256').update(rawToken).digest('hex');
   const expires   = new Date(Date.now() + 30 * 60 * 1000);
@@ -67,6 +68,7 @@ async function verifySignupToken(rawToken, sql) {
 }
 
 async function createArtistAndAdmin(name, slug, email, sql) {
+  email = String(email).trim().toLowerCase();
   return await sql.begin(async tx => {
     const [artist] = await tx`
       INSERT INTO artists (slug, name, config)
