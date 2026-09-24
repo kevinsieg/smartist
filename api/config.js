@@ -140,6 +140,9 @@ async function myArtists(req, res) {
   const sql = getDb();
   if (claim) {
     const artists = await getArtistsForUser(claim.userId, sql);
+    // Every users row belongs to a workspace, so none means the user is gone
+    // (account deleted) while its signed token is still in date.
+    if (!artists.length) return res.status(401).json({ error: 'Unauthorised' });
     return res.json({ artists });
   }
   // Legacy bootstrap sessions (artist password as bearer) have no users row —

@@ -534,7 +534,6 @@
   "profile.dangerConfirmPrompt": "Cette action est irréversible. Supprimer votre compte ?",
   "profile.dangerConfirmTitle": "Confirmer la suppression de votre compte",
   "profile.dangerDestroy": "Ces espaces seront entièrement supprimés, avec tous leurs morceaux, concerts et fichiers :",
-  "profile.dangerDone": "Votre compte et ses données ont été supprimés.",
   "profile.dangerExport": "Exporter d'abord vos données",
   "profile.dangerFailed": "Ce lien est invalide ou a expiré.",
   "profile.dangerIntro": "Cela supprime votre compte et tout ce que vous seul pouvez voir. Cette action est irréversible.",

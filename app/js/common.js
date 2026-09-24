@@ -838,6 +838,23 @@ function getAuthRole() {
 
 // Authenticated fetch. Adds the auth header when a token exists. On 401 clears
 // the token and redirects to login (then throws so callers abort cleanly).
+// my-artists answers 401 once the token's user is gone. Anything else,
+// network failures included, counts as alive: never log out on a guess.
+async function _sessionAlive(token) {
+  try {
+    const r = await fetch('/api/config?action=my-artists', { headers: { Authorization: `Bearer ${token}` } });
+    return r.status !== 401;
+  } catch { return true; }
+}
+
+function _endDeadSession() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem('setlist_token');
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  invalidateConfigCache();
+  window.location.replace('/login');
+}
+
 async function apiFetch(url, method = 'GET', body) {
   const opts = { method, headers: {} };
   const token = getToken();
@@ -847,6 +864,13 @@ async function apiFetch(url, method = 'GET', body) {
     opts.body = JSON.stringify(body);
   }
   const r = await fetch(url, opts);
+  // A 404 while logged in is either a real miss or a workspace that no longer
+  // exists (account deleted in another tab or device). Only the second one is
+  // worth leaving the page for, so ask once whether the session still stands.
+  if (r.status === 404 && token && !(await _sessionAlive(token))) {
+    _endDeadSession();
+    throw new Error('Session expired');
+  }
   if (r.status === 401) {
     if (!isViewMode()) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -871,6 +895,8 @@ async function initPage(onReady, opts) {
     cfg = await loadConfig(undefined, { light: !(opts && opts.fullConfig) });
   } catch (e) {
     console.error(e);
+    var tok = getToken();
+    if (tok && !(await _sessionAlive(tok))) { _endDeadSession(); return; }
     // Flag stops workspaces.js from auto-redirecting straight back here.
     try { sessionStorage.setItem('ws_skip_autoredirect', '1'); } catch {}
     window.location.assign('/workspaces');
