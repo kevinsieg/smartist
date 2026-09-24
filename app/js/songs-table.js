@@ -299,16 +299,13 @@ function _setBulkStatus(cls, msg) {
 // Energy 0–10 as a slider. A range input always has a value, so "not set" lives in
 // the hidden field collectRow reads; the slider itself carries no data-id.
 function energyInputHtml(sid, key, val, onDirty) {
-  const raw = val === null || val === undefined ? '' : String(val).trim();
-  const has = raw !== '' && isFinite(Number(raw));
-  const n = has ? Number(raw) : 5;
-  // An unmigrated word ("Medium") stays in the hidden field, so saving the row
-  // keeps it; the server turns it into its number on save.
+  const has = val !== null && val !== undefined && val !== '';
+  const n = has ? Number(val) : 5;
   return `<span class="energy-input">` +
-    `<input type="text" data-id="${sid}" data-key="${key}" value="${escHtml(raw)}" style="display:none">` +
+    `<input type="text" data-id="${sid}" data-key="${key}" value="${has ? n : ''}" style="display:none">` +
     `<span class="energy-end">${escHtml(t('songs.energyLow'))}</span>` +
     `<input type="range" min="0" max="10" step="1" value="${n}" class="energy-range${has ? '' : ' energy-range--unset'}"` +
-      ` title="${has ? n : escHtml(raw)}" aria-label="${escHtml(t('songs.fieldEnergy'))}" oninput="_energySet(this, this.value);${onDirty}">` +
+      ` title="${has ? n : ''}" aria-label="${escHtml(t('songs.fieldEnergy'))}" oninput="_energySet(this, this.value);${onDirty}">` +
     `<span class="energy-end">${escHtml(t('songs.energyHigh'))}</span>` +
     `<button type="button" class="energy-clear" title="${escHtml(t('songs.energyClear'))}"` +
       ` onclick="_energySet(this.parentNode.querySelector('.energy-range'), '');${onDirty}">×</button>` +

@@ -474,14 +474,11 @@ function formatTime(value) {
   return d.toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-// Energy is 0–10, shown as three bands. Words are shown as they are until every
-// database is migrated (scripts/migrate_energy_genre.js). Display only — setlist.js
-// scores on the exact number.
+// Energy is 0–10, shown as three bands. Display only — setlist.js scores on the
+// exact number.
 function energyLabel(value) {
-  var raw = String(value == null ? '' : value).trim();
-  if (!raw) return '';
-  var n = Number(raw);
-  if (!isFinite(n) || raw === '') return raw;
+  if (value == null || value === '') return '';
+  var n = Number(value);
   if (n <= 3) return t('songs.energyLow');
   if (n <= 7) return t('songs.energyMiddle');
   return t('songs.energyHigh');
