@@ -178,7 +178,7 @@ function _openSongEditForm(sid, panelEl) {
   var active   = song.active ? ' checked' : '';
   var heart    = song.heart  ? ' checked' : '';
   var genre    = escHtml(getVal(song, 'genre') || '');
-  var energy   = escHtml(getVal(song, 'energy') || '');
+  var energy   = getVal(song, 'energy');
   var timeSig  = escHtml(getVal(song, 'time_signature') || '');
   var bpm      = escHtml(String(getVal(song, 'bpm') || ''));
   var length   = escHtml(minsToTime(getVal(song, 'length_min')));
@@ -265,7 +265,7 @@ function _openSongEditForm(sid, panelEl) {
           _editField('', '<div class="edit-toggle-row"><span>' + t('songs.active') + '</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
           _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; ' + t('songs.favouriteHint') + '</span></div>') +
           _editField(t('songs.fieldGenre'), inp('genre', genre)) +
-          _editField(t('songs.fieldEnergy'), inp('energy', energy)) +
+          _editField(t('songs.fieldEnergy'), energyInputHtml(id, 'energy', energy, 'markPanelEditDirty()')) +
           _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
           _editField(t('songs.fieldLead'), inp('extra.lead', lead)) +
           _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>') +

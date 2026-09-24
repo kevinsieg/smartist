@@ -8,6 +8,7 @@ const { LYRICS_SOURCES, plainFromSynced } = require('../../_lyrics');
 const { GEMA_ROLE_TYPES } = require('../../_constants');
 const { validateStr } = require('../../_validate');
 const logger = require('../../_logger');
+const { energyToScale } = require('../../_song_values');
 const { requireFeature } = require('../../_plans');
 
 // ── GEMA import helpers (merged from gema/import.js) ─────────────────────────
@@ -623,7 +624,7 @@ module.exports = wrap(async function handler(req, res) {
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            length_min, interpret, reference_interpret, comment, extra)
         VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.heart ?? false}, ${d.key ?? null},
-                ${d.genre ?? null}, ${d.energy ?? d.tempo ?? null}, ${d.time_signature ?? null},
+                ${d.genre ?? null}, ${energyToScale(d.energy ?? d.tempo) ?? null}, ${d.time_signature ?? null},
                 ${d.length_min ?? null},
                 ${d.interpret ?? null}, ${d.reference_interpret ?? null},
                 ${d.comment ?? null}, ${d.extra ?? {}})
