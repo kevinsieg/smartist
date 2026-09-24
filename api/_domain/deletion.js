@@ -45,11 +45,11 @@ async function planDeletion(email, sql) {
 // Every R2 object belonging to these artists, gathered BEFORE any row is
 // deleted — once the rows are gone there is nothing left to enumerate from.
 //
-// Never do this by key prefix. _media.js writes song media as
+// Never do this by key prefix. Song media written before keys were scoped is
 // `audio/<uuid>-<name>`, `sheets/…`, `playback/…` — one flat namespace shared
 // by every tenant — so a prefix delete would take every band's recordings.
-// Only gigs/<slug>/ and bands/<slug>/ carry a slug, and even those are not
-// worth the inconsistency.
+// Newer keys are `audio/<artist id>/<uuid>-<name>`; gigs/<slug>/ and
+// bands/<slug>/ carry a slug. The rows stay the source of truth.
 async function collectR2Urls(artistIds, sql) {
   if (!artistIds.length) return [];
 
@@ -61,11 +61,30 @@ async function collectR2Urls(artistIds, sql) {
     SELECT poster_url, thumb_url FROM gigs WHERE artist_id = ANY(${artistIds})
   `;
   const bands = await sql`
-    SELECT config FROM artists WHERE id = ANY(${artistIds})
+    SELECT id, slug, config FROM artists WHERE id = ANY(${artistIds})
   `;
 
+  // Only keys this account can prove it owns. A stored URL is just a string a
+  // band could once set to anything, so a URL naming another band's object —
+  // `bands/<other slug>/…`, `audio/<other id>/…` — is left alone rather than
+  // deleted on that band's behalf. Pre-scoping song media (`audio/<uuid>-name`)
+  // carries no owner at all and is still removed, as before.
+  const ids   = new Set(bands.map(b => String(b.id)));
+  const slugs = new Set(bands.map(b => b.slug));
+  const base  = process.env.R2_PUBLIC_URL;
+  const owned = (u) => {
+    if (!base || !u.startsWith(`${base}/`)) return true;   // not ours to judge; deleteFromR2 ignores it
+    const key = u.slice(base.length + 1).split('?')[0];
+    const m = /^(audio|sheets|playback)\/([^/]+)\/[^/]+$/.exec(key);
+    if (m) return ids.has(m[2]);
+    if (/^(audio|sheets|playback)\/[^/]+$/.test(key)) return true;   // legacy flat key
+    const b = /^(bands|gigs)\/([^/]+)\//.exec(key);
+    if (b) return slugs.has(b[2]);
+    return false;
+  };
+
   const urls = new Set();
-  const add  = (u) => { if (u && typeof u === 'string') urls.add(u); };
+  const add  = (u) => { if (u && typeof u === 'string' && owned(u)) urls.add(u); };
 
   for (const s of songs) {
     const e = s.extra || {};
@@ -149,6 +168,13 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
       // gigs.venue_id / organizer_id are ON DELETE RESTRICT — nullify first, and
       // only for these artists. Same ordering as scripts/delete_artist.js.
       await tx`UPDATE gigs SET venue_id = NULL, organizer_id = NULL WHERE artist_id = ANY(${destroyIds})`;
+      // References from OTHER artists into these rows would block the delete
+      // (setlist_songs.song_id has no cascade; venue/organizer are RESTRICT).
+      // The API refuses such cross-tenant ids now, but rows written before that
+      // check must not be able to hold someone's deletion hostage.
+      await tx`DELETE FROM setlist_songs WHERE song_id IN (SELECT id FROM songs WHERE artist_id = ANY(${destroyIds}))`;
+      await tx`UPDATE gigs SET venue_id = NULL WHERE venue_id IN (SELECT id FROM venues WHERE artist_id = ANY(${destroyIds}))`;
+      await tx`UPDATE gigs SET organizer_id = NULL WHERE organizer_id IN (SELECT id FROM organizers WHERE artist_id = ANY(${destroyIds}))`;
       // setlist_songs.song_id has no cascade, so setlists go before songs.
       await tx`DELETE FROM setlists WHERE artist_id = ANY(${destroyIds})`;
       // artists cascades songs, gigs, venues, organizers, users, logs.

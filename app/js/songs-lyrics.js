@@ -260,7 +260,7 @@ function _setPreviewSrc(url) {
   if (url) {
     loading.style.display = '';
     iframe.style.display  = 'none';
-    iframe.src = toEmbedUrl(url) || url;
+    iframe.src = toEmbedUrl(url) || safeUrl(url);
   } else {
     loading.style.display = 'none';
     iframe.style.display  = '';
@@ -271,7 +271,7 @@ function _setPreviewSrc(url) {
 function openUrlPreview(url, sourceInput) {
   _urlPreviewSourceInput = sourceInput || null;
   document.getElementById('url-preview-input').value = url || '';
-  document.getElementById('url-preview-link').href   = url || '#';
+  document.getElementById('url-preview-link').href   = safeUrl(url);
   document.getElementById('url-preview-link').style.display = url ? '' : 'none';
   _setPreviewSrc(url);
   document.getElementById('url-preview-modal').classList.add('open');
@@ -280,7 +280,7 @@ function openUrlPreview(url, sourceInput) {
 
 function reloadUrlPreview() {
   const url = document.getElementById('url-preview-input').value.trim();
-  document.getElementById('url-preview-link').href  = url || '#';
+  document.getElementById('url-preview-link').href  = safeUrl(url);
   document.getElementById('url-preview-link').style.display = url ? '' : 'none';
   _setPreviewSrc(url);
   if (_urlPreviewSourceInput) {

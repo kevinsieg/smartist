@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit } = require('../_ratelimit');
+const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { generateMagicToken, verifyMagicToken, generateUserToken, TTL_8H } = require('../_token');
 const { sendEmail } = require('../_email');
 const { getArtistsForUser } = require('./artist');
@@ -50,6 +50,8 @@ async function requestReset(req, res) {
   // will happily tell anyone which addresses are registered here.
   if (!addr) return res.json({ ok: true });
   if (await checkRateLimit(`reset:${addr}`, 3, 3600)) return res.json({ ok: true });
+  // Per address alone lets one client mail-bomb many addresses.
+  if (await checkRateLimit(`reset-ip:${clientIp(req)}`, 10, 3600)) return res.json({ ok: true });
 
   const sql  = getDb();
   const rows = await _rowsFor(addr, sql);
@@ -58,7 +60,7 @@ async function requestReset(req, res) {
     return res.json({ ok: true });
   }
 
-  const token = generateMagicToken(_seed(rows[0]));
+  const token = generateMagicToken(_seed(rows[0]), 'reset');
   const hint  = Buffer.from(rows[0].email).toString('base64url');
   // Fragment, not query — tokens must not reach server or CDN logs. No `next`
   // here: at the root there is no single workspace to land in, so the login
@@ -95,7 +97,7 @@ async function setPassword(req, res) {
   // The hint is attacker-supplied, so the token is checked against the seed of
   // the account the hint actually names. A valid token for one address paired
   // with someone else's proves nothing and rewrites nothing.
-  if (!rows.length || !verifyMagicToken(String(token), _seed(rows[0])))
+  if (!rows.length || !verifyMagicToken(String(token), _seed(rows[0]), 'reset'))
     return res.status(400).json({ error: 'Invalid or expired link' });
 
   const hash = await bcrypt.hash(String(password), 12);
@@ -104,7 +106,7 @@ async function setPassword(req, res) {
   // Setting the password is what logs them in; they are here because they could
   // not, and handing them back to the login form would be a joke.
   const anchor       = rows[0];
-  const sessionToken = generateUserToken(anchor.id, anchor.role, TTL_8H);
+  const sessionToken = generateUserToken(anchor.id, anchor.role, TTL_8H, hash);
   const artists      = await getArtistsForUser(anchor.id, sql);
   await logger.info('password_set_via_reset', { email: addr, workspaces: rows.length });
   return res.json({ ok: true, token: sessionToken, role: anchor.role, email: anchor.email, artists });

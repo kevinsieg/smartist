@@ -3,8 +3,8 @@ const { wrap } = require('./_handler');
 const { validateStr } = require('./_validate');
 const { checkRateLimit, clientIp } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue, checkCredentials } = require('./_auth');
-const { createPresignedUrl } = require('./_r2');
-const { verifyUserToken } = require('./_token');
+const { createPresignedUrl, keyFromUrl } = require('./_r2');
+const { verifyUserToken, passwordMatches } = require('./_token');
 const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
 const { planSummary } = require('./_plans');
 const admin = require('./_domain/admin');
@@ -67,8 +67,8 @@ module.exports = wrap(async function handler(req, res) {
     });
   }
 
-  if (req.query.action === 'photo-url')      return presignedUpload(req, res, slugParam, 'photo', 'image/jpeg');
-  if (req.query.action === 'favicon-url')    return presignedUpload(req, res, slugParam, 'favicon', 'image/png');
+  if (req.query.action === 'photo-url')      return presignedUpload(req, res, slugParam, 'photo', 'image/jpeg', PHOTO_TYPES);
+  if (req.query.action === 'favicon-url')    return presignedUpload(req, res, slugParam, 'favicon', 'image/png', FAVICON_TYPES);
 
   return publicConfig(req, res, slugParam);
 });
@@ -116,6 +116,16 @@ async function patchConfig(req, res) {
     const update = { ...req.body.config };
     delete update.plan;
     delete update.upgradedAt;
+    // Image URLs pointing into our bucket must be this band's own uploads —
+    // account deletion removes whatever these name (api/_domain/deletion.js).
+    for (const k of ['logoUrl', 'faviconUrl']) {
+      if (update[k] == null || update[k] === '') continue;
+      if (typeof update[k] !== 'string' || !/^https?:\/\//i.test(update[k]))
+        return res.status(400).json({ error: `${k} must be an http(s) URL` });
+      const key = keyFromUrl(update[k]);
+      if (key !== null && !key.startsWith(`bands/${band.slug}/`))
+        return res.status(400).json({ error: `Invalid ${k}` });
+    }
     await sql`UPDATE artists SET config = config || ${update} WHERE id = ${band.id}`;
   }
   return res.json({ ok: true });
@@ -139,6 +149,8 @@ async function myArtists(req, res) {
   const claim = verifyUserToken(authHeader);
   const sql = getDb();
   if (claim) {
+    const [row] = await sql`SELECT password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
+    if (row && !passwordMatches(claim, row)) return res.status(401).json({ error: 'Unauthorised' });
     const artists = await getArtistsForUser(claim.userId, sql);
     // Every users row belongs to a workspace, so none means the user is gone
     // (account deleted) while its signed token is still in date.
@@ -157,15 +169,21 @@ async function myArtists(req, res) {
 }
 
 // ── GET ?action=photo-url|favicon-url — presigned upload URL (auth required) ─────
-async function presignedUpload(req, res, slugParam, kind, defaultType) {
+// Raster types only: an SVG in the public bucket is a script-capable document.
+const PHOTO_TYPES   = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const FAVICON_TYPES = new Set(['image/png', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/jpeg', 'image/webp', 'image/gif']);
+
+async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) {
   const band = await requireAuth(req, res, slugParam, 'admin');
   if (!band) return;
-  const contentType = req.query.type || defaultType;
-  if (!contentType.startsWith('image/')) return res.status(400).json({ error: 'Image files only' });
+  const contentType = String(req.query.type || defaultType);
+  if (!allowed.has(contentType)) return res.status(400).json({ error: 'Unsupported image type' });
   const key = `bands/${band.slug}/${kind}`;
   const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType);
   return res.json({ uploadUrl, publicUrl });
 }
+
+const PRIVATE_CONFIG_KEYS = ['gemaIpNameNumber', 'upgradedAt'];
 
 // ── GET — public config (songs, counts, feature flags) ──────────────────────────
 // ?light=1 skips the songs payload (full song rows incl. lyrics + GEMA join)
@@ -207,16 +225,25 @@ async function publicConfig(req, res, slugParam) {
   // Responses vary by auth for private workspaces — only the public variant
   // may sit in a shared CDN cache.
   if (!user) res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+  // Anonymous visitors get the band's branding and display settings, not its
+  // rights-administration details or plan history.
+  let config = band.config;
+  if (!user && config) {
+    config = { ...config };
+    for (const k of PRIVATE_CONFIG_KEYS) delete config[k];
+  }
   res.json({
     slug:          band.slug,
     name:          band.name,
-    config:        band.config,
+    config,
     // Per-workspace role of the authenticated caller (the session token's own
     // role claim is only valid for the workspace it was issued for, so the
     // client must read this instead of decoding the token). Bootstrap
     // password sessions (user.id === null) report null — the client treats
     // null as "legacy admin" and uses it to detect bootstrap logins.
-    role:          (user && user.id != null) ? user.role : null,
+    // Band-password sessions have no users row; a full one reports null
+    // ("legacy admin"), a demo-gate session reports its real, lesser role.
+    role:          user ? ((user.id != null || user.role !== 'admin') ? user.role : null) : null,
     songs:         light ? undefined : songs,
     counts,
     plan:          planSummary(band),

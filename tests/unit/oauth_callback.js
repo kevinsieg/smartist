@@ -91,16 +91,20 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
 
   return {
     oauth: require(path.join(__dirname, '../../api/_domain/oauth')),
-    state: realIdentity.generateState('google', 'login'),
+    state: realIdentity.generateState('google', 'login', NONCE),
     token: require(tokenPath),   // the real one, loaded after the eviction above
   };
 }
+
+// The nonce the OAuth start would have set as a cookie in this browser.
+const NONCE = 'a'.repeat(32);
 
 function mockRes() {
   const r = {};
   r.status   = () => r;
   r.json     = (b) => { r._body = b; return r; };
   r.redirect = (code, url) => { r._code = code; r._url = url; return r; };
+  r.setHeader = (k, v) => { r._headers = { ...(r._headers || {}), [k]: v }; };
   return r;
 }
 
@@ -108,13 +112,13 @@ function fragment(url) {
   return new URLSearchParams(String(url).split('#')[1] || '');
 }
 
-async function callback(opts = {}, query) {
+async function callback(opts = {}, query, cookie = `oauth_nonce=${NONCE}`) {
   const { oauth, state, token } = load(opts);
   const res = mockRes();
   await oauth.oauthCallback(
     {
       query: query ? query(state) : { code: 'auth-code', state },
-      headers: { host: 'app.smartist.studio' },
+      headers: { host: 'app.smartist.studio', ...(cookie ? { cookie } : {}) },
       url: '/auth/callback',
     },
     res,
@@ -197,6 +201,21 @@ async function run(r) {
       assertEq(entry.data.reason, reason);
     });
   }
+
+  console.log(B('\nOAuth callback — state belongs to this browser'));
+
+  // Login CSRF: a callback URL minted for someone else's account, opened in a
+  // browser that never started the flow, must not sign that browser in.
+  await testAsync('a callback without the oauth_nonce cookie is refused', async () => {
+    const res = await callback({}, undefined, null);
+    assert(!fragment(res._url).get('session'), `signed in without the cookie: ${res._url}`);
+    assert(String(res._url).includes('oauth_error=1'), `expected the error redirect, got ${res._url}`);
+  });
+
+  await testAsync('a callback with another flow\'s nonce is refused', async () => {
+    const res = await callback({}, undefined, `oauth_nonce=${'b'.repeat(32)}`);
+    assert(!fragment(res._url).get('session'), `signed in with a foreign nonce: ${res._url}`);
+  });
 }
 
 if (require.main === module) {
