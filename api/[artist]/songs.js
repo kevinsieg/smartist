@@ -10,7 +10,17 @@ const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
 const { isOwnMediaUrl } = require('../_ownership');
 const { wouldExceedStorage, storageLimitBytes, songLimit } = require('../_plans');
+const { energyToScale, matchGenre } = require('../_song_values');
 const logger = require('../_logger');
+
+const ENERGY_ERROR = 'energy must be a number from 0 to 10';
+
+async function genresOf(sql, artistId) {
+  const rows = await sql`
+    SELECT DISTINCT genre FROM songs
+    WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> ''`;
+  return rows.map(r => r.genre);
+}
 
 // `extra` is free-form, but its *Url keys end up in href/src attributes on the
 // songs and stage pages, so they must be plain http(s) links. A link into our
@@ -440,12 +450,14 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const _max = songLimit(band);
-    if (_max != null) {
-      const [{ count }] = await sql`
-        SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
-      if (count >= _max)
-        return res.status(402).json({ error: 'song_limit', limit: _max });
-    }
+    const [countRows, knownGenres] = await Promise.all([
+      _max != null
+        ? sql`SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`
+        : null,
+      genresOf(sql, band.id),
+    ]);
+    if (countRows && countRows[0].count >= _max)
+      return res.status(402).json({ error: 'song_limit', limit: _max });
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
@@ -456,10 +468,11 @@ module.exports = wrap(async function handler(req, res) {
     if (!title) return res.status(400).json({ error: 'title required' });
     const key = validateStr(rawKey, 20);
     if (key === false) return res.status(400).json({ error: 'key too long' });
-    const genre = validateStr(rawCat, 100);
-    if (genre === false) return res.status(400).json({ error: 'genre too long' });
-    const energy = validateStr(rawEnergy, 50);
-    if (energy === false) return res.status(400).json({ error: 'energy too long' });
+    const typedGenre = validateStr(rawCat, 100);
+    if (typedGenre === false) return res.status(400).json({ error: 'genre too long' });
+    const genre = matchGenre(typedGenre, knownGenres);
+    const energy = energyToScale(rawEnergy);
+    if (energy === undefined) return res.status(400).json({ error: ENERGY_ERROR });
     const time_signature = validateStr(rawTimeSig, 20);
     if (time_signature === false) return res.status(400).json({ error: 'time_signature too long' });
     const bpm = validateNum(rawBpm);
@@ -502,14 +515,17 @@ module.exports = wrap(async function handler(req, res) {
     // Rows that fail validation are reported back: a silently skipped row looks to the
     // user as if saving did nothing at all. Only fields present in the request are
     // written — a partial update (e.g. the favourite toggle) must not clear the rest.
-    const TEXT_LIMITS = { title: 200, key: 20, genre: 100, energy: 50, time_signature: 20,
+    const TEXT_LIMITS = { title: 200, key: 20, genre: 100, time_signature: 20,
                           interpret: 200, reference_interpret: 500, comment: 2000 };
     const NUM_FIELDS = ['bpm', 'length_min'];
 
     const ids = updates.map(u => Number(u.id)).filter(n => Number.isInteger(n) && n > 0);
-    const storedRows = ids.length
-      ? await sql`SELECT * FROM songs WHERE artist_id = ${band.id} AND id = ANY(${ids}::int[]) AND deleted = false`
-      : [];
+    const [storedRows, knownGenres] = await Promise.all([
+      ids.length
+        ? sql`SELECT * FROM songs WHERE artist_id = ${band.id} AND id = ANY(${ids}::int[]) AND deleted = false`
+        : [],
+      updates.some(u => u && 'genre' in u) ? genresOf(sql, band.id) : [],
+    ]);
     const stored = new Map(storedRows.map(row => [row.id, row]));
 
     let applied = 0;
@@ -532,6 +548,11 @@ module.exports = wrap(async function handler(req, res) {
         value[field] = v;
       }
       if (!error && !value.title) error = 'title is required';
+      if (!error && 'genre' in update) value.genre = matchGenre(value.genre, knownGenres);
+      if (!error && 'energy' in update) {
+        value.energy = energyToScale(update.energy);
+        if (value.energy === undefined) error = ENERGY_ERROR;
+      } else value.energy = current.energy;
       if (!error) {
         for (const field of NUM_FIELDS) {
           if (!(field in update)) { value[field] = current[field]; continue; }

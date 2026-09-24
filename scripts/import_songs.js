@@ -16,7 +16,7 @@
  *       "key": "G",                     // optional
  *       "genre": "Blues",            // optional
  *       "heart": false,                 // optional, favourite
- *       "energy": "middle",             // optional (low / middle / high); "tempo" accepted as an alias
+ *       "energy": 5,                    // optional, 0–10 (low / middle / high and 0–100 are converted); "tempo" accepted as an alias
  *       "time_signature": "4/4",        // optional
  *       "bpm": 120,                     // optional
  *       "length_min": 3.5,              // optional, decimal minutes
@@ -36,6 +36,7 @@ const { neon }   = require('@neondatabase/serverless');
 const readline   = require('readline');
 const fs         = require('fs');
 const path       = require('path');
+const { energyToScale } = require('../api/_song_values');
 
 // Load .env.local
 function loadEnv(filePath) {
@@ -128,7 +129,7 @@ function confirmDb(url) {
         ${s.heart  ?? false},
         ${s.key        ?? null},
         ${s.genre   ?? null},
-        ${s.energy ?? s.tempo ?? null},
+        ${energyToScale(s.energy ?? s.tempo) ?? null},
         ${s.time_signature ?? null},
         ${s.bpm ?? null},
         ${s.length_min ?? null},

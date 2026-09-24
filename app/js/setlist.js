@@ -12,14 +12,13 @@ function bpmNorm(song) {
   return 1;                  // Presto
 }
 
-// song.energy text → 0–1 (calm 0 … intense 1)
-// Handles common descriptive words and bare numbers (e.g. "7" on a 1–10 scale).
+// song.energy 0–10 → 0–1 (calm 0 … intense 1)
+// Words are still read until every database is migrated.
 function energyNorm(song) {
-  const raw = (song.energy || '').trim();
+  const raw = String(song.energy ?? '').trim();
   if (!raw) return null;
-  const n = parseFloat(raw);
-  if (!isNaN(n) && raw === String(Math.round(n))) // bare integer
-    return Math.min(1, Math.max(0, (n - 1) / 9));
+  const n = Number(raw);
+  if (isFinite(n)) return Math.min(1, Math.max(0, n / 10));
   const e = raw.toLowerCase();
   if (/low|soft|calm|quiet|gentle|acoustic|mellow|ballad/.test(e))   return 0.15;
   if (/med|mid|moderate|normal/.test(e))                              return 0.5;

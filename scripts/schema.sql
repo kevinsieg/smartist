@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS songs (
   heart               BOOLEAN NOT NULL DEFAULT false,  -- favourite, always included in auto-generation
   key                 TEXT,             -- musical key, e.g. "G", "Am"
   genre               TEXT,             -- genre or style grouping
-  energy              TEXT,             -- descriptive energy level, e.g. "Slow", "Medium", "Fast"
+  energy              SMALLINT CHECK (energy BETWEEN 0 AND 10),  -- 0 calm … 10 intense; shown as Low/Middle/High
   time_signature      TEXT,             -- e.g. "4/4", "3/4", "6/8"
   bpm                 INTEGER,          -- beats per minute
   length_min          REAL,             -- duration in decimal minutes, e.g. 3.5 = 3:30
