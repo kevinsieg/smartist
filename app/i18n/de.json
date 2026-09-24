@@ -534,7 +534,6 @@
   "profile.dangerConfirmPrompt": "Dies kann nicht rückgängig gemacht werden. Konto löschen?",
   "profile.dangerConfirmTitle": "Löschen Ihres Kontos bestätigen",
   "profile.dangerDestroy": "Diese Workspaces werden vollständig gelöscht, mit allen Songs, Auftritten und Dateien:",
-  "profile.dangerDone": "Ihr Konto und die zugehörigen Daten wurden gelöscht.",
   "profile.dangerExport": "Zuerst Ihre Daten exportieren",
   "profile.dangerFailed": "Dieser Link ist ungültig oder abgelaufen.",
   "profile.dangerIntro": "Dies löscht Ihr Konto und alles, was nur Sie sehen können. Dies kann nicht rückgängig gemacht werden.",

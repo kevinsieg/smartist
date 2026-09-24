@@ -534,7 +534,6 @@
   "profile.dangerConfirmPrompt": "This cannot be undone. Delete your account?",
   "profile.dangerConfirmTitle": "Confirm deleting your account",
   "profile.dangerDestroy": "These workspaces will be deleted entirely, with all their songs, gigs and files:",
-  "profile.dangerDone": "Your account and its data have been deleted.",
   "profile.dangerExport": "Export your data first",
   "profile.dangerFailed": "That link is invalid or has expired.",
   "profile.dangerIntro": "This removes your account and everything only you can see. It cannot be undone.",
