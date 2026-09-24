@@ -39,6 +39,7 @@ const suites = [
   require('./unit/asset_versions'),
   require('./unit/page_scripts'),
   require('./unit/storage_accounting'),
+  require('./unit/export'),
 ];
 
 (async () => {

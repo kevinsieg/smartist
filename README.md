@@ -304,7 +304,7 @@ All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <toke
 | GET    | `/api/:artist/organizers/:id`     | —    | Single organizer; add `?refs` for linked gigs                                                |
 | PUT    | `/api/:artist/organizers/:id`     | ✓    | Update organizer                                                                             |
 | DELETE | `/api/:artist/organizers/:id`     | ✓    | Soft-delete or hard-delete organizer                                                         |
-| GET    | `/api/:artist/export`             | ✓    | Full data export as JSON (all 9 artist-scoped tables)                                        |
+| GET    | `/api/:artist/export`             | ✓    | Full data export: ZIP of one CSV per table (empty/internal columns dropped)                  |
 
 
 ---
