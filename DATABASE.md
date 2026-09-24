@@ -6,7 +6,7 @@ PostgreSQL via **Neon** (hosted). All tables are scoped to an `artist_id` — a 
 
 **postgres.js** (`postgres` npm package, v3). Connects over the standard PostgreSQL wire protocol (port 5432) using Neon's pooler connection string.
 
-`@neondatabase/serverless` is kept in `package.json` for reference but is **not used** — it was replaced because its HTTP transport has no transaction support (`sql.begin()` is unavailable). postgres.js supports the full interface: tagged-template queries, transactions, and prepared statements.
+`@neondatabase/serverless` is not used by the API — its HTTP transport has no transaction support (`sql.begin()` is unavailable). Only `scripts/apply_schema.js` uses it, to run `schema.sql` over HTTP. postgres.js supports the full interface: tagged-template queries, transactions, and prepared statements.
 
 The swap point is the `DB.connect` line in `api/_db.js`. The rest of the codebase is driver-agnostic (`sql\`...\`` tagged templates only).
 
@@ -27,8 +27,9 @@ artists
   │                                    │
   └─── organizers ◄── gigs.organizer_id┘
   │
+  ├─── users  (one row per person per workspace; email ties them together)
   ├─── gema_works ──── gema_rightholders
-  ├─── rate_limits  (keyed by IP — not artist-scoped)
+  ├─── rate_limits  (keyed by IP, address or band — not artist-scoped)
   └─── subscribers  (landing/demo leads — not artist-scoped)
 ```
 
@@ -60,14 +61,15 @@ artists
 
 ### `artists`
 
-One row per artist. The API is keyed by `slug`; the app gets its slug from `ARTIST_SLUG`.
+One row per artist (a workspace). The API is keyed by `slug`, taken from the URL (`/api/:artist/…`); `ARTIST_SLUG` only sets the default on single-band deployments.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | serial PK | |
 | `slug` | text UNIQUE NOT NULL | URL-safe identifier used in all API routes |
 | `name` | text NOT NULL | Display name |
-| `password_hash` | text NOT NULL | bcrypt hash; plain password never stored |
+| `password_hash` | text | Legacy shared band password (bcrypt). NULL for workspaces created through signup — people log in with their own `users` row |
+| `storage_used_bytes` | bigint DEFAULT 0 | Song-media bytes counted against the plan's storage cap |
 | `config` | jsonb DEFAULT `{}` | UI config — see [Artist config](#artist-config) |
 | `social_links` | jsonb DEFAULT `{}` | Legacy social links field (platforms now in `config.platforms`) |
 
@@ -328,11 +330,11 @@ One row per rightholder per work. Replace-all on import (existing rows deleted b
 
 ### `rate_limits`
 
-Sliding-window rate limiting for auth, request-reset, and OAuth endpoints.
+Sliding-window rate limiting: login, failed band-password bearers, password reset, OAuth, sign-up, invites, setlist shares, deletion and lyrics suggest.
 
 | Column | Notes |
 |--------|-------|
-| `key` PK | e.g. `auth:1.2.3.4`, `oauth:1.2.3.4` |
+| `key` PK | `<purpose>:<ip \| address \| band id>`, e.g. `auth:1.2.3.4`, `reset:you@example.com`, `invite:12` |
 | `window_start` timestamptz | Start of current window |
 | `count` integer | Hits in current window |
 
@@ -347,8 +349,29 @@ Landing page email sign-ups and demo access leads. Not artist-scoped.
 | `id` serial PK | |
 | `email` text UNIQUE NOT NULL | |
 | `source` text DEFAULT `'landing'` | `landing` or `demo` |
-| `meta` jsonb | Demo only: `{ name, genres, perform_country, geo_country, geo_region, geo_city, ua, ref }` |
+| `meta` jsonb | Demo: `{ name, genres, perform_country, geo_country, geo_region, geo_city, ua, ref }`. Sign-up: `{ signup_token_hash, signup_token_expires }` while a link is pending |
 | `created_at` timestamptz DEFAULT NOW() | |
+
+---
+
+### `users`
+
+A login. One row per person **per workspace**; the rows of one person share the same `email`, which is how one session reaches every band they belong to. Emails are stored lowercased (CHECK `users_email_lowercase`).
+
+| Column | Notes |
+|--------|-------|
+| `id` serial PK | Session tokens carry this id |
+| `artist_id` FK → `artists` CASCADE | The workspace |
+| `email` text NOT NULL | Identity across workspaces; UNIQUE per `artist_id` |
+| `password_hash` text | bcrypt; NULL until an invite is accepted, or for Google-only accounts |
+| `role` text | `admin`, `member` or `viewer` |
+| `invite_token_hash`, `invite_expires_at` | SHA-256 of the emailed invite token; 7 days |
+| `invited_by` FK → `users` | |
+| `pending_email`, `email_change_token_hash`, `email_change_expires_at` | Email change waiting for confirmation from the new address (24 h) |
+| `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |
+| `created_at` timestamptz | |
+
+Every emailed token is stored only as a hash.
 
 ---
 
@@ -357,6 +380,8 @@ Landing page email sign-ups and demo access leads. Not artist-scoped.
 ### Multi-tenancy
 
 Every table has an `artist_id` FK. A single deployment and database serves multiple artists. `ARTIST_SLUG` env var tells `GET /api/config` which artist to serve in single-artist deployments.
+
+Row ids are one sequence across all artists, and a foreign key only proves that *some* row exists. The API therefore checks every id that arrives in a request body against the caller's artist (`api/_ownership.js`) and scopes every join by `artist_id`.
 
 ### Soft delete
 
@@ -379,6 +404,7 @@ Songs, venues, organizers, and gigs use `deleted = true` rather than physical de
 `songs.extra` holds per-artist fields (capo, isrc, language, lyrics, …) without schema changes. `artists.config` drives the UI:
 - `displayFields` / `filterFields` — song table columns and setlist generator filters
 - `logoUrl` — nav and print header logo
+- `publicCatalogue` / `publicStage` — opt-in anonymous access (both off unless `true`)
 - `platforms` — streaming/social links managed by `/hub` (see below)
 
 Always patch with JSONB `||` merge, never overwrite the full object — other keys not touched by the current UI operation would be lost.
@@ -449,7 +475,7 @@ R2 file assets (audio, sheet PDFs, playback) are referenced by URL in `songs.ext
 
 All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order, and `setlist_songs.song_id` has no cascade at all, so the song cascade fails while setlist entries still reference those songs.
 
-**Safe deletion sequence — always use this pattern:**
+**Safe deletion sequence — always use this pattern** (`scripts/delete_artist.js` runs the same steps):
 
 ```sql
 BEGIN;
@@ -458,6 +484,15 @@ BEGIN;
 UPDATE gigs
 SET venue_id = NULL, organizer_id = NULL
 WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
+
+-- Other artists' rows must not reference this one's (the API refuses that now,
+-- but older rows may exist): drop or null those references too.
+DELETE FROM setlist_songs
+WHERE song_id IN (SELECT id FROM songs WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug'));
+UPDATE gigs SET venue_id = NULL
+WHERE venue_id IN (SELECT id FROM venues WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug'));
+UPDATE gigs SET organizer_id = NULL
+WHERE organizer_id IN (SELECT id FROM organizers WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug'));
 
 -- setlist_songs.song_id has no cascade — drop the setlists first (that cascades
 -- setlist_songs), otherwise deleting the songs fails with a FK violation.
@@ -501,8 +536,8 @@ SELECT g.*,
        v.name AS venue_name,
        o.name AS organizer_name
 FROM gigs g
-LEFT JOIN venues    v ON v.id = g.venue_id
-LEFT JOIN organizers o ON o.id = g.organizer_id
+LEFT JOIN venues    v ON v.id = g.venue_id     AND v.artist_id = g.artist_id
+LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
 WHERE g.artist_id = $1
 ORDER BY g.date DESC NULLS LAST, g.id DESC;
 ```
@@ -519,8 +554,8 @@ SELECT sl.id, sl.title, sl.comment, sl.created_at,
        g.title AS gig_title, g.date AS gig_date, v.name AS venue_name
 FROM setlists sl
 JOIN setlist_songs ss ON ss.setlist_id = sl.id
-LEFT JOIN gigs g      ON sl.gig_id = g.id
-LEFT JOIN venues v    ON g.venue_id = v.id
+LEFT JOIN gigs g      ON sl.gig_id = g.id   AND g.artist_id = sl.artist_id
+LEFT JOIN venues v    ON g.venue_id = v.id AND v.artist_id = g.artist_id
 WHERE ss.song_id = $1 AND sl.artist_id = $2
 ORDER BY sl.created_at DESC;
 ```

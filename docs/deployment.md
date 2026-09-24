@@ -49,6 +49,11 @@ one `artist_id` and never deletes table-wide; `artists` and `users` rows are
 left alone. It needs the repository secret `DEMO_DATABASE_URL`, pointing at the
 **production** database.
 
+Visitors enter through the `/demo` gate, which gives them a **member** session
+on that band (`DEMO_ARTIST_SLUG`, default `demo`): they can edit songs, gigs and
+setlists, but not settings, members or uploads, and the gate sends no email. A
+password login to the demo band is still a full admin session.
+
 It lives in production rather than on the development branch because the test
 suite writes `[TEST]` rows to development, and schema changes land there first.
 
@@ -75,7 +80,10 @@ vercel env ls production --project <name>    # what that one actually has
 | `DATABASE_URL` | yes | yes | Per environment. |
 | `ARTIST_SLUG` | **no** | yes | Presence pins a deployment to one band. |
 | `SUPER_ADMIN_EMAILS` | yes | optional | Needs a `users` row to match; `scripts/create_user.js` creates the first one. |
-| `APP_ORIGIN`, `R2_*`, `RESEND_*`, `GEMINI_API_KEY` | yes | yes | See `tenant-onboarding.md`. |
+| `APP_ORIGIN` | yes | yes | Base of every emailed link. Without it links fall back to the request's `Host` header. |
+| `R2_*`, `RESEND_*`, `GEMINI_API_KEY` | yes | yes | See `tenant-onboarding.md`. |
+| `DEMO_ARTIST_SLUG` | optional | no | Band the `/demo` gate opens; default `demo`. |
+| `FACEBOOK_TRUST_EMAIL` | optional | optional | Only with Facebook sign-in; see `oauth-setup.md`. |
 | `BETTERSTACK_TOKEN` | production only | production only | |
 
 **Variables only reach new builds.** Adding one to a live deployment changes

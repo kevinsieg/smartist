@@ -43,5 +43,5 @@ All write tests clean up after themselves:
 
 If a test run is interrupted mid-way, any `[TEST]` records left in the dev DB can be removed manually:
 - Setlists → `/setlist-history`
-- Users → `/users`
+- Users → `/<slug>/settings` (Members)
 - Venues/organizers/gigs → their respective management pages

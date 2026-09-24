@@ -16,10 +16,10 @@
  * affected works are deleted before re-inserting, so re-runs are idempotent.
  *
  * Usage:
- *   node scripts/import_gema.js --band <slug> --ids <Identifikatoren.csv>
- *   node scripts/import_gema.js --band <slug> --ids <...csv> --info <Werkinformationen.csv>
- *   node scripts/import_gema.js --band <slug> --beteiligte <Beteiligte.csv>
- *   node scripts/import_gema.js --band <slug> --ids <...csv> --info <...csv> --beteiligte <...csv>
+ *   node scripts/import_gema.js --artist <slug> --ids <Identifikatoren.csv>
+ *   node scripts/import_gema.js --artist <slug> --ids <...csv> --info <Werkinformationen.csv>
+ *   node scripts/import_gema.js --artist <slug> --beteiligte <Beteiligte.csv>
+ *   node scripts/import_gema.js --artist <slug> --ids <...csv> --info <...csv> --beteiligte <...csv>
  *   Add --dry-run to preview without writing.
  *
  * Reads DATABASE_URL from .env or .env.local in the project root.
@@ -157,13 +157,14 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const flag   = k => { const i = args.indexOf(k); return i !== -1 ? args[i + 1] : null; };
 
-  const slug           = flag('--band') || process.env.ARTIST_SLUG;
+  // --artist like every other script; --band kept for old command lines.
+  const slug           = flag('--artist') || flag('--band') || process.env.ARTIST_SLUG;
   const idsFile        = flag('--ids');
   const infoFile       = flag('--info');
   const beteiligteFile = flag('--beteiligte');
 
   if (!slug || (!idsFile && !infoFile && !beteiligteFile)) {
-    console.error('Usage: node scripts/import_gema.js --band <slug> [--ids <ids.csv>] [--info <info.csv>] [--beteiligte <beteiligte.csv>] [--dry-run]');
+    console.error('Usage: node scripts/import_gema.js --artist <slug> [--ids <ids.csv>] [--info <info.csv>] [--beteiligte <beteiligte.csv>] [--dry-run]');
     process.exit(1);
   }
 

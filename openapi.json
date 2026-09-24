@@ -1,20 +1,30 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Smartist — Band API",
-    "version": "1.0.0",
-    "description": "Internal API for setlist management, song database, and gig tracking.\n\n**Auth**: most write endpoints require a `Bearer` token in the `Authorization` header. The token is either the band password or a short-lived magic token obtained via `/request-reset`.\n\nThe `{band}` path segment is the band slug (e.g. `yourband`). Fetch it at runtime from `GET /api/config`."
+    "title": "Smartist API",
+    "version": "1.1.0",
+    "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/{band}/auth` (email + password) or from Google sign-in. Older single-band installs also accept the band password itself. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
+    "license": {
+      "name": "AGPL-3.0-or-later",
+      "url": "https://www.gnu.org/licenses/agpl-3.0.html"
+    }
   },
   "servers": [
-    { "url": "https://yourapp.example.com", "description": "Production" },
-    { "url": "http://localhost:3000", "description": "Local (vercel dev)" }
+    {
+      "url": "https://yourapp.example.com",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local (vercel dev)"
+    }
   ],
   "components": {
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Band password or magic login token"
+        "description": "Session token from login or Google sign-in (legacy installs: the band password)"
       }
     },
     "parameters": {
@@ -22,117 +32,386 @@
         "name": "band",
         "in": "path",
         "required": true,
-        "schema": { "type": "string" },
-        "description": "Band slug — obtain from `GET /api/config`",
+        "schema": {
+          "type": "string"
+        },
+        "description": "Band slug — from `GET /api/config`",
         "example": "yourband"
       },
       "id": {
         "name": "id",
         "in": "path",
         "required": true,
-        "schema": { "type": "integer" },
-        "description": "Resource ID"
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "description": "Numeric ID"
       }
     },
     "schemas": {
       "Error": {
         "type": "object",
         "properties": {
-          "error": { "type": "string" }
+          "error": {
+            "type": "string"
+          }
         },
-        "required": ["error"]
+        "required": [
+          "error"
+        ]
       },
       "Ok": {
         "type": "object",
         "properties": {
-          "ok": { "type": "boolean", "enum": [true] }
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
         }
       },
       "Song": {
         "type": "object",
         "properties": {
-          "id":                   { "type": "integer" },
-          "band_id":              { "type": "integer" },
-          "title":                { "type": "string" },
-          "active":               { "type": "boolean" },
-          "key":                  { "type": "string",  "nullable": true },
-          "genre":             { "type": "string",  "nullable": true },
-          "tempo":                { "type": "number",  "nullable": true },
-          "length_min":           { "type": "number",  "nullable": true },
-          "interpret":            { "type": "string",  "nullable": true },
-          "reference_interpret":  { "type": "string",  "nullable": true },
-          "comment":              { "type": "string",  "nullable": true },
-          "extra":                { "type": "object" },
-          "deleted":              { "type": "boolean" }
+          "id": {
+            "type": "integer"
+          },
+          "artist_id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "heart": {
+            "type": "boolean",
+            "description": "Favourite"
+          },
+          "key": {
+            "type": "string",
+            "nullable": true
+          },
+          "genre": {
+            "type": "string",
+            "nullable": true
+          },
+          "energy": {
+            "type": "string",
+            "nullable": true,
+            "description": "low / middle / high"
+          },
+          "time_signature": {
+            "type": "string",
+            "nullable": true
+          },
+          "bpm": {
+            "type": "integer",
+            "nullable": true
+          },
+          "length_min": {
+            "type": "number",
+            "nullable": true
+          },
+          "interpret": {
+            "type": "string",
+            "nullable": true
+          },
+          "reference_interpret": {
+            "type": "string",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true,
+            "description": "Private note — omitted for visitors without a session"
+          },
+          "extra": {
+            "type": "object",
+            "description": "Free-form per-song data (`lyrics`, `capo`, `isrc`, `language`, `listenUrl`, `sheetUrl`, `playbackUrl`, `referenceUrl`, `songinfoUrl`, …). Keys ending in `Url` must be http(s); a URL into the storage bucket is only accepted when the upload flow stored it."
+          },
+          "deleted": {
+            "type": "boolean"
+          }
         }
       },
       "SongWithStats": {
         "allOf": [
-          { "$ref": "#/components/schemas/Song" },
+          {
+            "$ref": "#/components/schemas/Song"
+          },
           {
             "type": "object",
             "properties": {
-              "play_count":     { "type": "integer", "description": "Number of distinct setlists this song appears in" },
-              "last_played_at": { "type": "string", "format": "date-time", "nullable": true }
+              "play_count": {
+                "type": "integer",
+                "description": "Number of distinct setlists this song appears in"
+              },
+              "last_played_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              }
             }
           }
         ]
       },
       "SongInput": {
         "type": "object",
-        "required": ["title"],
+        "required": [
+          "title"
+        ],
         "properties": {
-          "title":                { "type": "string", "maxLength": 200 },
-          "active":               { "type": "boolean", "default": true },
-          "key":                  { "type": "string", "maxLength": 20,  "nullable": true },
-          "genre":             { "type": "string", "maxLength": 100, "nullable": true },
-          "tempo":                { "type": "number", "nullable": true },
-          "length_min":           { "type": "number", "nullable": true },
-          "interpret":            { "type": "string", "maxLength": 200, "nullable": true },
-          "reference_interpret":  { "type": "string", "maxLength": 500, "nullable": true },
-          "comment":              { "type": "string", "maxLength": 2000, "nullable": true },
-          "extra":                { "type": "object", "nullable": true }
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          },
+          "heart": {
+            "type": "boolean",
+            "default": false
+          },
+          "key": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20
+          },
+          "genre": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+          },
+          "energy": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "time_signature": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20
+          },
+          "bpm": {
+            "type": "number",
+            "nullable": true
+          },
+          "length_min": {
+            "type": "number",
+            "nullable": true
+          },
+          "interpret": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "reference_interpret": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "extra": {
+            "type": "object",
+            "nullable": true
+          }
         }
       },
       "Gig": {
         "type": "object",
         "properties": {
-          "id":      { "type": "integer" },
-          "band_id": { "type": "integer" },
-          "name":    { "type": "string" },
-          "date":    { "type": "string", "format": "date", "nullable": true },
-          "venue":   { "type": "string", "nullable": true },
-          "notes":   { "type": "string", "nullable": true }
+          "id": {
+            "type": "integer"
+          },
+          "artist_id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "time_start": {
+            "type": "string",
+            "nullable": true,
+            "description": "HH:MM[:SS]"
+          },
+          "time_end": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "description": "concert, festival, wedding, private, other"
+          },
+          "venue_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "venue_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "organizer_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "organizer_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "location": {
+            "type": "string",
+            "nullable": true,
+            "description": "Free-text location when no venue is linked"
+          },
+          "additional_link": {
+            "type": "string",
+            "nullable": true
+          },
+          "additional_text": {
+            "type": "string",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true,
+            "description": "Private note — omitted for visitors without a session"
+          },
+          "poster_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "thumb_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "GigInput": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "title"
+        ],
         "properties": {
-          "name":  { "type": "string", "maxLength": 200 },
-          "date":  { "type": "string", "format": "date", "nullable": true },
-          "venue": { "type": "string", "maxLength": 200, "nullable": true },
-          "notes": { "type": "string", "maxLength": 2000, "nullable": true }
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "time_start": {
+            "type": "string",
+            "nullable": true
+          },
+          "time_end": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "venue_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Must be one of this band's venues"
+          },
+          "organizer_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Must be one of this band's organizers"
+          },
+          "location": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "additional_link": {
+            "type": "string",
+            "nullable": true
+          },
+          "additional_text": {
+            "type": "string",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          }
         }
       },
       "Setlist": {
         "type": "object",
         "properties": {
-          "id":         { "type": "integer" },
-          "band_id":    { "type": "integer" },
-          "title":      { "type": "string", "nullable": true },
-          "comment":    { "type": "string", "nullable": true },
-          "gig_id":     { "type": "integer", "nullable": true },
-          "gig_name":   { "type": "string", "nullable": true },
-          "gig_date":   { "type": "string", "nullable": true },
-          "gig_venue":  { "type": "string", "nullable": true },
-          "song_count": { "type": "integer" },
-          "created_at": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "integer"
+          },
+          "artist_id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "gig_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "gig_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "gig_date": {
+            "type": "string",
+            "nullable": true
+          },
+          "gig_venue": {
+            "type": "string",
+            "nullable": true
+          },
+          "song_count": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "SetlistWithSongs": {
         "allOf": [
-          { "$ref": "#/components/schemas/Setlist" },
+          {
+            "$ref": "#/components/schemas/Setlist"
+          },
           {
             "type": "object",
             "properties": {
@@ -140,8 +419,17 @@
                 "type": "array",
                 "items": {
                   "allOf": [
-                    { "$ref": "#/components/schemas/Song" },
-                    { "type": "object", "properties": { "position": { "type": "integer" } } }
+                    {
+                      "$ref": "#/components/schemas/Song"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "position": {
+                          "type": "integer"
+                        }
+                      }
+                    }
                   ]
                 }
               }
@@ -151,98 +439,369 @@
       },
       "SetlistInput": {
         "type": "object",
-        "required": ["song_ids"],
         "properties": {
-          "title":    { "type": "string", "maxLength": 200, "nullable": true },
-          "comment":  { "type": "string", "maxLength": 2000, "nullable": true },
-          "gig_id":   { "type": "integer", "nullable": true },
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "gig_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Must be one of this band's gigs"
+          },
           "song_ids": {
             "type": "array",
-            "items": { "type": "integer" },
-            "minItems": 1,
+            "items": {
+              "type": "integer"
+            },
             "maxItems": 200,
-            "description": "Ordered list of song IDs (position = array index)"
+            "description": "Ordered song IDs (position = array index); every ID must be one of this band's songs"
           }
         }
       },
       "SongLog": {
         "type": "object",
         "properties": {
-          "id":         { "type": "integer" },
-          "band_id":    { "type": "integer" },
-          "song_id":    { "type": "integer", "nullable": true },
-          "action":     { "type": "string", "enum": ["create", "update", "delete"] },
-          "song_data":  { "type": "object", "description": "Snapshot of the song at the time of the action" },
-          "changed_at": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "integer"
+          },
+          "artist_id": {
+            "type": "integer"
+          },
+          "song_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "action": {
+            "type": "string"
+          },
+          "song_data": {
+            "type": "object",
+            "description": "Snapshot of the song (or file event details) at the time of the action"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Venue": {
+        "type": "object",
+        "description": "CRM venue. Carries contact data (`contact_name`, `phone`, `generic_email`), so it is never public.",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "street": {
+            "type": "string",
+            "nullable": true
+          },
+          "street_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "postcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string",
+            "nullable": true
+          },
+          "generic_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "contact_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "type": "string",
+            "nullable": true
+          },
+          "lat": {
+            "type": "number",
+            "nullable": true
+          },
+          "lng": {
+            "type": "number",
+            "nullable": true
+          },
+          "last_communication": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "season": {
+            "type": "string",
+            "nullable": true
+          },
+          "preferred_period": {
+            "type": "string",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Organizer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_communication": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "extra": {
+            "type": "object"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
         }
       }
     },
     "responses": {
       "401": {
-        "description": "Unauthorized",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "description": "No valid session for this band",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       },
       "404": {
         "description": "Not found",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       },
       "405": {
         "description": "Method not allowed",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       },
       "500": {
         "description": "Internal server error",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     }
   },
   "paths": {
     "/api/config": {
       "get": {
-        "summary": "Get band config and song list",
-        "description": "Returns the band slug, name, config, and all non-deleted songs. Use this to bootstrap the frontend — the `slug` value is the `{band}` path parameter for all other endpoints.",
-        "operationId": "getConfig",
-        "tags": ["Config"],
-        "security": [],
+        "summary": "Get band config",
+        "tags": [
+          "Config"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          }
+        ],
+        "description": "Band slug, name, branding config, plan and usage. `songs` and `counts` are included only with a session or when the band has a public catalogue. `role` is the caller's role in this band (null without a session). The `slug` is the `{band}` path parameter for every other endpoint.",
         "responses": {
           "200": {
-            "description": "Band config with songs",
+            "description": "Band config",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "slug":   { "type": "string" },
-                    "name":   { "type": "string" },
-                    "config": { "type": "object" },
-                    "songs":  { "type": "array", "items": { "$ref": "#/components/schemas/Song" } }
+                    "slug": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "config": {
+                      "type": "object"
+                    },
+                    "role": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "admin",
+                        "member",
+                        "viewer",
+                        null
+                      ]
+                    },
+                    "songs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Song"
+                      }
+                    },
+                    "counts": {
+                      "type": "object"
+                    },
+                    "plan": {
+                      "type": "object"
+                    },
+                    "usage": {
+                      "type": "object"
+                    },
+                    "googleLogin": {
+                      "type": "boolean"
+                    },
+                    "facebookLogin": {
+                      "type": "boolean"
+                    },
+                    "singleTenant": {
+                      "type": "boolean"
+                    }
                   }
                 }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/auth": {
       "post": {
-        "summary": "Verify password",
-        "description": "Checks the band password. Returns `{ ok: true }` on success. The token to use in subsequent `Authorization: Bearer` headers is the raw password (or a magic token from `/request-reset`).",
-        "operationId": "auth",
-        "tags": ["Auth"],
+        "summary": "Log in",
+        "tags": [
+          "Auth"
+        ],
         "security": [],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Email + password login for a member of this band. Returns a session token for `Authorization: Bearer`, valid 8 hours (30 days with `rememberMe`). Changing or resetting the password ends every earlier session. Older single-band installs also accept `{ password }` alone (the band password); that returns `{ ok: true }` and the password itself is the bearer token. Rate-limited per IP.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["password"],
+                "required": [
+                  "password"
+                ],
                 "properties": {
-                  "password": { "type": "string", "maxLength": 1000 }
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "rememberMe": {
+                    "type": "boolean"
+                  }
                 }
               }
             }
@@ -250,33 +809,110 @@
         },
         "responses": {
           "200": {
-            "description": "Password accepted",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } }
+            "description": "Logged in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "admin",
+                        "member",
+                        "viewer"
+                      ]
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "artists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
-          "400": { "description": "Missing password", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/request-reset": {
       "post": {
-        "summary": "Request a magic login link",
-        "description": "Sends a one-time login link to the admin email. Always returns `{ ok: true }` regardless of whether the email matches (prevents email enumeration).",
-        "operationId": "requestReset",
-        "tags": ["Auth"],
+        "summary": "Request a password-reset link",
+        "tags": [
+          "Auth"
+        ],
         "security": [],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Emails a 30-minute link to set a new password to a member of this band. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["email"],
+                "required": [
+                  "email"
+                ],
                 "properties": {
-                  "email": { "type": "string", "format": "email" }
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
                 }
               }
             }
@@ -284,61 +920,155 @@
         },
         "responses": {
           "200": {
-            "description": "Always returned (silent fail if email does not match)",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } }
+            "description": "Always returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
           },
-          "500": { "$ref": "#/components/responses/500" }
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/songs": {
       "get": {
-        "summary": "List all songs",
-        "description": "Returns all non-deleted songs with aggregated play stats (`play_count`, `last_played_at`).",
-        "operationId": "listSongs",
-        "tags": ["Songs"],
-        "security": [],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "summary": "List songs",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "With a session: every non-deleted song with play stats, as an array. Without a session only when the band has a public catalogue — then paged (`limit` ≤ 30, `offset`, `active=0` to include inactive songs) and returned as `{ rows, total, limit, offset }`.",
         "responses": {
           "200": {
-            "description": "Array of songs",
+            "description": "Songs",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SongWithStats" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SongWithStats"
+                  }
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       },
       "post": {
         "summary": "Create a song",
-        "operationId": "createSong",
-        "tags": ["Songs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role. The same endpoint also carries lyrics and media actions selected by a body field (`lyrics_update_id`, `lyrics_delete_id`, `lyrics_suggest_id`, `upload_presign_id`, `media_confirm_id`, `media_delete_id`) — these exist because multi-segment POSTs to catch-all routes fail under `vercel dev`.",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SongInput" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SongInput"
+              }
+            }
+          }
         },
         "responses": {
           "201": {
-            "description": "Song created",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Song" } } }
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Song"
+                }
+              }
+            }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "500": { "$ref": "#/components/responses/500" }
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       },
       "patch": {
         "summary": "Batch update songs",
-        "description": "Updates multiple songs in a single request (max 100). Each item must include `id`. Items with invalid or oversized fields are silently skipped.",
-        "operationId": "batchUpdateSongs",
-        "tags": ["Songs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role. Up to 100 rows; only the fields sent are written, and `extra` is merged into the stored object. Rows that fail validation are reported back instead of aborting the batch.",
         "requestBody": {
           "required": true,
           "content": {
@@ -348,8 +1078,20 @@
                 "maxItems": 100,
                 "items": {
                   "allOf": [
-                    { "$ref": "#/components/schemas/SongInput" },
-                    { "type": "object", "required": ["id"], "properties": { "id": { "type": "integer" } } }
+                    {
+                      "type": "object",
+                      "required": [
+                        "id"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/SongInput"
+                    }
                   ]
                 }
               }
@@ -358,66 +1100,341 @@
         },
         "responses": {
           "200": {
-            "description": "Update complete",
+            "description": "Result",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok":    { "type": "boolean" },
-                    "count": { "type": "integer" }
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "rejected": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
             }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "500": { "$ref": "#/components/responses/500" }
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/songs/{id}": {
+      "get": {
+        "summary": "Get a song",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "One song with GEMA identifiers and its arrangement versions (used by stage view). Without a session only with a public catalogue or public stage links; `comment` is then omitted.",
+        "responses": {
+          "200": {
+            "description": "Song",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Song"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "iswc": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "gema_work_number": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "gema_language": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "arrangements": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
       "delete": {
         "summary": "Soft-delete a song",
-        "description": "Sets `deleted = true`. The song remains in the database and can be restored.",
-        "operationId": "deleteSong",
-        "tags": ["Songs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
+        "tags": [
+          "Songs"
         ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Sets `deleted` and logs a snapshot; restore with `/restore`.",
         "responses": {
-          "204": { "description": "Deleted" },
-          "401": { "$ref": "#/components/responses/401" },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/restore": {
+      "post": {
+        "summary": "Restore a deleted song",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Undeletes the row, or recreates it from the last delete snapshot in the audit log.",
+        "responses": {
+          "200": {
+            "description": "Restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Song"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/setlists": {
+      "get": {
+        "summary": "Setlists containing a song",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Without a session only with a public catalogue.",
+        "responses": {
+          "200": {
+            "description": "Setlists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Setlist"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/songs/{id}/audio": {
       "post": {
-        "summary": "Get a presigned upload URL for a song audio file",
-        "description": "Returns a short-lived presigned PUT URL for uploading an audio file directly to Cloudflare R2, plus the public URL where the file will be accessible. The client uploads directly to R2 (not through this server). After a successful upload, save the `publicUrl` to the song via `PATCH /api/{band}/songs`.",
-        "operationId": "getAudioUploadUrl",
-        "tags": ["Songs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/songId" }
+        "summary": "Presign a audio upload",
+        "tags": [
+          "Media"
         ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role. Returns a 5-minute presigned PUT URL for a recording (mp3, m4a, ogg, wav, flac; 50 MB). The URL signs the content type and the exact byte count; the key is `audio/<artist id>/<uuid>-<name>`.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["filename", "contentType"],
+                "required": [
+                  "filename",
+                  "size"
+                ],
                 "properties": {
-                  "filename":    { "type": "string", "example": "cripple-creek.mp3" },
-                  "contentType": { "type": "string", "example": "audio/mpeg" },
-                  "size":        { "type": "integer", "description": "File size in bytes (used for pre-validation)" }
+                  "filename": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  }
                 }
               }
             }
@@ -425,266 +1442,1201 @@
         },
         "responses": {
           "200": {
-            "description": "Presigned upload URL",
+            "description": "Upload target",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "uploadUrl": { "type": "string", "description": "Presigned PUT URL (5-min expiry) — upload file body directly here" },
-                    "publicUrl": { "type": "string", "description": "Public URL where the file will be accessible after upload" }
+                    "uploadUrl": {
+                      "type": "string"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
                   }
                 }
               }
             }
           },
-          "400": { "description": "Invalid filename, unsupported type, or file too large" },
-          "401": { "description": "Unauthorized" }
-        }
-      },
-      "delete": {
-        "summary": "Delete a song audio file",
-        "description": "Removes the audio file from Cloudflare R2 (if hosted there) and clears `extra.listenUrl` on the song.",
-        "operationId": "deleteAudio",
-        "tags": ["Songs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/songId" }
-        ],
-        "responses": {
-          "200": { "description": "File deleted and DB field cleared" },
-          "401": { "description": "Unauthorized" },
-          "404": { "description": "Song not found" }
-        }
-      }
-    },
-    "/api/{band}/songs/{id}/restore": {
-      "post": {
-        "summary": "Restore a deleted song",
-        "description": "Restores the most recently deleted version. If the song still exists as a soft-deleted row, it is undeleted in place. Otherwise it is re-inserted from the audit log snapshot.",
-        "operationId": "restoreSong",
-        "tags": ["Songs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
-        ],
-        "responses": {
-          "201": {
-            "description": "Song restored",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Song" } } }
-          },
-          "401": { "$ref": "#/components/responses/401" },
-          "404": { "description": "No delete record found for this song", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "500": { "$ref": "#/components/responses/500" }
-        }
-      }
-    },
-    "/api/{band}/songs/{id}/setlists": {
-      "get": {
-        "summary": "Setlists containing a song",
-        "description": "Returns all setlists (with gig info) that include this song, ordered by creation date descending.",
-        "operationId": "getSongSetlists",
-        "tags": ["Songs"],
-        "security": [],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
-        ],
-        "responses": {
-          "200": {
-            "description": "Matching setlists",
+          "400": {
+            "description": "Invalid input",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Setlist" } }
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Confirm a audio upload",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "publicUrl"
+                ],
+                "properties": {
+                  "publicUrl": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a song's audio file",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role.",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/sheet": {
+      "post": {
+        "summary": "Presign a sheet upload",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role. Returns a 5-minute presigned PUT URL for a sheet-music PDF (20 MB). The URL signs the content type and the exact byte count; the key is `sheets/<artist id>/<uuid>-<name>`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "filename",
+                  "size"
+                ],
+                "properties": {
+                  "filename": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadUrl": {
+                      "type": "string"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Confirm a sheet upload",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "publicUrl"
+                ],
+                "properties": {
+                  "publicUrl": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a song's sheet file",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role.",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/playback": {
+      "post": {
+        "summary": "Presign a playback upload",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role. Returns a 5-minute presigned PUT URL for a playback track (mp3, m4a, ogg, wav, flac; 50 MB). The URL signs the content type and the exact byte count; the key is `playback/<artist id>/<uuid>-<name>`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "filename",
+                  "size"
+                ],
+                "properties": {
+                  "filename": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadUrl": {
+                      "type": "string"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Confirm a playback upload",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "publicUrl"
+                ],
+                "properties": {
+                  "publicUrl": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a song's playback file",
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Admin role.",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/song-logs": {
       "get": {
         "summary": "Recent audit log",
-        "description": "Returns the 10 most recent entries from the song audit trail.",
-        "operationId": "getSongLogs",
-        "tags": ["Songs"],
-        "security": [],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "songId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Only file events for this song"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Audit log entries",
+            "description": "Log entries",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SongLog" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SongLog"
+                  }
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/gigs": {
       "get": {
-        "summary": "List all gigs",
-        "operationId": "listGigs",
-        "tags": ["Gigs"],
-        "security": [],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "summary": "List gigs",
+        "tags": [
+          "Gigs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ics"
+              ]
+            },
+            "description": "`ics` returns an iCalendar feed of upcoming gigs (no comments)"
+          }
+        ],
+        "description": "Paged, newest first. Without a session only with a public catalogue; comments are then omitted.",
         "responses": {
           "200": {
-            "description": "Array of gigs",
-            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Gig" } } } }
+            "description": "Gigs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Gig"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
           },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       },
       "post": {
         "summary": "Create a gig",
-        "operationId": "createGig",
-        "tags": ["Gigs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "tags": [
+          "Gigs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role.",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GigInput" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GigInput"
+              }
+            }
+          }
         },
         "responses": {
           "201": {
-            "description": "Gig created",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gig" } } }
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gig"
+                }
+              }
+            }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "500": { "$ref": "#/components/responses/500" }
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/gigs/{id}": {
       "get": {
         "summary": "Get a gig",
-        "operationId": "getGig",
-        "tags": ["Gigs"],
-        "security": [],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
+        "tags": [
+          "Gigs"
         ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "refs",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: also return linked setlists, venue and organizer as `{ gig, refs }`"
+          }
+        ],
+        "description": "Without a session only with a public catalogue.",
         "responses": {
           "200": {
             "description": "Gig",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gig" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gig"
+                }
+              }
+            }
           },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       },
       "put": {
         "summary": "Update a gig",
-        "operationId": "updateGig",
-        "tags": ["Gigs"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
+        "tags": [
+          "Gigs"
         ],
-        "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GigInput" } } }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated gig",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gig" } } }
-          },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
-        }
-      }
-    },
-    "/api/{band}/setlists": {
-      "get": {
-        "summary": "List all setlists",
-        "description": "Returns setlists with gig info and song count, ordered by creation date descending.",
-        "operationId": "listSetlists",
-        "tags": ["Setlists"],
-        "security": [],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
-        "responses": {
-          "200": {
-            "description": "Array of setlists",
-            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Setlist" } } } }
-          },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
-        }
-      },
-      "post": {
-        "summary": "Create a setlist",
-        "description": "Creates a setlist and inserts songs in the given order. `song_ids` determines position (index = position).",
-        "operationId": "createSetlist",
-        "tags": ["Setlists"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
-        "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SetlistInput" } } }
-        },
-        "responses": {
-          "201": {
-            "description": "Setlist created",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Setlist" } } }
-          },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "500": { "$ref": "#/components/responses/500" }
-        }
-      }
-    },
-    "/api/{band}/setlists/{id}": {
-      "get": {
-        "summary": "Get a setlist with songs",
-        "operationId": "getSetlist",
-        "tags": ["Setlists"],
-        "security": [],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
+        "security": [
+          {
+            "bearerAuth": []
+          }
         ],
-        "responses": {
-          "200": {
-            "description": "Setlist with ordered songs",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SetlistWithSongs" } } }
-          },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
-        }
-      },
-      "put": {
-        "summary": "Update a setlist",
-        "description": "Updates metadata and rebuilds the song list. The existing `setlist_songs` rows are deleted and replaced with the new `song_ids` order.",
-        "operationId": "updateSetlist",
-        "tags": ["Setlists"],
-        "security": [{ "bearerAuth": [] }],
         "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
         ],
+        "description": "Member role. `?action=poster` confirms an uploaded poster (`POST ?action=poster-url` presigns it; `DELETE ?action=poster` removes it).",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  { "$ref": "#/components/schemas/SetlistInput" },
-                  { "type": "object", "properties": { "song_ids": { "minItems": 0 } } }
+                "$ref": "#/components/schemas/GigInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gig"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "description": "Gig is deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a gig",
+        "tags": [
+          "Gigs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Soft delete by default; `{ \"hard\": true }` removes the row, and `cascade: [\"setlists\"]` its setlists too.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hard": {
+                    "type": "boolean"
+                  },
+                  "cascade": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "setlists"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/setlists": {
+      "get": {
+        "summary": "List setlists",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Never public — only single setlists can be opened from a stage link.",
+        "responses": {
+          "200": {
+            "description": "Setlists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Setlist"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create, duplicate or share a setlist",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role. One endpoint, three actions chosen by the body: `{ song_ids, title?, comment?, gig_id? }` creates; `{ duplicate_id }` copies a setlist; `{ share_id, email }` emails it as a PDF (rate-limited per band and IP).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SetlistInput"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "duplicate_id"
+                    ],
+                    "properties": {
+                      "duplicate_id": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "share_id",
+                      "email"
+                    ],
+                    "properties": {
+                      "share_id": {
+                        "type": "integer"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      }
+                    }
+                  }
                 ]
               }
             }
@@ -692,58 +2644,654 @@
         },
         "responses": {
           "200": {
-            "description": "Updated setlist",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Setlist" } } }
+            "description": "Shared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
           },
-          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
-        }
-      }
-    },
-    "/api/{band}/setlists/{id}/duplicate": {
-      "post": {
-        "summary": "Duplicate a setlist",
-        "description": "Creates a copy of the setlist with the same songs and order. The copy is unlinked from any gig and its title gets a `(copy)` suffix.",
-        "operationId": "duplicateSetlist",
-        "tags": ["Setlists"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
-        ],
-        "responses": {
           "201": {
-            "description": "Duplicated setlist",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Setlist" } } }
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setlist"
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/401" },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
-    "/api/{band}/setlists/{id}/share": {
-      "post": {
-        "summary": "Email a setlist as PDF",
-        "description": "Generates a PDF of the setlist and sends it to the given email address via Resend.",
-        "operationId": "shareSetlist",
-        "tags": ["Setlists"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "$ref": "#/components/parameters/band" },
-          { "$ref": "#/components/parameters/id" }
+    "/api/{band}/setlists/{id}": {
+      "get": {
+        "summary": "Get a setlist with songs",
+        "tags": [
+          "Setlists"
         ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Without a session only with public stage links; song comments are then omitted.",
+        "responses": {
+          "200": {
+            "description": "Setlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetlistWithSongs"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a setlist",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Replaces title, comment, gig and the whole song list.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
+                "$ref": "#/components/schemas/SetlistInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setlist"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a setlist",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/venues": {
+      "get": {
+        "summary": "List venues",
+        "tags": [
+          "Venues"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "has_gigs",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dir",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "letter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "slim",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: a plain array of `{ id, name, … }` for pickers instead of the paged object"
+          }
+        ],
+        "description": "Pro plan (402 otherwise). Private CRM data — always needs a session. Paged: `{ rows, total, limit, offset }`.",
+        "responses": {
+          "200": {
+            "description": "Venues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Venue"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a venue",
+        "tags": [
+          "Venues"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role, Pro plan.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Venue"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Venue"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/venues/{id}": {
+      "get": {
+        "summary": "Get a venue",
+        "tags": [
+          "Venues"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "refs",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: also return linked gigs"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Venue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Venue"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a venue",
+        "tags": [
+          "Venues"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role, Pro plan.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Venue"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Venue"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a venue",
+        "tags": [
+          "Venues"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role, Pro plan. Soft delete by default; `{ \"hard\": true }` removes the row.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
                 "type": "object",
-                "required": ["email"],
                 "properties": {
-                  "email": { "type": "string", "format": "email" }
+                  "hard": {
+                    "type": "boolean"
+                  }
                 }
               }
             }
@@ -751,54 +3299,499 @@
         },
         "responses": {
           "200": {
-            "description": "Email sent",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } }
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           },
-          "400": { "description": "Invalid email", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "$ref": "#/components/responses/401" },
-          "404": { "$ref": "#/components/responses/404" },
-          "500": { "$ref": "#/components/responses/500" }
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/organizers": {
+      "get": {
+        "summary": "List organizers",
+        "tags": [
+          "Organizers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "slim",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: a plain array of `{ id, name, … }` for pickers instead of the paged object"
+          }
+        ],
+        "description": "Pro plan (402 otherwise). Private CRM data — always needs a session. Paged: `{ rows, total, limit, offset }`.",
+        "responses": {
+          "200": {
+            "description": "Organizers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Organizer"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an organizer",
+        "tags": [
+          "Organizers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role, Pro plan.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Organizer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organizer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/organizers/{id}": {
+      "get": {
+        "summary": "Get an organizer",
+        "tags": [
+          "Organizers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "refs",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: also return linked gigs"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organizer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organizer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update an organizer",
+        "tags": [
+          "Organizers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role, Pro plan.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Organizer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organizer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an organizer",
+        "tags": [
+          "Organizers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role, Pro plan. Soft delete by default; `{ \"hard\": true }` removes the row.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hard": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     },
     "/api/{band}/export": {
       "get": {
         "summary": "Export all data",
-        "description": "Returns a full JSON export of all songs, gigs, setlists, and setlist_songs for the band. Response is served with a `Content-Disposition: attachment` header.",
-        "operationId": "exportData",
-        "tags": ["Export"],
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/band" }],
+        "tags": [
+          "Export"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role. A ZIP archive with one CSV per non-empty table: `artist`, `songs`, `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`. Soft-deleted rows and internal columns are left out; `songs.extra` is flattened into columns; cells that a spreadsheet would evaluate are prefixed with `'`. Media files are referenced by URL, not included.",
         "responses": {
           "200": {
-            "description": "Full data export",
+            "description": "ZIP archive",
             "content": {
-              "application/json": {
+              "application/zip": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "band":          { "type": "object", "properties": { "slug": { "type": "string" }, "name": { "type": "string" } } },
-                    "songs":         { "type": "array", "items": { "$ref": "#/components/schemas/Song" } },
-                    "gigs":          { "type": "array", "items": { "$ref": "#/components/schemas/Gig" } },
-                    "setlists":      { "type": "array", "items": { "$ref": "#/components/schemas/Setlist" } },
-                    "setlist_songs": { "type": "array", "items": { "type": "object" } }
-                  }
+                  "type": "string",
+                  "format": "binary"
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/401" },
-          "500": { "$ref": "#/components/responses/500" }
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
         }
       }
     }
-  },
-  "tags": [
-    { "name": "Config",   "description": "Bootstrap / configuration" },
-    { "name": "Auth",     "description": "Password verification and magic login" },
-    { "name": "Songs",    "description": "Song CRUD, audit log, play statistics" },
-    { "name": "Gigs",     "description": "Concert management" },
-    { "name": "Setlists", "description": "Setlist management, sharing, and stage view" },
-    { "name": "Export",   "description": "Full data export" }
-  ]
+  }
 }
