@@ -30,16 +30,25 @@ jobs:
     needs: unit-tests
     # Secrets are unavailable to pull requests from forks and cannot be read in
     # a job-level `if`, so the job runs everywhere and the steps skip themselves
-    # when VERCEL_TOKEN is absent.
+    # when VERCEL_TOKEN or the protection-bypass secret is absent.
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # Preview deployments sit behind Vercel Deployment Protection; the suite
+      # needs the project's "Protection Bypass for Automation" secret to reach them.
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
       - name: Check for Vercel credentials
         id: creds
         run: |
-          if [ -n "$VERCEL_TOKEN" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "No VERCEL_TOKEN — skipping integration tests."; fi
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "No VERCEL_TOKEN — skipping integration tests."
+          elif [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
+            echo "::warning::Integration tests skipped: add the Vercel 'Protection Bypass for Automation' secret as VERCEL_AUTOMATION_BYPASS_SECRET (previews are protected, every request would get Vercel's 401)."
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - if: steps.creds.outputs.ok == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
