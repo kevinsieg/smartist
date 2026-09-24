@@ -6,7 +6,7 @@
  *   node scripts/create_user.js --artist <slug> --email <address> [--role admin|member|viewer] [--yes]
  *   node scripts/create_user.js --artist <slug> --email <address> --set-password   # existing account
  *   USER_PASSWORD=… node scripts/create_user.js --artist <slug> --email <address> --yes   # unattended
- *   DATABASE_URL=<url> node scripts/create_user.js --artist bandtwo --email me@example.com
+ *   DATABASE_URL=<url> node scripts/create_user.js --artist myband --email me@example.com
  *
  * Why this exists: signup (api/_domain/registration.js) creates a *new* band,
  * and invite (api/[artist]/auth.js) needs an already-authenticated admin. A band

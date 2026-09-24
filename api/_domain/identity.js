@@ -80,7 +80,7 @@ async function resolveOAuthEmail(provider, code, redirectUri) {
     // matching this address against an existing account as a supported pattern,
     // and withholds the field entirely when it has none to give — so a missing
     // email is the only "don't trust this" signal there is. See
-    // docs/2026-09-22-oauth-setup.md for what that does and does not guarantee.
+    // docs/oauth-setup.md for what that does and does not guarantee.
     const meParams = new URLSearchParams({
       fields: 'email',
       access_token,

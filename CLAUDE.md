@@ -2,6 +2,11 @@
 
 Artist management app — Vercel serverless (no build step) + Neon PostgreSQL. See `README.md` for infrastructure names, env vars, and setup steps.
 
+**This repository is public.** Plans, specs and design notes go to `docs/plans/`
+(git-ignored, overrides the global "save plans to docs/" rule); `docs/` itself
+holds only published documentation. No tenant names, personal data or private
+infrastructure details in tracked files.
+
 ---
 
 ## Environments
@@ -11,7 +16,7 @@ Artist management app — Vercel serverless (no build step) + Neon PostgreSQL. S
 | `dev` | Preview | Neon dev | default; push freely |
 | `main` | Production | Neon main | PR-merge only |
 
-**This code runs as several Vercel projects, one per artist** (`smartist-bandone`, `smartist-bandtwo`, `smartist-demo`, …), each with its own env vars and its own `DATABASE_URL`. A new required env var must be set on *every* project — `vercel project ls`, then `vercel env ls production --project <name>` — and a schema change applied to every production DB. Missing `APP_SECRET` took `smartist-bandtwo` and `smartist-demo` down for months — every API route 500ing — because only the linked project had it. Required vars and the post-deploy check: `docs/tenant-onboarding.md`.
+**This code runs as several Vercel projects, one per deployment** (e.g. the public app plus one project per single-band domain), each with its own env vars and its own `DATABASE_URL`. A new required env var must be set on *every* project — `vercel project ls`, then `vercel env ls production --project <name>` — and a schema change applied to every production DB. A missing `APP_SECRET` once took two projects down for months — every API route 500ing — because only the linked project had it. Required vars and the post-deploy check: `docs/tenant-onboarding.md`.
 
 ---
 
@@ -188,7 +193,7 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 - **Super-admin:** `/admin` page + `?action=admin-overview`/`admin-set-plan`, gated by `SUPER_ADMIN_EMAILS` (allowlist via global user token, email from DB). Manual grants also via `scripts/plans.js`.
 - **Support/donations (live now):** `SUPPORT_LINKS` constant in `footer.js` (provider-agnostic; empty-url entries skipped; optional `img` for official brand buttons loaded as `<img>` — third-party `button.js` is **not** used, CSP blocks it). `renderSupportLinks(el)` renders them in the footer + the Settings donation panel shown after a self-serve upgrade. i18n: `settings.plan.donatePrompt`.
 - **One footer everywhere:** `app/js/footer.js` + `app/css/footer.css` (languages left, donations centred, right: smartist.studio · Contact · Impressum; two compact rows under 480px). `/impressum` redirects to smartist.studio/impressum (one legal notice). Pages without a workspace slug (login, root contact) and signup/onboarding show a "smartist studio" wordmark linking to the marketing site. Every page loads `footer.js` before `common.js`; `injectShell()` calls `renderAppFooter()`, standalone pages carry `<footer data-app-footer></footer>`. `footer.css` has variable fallbacks because `demo.html` does not load `app.css`.
-- **Specs in `docs/`:** `2026-06-27-subscription-tiers-design.md` (tiers), `…-billing-lemonsqueezy-design.md` (**parked** paid rollout — Lemon Squeezy MoR; the webhook function is free since `gigs/[id].js` was merged into `gigs.js`; client-set `plan` is already locked down), `…-support-links-design.md` (current donations + upgrade seam).
+- **Docs:** `docs/architecture.md` (why things are built this way), `docs/deployment.md`, `docs/tenant-onboarding.md`, `docs/oauth-setup.md`, `docs/ci-cd.md`.
 
 ---
 
