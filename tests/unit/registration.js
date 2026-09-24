@@ -57,6 +57,27 @@ async function run(r) {
     assert(upsertCalled, 'expected upsert into subscribers');
   });
 
+  await testAsync('stores a mixed-case address lowercased (OAuth providers keep case)', async () => {
+    let stored;
+    const sql = async (strings, ...vals) => {
+      if (String(strings[0]).includes('INSERT INTO subscribers')) stored = vals[0];
+      return [];
+    };
+    await createSignupToken('Kev.Test@Example.COM', sql);
+    assertEq(stored, 'kev.test@example.com');
+  });
+
+  await testAsync('createArtistAndAdmin lowercases the admin address', async () => {
+    let stored;
+    const tx = async (strings, ...vals) => {
+      if (String(strings[0]).includes('INSERT INTO users')) { stored = vals[1]; return [{ id: 2 }]; }
+      return [{ id: 1 }];
+    };
+    const sql = { begin: fn => fn(tx) };
+    await createArtistAndAdmin('Band', 'band', 'Kev.Test@Example.COM', sql);
+    assertEq(stored, 'kev.test@example.com');
+  });
+
   console.log(B('\nverifySignupToken'));
 
   await testAsync('returns { email } for valid non-expired token', async () => {
