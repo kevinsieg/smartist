@@ -356,7 +356,6 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | `scripts/import_gema.js`      | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/delete_artist.js`    | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
 | `scripts/demo_reset.js`       | Snapshot / restore the public demo band (`scripts/demo_seed.json`)       |
-| `scripts/migrate_*.js`        | One-off data migrations, kept for older databases                        |
 | `scripts/schema.sql`          | Raw schema — apply directly with `psql` if preferred                     |
 
 ---
