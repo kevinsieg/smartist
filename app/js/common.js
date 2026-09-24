@@ -876,6 +876,21 @@ async function initPage(onReady, opts) {
 }
 
 // Set a status element's text and error styling.
+// A write button answers the click at once and cannot fire twice.
+async function withBusy(btn, fn, label = t('common.saving')) {
+  if (!btn) return fn();
+  if (btn.disabled) return;
+  const text = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = label;
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = text;
+  }
+}
+
 function setStatus(elementId, msg, isError = false) {
   const el = document.getElementById(elementId);
   if (!el) return;

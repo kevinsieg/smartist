@@ -8,10 +8,14 @@ const { ownsVenue, ownsOrganizer } = require('../_ownership');
 
 // venue_id / organizer_id come from the body; both must be this artist's rows.
 async function checkRefs(sql, artistId, body, res) {
-  if (!await ownsVenue(sql, artistId, body.venue_id ?? null)) {
+  const [venueOk, organizerOk] = await Promise.all([
+    ownsVenue(sql, artistId, body.venue_id ?? null),
+    ownsOrganizer(sql, artistId, body.organizer_id ?? null),
+  ]);
+  if (!venueOk) {
     res.status(400).json({ error: 'Invalid venue_id' }); return false;
   }
-  if (!await ownsOrganizer(sql, artistId, body.organizer_id ?? null)) {
+  if (!organizerOk) {
     res.status(400).json({ error: 'Invalid organizer_id' }); return false;
   }
   return true;
@@ -36,17 +40,19 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       // Public visitors never see the private gig comment.
       if (!user) { const { comment: _, ...rest } = gig; gig = rest; }
       if (req.query.refs) {
-        const setlists = await sql`
-          SELECT id, title FROM setlists
-          WHERE gig_id = ${gigId} AND artist_id = ${artist.id}
-          ORDER BY id DESC
-        `;
-        const venue = gig.venue_id
-          ? (await sql`SELECT id, name, city FROM venues WHERE id = ${gig.venue_id} AND artist_id = ${artist.id}`)[0] ?? null
-          : null;
-        const organizer = gig.organizer_id
-          ? (await sql`SELECT id, name, city FROM organizers WHERE id = ${gig.organizer_id} AND artist_id = ${artist.id}`)[0] ?? null
-          : null;
+        const [setlists, venue, organizer] = await Promise.all([
+          sql`
+            SELECT id, title FROM setlists
+            WHERE gig_id = ${gigId} AND artist_id = ${artist.id}
+            ORDER BY id DESC
+          `,
+          gig.venue_id
+            ? sql`SELECT id, name, city FROM venues WHERE id = ${gig.venue_id} AND artist_id = ${artist.id}`.then(r => r[0] ?? null)
+            : null,
+          gig.organizer_id
+            ? sql`SELECT id, name, city FROM organizers WHERE id = ${gig.organizer_id} AND artist_id = ${artist.id}`.then(r => r[0] ?? null)
+            : null,
+        ]);
         const setlistIds = setlists.map(s => s.id);
         const setlistSongs = setlistIds.length
           ? await sql`

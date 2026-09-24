@@ -170,7 +170,7 @@ function openAddModal() {
 
 function closePlatformModal() { closeModal('platform-modal'); }
 
-async function savePlatform() {
+async function savePlatform(btn) {
   const url   = document.getElementById('pm-url').value.trim();
   const label = document.getElementById('pm-label').value.trim();
   const note  = document.getElementById('pm-note').value.trim() || undefined;
@@ -189,8 +189,9 @@ async function savePlatform() {
     platforms[_editingId] = entry;
   }
 
-  setStatus('pm-status', t('hub.saving'));
-  const r = await apiFetch('/api/config', 'PATCH', { config: { platforms } });
+  setStatus('pm-status', '');
+  const r = await withBusy(btn, () => apiFetch('/api/config', 'PATCH', { config: { platforms } }));
+  if (!r) return;
   if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || t('hub.errorFallback'), true); return; }
 
   if (!_cfg.config) _cfg.config = {};
@@ -200,13 +201,14 @@ async function savePlatform() {
   renderHub();
 }
 
-async function disconnectPlatform() {
+async function disconnectPlatform(btn) {
   if (!_editingId) return;
   const platforms = { ..._platforms() };
   delete platforms[_editingId];
 
-  setStatus('pm-status', t('hub.saving'));
-  const r = await apiFetch('/api/config', 'PATCH', { config: { platforms } });
+  setStatus('pm-status', '');
+  const r = await withBusy(btn, () => apiFetch('/api/config', 'PATCH', { config: { platforms } }));
+  if (!r) return;
   if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || t('hub.errorFallback'), true); return; }
 
   if (!_cfg.config) _cfg.config = {};

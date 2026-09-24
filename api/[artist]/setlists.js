@@ -48,17 +48,16 @@ module.exports = wrap(async function handler(req, res) {
       const dupId = Number(rawDupId);
       if (!Number.isInteger(dupId) || dupId <= 0) return res.status(400).json({ error: 'Invalid duplicate_id' });
 
-      const [source] = await sql`SELECT * FROM setlists WHERE id = ${dupId} AND artist_id = ${band.id}`;
+      const [[source], sourceSongs] = await Promise.all([
+        sql`SELECT * FROM setlists WHERE id = ${dupId} AND artist_id = ${band.id}`,
+        sql`SELECT song_id, position FROM setlist_songs WHERE setlist_id = ${dupId} ORDER BY position`,
+      ]);
       if (!source) return res.status(404).json({ error: 'Setlist not found' });
 
       const [copy] = await sql`
         INSERT INTO setlists (artist_id, title, gig_id, comment)
         VALUES (${band.id}, ${source.title ? source.title + ' (copy)' : null}, null, ${source.comment ?? null})
         RETURNING *
-      `;
-
-      const sourceSongs = await sql`
-        SELECT song_id, position FROM setlist_songs WHERE setlist_id = ${dupId} ORDER BY position
       `;
       if (sourceSongs.length > 0) {
         const copyIds   = sourceSongs.map(() => copy.id);
@@ -145,10 +144,12 @@ module.exports = wrap(async function handler(req, res) {
     const gigId = rawGigId != null ? Number(rawGigId) : null;
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
-    if (!await ownsSongs(sql, band.id, validIds))
-      return res.status(400).json({ error: 'Invalid song_ids' });
-    if (!await ownsGig(sql, band.id, gigId))
-      return res.status(400).json({ error: 'Invalid gig_id' });
+    const [songsOk, gigOk] = await Promise.all([
+      ownsSongs(sql, band.id, validIds),
+      ownsGig(sql, band.id, gigId),
+    ]);
+    if (!songsOk) return res.status(400).json({ error: 'Invalid song_ids' });
+    if (!gigOk)   return res.status(400).json({ error: 'Invalid gig_id' });
 
     const [setlist] = await sql`
       INSERT INTO setlists (artist_id, title, gig_id, comment)

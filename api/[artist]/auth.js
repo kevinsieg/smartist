@@ -49,13 +49,15 @@ module.exports = wrap(async function handler(req, res) {
     if (!user) return res.status(400).json({ error: 'Invalid or expired invite' });
 
     const hash = await bcrypt.hash(password, 12);
-    await sql`
-      UPDATE users
-      SET password_hash = ${hash}, invite_token_hash = NULL, invite_expires_at = NULL
-      WHERE id = ${user.id}
-    `;
+    const [, artists] = await Promise.all([
+      sql`
+        UPDATE users
+        SET password_hash = ${hash}, invite_token_hash = NULL, invite_expires_at = NULL
+        WHERE id = ${user.id}
+      `,
+      getArtistsForUser(user.id, sql),
+    ]);
     const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
-    const artists      = await getArtistsForUser(user.id, sql);
     return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
   }
 
@@ -89,12 +91,14 @@ module.exports = wrap(async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid or expired link' });
 
     const hash = await bcrypt.hash(String(password), 12);
-    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${user.id}`;
+    const [, artists] = await Promise.all([
+      sql`UPDATE users SET password_hash = ${hash} WHERE id = ${user.id}`,
+      getArtistsForUser(user.id, sql),
+    ]);
 
     // Setting the password is what logs them in — they came here because they
     // could not, and sending them back to a login form would be a joke.
     const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
-    const artists      = await getArtistsForUser(user.id, sql);
     await logger.info('password_set_via_reset', { band: slug, email: user.email });
     return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
   }
@@ -171,9 +175,8 @@ module.exports = wrap(async function handler(req, res) {
 
     // Magic token login (password reset link click)
     if (magic) {
-      if (await checkRateLimit(`auth:${clientIp(req)}`, 10, 60))
-        return res.status(429).json({ error: 'Too many attempts — try again later' });
-      const band = await getArtist(slug);
+      const [limited, band] = await Promise.all([checkRateLimit(`auth:${clientIp(req)}`, 10, 60), getArtist(slug)]);
+      if (limited) return res.status(429).json({ error: 'Too many attempts — try again later' });
       if (!band) return res.status(404).json({ error: 'Not found' });
 
       if (hint) {
@@ -200,9 +203,8 @@ module.exports = wrap(async function handler(req, res) {
     // Legacy bootstrap: password-only (no email field, old installs)
     if (!email && password) {
       if (String(password).length > 1000) return res.status(400).json({ error: 'Invalid' });
-      if (await checkRateLimit(`auth:${clientIp(req)}`, 10, 60))
-        return res.status(429).json({ error: 'Too many attempts — try again later' });
-      const band = await getArtist(slug);
+      const [limited, band] = await Promise.all([checkRateLimit(`auth:${clientIp(req)}`, 10, 60), getArtist(slug)]);
+      if (limited) return res.status(429).json({ error: 'Too many attempts — try again later' });
       if (!band) return res.status(404).json({ error: 'Artist not found' });
       if (!await checkCredentials(password, band)) return res.status(401).json({ error: 'Invalid password' });
       return res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
@@ -210,9 +212,8 @@ module.exports = wrap(async function handler(req, res) {
 
     // Email + password login
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    if (await checkRateLimit(`auth:${clientIp(req)}`, 10, 60))
-      return res.status(429).json({ error: 'Too many attempts — try again later' });
-    const band = await getArtist(slug);
+    const [limited, band] = await Promise.all([checkRateLimit(`auth:${clientIp(req)}`, 10, 60), getArtist(slug)]);
+    if (limited) return res.status(429).json({ error: 'Too many attempts — try again later' });
     if (!band) return res.status(404).json({ error: 'Artist not found' });
 
     const [user] = await sql`

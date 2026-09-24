@@ -91,13 +91,22 @@ module.exports = wrap(async function handler(req, res) {
       anonymous = !user;
     }
 
-    const [setlist] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
-      FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
-    `;
+    const [[setlist], songs] = await Promise.all([
+      sql`
+        SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
+        FROM setlists s
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
+      `,
+      req.method === 'GET' ? sql`
+        SELECT songs.*, ss.position
+        FROM setlist_songs ss
+        JOIN songs ON ss.song_id = songs.id
+        WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${band.id}
+        ORDER BY ss.position
+      ` : null,
+    ]);
     if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
 
     if (req.method === 'DELETE') {
@@ -106,13 +115,6 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      const songs = await sql`
-        SELECT songs.*, ss.position
-        FROM setlist_songs ss
-        JOIN songs ON ss.song_id = songs.id
-        WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${band.id}
-        ORDER BY ss.position
-      `;
       // Visitors on a public stage link never see the band's private song
       // notes. The setlist's own comment stays: stage shows it as a subtitle.
       if (anonymous) for (const s of songs) delete s.comment;
@@ -132,10 +134,12 @@ module.exports = wrap(async function handler(req, res) {
     const gigId = rawGigId != null ? Number(rawGigId) : null;
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
-    if (!await ownsSongs(sql, band.id, validIds))
-      return res.status(400).json({ error: 'Invalid song_ids' });
-    if (!await ownsGig(sql, band.id, gigId))
-      return res.status(400).json({ error: 'Invalid gig_id' });
+    const [songsOk, gigOk] = await Promise.all([
+      ownsSongs(sql, band.id, validIds),
+      ownsGig(sql, band.id, gigId),
+    ]);
+    if (!songsOk) return res.status(400).json({ error: 'Invalid song_ids' });
+    if (!gigOk)   return res.status(400).json({ error: 'Invalid gig_id' });
 
     await sql`
       UPDATE setlists SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
@@ -172,21 +176,20 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
-    const [source] = await sql`
-      SELECT * FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}
-    `;
+    const [[source], sourceSongs] = await Promise.all([
+      sql`SELECT * FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}`,
+      sql`
+        SELECT song_id, position FROM setlist_songs
+        WHERE setlist_id = ${setlistId}
+        ORDER BY position
+      `,
+    ]);
     if (!source) return res.status(404).json({ error: 'Setlist not found' });
 
     const [copy] = await sql`
       INSERT INTO setlists (artist_id, title, gig_id, comment)
       VALUES (${band.id}, ${source.title ? source.title + ' (copy)' : null}, null, ${source.comment ?? null})
       RETURNING *
-    `;
-
-    const sourceSongs = await sql`
-      SELECT song_id, position FROM setlist_songs
-      WHERE setlist_id = ${setlistId}
-      ORDER BY position
     `;
 
     if (sourceSongs.length > 0) {

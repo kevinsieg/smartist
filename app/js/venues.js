@@ -908,10 +908,14 @@ async function saveVenue() {
     lat:  _geocodeAccepted ? _pendingLat : null,
     lng:  _geocodeAccepted ? _pendingLng : null,
   };
-  setStatus('vm-status-msg', t('venues.savingMsg'));
+  setStatus('vm-status-msg', '');
   const url = editingId ? `/api/${artistSlug}/venues/${editingId}` : `/api/${artistSlug}/venues`;
-  const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
-  const json = await r.json();
+  const res = await withBusy(document.getElementById('vm-save-btn'), async () => {
+    const r = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
+    return { r, json: await r.json() };
+  });
+  if (!res) return;
+  const { r, json } = res;
   if (!r.ok) { setStatus('vm-status-msg', json.error || t('gigs.errorFallback'), true); return; }
   if (editingId) delete _venueRefsCache[editingId];
   closeVenueModal();

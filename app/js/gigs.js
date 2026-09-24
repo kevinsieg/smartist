@@ -527,13 +527,17 @@ function closeVenueQc() {
   document.getElementById('gm-venue-qc').classList.remove('open');
 }
 
-async function quickCreateVenue() {
+async function quickCreateVenue(btn) {
   const name = document.getElementById('gm-venue-qc-name').value.trim();
   const city = document.getElementById('gm-venue-qc-city').value.trim();
   if (!name) { setStatus('gm-venue-qc-status', t('gigs.nameRequired'), true); return; }
-  setStatus('gm-venue-qc-status', t('gigs.saving'));
-  const r = await apiFetch(`/api/${artistSlug}/venues`, 'POST', { name, city: city || null });
-  const json = await r.json();
+  setStatus('gm-venue-qc-status', '');
+  const res = await withBusy(btn, async () => {
+    const r = await apiFetch(`/api/${artistSlug}/venues`, 'POST', { name, city: city || null });
+    return { r, json: await r.json() };
+  });
+  if (!res) return;
+  const { r, json } = res;
   if (!r.ok) { setStatus('gm-venue-qc-status', json.error || t('gigs.errorFallback'), true); return; }
   allVenues.push(json);
   if (_venueTypeahead) _venueTypeahead.updateItems(allVenues);
@@ -586,13 +590,17 @@ function closeOrganizerQc() {
   document.getElementById('gm-organizer-qc').classList.remove('open');
 }
 
-async function quickCreateOrganizer() {
+async function quickCreateOrganizer(btn) {
   const name = document.getElementById('gm-organizer-qc-name').value.trim();
   const city = document.getElementById('gm-organizer-qc-city').value.trim();
   if (!name) { setStatus('gm-organizer-qc-status', t('gigs.nameRequired'), true); return; }
-  setStatus('gm-organizer-qc-status', t('gigs.saving'));
-  const r = await apiFetch(`/api/${artistSlug}/organizers`, 'POST', { name, city: city || null });
-  const json = await r.json();
+  setStatus('gm-organizer-qc-status', '');
+  const res = await withBusy(btn, async () => {
+    const r = await apiFetch(`/api/${artistSlug}/organizers`, 'POST', { name, city: city || null });
+    return { r, json: await r.json() };
+  });
+  if (!res) return;
+  const { r, json } = res;
   if (!r.ok) { setStatus('gm-organizer-qc-status', json.error || t('gigs.errorFallback'), true); return; }
   allOrganizers.push(json);
   if (_organizerTypeahead) _organizerTypeahead.updateItems(allOrganizers);
@@ -806,10 +814,14 @@ async function saveGig() {
     additional_link: document.getElementById('gm-link').value.trim()      || null,
     comment:         document.getElementById('gm-comment').value.trim()   || null,
   };
-  setStatus('gm-status', t('gigs.saving'));
-  const url = editingId ? `/api/${artistSlug}/gigs/${editingId}` : `/api/${artistSlug}/gigs`;
-  const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
-  const json = await r.json();
+  setStatus('gm-status', '');
+  const url = editingId ? `/api/${artistSlug}/gigs?id=${editingId}` : `/api/${artistSlug}/gigs`;
+  const res = await withBusy(document.getElementById('gm-save-btn'), async () => {
+    const r = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
+    return { r, json: await r.json() };
+  });
+  if (!res) return;
+  const { r, json } = res;
   if (!r.ok) { setStatus('gm-status', json.error || t('gigs.errorFallback'), true); return; }
   closeGigModal();
   await loadGigs();
@@ -826,7 +838,7 @@ async function renderGigRelated(gigId) {
 
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await apiFetch(`/api/${artistSlug}/gigs/${gigId}?refs=1`);
+      const r = await apiFetch(`/api/${artistSlug}/gigs?id=${gigId}&refs=1`);
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
