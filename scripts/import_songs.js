@@ -15,7 +15,10 @@
  *       "active": true,                 // optional, default true
  *       "key": "G",                     // optional
  *       "genre": "Blues",            // optional
- *       "tempo": "Medium",              // optional
+ *       "heart": false,                 // optional, favourite
+ *       "energy": "middle",             // optional (low / middle / high); "tempo" accepted as an alias
+ *       "time_signature": "4/4",        // optional
+ *       "bpm": 120,                     // optional
  *       "length_min": 3.5,              // optional, decimal minutes
  *       "interpret": "Artist",          // optional
  *       "reference_interpret": "Ref",   // optional
@@ -116,15 +119,18 @@ function confirmDb(url) {
 
     await sql`
       INSERT INTO songs
-        (artist_id, title, active, key, genre, tempo, length_min,
+        (artist_id, title, active, heart, key, genre, energy, time_signature, bpm, length_min,
          interpret, reference_interpret, comment, extra)
       VALUES (
         ${artist.id},
         ${String(s.title).trim()},
         ${s.active ?? true},
+        ${s.heart  ?? false},
         ${s.key        ?? null},
         ${s.genre   ?? null},
-        ${s.tempo      ?? null},
+        ${s.energy ?? s.tempo ?? null},
+        ${s.time_signature ?? null},
+        ${s.bpm ?? null},
         ${s.length_min ?? null},
         ${s.interpret           ?? null},
         ${s.reference_interpret ?? null},
