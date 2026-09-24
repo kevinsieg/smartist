@@ -317,7 +317,8 @@
       if (r.ok) {
         clearToken();
         // replace, not assign: Back must not return to a spent link.
-        window.location.replace('https://smartist.studio/goodbye');
+        var loc = (window.i18n && window.i18n.getLocale && window.i18n.getLocale()) || 'en';
+        window.location.replace('https://smartist.studio' + (loc === 'en' ? '' : '/' + loc) + '/goodbye');
         return;
       }
       if (r.status === 400) {
