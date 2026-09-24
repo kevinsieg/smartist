@@ -188,7 +188,7 @@ async function initSetlist(params, el, cfg) {
   const setTitle  = data.title ? `"${escHtml(data.title)}"` : '';
   const mainTitle = gigLine ? escHtml(gigLine) : (setTitle || `Setlist #${setlistId}`);
 
-  document.title = `${data.title || data.gig_name || 'Stage'} — ${cfg.name}`;
+  document.title = `smartist · ${data.title || data.gig_name || 'Stage'} · ${cfg.name}`;
 
   let totalMin = 0;
   const items = songs.map((song, i) => {
@@ -260,7 +260,7 @@ async function initSong(params, el, cfg) {
     if (navIdx >= 0) navHtml = _navHtml(fromId, navSongs, navIdx);
   }
 
-  document.title = `${song.title} — ${cfg.name}`;
+  document.title = `smartist · ${song.title} · ${cfg.name}`;
 
   const extra   = song.extra || {};
   const gitCapo = extra.gitCapo   != null ? extra.gitCapo   : null;

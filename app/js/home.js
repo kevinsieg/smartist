@@ -69,7 +69,7 @@ async function init() {
       return;
     }
     applyNav(cfg.name, cfg.config);
-    document.title = cfg.name || 'smartist';
+    document.title = 'smartist' + (cfg.name ? ' · ' + cfg.name : '');
   } catch {
     renderLogin();
     return;

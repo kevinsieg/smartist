@@ -195,7 +195,7 @@ function applyPlanNavLocks(planFeatures) {
         a.classList.toggle('current', a.getAttribute('href').replace(/\/+$/, '') === path);
       });
       if (cached.name && document.title && !document.title.includes(cached.name)) {
-        document.title = document.title + ' — ' + cached.name;
+        document.title = document.title + ' · ' + cached.name;
       }
     }
   } catch {}
@@ -653,7 +653,7 @@ function applyNav(bandName, bandConfig) {
   }
 
   if (bandName && document.title && !document.title.includes(bandName)) {
-    document.title = `${document.title} — ${bandName}`;
+    document.title = `${document.title} · ${bandName}`;
   }
 
   const path = window.location.pathname.replace(/\/+$/, '');
