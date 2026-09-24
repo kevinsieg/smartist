@@ -23,9 +23,9 @@ function _openSongPanelContent(item, panelEl) {
   var _spd = '<div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
   var audioHtml = '';
   if (listenUrl  && audioRe.test(listenUrl))
-    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(listenUrl) + '"></audio>' + _spd + '</div>';
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(listenUrl)) + '"></audio>' + _spd + '</div>';
   if (playbackUrl && audioRe.test(playbackUrl))
-    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(playbackUrl) + '"></audio>' + _spd + '</div>';
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(playbackUrl)) + '"></audio>' + _spd + '</div>';
 
   var actions = '';
   if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" onclick="_openSongEditForm(\'' + sidEsc + '\', document.getElementById(\'view-side-panel-inner\'))">' +

@@ -4,6 +4,18 @@ const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { wrap } = require('../_handler');
 const { validateStr } = require('../_validate');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
+const { ownsVenue, ownsOrganizer } = require('../_ownership');
+
+// venue_id / organizer_id come from the body; both must be this artist's rows.
+async function checkRefs(sql, artistId, body, res) {
+  if (!await ownsVenue(sql, artistId, body.venue_id ?? null)) {
+    res.status(400).json({ error: 'Invalid venue_id' }); return false;
+  }
+  if (!await ownsOrganizer(sql, artistId, body.organizer_id ?? null)) {
+    res.status(400).json({ error: 'Invalid organizer_id' }); return false;
+  }
+  return true;
+}
 
 // One gig: /api/:artist/gigs/:id is rewritten to /api/:artist/gigs?id=:id so both live in
 // a single serverless function (Hobby plan allows 12, and all 12 are in use).
@@ -16,8 +28,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       let [gig] = await sql`
         SELECT g.*, v.name AS venue_name, o.name AS organizer_name
         FROM gigs g
-        LEFT JOIN venues v ON v.id = g.venue_id
-        LEFT JOIN organizers o ON o.id = g.organizer_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
         WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
       `;
       if (!gig) return res.status(404).json({ error: 'Gig not found' });
@@ -40,7 +52,7 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
           ? await sql`
               SELECT ss.setlist_id, ss.position, s.title
               FROM setlist_songs ss
-              JOIN songs s ON s.id = ss.song_id
+              JOIN songs s ON s.id = ss.song_id AND s.artist_id = ${artist.id}
               WHERE ss.setlist_id = ANY(${setlistIds}::int[])
               ORDER BY ss.setlist_id, ss.position
             `
@@ -122,6 +134,7 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       if (comment  === false) return res.status(400).json({ error: 'comment too long' });
       const location = validateStr(body.location, 200);
       if (location === false) return res.status(400).json({ error: 'location too long' });
+      if (!await checkRefs(sql, artist.id, body, res)) return;
       const [updated] = await sql`
         UPDATE gigs SET
           title = ${title}, date = ${body.date || null},
@@ -197,7 +210,7 @@ module.exports = wrap(async function handler(req, res) {
       const gigs = await sql`
         SELECT g.*, v.name AS venue_name, v.city AS venue_city
         FROM gigs g
-        LEFT JOIN venues v ON v.id = g.venue_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
         WHERE g.artist_id = ${artist.id}
           AND g.deleted = false AND g.date >= ${today}
         ORDER BY g.date ASC, g.time_start ASC NULLS LAST
@@ -253,8 +266,8 @@ module.exports = wrap(async function handler(req, res) {
              o.name AS organizer_name,
              COUNT(*) OVER() AS total
       FROM gigs g
-      LEFT JOIN venues v ON v.id = g.venue_id
-      LEFT JOIN organizers o ON o.id = g.organizer_id
+      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+      LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
       WHERE g.artist_id = ${artist.id}
       ORDER BY g.date DESC NULLS LAST, g.id DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -280,6 +293,7 @@ module.exports = wrap(async function handler(req, res) {
     if (comment  === false) return res.status(400).json({ error: 'comment too long' });
     const location = validateStr(body.location, 200);
     if (location === false) return res.status(400).json({ error: 'location too long' });
+    if (!await checkRefs(sql, artist.id, body, res)) return;
     const [gig] = await sql`
       INSERT INTO gigs (artist_id, title, date, venue_id, organizer_id, type, time_start, time_end, additional_link, additional_text, comment, location)
       VALUES (
