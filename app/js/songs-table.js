@@ -225,6 +225,9 @@ function renderRow(song) {
           oninput="markDirty('${sid}')">
       </td>`;
     }
+    if (c.type === 'energy') {
+      return `<td class="${c.cls}${sticky}">${energyInputHtml(sid, c.key, val, `markDirty('${sid}')`)}</td>`;
+    }
     if (c.type === 'number') {
       return `<td class="${c.cls}${sticky}">
         <input type="number" data-id="${sid}" data-key="${c.key}"
@@ -292,6 +295,32 @@ function _setBulkStatus(cls, msg) {
 }
 
 // --- Collect row ---
+
+// Energy 0–10 as a slider. A range input always has a value, so "not set" lives in
+// the hidden field collectRow reads; the slider itself carries no data-id.
+function energyInputHtml(sid, key, val, onDirty) {
+  const raw = val === null || val === undefined ? '' : String(val).trim();
+  const has = raw !== '' && isFinite(Number(raw));
+  const n = has ? Number(raw) : 5;
+  // An unmigrated word ("Medium") stays in the hidden field, so saving the row
+  // keeps it; the server turns it into its number on save.
+  return `<span class="energy-input">` +
+    `<input type="text" data-id="${sid}" data-key="${key}" value="${escHtml(raw)}" style="display:none">` +
+    `<span class="energy-end">${escHtml(t('songs.energyLow'))}</span>` +
+    `<input type="range" min="0" max="10" step="1" value="${n}" class="energy-range${has ? '' : ' energy-range--unset'}"` +
+      ` title="${has ? n : escHtml(raw)}" aria-label="${escHtml(t('songs.fieldEnergy'))}" oninput="_energySet(this, this.value);${onDirty}">` +
+    `<span class="energy-end">${escHtml(t('songs.energyHigh'))}</span>` +
+    `<button type="button" class="energy-clear" title="${escHtml(t('songs.energyClear'))}"` +
+      ` onclick="_energySet(this.parentNode.querySelector('.energy-range'), '');${onDirty}">×</button>` +
+  `</span>`;
+}
+
+function _energySet(range, value) {
+  const wrap = range.parentNode;
+  wrap.querySelector('input[type="text"]').value = value;
+  range.classList.toggle('energy-range--unset', value === '');
+  range.title = value;
+}
 
 function collectRow(sid) {
   const inputs = document.querySelectorAll(`input[data-id="${sid}"], textarea[data-id="${sid}"], select[data-id="${sid}"]`);
