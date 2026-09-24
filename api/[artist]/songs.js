@@ -385,17 +385,17 @@ module.exports = wrap(async function handler(req, res) {
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
     const url = song.extra?.[config.extraKey];
+    const writes = [sql`UPDATE songs SET extra = extra - ${config.extraKey} WHERE id = ${songId} AND artist_id = ${band.id}`];
     if (url) {
       const delHead = await verifyUpload(keyFromUrl(url));
       const removed = isOwnMediaUrl(url, band.id, keyFromUrl) ? await deleteFromR2(url) : false;
-      if (removed && delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
-      await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
+      if (removed && delHead) writes.push(sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`);
+      writes.push(insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
         filename:  filenameFromUrl(url),
         deletedAt: new Date().toISOString(),
-      });
+      }));
     }
-
-    await sql`UPDATE songs SET extra = extra - ${config.extraKey} WHERE id = ${songId} AND artist_id = ${band.id}`;
+    await Promise.all(writes);
     return res.json({ ok: true });
   }
 
