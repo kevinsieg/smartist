@@ -99,7 +99,6 @@
   "dashboard.hintGig": "Notez où et quand vous vous êtes produit.",
   "dashboard.hintSongs_one": "Vous avez {count} chanson. Regroupez-les dans une setlist.",
   "dashboard.hintSongs_other": "Vous avez {count} chansons. Regroupez-les dans une setlist.",
-  "dashboard.hintVenues": "Liez les concerts aux salles pour construire votre carte de performances.",
   "dashboard.taskAddSong": "Ajouter une chanson",
   "dashboard.taskBuildSetlist": "Créer une setlist",
   "dashboard.taskFindSong": "Trouver une chanson",

@@ -99,7 +99,6 @@
   "dashboard.hintGig": "Halten Sie fest, wo und wann Sie aufgetreten sind.",
   "dashboard.hintSongs_one": "Sie haben {count} Song. Fassen Sie ihn in einer Setlist zusammen.",
   "dashboard.hintSongs_other": "Sie haben {count} Songs. Fassen Sie sie in einer Setlist zusammen.",
-  "dashboard.hintVenues": "Verknüpfen Sie Auftritte mit Locations, um Ihre Performance-Karte aufzubauen.",
   "dashboard.taskAddSong": "Song hinzufügen",
   "dashboard.taskBuildSetlist": "Setlist erstellen",
   "dashboard.taskFindSong": "Song suchen",
