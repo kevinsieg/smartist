@@ -435,22 +435,9 @@ Full `artists.config` shape:
 
 ### Export all data for one artist
 
-`GET /api/:artist/setlists/export` (requires auth) returns a single JSON file containing every artist-scoped table:
+`GET /api/:artist/export` (requires auth; rewritten to `/setlists/export`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `songs`, `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
 
-```
-{
-  artist:            { slug, name }
-  songs:             [ …all rows including deleted ]
-  gigs:              [ … ]
-  setlists:          [ … ]
-  setlist_songs:     [ … ]
-  venues:            [ …all rows including deleted ]
-  organizers:        [ …all rows including deleted ]
-  gema_works:        [ … ]
-  gema_rightholders: [ … ]
-  song_logs:         [ … ]
-}
-```
+Built by `api/_export.js`. Soft-deleted rows are left out. Columns empty in every row are dropped, as are `artist_id` and `deleted`; `id`s stay so the files still join. `songs.extra` is flattened into its own columns (a key clashing with a real column becomes `extra_<key>`); other JSON columns are a JSON string in the cell. UTF-8 with BOM, CRLF, and cells starting with `= + - @` are prefixed with `'` so spreadsheets don't run them.
 
 `subscribers` and `rate_limits` are global (not artist-scoped) and are excluded.
 
