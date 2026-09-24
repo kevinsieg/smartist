@@ -75,6 +75,18 @@ confirmed with Google before suspecting the wiring.
 
 ## Facebook
 
+> **Status 2026-09-24: parked, Google only.** A newly created app with the
+> "Authenticate and request data from users with Facebook Login" use case cannot
+> be published without a *verified business portfolio* (Meta's dashboard says so
+> explicitly, even though the public docs only mention it for advanced access).
+> No business is registered yet (no SIRET), and none of the existing Facebook
+> apps with this use case is Live, so the Facebook env vars were removed from
+> `smartist-salb` and are not set anywhere. The code (appsecret_proof, v25.0,
+> rerequest) is ready. After the SIRET: verify the business portfolio, connect
+> it to the "smartist studio" app, add the redirect URI, set the env vars, go
+> Live. The privacy policy (smartist.studio/privacy) and self-service account
+> deletion, listed below as missing, both exist now.
+
 1. **developers.facebook.com** → Create App → type **Consumer**.
 2. Add the **Facebook Login** product → **Settings**
    - **Valid OAuth Redirect URIs:** `https://app.smartist.studio/auth/callback`
