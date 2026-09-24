@@ -4,7 +4,7 @@
     {
       "source": "/",
       "has": [{ "type": "host", "value": "demo.smartist.studio" }],
-      "destination": "https://app.smartist.studio/demo/dashboard",
+      "destination": "https://app.smartist.studio/demo",
       "permanent": false
     }
   ],
