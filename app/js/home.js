@@ -65,7 +65,9 @@ async function init() {
       // slug, so returning here would drop the token and show a plain login
       // form — which is how the OAuth confirm link was broken earlier.
       if (reset) { renderSetPassword(reset, cfg, hint); return; }
-      renderLogin(null, cfg);
+      // Same for a failed OAuth sign-in: without this the error vanished and
+      // the page looked as if nothing had happened.
+      renderLogin(oauthError ? t('home.oauthErrorMsg') : null, cfg);
       return;
     }
     applyNav(cfg.name, cfg.config);
