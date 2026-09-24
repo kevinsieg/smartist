@@ -53,6 +53,7 @@
   "common.error": "Error",
   "common.loading": "Loading…",
   "common.networkError": "Network error. Try again.",
+  "common.saving": "Saving…",
   "confirmEmail.affects": "This will apply to every band you belong to:",
   "confirmEmail.applying": "Applying…",
   "confirmEmail.badLink": "This link is incomplete. Request a new one from your profile.",

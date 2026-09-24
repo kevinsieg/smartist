@@ -235,10 +235,14 @@ async function saveOrganizer() {
     country: document.getElementById('om-country').value.trim() || null,
     comment: document.getElementById('om-comment').value.trim() || null,
   };
-  setStatus('om-status-msg', t('venues.savingMsg'));
+  setStatus('om-status-msg', '');
   const url = editingId ? `/api/${artistSlug}/organizers/${editingId}` : `/api/${artistSlug}/organizers`;
-  const r   = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
-  const json = await r.json();
+  const res = await withBusy(document.getElementById('om-save-btn'), async () => {
+    const r = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
+    return { r, json: await r.json() };
+  });
+  if (!res) return;
+  const { r, json } = res;
   if (!r.ok) { setStatus('om-status-msg', json.error || t('gigs.errorFallback'), true); return; }
   if (editingId) delete _orgRefsCache[editingId];
   closeOrgModal();
