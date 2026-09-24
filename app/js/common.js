@@ -38,7 +38,7 @@ function renderSupportLinks(containerEl) {
   });
   return links.length;
 }
-var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact']);
+var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact','profile']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
 // artist's dashboard).
@@ -1322,6 +1322,9 @@ async function navigate(href) {
         document.body.insertBefore(script, footer);
       });
     }
+
+    // i18n.ready resolved on the first load; swapped-in markup needs its own pass.
+    if (window.i18n && window.i18n.applyTranslations) window.i18n.applyTranslations(document);
 
     history.pushState(null, document.title, href);
     document.querySelectorAll('.nav-links a').forEach(function(a) {
