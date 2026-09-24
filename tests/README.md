@@ -51,7 +51,7 @@ Full API coverage against a live server. Requires `vercel dev` running locally, 
 
 Integration tests load `.env.local` then `.env` from the **repo root** (paths are fixed relative to `tests/api.js`, so `npm test` from `tests/` still works). Each key is applied only if not already set, so a variable present in both files keeps the `.env.local` value. Values already exported in the shell win over both files. Quote-wrapped lines (from `vercel env pull`) are stripped when parsed.
 
-To enable write tests, add your band password:
+Workspaces are private, so every read and write test runs with a session. Add your band password (it works as a bearer token):
 
 ```
 ARTIST_PASSWORD=yourpassword
@@ -68,7 +68,7 @@ ARTIST_PASSWORD=xxx npm test
 npm run test:dev
 ARTIST_PASSWORD=xxx npm run test:dev
 
-# Against production (read-only)
+# Against production (anonymous checks only, unless ARTIST_PASSWORD is set)
 npm run test:prod
 
 # Override URL explicitly
@@ -77,32 +77,34 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 
 ### What is tested
 
-**Read-only (always run)**
+**Anonymous (always run)**
 
 | Area | Checks |
 |------|--------|
-| `GET /api/config` | returns slug, name, songs array |
+| `GET /api/config` | slug and name; songs only for a public catalogue; `gemaIpNameNumber`/`upgradedAt` hidden |
+| Privacy | songs, song logs, gigs (+ .ics), setlists, venues and GEMA answer 401 without a token — except what the band opted into (`publicCatalogue`, `publicStage`) |
+| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; PUT /setlists/:id → 401 |
+
+**Signed in (requires `ARTIST_PASSWORD`)**
+
+| Area | Checks |
+|------|--------|
+| `GET /api/config` | ships the songs array |
 | `GET /api/:artist/songs` | array with play_count and last_played_at |
 | `GET /api/:artist/songs/:id/setlists` | appearances list |
 | `GET /api/:artist/song-logs` | audit log with action and song_data |
 | `GET /api/:artist/gigs` | array; single gig by id |
 | `GET /api/:artist/setlists` | array with song_count; single setlist with ordered songs |
-| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; PUT /setlists/:id → 401 |
 | Validation | id=0 → 400, non-integer id → 400, missing required fields → 400, unknown id → 404 |
-
-**Write (requires `ARTIST_PASSWORD`)**
-
-| Area | Checks |
-|------|--------|
 | `POST /api/:artist/auth` | correct password → 200 |
 | Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
 | `POST /api/:artist/songs` | missing title → 400 |
 | Lyrics suggest | rejects songs without an artist before calling external providers |
 | Setlist lifecycle | `POST` (create) → 201, `POST` (share) validates email + unknown id, `PUT` updates title, `POST` (duplicate) → 201 with new id + matching song count |
 | `POST /api/:artist/setlists` | missing song_ids → 400 |
-| File upload validation | extension, MIME type, size, presigned URL prefix checks |
+| File upload validation | extension, MIME type, size, presigned URL prefix checks (keys are `audio|sheets|playback/<artist id>/…`) |
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
-| `GET /api/:artist/export` | 200 with `Content-Disposition: attachment`, songs/setlists/gigs arrays present |
+| `GET /api/:artist/export` | 200, a `.zip` attachment holding `artist.csv`, `songs.csv`, … |
 
 > **Note:** write tests create two setlists named `[TEST]` that cannot be deleted via the API. Remove them manually from the setlist history page if needed.
 
