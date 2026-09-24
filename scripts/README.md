@@ -27,6 +27,56 @@ psql $DATABASE_URL < scripts/schema.sql
 
 ---
 
+## apply_schema.js — bring an existing database up to date
+
+`setup.js` skips the schema step once tables exist; this always runs every statement of
+`schema.sql` (idempotent), so new tables, columns and indexes reach existing databases.
+Run it against **every** production database after a schema change.
+
+```bash
+node scripts/apply_schema.js                          # database from .env
+DATABASE_URL=<url> node scripts/apply_schema.js       # any other
+```
+
+---
+
+## create_user.js — first login for a band, or set a password
+
+Signup creates a *new* band, and invites need an admin who is already signed in. A band made
+with `setup.js` has no `users` row, so this writes the first one. The password is read without
+echo and stored as a bcrypt hash.
+
+```bash
+node scripts/create_user.js --artist <slug> --email <addr> [--role admin|member|viewer]
+node scripts/create_user.js --artist <slug> --email <addr> --set-password   # existing account
+USER_PASSWORD=… node scripts/create_user.js --artist <slug> --email <addr> --yes   # unattended
+```
+
+---
+
+## plans.js — plans and storage
+
+```bash
+node scripts/plans.js                                   # every band: plan, storage used/limit, songs, users
+node scripts/plans.js --artist <slug> --plan <free|pro> # grant or change a plan
+node scripts/plans.js --recount                         # recompute storage_used_bytes from R2
+```
+
+---
+
+## demo_reset.js — the public demo band
+
+The demo band lives in the production database next to real bands; every statement is scoped to
+its `artist_id`. The artists row and its users are left alone.
+
+```bash
+node scripts/demo_reset.js --export     # snapshot the band into scripts/demo_seed.json
+node scripts/demo_reset.js --dry-run    # show what a restore would change
+node scripts/demo_reset.js --yes        # restore without a prompt (the nightly GitHub Action)
+```
+
+---
+
 ## seed.js — dev database seeder
 
 Populates the database with realistic test data for local development. Run this after `setup.js` creates the band.
@@ -76,7 +126,9 @@ The JSON file must be an array of song objects. Only `title` is required; all ot
     "active": true,
     "key": "G",
     "genre": "Blues",
-    "tempo": "Medium",
+    "energy": "middle",
+    "time_signature": "4/4",
+    "bpm": 120,
     "length_min": 3.5,
     "interpret": "Artist",
     "reference_interpret": "Reference artist",
@@ -96,29 +148,29 @@ Imports works and rightholders from GEMA CSV exports. Accepts any combination of
 
 ```bash
 # Identifiers (ISWC, ISRC)
-node scripts/import_gema.js --band <slug> --ids "Identifikatoren-Table 1.csv"
+node scripts/import_gema.js --artist <slug> --ids "Identifikatoren-Table 1.csv"
 
 # Work info (language, genre, duration, performers)
-node scripts/import_gema.js --band <slug> --info "Werkinformationen-Table 1.csv"
+node scripts/import_gema.js --artist <slug> --info "Werkinformationen-Table 1.csv"
 
 # Rightholders (composers, publishers, AR/VR shares)
-node scripts/import_gema.js --band <slug> --beteiligte "Beteiligte-Table 1.csv"
+node scripts/import_gema.js --artist <slug> --beteiligte "Beteiligte-Table 1.csv"
 
 # All three at once
-node scripts/import_gema.js --band <slug> \
+node scripts/import_gema.js --artist <slug> \
   --ids "Identifikatoren-Table 1.csv" \
   --info "Werkinformationen-Table 1.csv" \
   --beteiligte "Beteiligte-Table 1.csv"
 
 # Preview without writing
-node scripts/import_gema.js --band <slug> --ids <...> --dry-run
+node scripts/import_gema.js --artist <slug> --ids <...> --dry-run
 ```
 
 **Title matching** (`--ids` / `--info`): each work is auto-linked to a song by matching the GEMA title (case-insensitive, German umlaut ASCII-folding) against `songs.title`. Unmatched works are imported with `song_id = NULL` for manual linking later via the UI.
 
 **Rightholder import** (`--beteiligte`): replace-all per work — existing rightholders for each affected work are deleted before re-inserting. Re-runs are idempotent.
 
-The web UI at `/gema-import` runs the same pipeline interactively with a dry-run preview step.
+The web UI at `/<slug>/pro-import` runs the same pipeline interactively with a dry-run preview step (Pro plan).
 
 ---
 
@@ -132,8 +184,10 @@ Prints the DB hostname, the artist name and a row count per table, then requires
 to be typed back. The deletion runs in one transaction in the order `DATABASE.md` documents:
 
 1. `gigs.venue_id` / `gigs.organizer_id` are `ON DELETE RESTRICT` → set to NULL first.
-2. `setlist_songs.song_id` has no cascade → delete the setlists first (that cascades their songs).
-3. `DELETE FROM artists` cascades songs, venues, organizers, gigs, arrangements, logs, users and GEMA works.
+2. References from *other* artists into this one (setlist rows naming its songs, gigs naming its
+   venues or organizers) are removed or nulled, so they cannot block the delete.
+3. `setlist_songs.song_id` has no cascade → delete the setlists first (that cascades their songs).
+4. `DELETE FROM artists` cascades songs, venues, organizers, gigs, arrangements, logs, users and GEMA works.
 
 Other artists are untouched. R2 files (audio, sheets, playback) are **not** deleted — the script
 warns how many songs still reference them; remove those in the Cloudflare dashboard or with

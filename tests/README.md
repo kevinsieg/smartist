@@ -9,7 +9,7 @@ Two test layers — unit tests (no infrastructure) and integration tests (need a
 Test pure helper functions with no server, database, or network required. Run anywhere Node 20+ is available.
 
 ```bash
-npm run test:unit           # from repo root — runs unit.js and history-client.js
+npm run test:unit           # from repo root — unit.js plus the client-script suites (*-client.js)
 
 # Individual suites (useful when working on one module)
 node tests/unit/validate.js
@@ -38,6 +38,9 @@ node tests/history-client.js
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
 | `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
+| `tests/unit/tenant_isolation.js` | handlers, `api/_ownership.js`, `api/_token.js` | cross-band ids refused, script links refused, demo token is a member session, token purposes, sessions end on password change |
+| `tests/unit/*_handlers.js`, `auth.js`, `oauth_callback.js`, … | API handlers with a stubbed database | auth, roles, reset, signup, deletion, OAuth callback (incl. the `oauth_nonce` cookie), storage accounting |
+| `tests/*-client.js` | page scripts in `app/js/` | run in a stubbed DOM (songs, gigs, map, workspaces, logout, …) |
 
 Unit tests run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`).
 
@@ -106,7 +109,9 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
 | `GET /api/:artist/export` | 200, a `.zip` attachment holding `artist.csv`, `songs.csv`, … |
 
-> **Note:** write tests create two setlists named `[TEST]` that cannot be deleted via the API. Remove them manually from the setlist history page if needed.
+> **Note:** write tests create `[TEST]` rows (songs, setlists, venues, organizers, gigs, a user) and delete them again at the end. An interrupted run can leave some behind — remove them from the matching page.
+
+> **Protected previews:** Vercel Deployment Protection answers every request with its own 401. Set `VERCEL_AUTOMATION_BYPASS_SECRET` (the project's *Protection Bypass for Automation* secret) and the suite sends it as `x-vercel-protection-bypass`.
 
 ### Exit codes
 
