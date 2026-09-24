@@ -53,6 +53,7 @@
   "common.error": "Fehler",
   "common.loading": "Lädt…",
   "common.networkError": "Netzwerkfehler. Bitte erneut versuchen.",
+  "common.saving": "Speichern…",
   "confirmEmail.affects": "Dies gilt für alle Bands, zu denen Sie gehören:",
   "confirmEmail.applying": "Wird angewendet…",
   "confirmEmail.badLink": "Dieser Link ist unvollständig. Fordern Sie in Ihrem Profil einen neuen an.",

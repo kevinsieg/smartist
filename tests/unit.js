@@ -41,6 +41,7 @@ const suites = [
   require('./unit/storage_accounting'),
   require('./unit/export'),
   require('./unit/tenant_isolation'),
+  require('./unit/with_busy'),
 ];
 
 (async () => {

@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=40">
-  <script src="/app/js/i18n.js?v=28"></script>
+  <script src="/app/js/i18n.js?v=29"></script>
   <style>
     .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .gigs-section-title { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin: 1.75rem 0 0.75rem; }
@@ -173,7 +173,7 @@
           <input type="text" id="gm-venue-qc-city" placeholder="City" data-i18n-attr="placeholder:gigs.cityPlaceholder">
         </div>
         <div class="qc-actions">
-          <button class="btn active" type="button" onclick="quickCreateVenue()" data-i18n="gigs.addVenueBtn">Add venue</button>
+          <button class="btn active" type="button" onclick="quickCreateVenue(this)" data-i18n="gigs.addVenueBtn">Add venue</button>
           <button class="btn" type="button" onclick="closeVenueQc()" data-i18n="gigs.cancelBtn">Cancel</button>
         </div>
         <div class="status-msg" id="gm-venue-qc-status"></div>
@@ -195,7 +195,7 @@
           <input type="text" id="gm-organizer-qc-city" placeholder="City" data-i18n-attr="placeholder:gigs.cityPlaceholder">
         </div>
         <div class="qc-actions">
-          <button class="btn active" type="button" onclick="quickCreateOrganizer()" data-i18n="gigs.addOrganizerBtn">Add organizer</button>
+          <button class="btn active" type="button" onclick="quickCreateOrganizer(this)" data-i18n="gigs.addOrganizerBtn">Add organizer</button>
           <button class="btn" type="button" onclick="closeOrganizerQc()" data-i18n="gigs.cancelBtn">Cancel</button>
         </div>
         <div class="status-msg" id="gm-organizer-qc-status"></div>
@@ -250,7 +250,7 @@
 </div>
 
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/common.js?v=20"></script>
-<script src="/app/js/gigs.js?v=8"></script>
+<script src="/app/js/common.js?v=21"></script>
+<script src="/app/js/gigs.js?v=9"></script>
 </body>
 </html>

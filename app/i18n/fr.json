@@ -53,6 +53,7 @@
   "common.error": "Erreur",
   "common.loading": "Chargement…",
   "common.networkError": "Erreur réseau. Réessayez.",
+  "common.saving": "Enregistrement…",
   "confirmEmail.affects": "Ceci s'appliquera à tous vos groupes :",
   "confirmEmail.applying": "Application…",
   "confirmEmail.badLink": "Ce lien est incomplet. Demandez-en un nouveau depuis votre profil.",
