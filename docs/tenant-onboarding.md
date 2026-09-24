@@ -50,10 +50,10 @@ Then: Account Home → Manage R2 API Tokens → Create token with **Object Read 
 | `R2_ACCOUNT_ID` | Cloudflare account ID (top-right of dashboard) |
 | `R2_ACCESS_KEY_ID` | From the R2 API token |
 | `R2_SECRET_ACCESS_KEY` | From the R2 API token |
-| `R2_BUCKET_NAME` | Bucket name, e.g. `smartist-klang` |
+| `R2_BUCKET_NAME` | Bucket name, e.g. `smartist-myband` |
 | `R2_PUBLIC_URL` | Public URL for the bucket — either `https://pub-xxxx.r2.dev` or a custom domain (see below) |
 
-**Per-environment:** ideally use a separate bucket for preview/dev (`smartist-klang-dev`) to keep dev uploads isolated. For demos or internal deployments a single bucket shared across all environments is fine — set the same R2 vars as "All Environments" in Vercel.
+**Per-environment:** ideally use a separate bucket for preview/dev (`smartist-myband-dev`) to keep dev uploads isolated. For demos or internal deployments a single bucket shared across all environments is fine — set the same R2 vars as "All Environments" in Vercel.
 
 #### R2 public URL — two options
 
@@ -61,13 +61,13 @@ Then: Account Home → Manage R2 API Tokens → Create token with **Object Read 
 When you enable public access on the bucket, Cloudflare gives you a `pub-xxxx.r2.dev` URL. Set this as `R2_PUBLIC_URL`. No custom domain or Cloudflare DNS required. You can disable it later if you switch to a custom domain.
 
 **Option 2 — Custom domain (requires Cloudflare DNS):**  
-Files are served from a subdomain you own, e.g. `media.kevinklang.de`. This requires the domain's nameservers to be pointing to Cloudflare (see DNS section below). Common subdomain names: `media`, `cdn`, `assets`, `files`.
+Files are served from a subdomain you own, e.g. `media.band.example.com`. This requires the domain's nameservers to be pointing to Cloudflare (see DNS section below). Common subdomain names: `media`, `cdn`, `assets`, `files`.
 
-**Important:** the custom domain for R2 must be a *different* subdomain from the Vercel app domain. If your app lives at `smartist.kevinklang.de`, the R2 domain could be `media.kevinklang.de` — never the same subdomain.
+**Important:** the custom domain for R2 must be a *different* subdomain from the Vercel app domain. If your app lives at `smartist.band.example.com`, the R2 domain could be `media.band.example.com` — never the same subdomain.
 
 To connect: Cloudflare → R2 → your bucket → Settings → **Custom Domains → Connect Domain** → enter the subdomain. Cloudflare automatically creates the proxied CNAME record in your DNS — you do not add it manually. Once the custom domain is active, you can disable the `pub-xxxx.r2.dev` URL under Settings → Public Access to prevent direct access.
 
-After connecting, update `R2_PUBLIC_URL` in Vercel (Production environment) to `https://media.kevinklang.de` (or whichever subdomain you chose), then redeploy.
+After connecting, update `R2_PUBLIC_URL` in Vercel (Production environment) to `https://media.band.example.com` (or whichever subdomain you chose), then redeploy.
 
 **CORS policy (required for photo uploads):** R2 blocks browser presigned PUT requests unless a CORS policy is set. In Cloudflare → R2 → your bucket → Settings → CORS Policy, add:
 
@@ -91,7 +91,7 @@ List only the origins that use this bucket. Each bucket gets its own CORS policy
 | Env var | Value |
 |---|---|
 | `RESEND_API_KEY` | `re_...` |
-| `RESEND_FROM` | Verified sender address, e.g. `noreply@kevinklang.de` |
+| `RESEND_FROM` | Verified sender address, e.g. `noreply@band.example.com` |
 | `CONTACT_EMAIL` | Where contact form submissions go (defaults to `ARTIST_ADMIN_EMAIL`) |
 
 Set as "All Environments" in Vercel.
@@ -150,7 +150,7 @@ DATABASE_URL=<neon-main-url> node scripts/setup.js
 The wizard will:
 1. Detect schema exists — skip
 2. Show existing artists — choose **new**
-3. Prompt for slug (e.g. `klang`), display name, and password (**minimum 6 characters**)
+3. Prompt for slug (e.g. `myband`), display name, and password (**minimum 6 characters**)
 4. Configure song display/filter fields and logo URL
 5. Write the `artists` row
 
@@ -170,7 +170,7 @@ DATABASE_URL=<neon-dev-url> node scripts/setup.js
 ### Step 2 — Create the Vercel project
 
 1. Vercel dashboard → **New Project** → import `kevinsieg/smartist`
-2. Name it, e.g. `smartist-klang`
+2. Name it, e.g. `smartist-myband`
 3. Framework: **Other** (no build step), production branch: **main**
 4. Deploy (will fail — env vars not set yet, that is fine)
 
@@ -181,9 +181,9 @@ Vercel project → Settings → Environment Variables:
 | Variable | Production | Preview + Development |
 |---|---|---|
 | `DATABASE_URL` | Neon `main` branch URL | Neon `dev` branch URL |
-| `APP_ORIGIN` | `https://smartist.kevinklang.de` | leave blank (uses auto preview URL) |
+| `APP_ORIGIN` | `https://smartist.band.example.com` | leave blank (uses auto preview URL) |
 | `ARTIST_ADMIN_EMAIL` | your email | your email |
-| `R2_BUCKET_NAME` | `smartist-klang` | `smartist-klang-dev` |
+| `R2_BUCKET_NAME` | `smartist-myband` | `smartist-myband-dev` |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | prod R2 token | dev R2 token |
 | `R2_PUBLIC_URL` | prod bucket public URL | dev bucket public URL |
 
@@ -200,13 +200,13 @@ vercel env ls production --project <name>           # what that project actually
 
 ### Step 4 — Add the domain
 
-Vercel project → Settings → Domains → add `smartist.kevinklang.de` → assign to `main`.
+Vercel project → Settings → Domains → add `smartist.band.example.com` → assign to `main`.
 
 See the DNS section below for the CNAME record to add in Cloudflare.
 
 ### Step 5 — Redeploy
 
-Click Redeploy in Vercel (or push any commit). Once DNS propagates, `smartist.kevinklang.de` serves the artist.
+Click Redeploy in Vercel (or push any commit). Once DNS propagates, `smartist.band.example.com` serves the artist.
 
 Environment changes only reach **new** deployments — setting a variable does not fix a deployment that is already live.
 
@@ -215,13 +215,13 @@ Environment changes only reach **new** deployments — setting a variable does n
 Opening the page is not enough: it is static and renders before any API call fails.
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://smartist.kevinklang.de/api/config
+curl -s -o /dev/null -w "%{http_code}\n" https://smartist.band.example.com/api/config
 ```
 
 `200` means the functions boot. Anything else, read the real error — the Vercel dashboard shows `FUNCTION_INVOCATION_FAILED` without the cause, and a crash at module load produces no entry in the runtime *errors* view:
 
 ```bash
-vercel inspect https://smartist.kevinklang.de     # get the deployment id
+vercel inspect https://smartist.band.example.com     # get the deployment id
 vercel logs <deployment-url>                      # the stack trace
 ```
 
@@ -305,7 +305,7 @@ Copy values from `.env.local` into `.env`. Set `DATABASE_URL` to the Neon `dev` 
 
 ### DNS provider — Cloudflare vs Vercel DNS
 
-**Cloudflare is required only if you want a custom domain on your R2 bucket** (e.g. `files.kevinklang.de` instead of the default `pub-xxxx.r2.dev` URL). If you use the `r2.dev` public URL, any DNS provider works — including Vercel DNS (nameservers pointing to `ns1/ns2.vercel-dns.com`).
+**Cloudflare is required only if you want a custom domain on your R2 bucket** (e.g. `files.band.example.com` instead of the default `pub-xxxx.r2.dev` URL). If you use the `r2.dev` public URL, any DNS provider works — including Vercel DNS (nameservers pointing to `ns1/ns2.vercel-dns.com`).
 
 | Setup | DNS provider |
 |---|---|
@@ -320,7 +320,7 @@ Copy values from `.env.local` into `.env`. Set `DATABASE_URL` to the Neon `dev` 
 ### Connecting the app domain to Vercel
 
 **Step 1 — Add the domain in Vercel:**  
-Project → Settings → Domains → add your domain (e.g. `smartist.kevinklang.de`) → assign to **Production** (this means the `main` git branch — the live code). Vercel will show a pending banner until the DNS record resolves. SSL is provisioned automatically once it does.
+Project → Settings → Domains → add your domain (e.g. `smartist.band.example.com`) → assign to **Production** (this means the `main` git branch — the live code). Vercel will show a pending banner until the DNS record resolves. SSL is provisioned automatically once it does.
 
 **Step 2 — Add the DNS record:**
 
@@ -331,7 +331,7 @@ Project → Settings → Domains → add your domain (e.g. `smartist.kevinklang.
 | Domain type | Record type | Name | Value |
 |---|---|---|---|
 | Apex (`smartist.studio`) | A | `@` | `76.76.21.21` |
-| Subdomain (`smartist.kevinklang.de`) | CNAME | `smartist` | `cname.vercel-dns.com` |
+| Subdomain (`smartist.band.example.com`) | CNAME | `smartist` | `cname.vercel-dns.com` |
 | Subdomain on same domain (`demo.smartist.studio`) | CNAME | `demo` | `cname.vercel-dns.com` |
 | www redirect | CNAME | `www` | `cname.vercel-dns.com` |
 
@@ -363,35 +363,20 @@ When ready to send email from a domain: Resend dashboard → Domains → Add dom
 
 Delivery is blocked until all three show green in the Resend dashboard. Each sending domain needs its own set.
 
-### Deployment-to-domain map
-
-Renamed 2026-09-22. Target state and migration: `2026-09-22-deployment-architecture.md`.
-
-| Vercel project | Repo | Branch | Domain | Status |
-|---|---|---|---|---|
-| `smartist-salb` | `smartist` | `main` | `smartist.salmons.fr` | live |
-| `smartist-klang` | `smartist` | `main` | `smartist.kevinklang.de` | ⚠ 500 on every route until `APP_SECRET` is set |
-| `smartist` | `smartist` | `main` | `demo.smartist.studio`, `app.smartist.studio` planned | ⚠ same — `APP_SECRET` missing |
-| `smartist-website` | `smartist-website` | `main` | `smartist.studio` | live — static, needs no env vars |
-
 ---
 
-## Schema migrations
+## Schema changes
 
-### 2026-09-23 — account deletion columns
+`scripts/schema.sql` is idempotent (`IF NOT EXISTS`, guarded `ALTER`s). Whenever it
+changes, apply it to **every** production database, not only the one your shell
+is linked to — each tenant project has its own `DATABASE_URL`:
 
-`users.delete_token_hash` and `users.delete_token_expires`. Apply to **every**
-production database before the profile page ships, not just the linked one:
+```bash
+DATABASE_URL='<that project\'s production url>' node scripts/apply_schema.js
+```
 
-- `smartist-kevin` — serves both salb and klang
-- `smartist` — serves app.smartist.studio and the demo
-
-`node scripts/apply_schema.js` against each. The statements are
-`ADD COLUMN IF NOT EXISTS`, so re-running is safe.
-
-The feature needs working transactional email. Until `kevinklang.de` is verified
-in the Resend account klang and salmons use, the confirmation link never
-arrives there.
+Features that send email (password reset, invites, account deletion, email
+change) need the tenant's sending domain verified in Resend first.
 
 ---
 
