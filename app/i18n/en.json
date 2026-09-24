@@ -237,7 +237,7 @@
   "home.hidePw": "hide",
   "home.invalidLink": "Invalid or expired login link.",
   "home.noAccount": "No account?",
-  "home.oauthErrorMsg": "Sign-in failed. Please try again, or sign in with your email address.",
+  "home.oauthErrorMsg": "Sign-in failed. Try again, sign in with your email address, or sign up if you don't have an account yet.",
   "home.oauthNotConfigured": "{provider} login is not configured",
   "home.orDivider": "or",
   "home.passwordLabel": "Password",
