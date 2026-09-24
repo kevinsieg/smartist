@@ -59,8 +59,13 @@ async function deleteFromR2(url) {
   }
 }
 
-async function createPresignedUrl(key, contentType) {
-  const command = new PutObjectCommand({ Bucket: STORAGE.bucket(), Key: key, ContentType: contentType });
+// contentLength, when given, is signed into the URL: the upload must be exactly
+// that many bytes, so a presigned URL cannot be used to park an arbitrarily
+// large file in the bucket (the size is otherwise only checked at confirm).
+async function createPresignedUrl(key, contentType, contentLength) {
+  const params = { Bucket: STORAGE.bucket(), Key: key, ContentType: contentType };
+  if (Number.isInteger(contentLength) && contentLength > 0) params.ContentLength = contentLength;
+  const command = new PutObjectCommand(params);
   const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 300 });
   const publicUrl = `${STORAGE.publicUrl()}/${key}`;
   return { uploadUrl, publicUrl };

@@ -181,6 +181,9 @@ async function runRestore(sql, artist) {
 async function main() {
   let host;
   try { host = new URL(process.env.DATABASE_URL).hostname; } catch { host = '(unknown)'; }
+  // Actions logs of a public repository are public: name the database there
+  // only by its first label, enough to tell dev from prod.
+  if (process.env.CI) host = host.split('.')[0].replace(/^(.{4}).*(.{2})$/, '$1…$2');
   console.log(`\n  ${D('database:')} ${B(host)}`);
 
   const sql = postgres(process.env.DATABASE_URL, { ssl: 'require', max: 1 });

@@ -413,11 +413,9 @@ function renderWorkspace(cfg) {
   function _wirePrivacyToggle(id, msgId, key, onLabel, offLabel) {
     var toggle = document.getElementById(id);
     if (!toggle) return;
-    // publicStage defaults to on, publicCatalogue to off — read each the way
-    // the server does, so the switch matches what is actually enforced.
-    toggle.checked = key === 'publicStage'
-      ? (cfg.config || {}).publicStage !== false
-      : (cfg.config || {}).publicCatalogue === true;
+    // Both default to off — read each the way the server does (identity with
+    // true), so the switch matches what is actually enforced.
+    toggle.checked = (cfg.config || {})[key] === true;
     toggle.disabled = false;
     toggle.addEventListener('change', function () {
       var msg = document.getElementById(msgId);

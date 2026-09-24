@@ -8,8 +8,25 @@ const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
+const { isOwnMediaUrl } = require('../_ownership');
 const { wouldExceedStorage, storageLimitBytes, songLimit } = require('../_plans');
 const logger = require('../_logger');
+
+// `extra` is free-form, but its *Url keys end up in href/src attributes on the
+// songs and stage pages, so they must be plain http(s) links. A link into our
+// own bucket may only be the one the upload flow already stored on this song:
+// otherwise a band could point its song at another band's file and have it
+// deleted by the next media replace, media delete or account deletion.
+function extraError(extra, current = {}) {
+  if (extra == null) return null;
+  if (typeof extra !== 'object' || Array.isArray(extra)) return 'extra must be an object';
+  for (const [k, v] of Object.entries(extra)) {
+    if (!/Url$/.test(k) || v == null || v === '') continue;
+    if (typeof v !== 'string' || !/^https?:\/\//i.test(v)) return `${k} must be an http(s) URL`;
+    if (keyFromUrl(v) !== null && v !== (current || {})[k]) return `${k} must be uploaded, not linked`;
+  }
+  return null;
+}
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -54,8 +71,8 @@ module.exports = wrap(async function handler(req, res) {
              g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
       FROM setlists sl
       JOIN setlist_songs ss ON ss.setlist_id = sl.id
-      LEFT JOIN gigs g ON sl.gig_id = g.id
-      LEFT JOIN venues v ON v.id = g.venue_id
+      LEFT JOIN gigs g ON sl.gig_id = g.id AND g.artist_id = sl.artist_id
+      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
       WHERE ss.song_id = ${songId} AND sl.artist_id = ${band.id}
       ORDER BY sl.created_at DESC
     `;
@@ -288,7 +305,9 @@ module.exports = wrap(async function handler(req, res) {
       return res.status(400).json({ error: 'publicUrl required' });
 
     const base = process.env.R2_PUBLIC_URL;
-    if (!base || !publicUrl.startsWith(`${base}/${config.keyPrefix}`))
+    // Keys carry the band id (see upload_presign_id), so a band can only
+    // confirm — and later delete — files it uploaded itself.
+    if (!base || !publicUrl.startsWith(`${base}/${config.keyPrefix}${band.id}/`))
       return res.status(400).json({ error: 'Invalid publicUrl' });
 
     const head = await verifyUpload(keyFromUrl(publicUrl));
@@ -331,7 +350,7 @@ module.exports = wrap(async function handler(req, res) {
     // Delete first: whether the old object really went away decides the net
     // change, so the counter settles in one round-trip instead of a +n then −m
     // pair (which also left it briefly overstated).
-    const removed  = isReplacement ? await deleteFromR2(previousUrl) : false;
+    const removed  = (isReplacement && isOwnMediaUrl(previousUrl, band.id, keyFromUrl)) ? await deleteFromR2(previousUrl) : false;
     const freed    = (removed && prevHead) ? prevHead.size : 0;
     const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
 
@@ -368,7 +387,7 @@ module.exports = wrap(async function handler(req, res) {
     const url = song.extra?.[config.extraKey];
     if (url) {
       const delHead = await verifyUpload(keyFromUrl(url));
-      const removed = await deleteFromR2(url);
+      const removed = isOwnMediaUrl(url, band.id, keyFromUrl) ? await deleteFromR2(url) : false;
       if (removed && delHead) await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`;
       await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
         filename:  filenameFromUrl(url),
@@ -406,15 +425,15 @@ module.exports = wrap(async function handler(req, res) {
         return res.status(400).json({ error: 'Only PDF files are allowed' });
     }
 
-    if (!size || Number(size) > config.maxBytes)
+    if (!Number.isInteger(Number(size)) || Number(size) <= 0 || Number(size) > config.maxBytes)
       return res.status(400).json({ error: `size required, max ${maxMB} MB` });
 
     const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (!song) return res.status(404).json({ error: 'Song not found' });
 
     const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
-    const key = `${config.keyPrefix}${crypto.randomUUID()}-${safeName}`;
-    return res.json(await createPresignedUrl(key, config.allowedExts ? contentType : 'application/pdf'));
+    const key = `${config.keyPrefix}${band.id}/${crypto.randomUUID()}-${safeName}`;
+    return res.json(await createPresignedUrl(key, config.allowedExts ? contentType : 'application/pdf', Number(size)));
   }
 
   if (req.method === 'POST') {
@@ -453,6 +472,8 @@ module.exports = wrap(async function handler(req, res) {
     if (reference_interpret === false) return res.status(400).json({ error: 'reference_interpret too long' });
     const comment = validateStr(rawComment, 2000);
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
+    const extraErr = extraError(extra);
+    if (extraErr) return res.status(400).json({ error: extraErr });
 
     const [song] = await sql`
       INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
@@ -519,6 +540,7 @@ module.exports = wrap(async function handler(req, res) {
           value[field] = v;
         }
       }
+      if (!error) error = extraError(update.extra, current.extra);
       if (error) { rejected.push({ id: songId, error }); continue; }
 
       const [updated] = await sql`

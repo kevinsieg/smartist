@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const { getDb } = require('../_db');
-const { verifyUserToken } = require('../_token');
+const { verifyUserToken, passwordMatches } = require('../_token');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { deleteFromR2 } = require('../_r2');
 const { sendEmail } = require('../_email');
@@ -17,8 +17,8 @@ async function _sessionEmail(req, sql) {
   const bearer = (req.headers.authorization || '').replace(/^Bearer /, '');
   const claim  = verifyUserToken(bearer);
   if (!claim) return null;
-  const [row] = await sql`SELECT email FROM users WHERE id = ${claim.userId} LIMIT 1`;
-  return row ? String(row.email).toLowerCase() : null;
+  const [row] = await sql`SELECT email, password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  return row && passwordMatches(claim, row) ? String(row.email).toLowerCase() : null;
 }
 
 // GET ?action=deletion-preflight — what would happen, in the person's own words.
@@ -111,7 +111,8 @@ async function requestDeletion(req, res) {
 // a mail scanner that runs JS all re-issue whatever the page fires on load, and
 // for this endpoint that would be an irreversible deletion nobody clicked.
 async function confirmDeletion(req, res) {
-  const raw = req.body?.token || req.query?.token;
+  // Body only: a token in the query string ends up in request logs.
+  const raw = req.body?.token;
   if (!raw) return res.status(400).json({ error: 'Invalid or expired link' });
 
   // Same shape as emailchg-confirm (auth.js): the link carries no session, so

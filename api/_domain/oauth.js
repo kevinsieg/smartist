@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { getDb } = require('../_db');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { generateMagicToken, generateUserToken, TTL_8H } = require('../_token');
@@ -12,6 +13,22 @@ function callbackUri(req) {
   return `${origin(req)}/auth/callback`;
 }
 
+const NONCE_COOKIE = 'oauth_nonce';
+
+// Set on the OAuth start (a same-origin fetch), sent back by the browser on the
+// provider's top-level redirect to /auth/callback (SameSite=Lax allows that).
+function setNonceCookie(res) {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  res.setHeader('Set-Cookie',
+    `${NONCE_COOKIE}=${nonce}; Path=/; Max-Age=900; HttpOnly; Secure; SameSite=Lax`);
+  return nonce;
+}
+
+function readNonceCookie(req) {
+  const m = new RegExp(`(?:^|;\\s*)${NONCE_COOKIE}=([0-9a-f]{32})(?:;|$)`).exec(req.headers?.cookie || '');
+  return m ? m[1] : null;
+}
+
 // GET ?action=google-url — start Google OAuth flow.
 async function googleUrl(req, res) {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
@@ -21,7 +38,7 @@ async function googleUrl(req, res) {
     redirect_uri:  callbackUri(req),
     response_type: 'code',
     scope:         'openid email',
-    state:         generateState('google', req.query.mode || 'login'),
+    state:         generateState('google', req.query.mode || 'login', setNonceCookie(res)),
     access_type:   'online',
     prompt:        'select_account',
   });
@@ -37,7 +54,7 @@ async function facebookUrl(req, res) {
     redirect_uri: callbackUri(req),
     response_type: 'code',
     scope:        'email',
-    state:        generateState('facebook', req.query.mode || 'login'),
+    state:        generateState('facebook', req.query.mode || 'login', setNonceCookie(res)),
     // email is the only permission we ask for and the login cannot work
     // without it. Facebook will not re-ask for a permission someone has
     // declined unless told to, so without this one untick locks that person
@@ -77,6 +94,10 @@ async function oauthCallback(req, res) {
 
   const stateResult = verifyState(state);
   if (!stateResult) return fail('invalid_or_expired_state');
+  const cookieNonce = readNonceCookie(req);
+  // Not a secret (it also travels in the state): only proof this browser began the flow.
+  if (!cookieNonce || stateResult.nonce !== cookieNonce) return fail('state_not_from_this_browser');
+  res.setHeader('Set-Cookie', `${NONCE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
   provider   = stateResult.provider;
   const mode = stateResult.mode || 'login';
 
@@ -94,7 +115,7 @@ async function oauthCallback(req, res) {
 
   const sql = getDb();
   const [firstUser] = await sql`
-    SELECT u.id, u.role FROM users u WHERE u.email = ${email.toLowerCase()} LIMIT 1
+    SELECT u.id, u.role, u.password_hash FROM users u WHERE u.email = ${email.toLowerCase()} ORDER BY u.id LIMIT 1
   `;
 
   // Signup mode only creates a new workspace for genuinely new emails —
@@ -108,9 +129,15 @@ async function oauthCallback(req, res) {
     return res.redirect(302, `${o}/onboarding#token=${encodeURIComponent(rawToken)}`);
   }
 
+  // Facebook has no verified-email flag (see identity.js). Matching its address
+  // to an existing account is therefore opt-in per deployment: without it, an
+  // address someone merely typed into Facebook would open that account here.
+  if (firstUser && provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true')
+    return fail('facebook_email_not_trusted');
+
   if (firstUser) {
     const artists = await getArtistsForUser(firstUser.id, sql);
-    const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H);
+    const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash);
     const hint = Buffer.from(email.toLowerCase()).toString('base64url');
     await logger.info('oauth_login', { provider, email });
     // This is a finished session, not a link to be redeemed. It used to travel
@@ -131,7 +158,7 @@ async function oauthCallback(req, res) {
     return fail('email_not_authorised');
   }
   const band = await resolveArtist('', sql);
-  if (!band) return fail('band_not_found');
+  if (!band || !band.password_hash) return fail('band_not_found');
   await logger.info('oauth_login', { provider, email });
   const token = generateMagicToken(band.password_hash);
   return res.redirect(302, `${o}/login#magic=${encodeURIComponent(token)}`);

@@ -33,6 +33,23 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
   }
 }
 
+// Read-only: is this key already over its limit? Does not count a hit — for
+// callers that only want to count failures (see requireAuth in api/_auth.js),
+// paired with checkRateLimit on the failure path.
+async function isRateLimited(key, maxRequests, windowSecs) {
+  const sql = getDb();
+  const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
+  try {
+    const [row] = await sql`
+      SELECT count FROM rate_limits WHERE key = ${key} AND window_start >= ${windowStart}
+    `;
+    return !!row && row.count >= maxRequests;
+  } catch (err) {
+    if (isMissingRateLimitTable(err)) return false;
+    throw err;
+  }
+}
+
 function isMissingRateLimitTable(err) {
   return err?.code === '42P01'
     || /relation ["']?rate_limits["']? does not exist/i.test(err?.message || '');
@@ -45,4 +62,4 @@ function clientIp(req) {
   return 'unknown';
 }
 
-module.exports = { checkRateLimit, clientIp, isMissingRateLimitTable };
+module.exports = { checkRateLimit, isRateLimited, clientIp, isMissingRateLimitTable };

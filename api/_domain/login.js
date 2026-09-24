@@ -20,6 +20,11 @@ const logger = require('../_logger');
 // for that address is checked and the first whose hash matches wins.
 const MAX_CANDIDATES = 10;
 
+// Compared against when no account matches, so an unknown address costs the
+// same bcrypt round as a wrong password — response time must not say which
+// emails have accounts. Cost 12, like every stored hash; matches no password.
+const DUMMY_HASH = '$2a$12$bX/Oyxx22A2xtE30S33C6evrSuAbmD9UFwycjT85mhdiJBygShHLO';
+
 async function passwordLogin(req, res) {
   const { email, password, rememberMe } = req.body ?? {};
   const clean = String(email ?? '').trim().toLowerCase();
@@ -42,6 +47,7 @@ async function passwordLogin(req, res) {
   for (const row of candidates) {
     if (await bcrypt.compare(password, row.password_hash)) { user = row; break; }
   }
+  if (!candidates.length) await bcrypt.compare(String(password), DUMMY_HASH);
   // One message for an unknown address and a wrong password alike — otherwise
   // this endpoint tells anyone which emails have accounts.
   if (!user) {
@@ -49,10 +55,10 @@ async function passwordLogin(req, res) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  const token   = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H);
+  const token   = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, user.password_hash);
   const artists = await getArtistsForUser(user.id, sql);
   await logger.info('login', { email: clean, artists: artists.length });
   return res.json({ ok: true, token, role: user.role, email: clean, artists });
 }
 
-module.exports = { passwordLogin };
+module.exports = { passwordLogin, DUMMY_HASH };

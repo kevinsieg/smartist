@@ -6,13 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+# Read-only token: nothing here writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
       - name: Install dependencies
@@ -24,32 +28,43 @@ jobs:
     name: Integration tests
     runs-on: ubuntu-latest
     needs: unit-tests
-    # Only run when Vercel secrets are present (skip on forks/dependabot)
-    if: vars.VERCEL_ORG_ID != '' || secrets.VERCEL_TOKEN != ''
+    # Secrets are unavailable to pull requests from forks and cannot be read in
+    # a job-level `if`, so the job runs everywhere and the steps skip themselves
+    # when VERCEL_TOKEN is absent.
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check for Vercel credentials
+        id: creds
+        run: |
+          if [ -n "$VERCEL_TOKEN" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "No VERCEL_TOKEN — skipping integration tests."; fi
+
+      - if: steps.creds.outputs.ok == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - if: steps.creds.outputs.ok == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
 
-      - name: Install Vercel CLI and test deps
+      # tests/ has no dependencies of its own; it resolves from the root install.
+      - name: Install Vercel CLI and dependencies
+        if: steps.creds.outputs.ok == 'true'
         run: |
-          npm install -g vercel@latest
+          npm install -g vercel@59.26.0
           npm ci
-          cd tests && npm ci
 
       - name: Deploy preview
         id: deploy
+        if: steps.creds.outputs.ok == 'true'
         run: |
-          vercel pull --yes --environment=preview --token=$VERCEL_TOKEN
-          DEPLOY_URL=$(vercel deploy --token=$VERCEL_TOKEN)
-          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" > /dev/null
+          DEPLOY_URL=$(vercel deploy --token="$VERCEL_TOKEN" 2>/dev/null)
+          echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
 
       - name: Run integration tests
+        if: steps.creds.outputs.ok == 'true'
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
           ARTIST_PASSWORD: ${{ secrets.ARTIST_PASSWORD }}
