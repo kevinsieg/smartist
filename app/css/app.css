@@ -450,21 +450,6 @@ input[type="date"], input[type="number"] {
 }
 [data-tooltip]:hover::after { opacity: 1; transition: opacity 0.12s ease 0.45s; }
 
-/* ── Footer ─────────────────────────────────────────────────────────────────── */
-footer {
-    background: var(--primary-color);
-    padding: 1.25rem 1rem;
-    border-top: 1px solid var(--border-color);
-    font-size: 0.82rem;
-    color: var(--third-color);
-    text-align: center;
-    /* Pushes the footer to the viewport bottom when content is short. */
-    margin-top: auto;
-    flex-shrink: 0;
-}
-.footer-backlink { color: var(--muted-ink); text-decoration: none; }
-.footer-backlink:hover { color: var(--secondary-ink); text-decoration: underline; }
-
 /* ── Status messages ────────────────────────────────────────────────────────── */
 @keyframes status-in {
     from { opacity: 0; transform: translateY(-3px); }
@@ -1323,6 +1308,7 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 body.brand-page { min-height: 100dvh; display: flex; flex-direction: column; }
 body.brand-page .landing-main { min-height: 0; flex: 1; }
 .brand-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+.app-studio-wordmark { font-size: 1rem; font-weight: 700; letter-spacing: 0.12em; color: var(--black); text-decoration: none; white-space: nowrap; }
 .brand-wordmark { font-size: 1rem; font-weight: 700; letter-spacing: 0.12em; color: var(--black); text-decoration: none; }
 .brand-bar nav a { font-size: 0.68rem; color: #999; text-decoration: none; letter-spacing: 0.1em; margin-left: 18px; }
 .brand-bar nav a:hover { color: var(--secondary-ink); }
@@ -1331,8 +1317,6 @@ body.brand-page .landing-main { min-height: 0; flex: 1; }
 .brand-wave { display: flex; align-items: flex-end; justify-content: center; gap: 3px; opacity: 0.25; margin-bottom: 0.75rem; pointer-events: none; }
 .brand-wave span { display: block; width: 3px; background: var(--secondary-ink); border-radius: 1px; }
 .brand-label { font-size: 0.62rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--secondary-ink); margin-bottom: 1.5rem; }
-.brand-foot { text-align: center; font-size: 0.62rem; color: var(--third-color); opacity: 0.55; letter-spacing: 0.08em; padding: 1.25rem 1rem 1.5rem; }
-.brand-foot a { color: inherit; text-decoration: underline; }
 @media (min-width: 640px) {
     .brand-bar { padding: 20px 40px; }
     .brand-wordmark { font-size: 1.1rem; }

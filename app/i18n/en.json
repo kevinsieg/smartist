@@ -116,7 +116,6 @@
   "demo.noSpam": "No spam — unsubscribe anytime.",
   "demo.stepLabel": "Demo access",
   "footer.contact": "Contact",
-  "footer.poweredBy": "powered by",
   "gigs.addFirstGigBtn": "+ Add your first gig",
   "gigs.addGig": "Add gig",
   "gigs.addGigBtn": "+ Add gig",
@@ -1029,7 +1028,6 @@
   "songs.useThis": "Use this",
   "songs.viewLyrics": "View lyrics",
   "songs.willUploadOnSave": "{name} — uploads on save",
-  "support.label": "Support the project",
   "touring.bookingOutreachBtn": "Start outreach",
   "touring.bookingOutreachDesc": "Draft and track booking emails for venues. Know who replied, who's pending, and who said no.",
   "touring.bookingOutreachTitle": "Booking Outreach",
@@ -1168,5 +1166,6 @@
   "workspaces.roleViewer": "Viewer",
   "workspaces.title": "Your workspaces",
   "workspaces.unauthHint": "You need to be logged in to see your workspaces.",
-  "home.savePassword": "Save password"
+  "home.savePassword": "Save password",
+  "footer.impressum": "Impressum"
 }

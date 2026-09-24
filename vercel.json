@@ -1,6 +1,7 @@
 {
   "regions": ["fra1"],
   "redirects": [
+    { "source": "/impressum", "destination": "https://smartist.studio/impressum", "permanent": false },
     {
       "source": "/",
       "has": [{ "type": "host", "value": "demo.smartist.studio" }],
@@ -35,7 +36,6 @@
     { "source": "/home",            "destination": "/app/workspaces.html" },
     { "source": "/admin",           "destination": "/app/admin.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
-    { "source": "/impressum",       "destination": "/app/impressum.html" },
     { "source": "/contact",         "destination": "/app/contact.html" },
     { "source": "/demo",            "destination": "/app/demo.html" },
     { "source": "/stage",           "destination": "/app/stage.html" },
