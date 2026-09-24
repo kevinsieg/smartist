@@ -75,6 +75,13 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Stored links are free text; only http(s) may reach an href/src, so a
+// `javascript:` value cannot run here. Mirrors safeUrl() in common.js, which
+// the stage page does not load.
+function _stageSafeUrl(url) {
+  return /^https?:\/\//i.test(url || '') ? url : '#';
+}
+
 function formatLength(min) {
   if (!min) return '';
   const m = Math.floor(min);
@@ -286,21 +293,21 @@ async function initSong(params, el, cfg) {
   let recItems = [];
   if (extra.listenUrl) {
     recItems.push(audioRe.test(extra.listenUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(extra.listenUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
-      : `<a class="song-stage-link" href="${escHtml(extra.listenUrl)}" target="_blank" rel="noopener">&#9654; Listen</a>`);
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(_stageSafeUrl(extra.listenUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      : `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.listenUrl))}" target="_blank" rel="noopener">&#9654; Listen</a>`);
   }
   if (extra.playbackUrl) {
     recItems.push(audioRe.test(extra.playbackUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(extra.playbackUrl)}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
-      : `<a class="song-stage-link" href="${escHtml(extra.playbackUrl)}" target="_blank" rel="noopener">&#9655; Playback</a>`);
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(_stageSafeUrl(extra.playbackUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      : `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.playbackUrl))}" target="_blank" rel="noopener">&#9655; Playback</a>`);
   }
   const recHtml = recItems.length ? `<div class="song-stage-section">${recItems.join('')}</div>` : '';
 
   // Links
   const linkItems = [
-    extra.sheetUrl     ? `<a class="song-stage-link" href="${escHtml(extra.sheetUrl)}"      target="_blank" rel="noopener">&#8801; Sheet music</a>` : '',
-    extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(extra.referenceUrl)}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
-    extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(extra.songinfoUrl)}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
+    extra.sheetUrl     ? `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.sheetUrl))}"      target="_blank" rel="noopener">&#8801; Sheet music</a>` : '',
+    extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.referenceUrl))}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
+    extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.songinfoUrl))}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
     activeArr
       ? `<button class="stage-chart-btn" onclick="openArrStagePopup(window._stageActiveArr,window._stageArrConfig)" title="Show arrangement chart">` +
         `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>` +

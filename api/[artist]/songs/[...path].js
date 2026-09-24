@@ -556,6 +556,8 @@ module.exports = wrap(async function handler(req, res) {
       WHERE song_id = ${songId} AND artist_id = ${band.id}
       ORDER BY created_at ASC
     `;
+    // A visitor without a session never sees the band's private notes.
+    if (!user) delete song.comment;
     return res.json({ ...song, arrangements });
   }
 
@@ -639,8 +641,8 @@ module.exports = wrap(async function handler(req, res) {
              g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
       FROM setlists sl
       JOIN setlist_songs ss ON ss.setlist_id = sl.id
-      LEFT JOIN gigs g ON sl.gig_id = g.id
-      LEFT JOIN venues v ON v.id = g.venue_id
+      LEFT JOIN gigs g ON sl.gig_id = g.id AND g.artist_id = sl.artist_id
+      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
       WHERE ss.song_id = ${songId} AND sl.artist_id = ${band.id}
       ORDER BY sl.created_at DESC
     `;

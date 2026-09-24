@@ -20,9 +20,12 @@ function _stateSecret(provider) {
   return '';
 }
 
-function generateState(provider, mode) {
+// nonce: the value the OAuth start also sets as the `oauth_nonce` cookie, so
+// the callback can check the state came back to the browser that asked for it
+// (without that, a callback URL for the attacker's own account can be handed
+// to someone else and signs them into it — login CSRF).
+function generateState(provider, mode, nonce = crypto.randomBytes(16).toString('hex')) {
   const resolvedMode = mode || 'login';
-  const nonce   = crypto.randomBytes(10).toString('hex');
   const expires = Date.now() + 15 * 60 * 1000;
   const msg     = `${provider}:${nonce}:${expires}:${resolvedMode}`;
   const sig     = crypto.createHmac('sha256', _stateSecret(provider)).update(msg).digest('hex');
@@ -39,7 +42,7 @@ function verifyState(state) {
     const expected = crypto.createHmac('sha256', _stateSecret(provider)).update(msg).digest('hex');
     if (!/^[0-9a-f]{64}$/.test(sig)) return null;
     const valid = crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'));
-    return valid ? { provider, mode } : null;
+    return valid ? { provider, mode, nonce } : null;
   } catch { return null; }
 }
 

@@ -1,5 +1,5 @@
 const { getDb } = require('../_db');
-const { verifyUserToken } = require('../_token');
+const { verifyUserToken, passwordMatches } = require('../_token');
 const { validateStr } = require('../_validate');
 
 // Gate a request to the super-admin allowlist (SUPER_ADMIN_EMAILS). Writes the
@@ -8,7 +8,8 @@ async function requireSuperAdmin(req, res, sql) {
   const tok = (req.headers.authorization || '').replace(/^Bearer /, '');
   const claim = verifyUserToken(tok);
   if (!claim) { res.status(401).json({ error: 'Unauthorized' }); return false; }
-  const [u] = await sql`SELECT email FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  const [u] = await sql`SELECT email, password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  if (u && !passwordMatches(claim, u)) { res.status(401).json({ error: 'Unauthorized' }); return false; }
   const allow = (process.env.SUPER_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   if (!u || !allow.includes(String(u.email).toLowerCase())) { res.status(403).json({ error: 'Forbidden' }); return false; }
   return true;

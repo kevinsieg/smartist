@@ -35,6 +35,18 @@ const SLUG     = process.env.ARTIST_SLUG;
 const PASSWORD = process.env.ARTIST_PASSWORD;
 const R2_BASE  = process.env.R2_PUBLIC_URL;
 
+// Workspaces are private: every read below runs with a session. The band
+// password works as a bearer token (legacy bootstrap session, admin role).
+const TOKEN = PASSWORD || null;
+const AUTH  = { token: TOKEN };
+
+// Vercel Deployment Protection answers every request to a protected preview
+// with its own 401 before the app sees it. Its "Protection Bypass for
+// Automation" secret, sent as this header, lets the suite through.
+const BYPASS = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+  ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET }
+  : {};
+
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const G  = s => `\x1b[32m${s}\x1b[0m`;
 const R  = s => `\x1b[31m${s}\x1b[0m`;
@@ -77,7 +89,7 @@ function assertStatus(res, json, expected) {
 
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
 async function req(method, path, { body, token } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', ...BYPASS };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -103,14 +115,37 @@ async function testConfig() {
   console.log(B('\n/api/config'));
   let result = null;
 
-  await test('returns band slug, name, and songs array', async () => {
+  await test('returns band slug and name', async () => {
     const { res, json } = await GET('/api/config');
     assertStatus(res, json, 200);
     assert(typeof json.slug === 'string' && json.slug, 'missing slug');
     assert(typeof json.name === 'string' && json.name, 'missing name');
-    assert(Array.isArray(json.songs), 'songs not an array');
     result = json;
   });
+
+  await test('anonymous config ships songs only for a public catalogue', async () => {
+    const { res, json } = await GET('/api/config');
+    assertStatus(res, json, 200);
+    if (json.config?.publicCatalogue === true)
+      assert(Array.isArray(json.songs), 'public catalogue should ship songs');
+    else
+      assert(json.songs === undefined, 'a private workspace must not ship songs anonymously');
+  });
+
+  await test('anonymous config hides private config keys', async () => {
+    const { res, json } = await GET('/api/config');
+    assertStatus(res, json, 200);
+    for (const k of ['gemaIpNameNumber', 'upgradedAt'])
+      assert(!(k in (json.config || {})), `${k} leaked to an anonymous visitor`);
+  });
+
+  if (TOKEN) {
+    await test('authenticated config ships the songs array', async () => {
+      const { res, json } = await GET('/api/config', AUTH);
+      assertStatus(res, json, 200);
+      assert(Array.isArray(json.songs), 'songs not an array');
+    });
+  }
 
   await test('unauthenticated config reports role null', async () => {
     const { res, json } = await GET('/api/config');
@@ -130,51 +165,78 @@ async function testConfig() {
   return result;
 }
 
+// ── Anonymous access ─────────────────────────────────────────────────────────
+// A workspace is private: without a session every read answers 401, except
+// what the band opted into (publicCatalogue, publicStage — both off by default).
+async function testPrivacy(slug, config) {
+  console.log(B('\nAnonymous access'));
+  const cfg = config.config || {};
+  const catalogue = cfg.publicCatalogue === true;
+  const stage     = cfg.publicStage === true;
+
+  const cases = [
+    ['GET songs',              `/api/${slug}/songs`,              catalogue ? 200 : 401],
+    ['GET songs/:id',          `/api/${slug}/songs/999999999`,    (stage || catalogue) ? 404 : 401],
+    ['GET song-logs',          `/api/${slug}/song-logs`,          401],
+    ['GET gigs',               `/api/${slug}/gigs`,               catalogue ? 200 : 401],
+    ['GET gigs?format=ics',    `/api/${slug}/gigs?format=ics`,    catalogue ? 200 : 401],
+    ['GET setlists',           `/api/${slug}/setlists`,           401],
+    ['GET setlists/:id',       `/api/${slug}/setlists/999999999`, stage ? 404 : 401],
+    ['GET venues',             `/api/${slug}/venues`,             401],
+    ['GET songs/:id/gema',     `/api/${slug}/songs/1/gema`,       401],
+  ];
+  for (const [label, url, want] of cases) {
+    await test(`${label} without token → ${want}`, async () => {
+      const res = await fetch(`${BASE_URL}${url}`, { headers: BYPASS });
+      assert(res.status === want, `Expected ${want}, got ${res.status}`);
+    });
+  }
+}
+
 async function testSongs(slug) {
   console.log(B(`\n/api/${slug}/songs`));
   let firstSong = null;
 
-  await test('GET songs returns paginated shape with play stats', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs`);
+  // Signed in, the list is the whole catalogue as a plain array; paging
+  // ({rows,total,limit}) is only the public-catalogue view.
+  await test('GET songs returns the full list with play stats', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs`, AUTH);
     assertStatus(res, json, 200);
-    assert(Array.isArray(json.rows), 'json.rows not an array');
-    assert(json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
-    assert(typeof json.total === 'number', 'json.total not a number');
-    assert(typeof json.limit === 'number' && json.limit > 0, `invalid limit: ${json.limit}`);
-    if (json.rows.length) {
-      firstSong = json.rows[0];
-      assert('play_count' in json.rows[0], 'missing play_count');
-      assert('last_played_at' in json.rows[0] || json.rows[0].last_played_at === null, 'missing last_played_at');
+    assert(Array.isArray(json), 'expected an array');
+    if (json.length) {
+      firstSong = json[0];
+      assert('play_count' in json[0], 'missing play_count');
+      assert('last_played_at' in json[0], 'missing last_played_at');
     }
   });
 
   if (firstSong) {
     await test('GET /:id returns single song with arrangements → 200', async () => {
-      const { res, json } = await GET(`/api/${slug}/songs/${firstSong.id}`);
+      const { res, json } = await GET(`/api/${slug}/songs/${firstSong.id}`, AUTH);
       assertStatus(res, json, 200);
       assert(json.id === firstSong.id, 'id mismatch');
       assert(Array.isArray(json.arrangements), 'missing arrangements array');
     });
 
     await test('GET /:id/setlists returns appearances', async () => {
-      const { res, json } = await GET(`/api/${slug}/songs/${firstSong.id}/setlists`);
+      const { res, json } = await GET(`/api/${slug}/songs/${firstSong.id}/setlists`, AUTH);
       assertStatus(res, json, 200);
       assert(Array.isArray(json), 'not an array');
     });
   }
 
   await test('GET /:id not found → 404', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/999999999`);
+    const { res, json } = await GET(`/api/${slug}/songs/999999999`, AUTH);
     assertStatus(res, json, 404);
   });
 
   await test('GET /:id/setlists with id=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/0/setlists`);
+    const { res, json } = await GET(`/api/${slug}/songs/0/setlists`, AUTH);
     assertStatus(res, json, 400);
   });
 
   await test('GET /:id/setlists with non-integer id → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/abc/setlists`);
+    const { res, json } = await GET(`/api/${slug}/songs/abc/setlists`, AUTH);
     assertStatus(res, json, 400);
   });
 
@@ -192,18 +254,18 @@ async function testArrangements(slug, firstSong) {
   const sid = firstSong.id;
 
   await test('GET /:id/arrangements returns array', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json), 'not an array');
   });
 
   await test('GET /:id/arrangements with id=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/0/arrangements`);
+    const { res, json } = await GET(`/api/${slug}/songs/0/arrangements`, AUTH);
     assertStatus(res, json, 400);
   });
 
   await test('GET /:id/arrangements with non-integer id → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/abc/arrangements`);
+    const { res, json } = await GET(`/api/${slug}/songs/abc/arrangements`, AUTH);
     assertStatus(res, json, 400);
   });
 
@@ -244,7 +306,7 @@ async function testArrangementWrite(slug, token, song) {
   if (!arr) { skip('arrangement write tests', 'create failed'); return; }
 
   await test('GET /:id/arrangements returns created version', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`, AUTH);
     assertStatus(res, json, 200);
     assert(json.some(v => v.id === arr.id), 'created version not in list');
   });
@@ -283,7 +345,7 @@ async function testArrangementWrite(slug, token, song) {
 
   // Clean up all created versions
   await test('DELETE /:id/arrangements/:arrId removes version → 204', async () => {
-    const { res, json: list } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    const { res, json: list } = await GET(`/api/${slug}/songs/${sid}/arrangements`, AUTH);
     assertStatus(res, list, 200);
     let lastStatus;
     for (const v of list) {
@@ -294,7 +356,7 @@ async function testArrangementWrite(slug, token, song) {
   });
 
   await test('GET /:id/arrangements returns empty after all deleted', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`);
+    const { res, json } = await GET(`/api/${slug}/songs/${sid}/arrangements`, AUTH);
     assertStatus(res, json, 200);
     assert(json.length === 0, `expected 0 versions, got ${json.length}`);
   });
@@ -305,7 +367,7 @@ async function testSongLogs(slug) {
 
   let firstLog = null;
   await test('GET returns recent log entries', async () => {
-    const { res, json } = await GET(`/api/${slug}/song-logs`);
+    const { res, json } = await GET(`/api/${slug}/song-logs`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json), 'not an array');
     if (json.length) {
@@ -317,7 +379,7 @@ async function testSongLogs(slug) {
 
   if (firstLog) {
     await test('GET ?songId filters to file actions for that song', async () => {
-      const { res, json } = await GET(`/api/${slug}/song-logs?songId=${firstLog.song_id}`);
+      const { res, json } = await GET(`/api/${slug}/song-logs?songId=${firstLog.song_id}`, AUTH);
       assertStatus(res, json, 200);
       assert(Array.isArray(json), 'not an array');
       json.forEach(l => assert(l.song_id === firstLog.song_id,
@@ -326,12 +388,12 @@ async function testSongLogs(slug) {
   }
 
   await test('GET ?songId=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/song-logs?songId=0`);
+    const { res, json } = await GET(`/api/${slug}/song-logs?songId=0`, AUTH);
     assertStatus(res, json, 400);
   });
 
   await test('GET ?songId=abc → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/song-logs?songId=abc`);
+    const { res, json } = await GET(`/api/${slug}/song-logs?songId=abc`, AUTH);
     assertStatus(res, json, 400);
   });
 }
@@ -341,7 +403,7 @@ async function testGigs(slug) {
   let firstGig = null;
 
   await test('GET gigs returns paginated shape', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs`);
+    const { res, json } = await GET(`/api/${slug}/gigs`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json.rows), 'json.rows not an array');
     assert(json.rows.length <= json.limit, `expected ≤${json.limit} rows, got ${json.rows?.length}`);
@@ -352,7 +414,7 @@ async function testGigs(slug) {
   });
 
   await test('GET ?limit=1&offset=0 unauthenticated returns paginated shape', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs?limit=1&offset=0`);
+    const { res, json } = await GET(`/api/${slug}/gigs?limit=1&offset=0`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json.rows), 'json.rows not an array');
     assert(typeof json.total === 'number', 'json.total not a number');
@@ -361,14 +423,14 @@ async function testGigs(slug) {
 
   if (firstGig) {
     await test('GET /:id returns gig', async () => {
-      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}`);
+      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}`, AUTH);
       assertStatus(res, json, 200);
       assert(json.id === firstGig.id, 'id mismatch');
       assert('title' in json, 'missing title');
     });
 
     await test('GET /:id?refs=1 returns gig with setlists/venue/organizer', async () => {
-      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}&refs=1`);
+      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}&refs=1`, AUTH);
       assertStatus(res, json, 200);
       assert('gig' in json && 'refs' in json, 'missing gig or refs');
       assert(Array.isArray(json.refs.setlists), 'refs.setlists should be array');
@@ -378,17 +440,18 @@ async function testGigs(slug) {
   }
 
   await test('GET /:id with id=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs?id=0`);
+    const { res, json } = await GET(`/api/${slug}/gigs?id=0`, AUTH);
     assertStatus(res, json, 400);
   });
 
   await test('GET /:id not found → 404', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs?id=999999999`);
+    const { res, json } = await GET(`/api/${slug}/gigs?id=999999999`, AUTH);
     assertStatus(res, json, 404);
   });
 
   await test('GET ?format=ics returns iCalendar → 200', async () => {
-    const res = await fetch(`${BASE_URL}/api/${slug}/gigs?format=ics`);
+    const res = await fetch(`${BASE_URL}/api/${slug}/gigs?format=ics`,
+      { headers: { ...BYPASS, Authorization: `Bearer ${TOKEN}` } });
     assert(res.status === 200, `Expected 200, got ${res.status}`);
     const ct = res.headers.get('content-type') || '';
     assert(ct.includes('text/calendar'), `expected text/calendar, got: ${ct}`);
@@ -404,13 +467,13 @@ async function testVenues(slug, config) {
 
   if (!planHas(config, 'venues')) {
     await test(`GET on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
-      const { res, json } = await GET(`/api/${slug}/venues`);
+      const { res, json } = await GET(`/api/${slug}/venues`, AUTH);
       assertStatus(res, json, 402);
       assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
     });
 
     await test(`GET /:id on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
-      const { res, json } = await GET(`/api/${slug}/venues/999999999`);
+      const { res, json } = await GET(`/api/${slug}/venues/999999999`, AUTH);
       assertStatus(res, json, 402);
       assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
     });
@@ -420,7 +483,7 @@ async function testVenues(slug, config) {
   let firstVenue = null;
 
   await test('GET returns paginated shape', async () => {
-    const { res, json } = await GET(`/api/${slug}/venues`);
+    const { res, json } = await GET(`/api/${slug}/venues`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json.rows), 'json.rows not an array');
     assert(typeof json.total === 'number', 'json.total not a number');
@@ -428,13 +491,13 @@ async function testVenues(slug, config) {
   });
 
   await test('GET ?slim=1 still returns plain array', async () => {
-    const { res, json } = await GET(`/api/${slug}/venues?slim=1`);
+    const { res, json } = await GET(`/api/${slug}/venues?slim=1`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json), 'slim should return plain array');
   });
 
   await test('GET ?q= filters results', async () => {
-    const { res, json } = await GET(`/api/${slug}/venues?q=zzznomatch`);
+    const { res, json } = await GET(`/api/${slug}/venues?q=zzznomatch`, AUTH);
     assertStatus(res, json, 200);
     assert(json.rows.length === 0, 'expected 0 rows for non-matching query');
     assert(json.total === 0, 'expected total 0 for non-matching query');
@@ -442,14 +505,14 @@ async function testVenues(slug, config) {
 
   if (firstVenue) {
     await test('GET /:id returns venue', async () => {
-      const { res, json } = await GET(`/api/${slug}/venues/${firstVenue.id}`);
+      const { res, json } = await GET(`/api/${slug}/venues/${firstVenue.id}`, AUTH);
       assertStatus(res, json, 200);
       assert(json.id === firstVenue.id, 'id mismatch');
       assert('name' in json, 'missing name');
     });
 
     await test('GET /:id?refs=1 returns venue with refs', async () => {
-      const { res, json } = await GET(`/api/${slug}/venues/${firstVenue.id}?refs=1`);
+      const { res, json } = await GET(`/api/${slug}/venues/${firstVenue.id}?refs=1`, AUTH);
       assertStatus(res, json, 200);
       assert('venue' in json && 'refs' in json, 'missing venue or refs');
       assert(Array.isArray(json.refs.gigs), 'refs.gigs should be an array');
@@ -461,12 +524,12 @@ async function testVenues(slug, config) {
   }
 
   await test('GET /:id with id=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/venues/0`);
+    const { res, json } = await GET(`/api/${slug}/venues/0`, AUTH);
     assertStatus(res, json, 400);
   });
 
   await test('GET /:id not found → 404', async () => {
-    const { res, json } = await GET(`/api/${slug}/venues/999999999`);
+    const { res, json } = await GET(`/api/${slug}/venues/999999999`, AUTH);
     assertStatus(res, json, 404);
   });
 }
@@ -501,7 +564,7 @@ async function testSetlists(slug) {
   let firstSetlist = null;
 
   await test('GET setlists returns array with song_count', async () => {
-    const { res, json } = await GET(`/api/${slug}/setlists`);
+    const { res, json } = await GET(`/api/${slug}/setlists`, AUTH);
     assertStatus(res, json, 200);
     assert(Array.isArray(json), 'not an array');
     assert(json.length <= 20, `expected ≤20, got ${json.length}`);
@@ -513,7 +576,7 @@ async function testSetlists(slug) {
 
   if (firstSetlist) {
     await test('GET /:id returns setlist with ordered songs', async () => {
-      const { res, json } = await GET(`/api/${slug}/setlists/${firstSetlist.id}`);
+      const { res, json } = await GET(`/api/${slug}/setlists/${firstSetlist.id}`, AUTH);
       assertStatus(res, json, 200);
       assert(json.id === firstSetlist.id, 'id mismatch');
       assert(Array.isArray(json.songs), 'songs not an array');
@@ -521,12 +584,12 @@ async function testSetlists(slug) {
   }
 
   await test('GET /:id with id=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/setlists/0`);
+    const { res, json } = await GET(`/api/${slug}/setlists/0`, AUTH);
     assertStatus(res, json, 400);
   });
 
   await test('GET /:id not found → 404', async () => {
-    const { res, json } = await GET(`/api/${slug}/setlists/999999999`);
+    const { res, json } = await GET(`/api/${slug}/setlists/999999999`, AUTH);
     assertStatus(res, json, 404);
   });
 
@@ -930,10 +993,12 @@ async function testFileValidation(slug, token, songId) {
         { publicUrl: `${R2_BASE}/sheets/fake.mp3` }, { token });
       assertStatus(res, json, 400);
     });
-    await test('PUT /audio valid prefix, nonexistent song → 404', async () => {
+    // Keys are scoped to the band (`audio/<artist id>/…`); an unscoped key is
+    // refused before the song is even looked up.
+    await test('PUT /audio unscoped key → 400', async () => {
       const { res, json } = await PUT(`/api/${slug}/songs/999999999/audio`,
         { publicUrl: `${R2_BASE}/audio/fake.mp3` }, { token });
-      assertStatus(res, json, 404);
+      assertStatus(res, json, 400);
     });
 
     await test('PUT /sheet wrong key prefix → 400', async () => {
@@ -941,10 +1006,12 @@ async function testFileValidation(slug, token, songId) {
         { publicUrl: `${R2_BASE}/audio/fake.pdf` }, { token });
       assertStatus(res, json, 400);
     });
-    await test('PUT /sheet valid prefix, nonexistent song → 404', async () => {
+    // Keys are scoped to the band (`sheets/<artist id>/…`); an unscoped key is
+    // refused before the song is even looked up.
+    await test('PUT /sheet unscoped key → 400', async () => {
       const { res, json } = await PUT(`/api/${slug}/songs/999999999/sheet`,
         { publicUrl: `${R2_BASE}/sheets/fake.pdf` }, { token });
-      assertStatus(res, json, 404);
+      assertStatus(res, json, 400);
     });
 
     await test('PUT /playback wrong key prefix → 400', async () => {
@@ -952,10 +1019,12 @@ async function testFileValidation(slug, token, songId) {
         { publicUrl: `${R2_BASE}/audio/fake.mp3` }, { token });
       assertStatus(res, json, 400);
     });
-    await test('PUT /playback valid prefix, nonexistent song → 404', async () => {
+    // Keys are scoped to the band (`playback/<artist id>/…`); an unscoped key is
+    // refused before the song is even looked up.
+    await test('PUT /playback unscoped key → 400', async () => {
       const { res, json } = await PUT(`/api/${slug}/songs/999999999/playback`,
         { publicUrl: `${R2_BASE}/playback/fake.mp3` }, { token });
-      assertStatus(res, json, 404);
+      assertStatus(res, json, 400);
     });
 
     // Presigned URL generation — verifies R2 client is wired correctly
@@ -1035,7 +1104,7 @@ async function testLyricsLifecycle(slug, token, songId) {
   });
 
   await test('GET /songs/:id reflects saved lyrics', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/${songId}`);
+    const { res, json } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
     assertStatus(res, json, 200);
     assert(json.extra?.lyrics === testLyrics.trim(),
       `lyrics mismatch — got: ${JSON.stringify(json.extra?.lyrics)}`);
@@ -1049,7 +1118,7 @@ async function testLyricsLifecycle(slug, token, songId) {
   });
 
   await test('GET /songs/:id confirms lyrics removed', async () => {
-    const { res, json } = await GET(`/api/${slug}/songs/${songId}`);
+    const { res, json } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
     assertStatus(res, json, 200);
     assert(!json.extra?.lyrics,
       `expected no lyrics, got: ${JSON.stringify(json.extra?.lyrics)}`);
@@ -1237,17 +1306,17 @@ async function testWrite(slug, token, firstSong, config) {
   });
 
   // Export
-  await test('GET /export returns JSON attachment', async () => {
+  await test('GET /export returns a ZIP of CSV tables', async () => {
     const res = await fetch(`${BASE_URL}/api/${slug}/export`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { ...BYPASS, 'Authorization': `Bearer ${token}` },
     });
     assert(res.status === 200, `Expected 200, got ${res.status}`);
     const cd = res.headers.get('content-disposition') || '';
-    assert(cd.includes('attachment'), `expected attachment disposition, got: ${cd}`);
-    const body = await res.json();
-    assert(Array.isArray(body.songs), 'missing songs array');
-    assert(Array.isArray(body.setlists), 'missing setlists array');
-    assert(Array.isArray(body.gigs), 'missing gigs array');
+    assert(cd.includes('attachment') && cd.includes('.zip'), `expected a .zip attachment, got: ${cd}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert(buf.subarray(0, 2).toString() === 'PK', 'not a ZIP archive');
+    for (const f of ['artist.csv', 'songs.csv'])
+      assert(buf.includes(Buffer.from(f)), `archive has no ${f}`);
   });
 }
 
@@ -1337,36 +1406,50 @@ async function main() {
 
   const { slug } = config;
 
-  const [firstSong] = await Promise.all([
-    testSongs(slug),
-    testSongLogs(slug),
-    testGigs(slug),
-    testVenues(slug, config),
+  await Promise.all([
+    testPrivacy(slug, config),
     testOrganizers(slug),
-    testSetlists(slug),
     testAuth(slug),
     testFileIdValidation(slug),
   ]);
 
+  if (!TOKEN) {
+    console.log(B('\nAuthenticated reads and write ops'));
+    console.log(D('  Set ARTIST_PASSWORD=<password> to run them — workspaces are private'));
+    printSummary();
+    return;
+  }
+
+  // Authenticated config carries the plan (for the venue gating checks).
+  const authed = (await GET('/api/config', AUTH)).json || config;
+
+  const [firstSong] = await Promise.all([
+    testSongs(slug),
+    testSongLogs(slug),
+    testGigs(slug),
+    testVenues(slug, authed),
+    testSetlists(slug),
+  ]);
+
   await testArrangements(slug, firstSong);
 
-  if (PASSWORD) {
-    await testWrite(slug, PASSWORD, firstSong, config);
-    await testCrudLifecycle(slug, PASSWORD, config, {
+  {
+    await testWrite(slug, PASSWORD, firstSong, authed);
+    await testCrudLifecycle(slug, PASSWORD, authed, {
       resource: 'venues',
       labelField: 'name',
       createBody:  { name: '[TEST] Venue',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Venue updated', city: 'Teststadt' },
     });
-    await testCrudLifecycle(slug, PASSWORD, config, {
+    await testCrudLifecycle(slug, PASSWORD, authed, {
       resource: 'organizers',
       labelField: 'name',
       createBody:  { name: '[TEST] Organizer',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Organizer updated', city: 'Teststadt' },
     });
-    await testCrudLifecycle(slug, PASSWORD, config, {
+    await testCrudLifecycle(slug, PASSWORD, authed, {
       resource: 'gigs',
       labelField: 'title',
       itemUrl: (id, qs = '') => `/api/${slug}/gigs?id=${id}${qs.replace('?', '&')}`,
@@ -1375,9 +1458,6 @@ async function main() {
       updateBody:  { title: '[TEST] Gig updated', date: '2099-12-31' },
     });
     await testMultiUserAuth(slug, PASSWORD);
-  } else {
-    console.log(B('\nWrite ops'));
-    console.log(D('  Set ARTIST_PASSWORD=<password> to enable write tests'));
   }
 
   printSummary();

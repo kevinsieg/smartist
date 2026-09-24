@@ -60,11 +60,11 @@ async function subscribe(req, res) {
     await sql`
       INSERT INTO subscribers (email, source, meta)
       VALUES (${email}, 'demo', ${meta})
-      ON CONFLICT (email) DO UPDATE SET source = 'demo', meta = ${meta}
+      ON CONFLICT (email) DO UPDATE SET source = 'demo', meta = subscribers.meta || ${meta}
     `;
     const demoSlug   = process.env.DEMO_ARTIST_SLUG || 'demo';
     const demoArtist = await getArtist(demoSlug);
-    const demoToken  = demoArtist?.password_hash ? generateMagicToken(demoArtist.password_hash) : null;
+    const demoToken  = demoArtist?.password_hash ? generateMagicToken(demoArtist.password_hash, 'demo') : null;
     return res.status(200).json({ ok: true, token: demoToken, slug: demoArtist?.slug || demoSlug });
   }
 
