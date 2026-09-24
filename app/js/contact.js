@@ -7,7 +7,7 @@ async function _contactInit() {
     try {
       var cfg = await loadConfig(undefined, { light: true });
       applyNav(cfg.name, cfg.config);
-      document.title = t('contact.heading') + ' — ' + (cfg.name || 'smartist');
+      document.title = 'smartist · ' + t('contact.heading') + (cfg.name ? ' · ' + cfg.name : '');
     } catch (_) {}
   } else {
     document.querySelectorAll('.band-name').forEach(function(el) { el.textContent = 'smartist'; });
