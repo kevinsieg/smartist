@@ -14,7 +14,7 @@ Hosted at [app.smartist.studio](https://app.smartist.studio); this repository is
 
 **Setlist history** (`/setlist-history`) — browse all saved setlists by year, share as PDF by email, duplicate, open in stage view.
 
-**Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. No auth required.
+**Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. Needs a session unless the band turns on *public stage links* in Settings (off by default).
 
 **PRO** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. `/gema-import` redirects to `/pro-import`.
 
@@ -29,7 +29,7 @@ Hosted at [app.smartist.studio](https://app.smartist.studio); this repository is
 | ------------ | ------------------------------------------------------------------ |
 | Hosting      | Vercel (serverless functions + static files, no build step)        |
 | Database     | PostgreSQL — Neon serverless (free tier)                           |
-| Auth         | Stateless Bearer token — bcrypt password or 30-min HMAC magic link |
+| Auth         | Stateless HMAC-signed Bearer tokens (bcrypt passwords, Google sign-in, 30-min email links) |
 | File storage | Cloudflare R2 (audio, sheet music, playback tracks)                |
 | Email        | Resend REST API                                                    |
 | PDF          | PDFKit                                                             |
@@ -272,7 +272,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 | Table               | Purpose                                                                     |
 | ------------------- | --------------------------------------------------------------------------- |
-| `artists`           | Slug, name, bcrypt password hash, UI config (JSONB)                         |
+| `artists`           | Slug, name, optional legacy band password hash, UI config (JSONB)           |
 | `songs`             | Catalogue — standard fields + `extra` JSONB; soft-delete via `deleted` flag |
 | `venues`            | CRM venue directory — soft-delete, linked to gigs via FK                    |
 | `organizers`        | CRM organizer/promoter directory — soft-delete, linked to gigs via FK       |
@@ -282,6 +282,10 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 | `song_logs`         | Append-only audit log — full JSON snapshot per change                       |
 | `gema_works`        | GEMA work registrations, auto-linked to songs by title                      |
 | `gema_rightholders` | Rightholders (composers, publishers) per work                               |
+| `song_arrangements` | Versioned arrangement charts per song (used by stage view)                  |
+| `users`             | Logins per workspace — email is the identity across workspaces, role per band |
+| `subscribers`       | Contact-form / demo-gate addresses and pending sign-up tokens                |
+| `rate_limits`       | Sliding-window counters for login, reset, invite and upload endpoints        |
 
 
 ---
@@ -290,42 +294,45 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 ## API
 
-All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` (artist password or 30-min magic token). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
+All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (or, on older single-band installs, the band password). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
 
+A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *stage* = also open without a session when the band turned on *public catalogue* / *public stage links* in Settings (both off by default); — = no session needed.
 
 | Method | Endpoint                          | Auth | Purpose                                                                                      |
 | ------ | --------------------------------- | ---- | -------------------------------------------------------------------------------------------- |
-| GET    | `/api/config`                     | —    | Artist config + all active songs                                                             |
-| POST   | `/api/:artist/auth`               | —    | Verify password, get token                                                                   |
-| POST   | `/api/:artist/request-reset`      | —    | Send magic login link by email                                                               |
-| GET    | `/api/:artist/songs`              | —    | Songs with play stats and GEMA data                                                          |
+| GET    | `/api/config`                     | —    | Band name and branding; songs and counts only with a session or a public catalogue           |
+| POST   | `/api/:artist/auth`               | —    | Log in, get a session token                                                                  |
+| POST   | `/api/:artist/request-reset`      | —    | Email a link to set a new password                                                           |
+| GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
 | POST   | `/api/:artist/songs`              | ✓    | Create song; also handles lyrics save/delete and media upload via body fields                |
-| PATCH  | `/api/:artist/songs`              | ✓    | Batch update songs                                                                           |
-| GET    | `/api/:artist/songs/:id`          | —    | Single song (used by stage view)                                                             |
+| PATCH  | `/api/:artist/songs`              | ✓    | Batch update songs (`extra.*Url` values must be http(s))                                     |
+| GET    | `/api/:artist/songs/:id`          | ✓ / catalogue / stage | Single song (used by stage view)                                            |
 | DELETE | `/api/:artist/songs/:id`          | ✓    | Soft-delete song                                                                             |
 | POST   | `/api/:artist/songs/:id/restore`  | ✓    | Restore from audit log                                                                       |
-| GET    | `/api/:artist/songs/:id/setlists` | —    | Setlists that include this song                                                              |
-| GET    | `/api/:artist/songs/:id/gema`     | —    | GEMA works + rightholders for this song                                                      |
-| GET    | `/api/:artist/setlists`           | —    | List setlists with song count                                                                |
+| GET    | `/api/:artist/songs/:id/setlists` | ✓ / catalogue | Setlists that include this song                                                     |
+| GET    | `/api/:artist/songs/:id/gema`     | ✓    | GEMA works + rightholders for this song                                                      |
+| GET    | `/api/:artist/setlists`           | ✓    | List setlists with song count                                                                |
 | POST   | `/api/:artist/setlists`           | ✓    | Create (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
-| GET    | `/api/:artist/setlists/:id`       | —    | Setlist detail with ordered songs                                                            |
+| GET    | `/api/:artist/setlists/:id`       | ✓ / stage | Setlist detail with ordered songs                                                       |
 | PUT    | `/api/:artist/setlists/:id`       | ✓    | Update metadata + song list                                                                  |
-| GET    | `/api/:artist/gigs`               | —    | List gigs with venue and organizer names                                                     |
+| GET    | `/api/:artist/gigs`               | ✓ / catalogue | List gigs with venue and organizer names (`?format=ics` for a calendar feed)        |
 | POST   | `/api/:artist/gigs`               | ✓    | Create gig                                                                                   |
-| GET    | `/api/:artist/gigs/:id`           | —    | Single gig; add `?refs` for linked setlists, venue, organizer                                |
+| GET    | `/api/:artist/gigs/:id`           | ✓ / catalogue | Single gig; add `?refs` for linked setlists, venue, organizer                       |
 | PUT    | `/api/:artist/gigs/:id`           | ✓    | Update gig                                                                                   |
 | DELETE | `/api/:artist/gigs/:id`           | ✓    | Soft-delete or hard-delete gig                                                               |
-| GET    | `/api/:artist/venues`             | —    | List venues (paginated, filterable)                                                          |
+| GET    | `/api/:artist/venues`             | ✓    | List venues (paginated, filterable) — Pro plan                                               |
 | POST   | `/api/:artist/venues`             | ✓    | Create venue                                                                                 |
-| GET    | `/api/:artist/venues/:id`         | —    | Single venue; add `?refs` for linked gigs                                                    |
+| GET    | `/api/:artist/venues/:id`         | ✓    | Single venue; add `?refs` for linked gigs                                                    |
 | PUT    | `/api/:artist/venues/:id`         | ✓    | Update venue                                                                                 |
 | DELETE | `/api/:artist/venues/:id`         | ✓    | Soft-delete or hard-delete venue                                                             |
-| GET    | `/api/:artist/organizers`         | —    | List organizers (paginated, filterable)                                                      |
+| GET    | `/api/:artist/organizers`         | ✓    | List organizers (paginated, filterable) — Pro plan                                           |
 | POST   | `/api/:artist/organizers`         | ✓    | Create organizer                                                                             |
-| GET    | `/api/:artist/organizers/:id`     | —    | Single organizer; add `?refs` for linked gigs                                                |
+| GET    | `/api/:artist/organizers/:id`     | ✓    | Single organizer; add `?refs` for linked gigs                                                |
 | PUT    | `/api/:artist/organizers/:id`     | ✓    | Update organizer                                                                             |
 | DELETE | `/api/:artist/organizers/:id`     | ✓    | Soft-delete or hard-delete organizer                                                         |
 | GET    | `/api/:artist/export`             | ✓    | Full data export: ZIP of one CSV per table (empty/internal columns dropped)                  |
+
+IDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.
 
 
 ---
@@ -337,15 +344,20 @@ All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <toke
 See [scripts/README.md](scripts/README.md) for usage details.
 
 
-| git Script                 | Purpose                                                                  |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `scripts/setup.js`         | Interactive wizard: schema + artist creation + field config              |
-| `scripts/seed.js`          | Populate the dev database with test data (wipe + reseed with `--force`)  |
-| `scripts/import_songs.js`  | Bulk-import songs from a JSON file (`--artist <slug>`)                   |
-| `scripts/import_venues.js` | Bulk-import venues from a CSV file (`--artist <slug>`)                   |
-| `scripts/import_gema.js`   | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
-| `scripts/delete_artist.js` | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
-| `scripts/schema.sql`       | Raw schema — apply directly with `psql` if preferred                     |
+| Script                        | Purpose                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| `scripts/setup.js`            | Interactive wizard: schema + artist creation + field config              |
+| `scripts/apply_schema.js`     | Apply `schema.sql` to the database in `DATABASE_URL` (idempotent)        |
+| `scripts/seed.js`             | Populate the dev database with test data (wipe + reseed with `--force`)  |
+| `scripts/create_user.js`      | First login for a band, or set an account's password from the CLI        |
+| `scripts/plans.js`            | List bands with plan and usage; grant a plan; recount storage            |
+| `scripts/import_songs.js`     | Bulk-import songs from a JSON file (`--artist <slug>`)                   |
+| `scripts/import_venues.js`    | Bulk-import venues from a CSV file (`--artist <slug>`)                   |
+| `scripts/import_gema.js`      | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
+| `scripts/delete_artist.js`    | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
+| `scripts/demo_reset.js`       | Snapshot / restore the public demo band (`scripts/demo_seed.json`)       |
+| `scripts/migrate_*.js`        | One-off data migrations, kept for older databases                        |
+| `scripts/schema.sql`          | Raw schema — apply directly with `psql` if preferred                     |
 
 ---
 
