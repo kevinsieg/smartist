@@ -1,4 +1,5 @@
 {
+  "regions": ["fra1"],
   "redirects": [
     {
       "source": "/",
@@ -29,6 +30,7 @@
     { "source": "/signup",          "destination": "/app/signup.html" },
     { "source": "/onboarding",      "destination": "/app/onboarding.html" },
     { "source": "/workspaces",      "destination": "/app/workspaces.html" },
+    { "source": "/profile",         "destination": "/app/profile.html" },
     { "source": "/confirm-email",  "destination": "/app/confirm-email.html" },
     { "source": "/home",            "destination": "/app/workspaces.html" },
     { "source": "/admin",           "destination": "/app/admin.html" },
