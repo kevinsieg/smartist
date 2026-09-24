@@ -91,6 +91,26 @@ function makeContext(fetchImpl) {
     assertEq(res.artists.length, 0);
   });
 
+  console.log(B('\nhome OAuth error at the multi-tenant root'));
+
+  // A failed Google/Facebook sign-in lands on /login?oauth_error=1. At the
+  // root there is no band, and the early "no workspace" return used to render
+  // a bare form: the error vanished and the page looked like nothing happened.
+  await test('oauth_error at the root shows the error message on the login form', async () => {
+    const ctx = makeContext(async () => ({ ok: false, json: async () => ({}) }));
+    let rendered;
+    ctx.window = { location: { search: '?oauth_error=1', hash: '', pathname: '/login' } };
+    ctx.history = { replaceState() {} };
+    ctx.AUTH_TOKEN_KEY = 'smartist_token';
+    ctx.t = (k) => k;
+    ctx.loadConfig = async () => ({ name: '', config: {} });  // no slug: the root
+    ctx.renderLogin = (msg) => { rendered = { msg }; };
+    ctx.renderSetPassword = () => { rendered = { setPassword: true }; };
+    await vm.runInContext('init()', ctx);
+    assert(rendered, 'nothing rendered');
+    assertEq(rendered.msg, 'home.oauthErrorMsg');
+  });
+
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);
   if (failures.length) {
