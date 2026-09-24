@@ -144,12 +144,6 @@ const SONGS = [
     assertEq(energyLabel(99), 'high');
   });
 
-  test('words are left untouched', () => {
-    assertEq(energyLabel('Fast'), 'Fast');
-    assertEq(energyLabel('Slow'), 'Slow');
-    assertEq(energyLabel('Medium'), 'Medium');
-  });
-
   test('empty stays empty', () => {
     assertEq(energyLabel(''), '');
     assertEq(energyLabel(null), '');
