@@ -2,42 +2,8 @@
 
 const AUTH_TOKEN_KEY = 'smartist_token';
 
-// "Support the project" donation links. Edit this list to add/remove/reorder
-// providers; entries with an empty url are skipped. `img` (optional) is the
-// provider's official button image — loaded as a plain <img> (their button.js
-// scripts are intentionally NOT used: CSP blocks third-party scripts and an
-// image gives the same branding without executing third-party code). Falls back
-// to the text label when no img. Brand labels/images are not translated.
-const SUPPORT_LINKS = [
-  { id: 'liberapay',    label: 'Liberapay',       url: 'https://liberapay.com/kevkevkev/donate', img: 'https://liberapay.com/assets/widgets/donate.svg' },
-  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: 'https://www.buymeacoffee.com/kevkevkev', img: 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png' },
-];
-
-// Render the non-empty SUPPORT_LINKS as external buttons into containerEl.
-// Returns the number of links rendered (0 = caller should hide its group).
-function renderSupportLinks(containerEl) {
-  if (!containerEl) return 0;
-  containerEl.textContent = '';
-  var links = SUPPORT_LINKS.filter(function (l) { return l.url && l.url.trim(); });
-  links.forEach(function (l) {
-    var a = document.createElement('a');
-    a.href = l.url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.className = 'support-link';
-    if (l.img && l.img.trim()) {
-      var img = document.createElement('img');
-      img.src = l.img;
-      img.alt = l.label;
-      img.loading = 'lazy';
-      a.appendChild(img);
-    } else {
-      a.textContent = l.label;
-    }
-    containerEl.appendChild(a);
-  });
-  return links.length;
-}
+// SUPPORT_LINKS, renderSupportLinks and renderAppFooter live in footer.js,
+// which every page loads before this file.
 var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact','profile']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
@@ -122,11 +88,15 @@ function applyPlanNavLocks(planFeatures) {
   header.className = 'app-header';
   header.innerHTML =
     '<nav class="app-nav">' +
-      '<a href="/" class="app-logo" aria-label="">' +
-        '<img src="" alt="" class="app-logo-img">' +
-        '<span class="app-logo-initials" aria-hidden="true"></span>' +
-        '<span class="band-name"></span>' +
-      '</a>' +
+      // No workspace in the URL means we are outside the app (login, root
+      // contact page): the way back is the marketing site, not a band.
+      (_artistSlug
+        ? '<a href="/" class="app-logo" aria-label="">' +
+            '<img src="" alt="" class="app-logo-img">' +
+            '<span class="app-logo-initials" aria-hidden="true"></span>' +
+            '<span class="band-name"></span>' +
+          '</a>'
+        : '<a href="https://smartist.studio" class="app-studio-wordmark">smartist studio</a>') +
       '<div class="nav-links">' +
         (_artistSlug ? (
           '<a href="' + _base + '/songs" data-i18n="nav.songs">Songs</a>' +
@@ -156,17 +126,8 @@ function applyPlanNavLocks(planFeatures) {
   document.body.insertBefore(header, document.body.firstChild);
 
   const footer = document.createElement('footer');
-  var _hasSupport = SUPPORT_LINKS.some(function (l) { return l.url && l.url.trim(); });
-  footer.innerHTML =
-    '<p>&copy; <span id="currentYear"></span> <span class="band-name"></span>' +
-    ' &middot; <span data-i18n="footer.poweredBy">powered by</span> <a href="https://smartist.studio" target="_blank" rel="noopener" class="footer-backlink">smartist.studio</a>' +
-    ' &middot; <a href="' + _base + '/contact" class="footer-backlink" data-i18n="footer.contact">Contact</a>' +
-    (_hasSupport ? ' &middot; <span class="footer-support"><span data-i18n="support.label">Support the project</span>: <span data-support-links></span></span>' : '') +
-    ' &middot; <span data-lang-switcher></span></p>';
   document.body.insertBefore(footer, document.currentScript);
-  if (_hasSupport) renderSupportLinks(footer.querySelector('[data-support-links]'));
-
-  document.getElementById('currentYear').textContent = new Date().getFullYear();
+  renderAppFooter(footer);
 
   // Set auth class early so CSS hides/shows auth-gated nav items before applyNav() runs.
   try {

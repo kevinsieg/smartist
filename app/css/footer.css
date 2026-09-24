@@ -1,0 +1,37 @@
+/* Footer for every app page, built by footer.js. Separate from app.css because
+   demo.html does not load app.css; hence the fallbacks. */
+footer {
+    font-family: var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    background: var(--primary-color, #fffdfa);
+    border-top: 1px solid var(--border-color, #e6ded1);
+    padding: 0.6rem 1rem;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.6rem;
+    font-size: 0.62rem; letter-spacing: 0.08em; color: var(--third-color, #8a847c);
+    /* Pushes the footer to the viewport bottom when content is short. */
+    margin-top: auto;
+    flex-shrink: 0;
+}
+.af-lang { display: flex; align-items: center; gap: 0.5rem; justify-self: start; }
+.af-lang button, .af-legal a {
+    background: none; border: none; padding: 0 2px; font: inherit; letter-spacing: inherit;
+    color: inherit; text-decoration: none; cursor: pointer;
+    display: inline-flex; align-items: center; min-height: 44px;
+}
+.af-lang strong { color: var(--black, #1a1a1a); font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; }
+.af-lang button:hover, .af-legal a:hover { color: var(--secondary-ink, #9e5e20); text-decoration: underline; }
+.af-support { display: flex; align-items: center; gap: 0.4rem; }
+.af-support .support-link { margin: 0; text-decoration: none; line-height: 0; }
+.af-support .support-link img { height: 22px; }
+.af-legal { justify-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: 0.75rem; white-space: nowrap; }
+@media (min-width: 640px) {
+    footer { padding: 0.6rem 2.5rem; }
+    .af-support { gap: 0.75rem; }
+}
+/* Phones: three links, three languages and two buttons do not fit one row at
+   tappable sizes, so languages and links share the first row and the buttons
+   sit centred beneath. */
+@media (max-width: 479px) {
+    footer { grid-template-columns: auto 1fr; row-gap: 0; }
+    .af-support { grid-column: 1 / -1; grid-row: 2; justify-content: center; padding-bottom: 0.4rem; }
+    .af-legal { flex-wrap: nowrap; column-gap: 0.6rem; }
+}

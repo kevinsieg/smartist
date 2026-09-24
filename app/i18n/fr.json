@@ -116,7 +116,6 @@
   "demo.noSpam": "Pas de spam — désabonnement à tout moment.",
   "demo.stepLabel": "Accès démo",
   "footer.contact": "Contact",
-  "footer.poweredBy": "propulsé par",
   "gigs.addFirstGigBtn": "+ Ajouter votre premier concert",
   "gigs.addGig": "Ajouter un concert",
   "gigs.addGigBtn": "+ Ajouter un concert",
@@ -1029,7 +1028,6 @@
   "songs.useThis": "Utiliser",
   "songs.viewLyrics": "Voir les paroles",
   "songs.willUploadOnSave": "{name} — sera téléversé à l'enregistrement",
-  "support.label": "Soutenir le projet",
   "touring.bookingOutreachBtn": "Lancer le démarchage",
   "touring.bookingOutreachDesc": "Rédigez et suivez vos e-mails de réservation auprès des salles. Sachez qui a répondu, qui est en attente et qui a refusé.",
   "touring.bookingOutreachTitle": "Démarchage de réservation",
@@ -1168,5 +1166,6 @@
   "workspaces.roleViewer": "Lecteur",
   "workspaces.title": "Vos espaces",
   "workspaces.unauthHint": "Vous devez être connecté pour voir vos espaces.",
-  "home.savePassword": "Enregistrer le mot de passe"
+  "home.savePassword": "Enregistrer le mot de passe",
+  "footer.impressum": "Mentions légales"
 }
