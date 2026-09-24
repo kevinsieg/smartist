@@ -237,7 +237,7 @@
   "home.hidePw": "masquer",
   "home.invalidLink": "Lien de connexion invalide ou expiré.",
   "home.noAccount": "Pas de compte ?",
-  "home.oauthErrorMsg": "Échec de la connexion. Réessayez ou connectez-vous avec votre adresse e-mail.",
+  "home.oauthErrorMsg": "Échec de la connexion. Réessayez, connectez-vous avec votre adresse e-mail, ou inscrivez-vous si vous n’avez pas encore de compte.",
   "home.oauthNotConfigured": "La connexion {provider} n'est pas configurée",
   "home.orDivider": "ou",
   "home.passwordLabel": "Mot de passe",
