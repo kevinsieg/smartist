@@ -2,6 +2,8 @@
 
 Song catalogue, setlist, gigs and venues management for musicians. Runs as a Vercel serverless application backed by a PostgreSQL database.
 
+Hosted at [app.smartist.studio](https://app.smartist.studio); this repository is the full source. Why it is built the way it is: [`docs/architecture.md`](docs/architecture.md). Running several deployments: [`docs/deployment.md`](docs/deployment.md).
+
 ---
 
 ## Features
@@ -322,9 +324,16 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | `scripts/seed.js`          | Populate the dev database with test data (wipe + reseed with `--force`)  |
 | `scripts/import_songs.js`  | Bulk-import songs from a JSON file (`--artist <slug>`)                   |
 | `scripts/import_venues.js` | Bulk-import venues from a CSV file (`--artist <slug>`)                   |
-| `scripts/import_gigs.js`   | Import historical gig data (band-one.example source — adapt for other artists) |
 | `scripts/import_gema.js`   | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/delete_artist.js` | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
 | `scripts/schema.sql`       | Raw schema — apply directly with `psql` if preferred                     |
 
+---
 
+## Translations
+
+The app ships in English, French and German. The French and German strings were a machine-translated first pass; corrections from native speakers are welcome (`app/i18n/*.json`, identical key sets enforced by `node tests/unit.js`).
+
+## License
+
+[GNU Affero General Public License v3.0](LICENSE) or later. You may use, change and self-host smartist freely; if you run a modified version as a service for others, you must offer them its source.

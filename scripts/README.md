@@ -50,15 +50,6 @@ Inserts:
 
 ---
 
-## import_gigs.js — past gig importer
-
-Inserts historical gig data (sourced from band-one.example/#live — edit the hardcoded data array to adapt for another artist). Safe to re-run — skips gigs that already exist (matched by date + title). For each named venue a `venues` row is created (or reused if it already exists); private events store the city in `additional_text` instead.
-
-```bash
-node scripts/import_gigs.js
-```
-
----
 
 ## import_venues.js — bulk venue import
 

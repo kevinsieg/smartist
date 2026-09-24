@@ -1,7 +1,7 @@
 'use strict';
 // Deciding what deleting an account would destroy. The fixture always contains
 // a second band in the same database, because that is the failure that cannot
-// be undone: smartist-shared holds both bandone and bandtwo.
+// be undone: one database can hold several bands.
 const path = require('path');
 const { stubLogger } = require('./_runner');
 stubLogger();

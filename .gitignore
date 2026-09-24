@@ -10,3 +10,8 @@ logs/
 data/
 .superpowers/
 docs/superpowers/
+
+# Working plans and specs stay local: the repository is public.
+docs/plans/
+docs/*-plan.md
+docs/*-design.md
