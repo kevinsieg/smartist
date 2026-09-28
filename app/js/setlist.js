@@ -763,12 +763,8 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
   const name  = document.getElementById('gig-name').value.trim();
   if (!name) return;
   const date  = document.getElementById('gig-date').value || null;
-  const token = getToken();
-  const r = await withBusy(document.getElementById('create-gig-btn'), () => fetch(`/api/${artistSlug}/gigs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ title: name, date }),
-  }));
+  const r = await withBusy(document.getElementById('create-gig-btn'),
+    () => apiFetch(`/api/${artistSlug}/gigs`, 'POST', { title: name, date }));
   if (!r) return;
   if (r.ok) {
     const gig = await r.json();

@@ -53,7 +53,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/` | `app/js/home.js` |
 | `/dashboard` | `app/js/dashboard.js` |
 | `/setlist` | `app/js/setlist.js` |
-| `/setlist-history` | `app/js/setlist-history.js` |
+| `/setlist-history` | `app/js/setlist-history.js` — redirect to the setlist page's history tab |
 | `/songs` | `app/js/songs.js` (init, data, filters, list view) + `songs-table.js` (bulk edit), `songs-panel.js` (side panel), `songs-media.js` (audio/sheet/playback), `songs-lyrics.js` (lyrics + URL preview) — one global scope, loaded in that order with `songs.js` last because it calls `init()`; `tests/songs-split-client.js` executes them together |
 | `/pro-import` | `app/js/pro-import.js` |
 | `/gigs` | `app/js/gigs.js` |
@@ -64,6 +64,9 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
 | `/stage?id=N` | `app/js/stage.js` — **no `common.js`; no nav** |
 | `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, no `common.js`, English-only |
+| `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
+| `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
+| `/contact`, `/confirm-email`, `/demo` | `app/js/contact.js`; inline scripts in `confirm-email.html` and `demo.html` |
 
 `app/js/common.js` is loaded by every page except `stage.html`. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `common.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()` (which lives in `common.js`).
 
@@ -84,9 +87,9 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `api/[artist]/organizers.js` | `GET/POST /api/:artist/organizers` |
 | `api/[artist]/organizers/[...path].js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
 | `api/[artist]/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
-| `api/[artist]/setlists/[...path].js` | `GET/PUT /api/:artist/setlists/:id`; `GET /api/:artist/setlists/export` (via rewrite) |
+| `api/[artist]/setlists/[...path].js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `GET /api/:artist/export` (ZIP of CSVs, via rewrite) |
 | `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite) |
-| `api/[artist]/songs/[...path].js` | `DELETE` / `restore` / `setlists` / `gema` / `lyrics` / `lyrics-suggest` / `audio` / `sheet` / `playback` / `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite) |
+| `api/[artist]/songs/[...path].js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite). Lyrics writes go through `POST /songs` body fields |
 | `api/[artist]/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
 | `api/[artist]/venues/[...path].js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
 
