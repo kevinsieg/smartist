@@ -1,7 +1,7 @@
 // One footer for every app page, matching smartist.studio: languages left,
 // donation buttons centred; on the right the way back to smartist.studio,
 // Contact and the Impressum (legally required to be reachable everywhere).
-// Loaded before common.js, which calls renderAppFooter() from injectShell();
+// Loaded before the shared scripts; shell.js calls renderAppFooter() from injectShell();
 // standalone pages (signup, onboarding, workspaces, demo) put <footer data-app-footer></footer>
 // in their markup and this file fills it on load.
 

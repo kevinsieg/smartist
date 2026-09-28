@@ -1,5 +1,5 @@
 // Reusable filter bar + grouped list + side panel shell.
-// Depends on `escHtml` from common.js (available globally on all pages that load it).
+// Depends on `escHtml` from core.js (loaded on every app page).
 
 // Available filter types — the only valid values for FilterDef.type.
 // Each entry also documents its optional `field` annotation:
