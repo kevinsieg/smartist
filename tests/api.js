@@ -1492,9 +1492,10 @@ async function main() {
 
   if (EMAIL && PASSWORD) {
     const { res, json } = await POST(`/api/${SLUG}/auth`, { email: EMAIL, password: PASSWORD });
-    if (!res.ok || !json.token) {
-      // json.error tells a wrong password apart from Vercel's protection page (no JSON).
-      const why = typeof json.error === 'string' ? json.error : JSON.stringify(json.error || 'no JSON — likely Vercel Deployment Protection');
+    if (!res.ok || !json?.token) {
+      // json.error tells a wrong password apart from Vercel's own answers.
+      const why = !json ? `non-JSON response, content-type ${res.headers.get('content-type')}`
+        : typeof json.error === 'string' ? json.error : JSON.stringify(json.error ?? json);
       console.log(R(`\nLogin as ${EMAIL} failed (${res.status}: ${why}) — stopping before repeated failures lock the account.`));
       process.exit(1);
     }
