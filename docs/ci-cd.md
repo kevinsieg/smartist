@@ -7,7 +7,7 @@ GitHub Actions runs tests automatically on every push to `dev` or `main`, and on
 `.github/workflows/ci.yml` has three jobs, all on Node 22 (the `engines` version in `package.json`, which Vercel also reads):
 
 1. **Unit tests** — run immediately, no secrets needed, ~10 seconds
-2. **Integration tests (local Postgres)** — after unit tests; no secrets needed. A `postgres:16` service gets `scripts/schema.sql` applied twice (it must stay idempotent) and checked with `apply_schema.js --check`, `tests/harness/seed.js` creates a Pro band with one admin and two songs, `tests/harness/server.js` serves the handlers with the `vercel.json` rewrites, and `tests/api.js` runs against it. This is the job that catches a schema or handler change before it reaches a preview.
+2. **Integration + browser tests (local Postgres)** — after unit tests; no secrets needed. A `postgres:16` service gets `scripts/schema.sql` applied twice (it must stay idempotent) and checked with `apply_schema.js --check`, `tests/harness/seed.js` creates a Pro band with one admin and two songs, `tests/harness/server.js` serves the handlers with the `vercel.json` rewrites, and `tests/api.js` runs against it. Then `tests/smoke.js` drives Chromium through the app: sign in through the login form, every workspace page, the nav links (SPA navigation) and a stage link; any uncaught exception, console error or API 5xx fails it. This is the job that catches a schema, handler or page-script change before it reaches a preview.
 3. **Integration tests (Vercel preview)** — after unit tests; deploy a preview to Vercel then run the same suite against it, through the real router and the dev database
 
 The local job can be run by hand against any throwaway database:
@@ -17,7 +17,9 @@ export DATABASE_URL=postgres://postgres@localhost:5432/smartist_ci APP_SECRET=x 
        ARTIST_SLUG=ci ARTIST_EMAIL=ci@example.test ARTIST_PASSWORD=ci-pass
 node scripts/apply_schema.js --yes && node tests/harness/seed.js
 node tests/harness/server.js &          # :3000, or PORT=…
-cd tests && node api.js
+cd tests && node api.js && cd ..
+npm install --no-save playwright && npx playwright install chromium
+node tests/smoke.js
 ```
 
 The seed script refuses any database that is not on localhost.
