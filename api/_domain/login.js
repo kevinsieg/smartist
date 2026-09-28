@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit, clientIp } = require('../_ratelimit');
+const { checkRateLimit } = require('../_ratelimit');
+const { ok, fail } = require('./http');
 const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const logger = require('../_logger');
@@ -25,14 +26,14 @@ const MAX_CANDIDATES = 10;
 // emails have accounts. Cost 12, like every stored hash; matches no password.
 const DUMMY_HASH = '$2a$12$bX/Oyxx22A2xtE30S33C6evrSuAbmD9UFwycjT85mhdiJBygShHLO';
 
-async function passwordLogin(req, res) {
-  const { email, password, rememberMe } = req.body ?? {};
+async function passwordLogin({ body, ip }) {
+  const { email, password, rememberMe } = body ?? {};
   const clean = String(email ?? '').trim().toLowerCase();
-  if (!clean || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (String(password).length > 1000) return res.status(400).json({ error: 'Invalid' });
+  if (!clean || !password) return fail(400, 'Email and password required');
+  if (String(password).length > 1000) return fail(400, 'Invalid');
 
-  if (await checkRateLimit(`auth:${clientIp(req)}`, 10, 60))
-    return res.status(429).json({ error: 'Too many attempts — try again later' });
+  if (await checkRateLimit(`auth:${ip}`, 10, 60))
+    return fail(429, 'Too many attempts — try again later');
 
   const sql = getDb();
   const candidates = await sql`
@@ -52,13 +53,13 @@ async function passwordLogin(req, res) {
   // this endpoint tells anyone which emails have accounts.
   if (!user) {
     await logger.info('login_failed', { email: clean });
-    return res.status(401).json({ error: 'Invalid email or password' });
+    return fail(401, 'Invalid email or password');
   }
 
   const token   = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, user.password_hash);
   const artists = await getArtistsForUser(user.id, sql);
   await logger.info('login', { email: clean, artists: artists.length });
-  return res.json({ ok: true, token, role: user.role, email: clean, artists });
+  return ok({ ok: true, token, role: user.role, email: clean, artists });
 }
 
 module.exports = { passwordLogin, DUMMY_HASH };

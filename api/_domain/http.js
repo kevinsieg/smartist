@@ -10,4 +10,40 @@ function origin(req) {
   return `${/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(h) ? 'http' : 'https'}://${h}`;
 }
 
-module.exports = { origin };
+// ── Plain input in, plain result out ──────────────────────────────────────────
+// Domain functions take `input` and return a `result`, so they run (and are
+// tested) without a request or response object, and scripts can call them:
+//
+//   input:  { body, query, headers, ip, origin }   — headers lower-cased
+//   result: { status, body }                       — JSON reply
+//           { status, redirect, headers? }         — redirect (OAuth), headers
+//                                                    such as Set-Cookie
+//
+// toInput/send are the only places that touch req and res.
+
+const { clientIp } = require('../_ratelimit');
+
+function toInput(req) {
+  return {
+    body:    req.body ?? {},
+    query:   req.query ?? {},
+    headers: req.headers ?? {},
+    ip:      clientIp({ headers: req.headers ?? {} }),
+    origin:  origin({ headers: req.headers ?? {} }),
+  };
+}
+
+function send(res, result) {
+  for (const [k, v] of Object.entries(result.headers || {})) res.setHeader(k, v);
+  if (result.redirect) return res.redirect(result.status || 302, result.redirect);
+  return res.status(result.status || 200).json(result.body ?? {});
+}
+
+// (req, res) handler for a domain function.
+const handle = fn => async (req, res) => send(res, await fn(toInput(req)));
+
+const reply = (status, body) => ({ status, body });
+const ok = body => ({ status: 200, body });
+const fail = (status, error, extra) => ({ status, body: { error, ...extra } });
+
+module.exports = { origin, toInput, send, handle, reply, ok, fail };

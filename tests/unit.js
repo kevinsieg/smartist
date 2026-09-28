@@ -45,6 +45,7 @@ const suites = [
   require('./unit/song_values'),
   require('./unit/env'),
   require('./unit/logger'),
+  require('./unit/http_adapter'),
 ];
 
 (async () => {
