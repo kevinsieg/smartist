@@ -31,7 +31,9 @@ function mockRes() {
 
 // storedUrl — what song.extra.listenUrl already holds; deleteOk — whether the
 // storage delete succeeds. Returns the handler plus the recorded byte deltas.
-function loadSongs({ storedUrl = null, deleteOk = true } = {}) {
+// counterFull — the conditional counter UPDATE matches no row, as when a parallel
+// upload has already used up the plan's storage.
+function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = {}) {
   process.env.APP_SECRET     = SECRET;
   process.env.R2_PUBLIC_URL  = BASE;
 
@@ -62,8 +64,9 @@ function loadSongs({ storedUrl = null, deleteOk = true } = {}) {
     // Counter writes in either shape: "storage_used_bytes + $n" or "... - $n",
     // with or without a GREATEST(0, ...) wrapper.
     if (text.includes('UPDATE artists') && text.includes('storage_used_bytes')) {
+      if (counterFull && text.includes('<=')) return [];
       deltas.push(text.includes('storage_used_bytes -') ? -Number(values[0]) : Number(values[0]));
-      return [];
+      return [{ storage_used_bytes: 0 }];
     }
     return [];
   };
@@ -161,12 +164,25 @@ async function run(r) {
     assertEq(deltas, []);
   });
 
+  // The reservation assumed the old file would be freed (+60); it stayed, so
+  // its 40 bytes go back on. Net +100, like a first upload.
   await testAsync('a failed delete during replace keeps the old bytes counted', async () => {
     const { handler, token, deltas } = loadSongs({ storedUrl: OLD_URL, deleteOk: false });
     const res = await call(handler, token, confirmAudio);
     assertEq(res.statusCode, 200);
     assert(!deltas.includes(-40), 'must not subtract bytes for a file that is still stored');
-    assertEq(deltas, [100]);
+    assertEq(deltas.reduce((a, b) => a + b, 0), 100);
+  });
+
+  // Two confirms at once both read the old counter; only the database can tell
+  // whether the bytes still fit, so the cap check is the counter UPDATE itself.
+  await testAsync('the cap is enforced by the counter update, not a stale read', async () => {
+    const { handler, token, deltas, deleted } = loadSongs({ counterFull: true });
+    const res = await call(handler, token, confirmAudio);
+    assertEq(res.statusCode, 402);
+    assertEq(res.body.error, 'storage_limit');
+    assertEq(deltas, []);
+    assertEq(deleted, [NEW_URL]);
   });
 }
 
