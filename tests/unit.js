@@ -44,6 +44,7 @@ const suites = [
   require('./unit/with_busy'),
   require('./unit/song_values'),
   require('./unit/env'),
+  require('./unit/logger'),
 ];
 
 (async () => {
