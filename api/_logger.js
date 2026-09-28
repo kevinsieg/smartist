@@ -44,16 +44,29 @@ const TRANSPORT = {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function sendToCloud(entry) {
+const { AsyncLocalStorage } = require('async_hooks');
+const crypto = require('crypto');
+
+// Per-request context (the request id from api/_handler.js), added to every
+// entry written while that request runs.
+const context = new AsyncLocalStorage();
+
+// Production entries are buffered and sent in one POST when the request is
+// done (flush, called by wrap() after the response): an awaited HTTPS call per
+// log line added the provider's latency to requests, several times over for
+// some of them.
+let buffer = [];
+
+async function sendToCloud(entries) {
   const token = process.env[TRANSPORT.envVar];
-  if (!token) return;
+  if (!token || !entries.length) return;
   try {
     const ac  = new AbortController();
     const t   = setTimeout(() => ac.abort(), 5000);
     const res = await fetch(TRANSPORT.url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': TRANSPORT.auth(token) },
-      body:    JSON.stringify(entry),
+      body:    JSON.stringify(entries),
       signal:  ac.signal,
     });
     clearTimeout(t);
@@ -63,19 +76,54 @@ async function sendToCloud(entry) {
   }
 }
 
+// Email addresses never leave for the log provider (or a log file) in clear:
+// they become <12 hex of sha256>@<domain> — still matchable by hashing the
+// address you look for, and the domain stays readable.
+const EMAIL_RE = /[^\s@"'<>(),;:]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+function redactEmail(address, domain) {
+  const hash = crypto.createHash('sha256').update(address.toLowerCase()).digest('hex').slice(0, 12);
+  return `${hash}@${domain}`;
+}
+function redact(value) {
+  if (typeof value === 'string') return value.replace(EMAIL_RE, redactEmail);
+  if (Array.isArray(value)) return value.map(redact);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = redact(v);
+    return out;
+  }
+  return value;
+}
+
 async function write(level, event, data) {
-  const entry = { ts: new Date().toISOString(), level, event, ...data };
+  const entry = redact({ ts: new Date().toISOString(), level, event, ...context.getStore(), ...data });
   console.log(JSON.stringify(entry));
   if (IS_LOCAL) {
     writeToFile(JSON.stringify(entry));
   } else if (IS_PROD) {
-    await sendToCloud(entry);
+    buffer.push(entry);
   }
   // preview: stdout only — logs visible in Vercel function dashboard
+}
+
+// Sends what this instance has buffered. Called once per request by wrap().
+async function flush() {
+  if (!buffer.length) return;
+  const entries = buffer;
+  buffer = [];
+  await sendToCloud(entries);
+}
+
+// Runs fn with ctx (e.g. { requestId }) attached to every entry it logs.
+function withContext(ctx, fn) {
+  return context.run(ctx, fn);
 }
 
 module.exports = {
   info:  (event, data = {}) => write('info',  event, data),
   warn:  (event, data = {}) => write('warn',  event, data),
   error: (event, data = {}) => write('error', event, data),
+  flush,
+  withContext,
+  redact,
 };

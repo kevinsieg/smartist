@@ -1391,6 +1391,7 @@ async function testWrite(slug, token, firstSong, config) {
 // itemUrl: gigs live in the collection handler (one function for both), so a single gig is
 // addressed as ?id=N; venues and organizers have their own catch-all and keep /:id.
 async function testCrudLifecycle(slug, token, config, { resource, createBody, invalidBody, updateBody, labelField, setHeart,
+                                                        badUpdate, clearable = 'comment', linkField,
                                                         itemUrl = (id, qs = '') => `/api/${slug}/${resource}/${id}${qs}` }) {
   console.log(B(`\nWrite ops — ${resource}`));
 
@@ -1434,6 +1435,32 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
     assertStatus(res, json, 200);
     assert(json[labelField] === updateBody[labelField], `${labelField} not reflected`);
   });
+
+  if (badUpdate) {
+    await test(`PUT /${resource}/:id with an invalid value → 400, not 500`, async () => {
+      const { res, json } = await PUT(itemUrl(item.id), badUpdate, { token });
+      assertStatus(res, json, 400);
+    });
+  }
+
+  await test(`PUT /${resource}/:id: only sent fields change, null clears one`, async () => {
+    const set = await PUT(itemUrl(item.id), { [clearable]: '[TEST] note' }, { token });
+    assertStatus(set.res, set.json, 200);
+    assert(set.json[labelField] === updateBody[labelField], `${labelField} changed by a partial update`);
+    const cleared = await PUT(itemUrl(item.id), { [clearable]: null }, { token });
+    assertStatus(cleared.res, cleared.json, 200);
+    assert(cleared.json[clearable] === null, `${clearable} not cleared: ${JSON.stringify(cleared.json[clearable])}`);
+  });
+
+  if (linkField) {
+    await test(`PUT /${resource}/:id: a typed link becomes https, a script link is refused`, async () => {
+      const ok = await PUT(itemUrl(item.id), { [linkField]: 'www.example.com/x' }, { token });
+      assertStatus(ok.res, ok.json, 200);
+      assert(ok.json[linkField] === 'https://www.example.com/x', `got ${ok.json[linkField]}`);
+      const bad = await PUT(itemUrl(item.id), { [linkField]: 'javascript:alert(1)' }, { token });
+      assertStatus(bad.res, bad.json, 400);
+    });
+  }
 
   if (setHeart) {
     await test(`${resource}: heart must be a boolean`, async () => {
@@ -1542,6 +1569,8 @@ async function main() {
       createBody:  { name: '[TEST] Venue',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Venue updated', city: 'Teststadt' },
+      badUpdate:   { size: 'big' },
+      linkField:   'website',
       setHeart: async (v, heart) => {
         const { res, json } = await PATCH(`/api/${slug}/venues`, [{ id: v.id, heart }], { token: TOKEN });
         return res.ok && json.count === 1 && !(json.rejected || []).length;
@@ -1553,6 +1582,8 @@ async function main() {
       createBody:  { name: '[TEST] Organizer',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Organizer updated', city: 'Teststadt' },
+      badUpdate:   { last_communication: 'yesterday' },
+      linkField:   'website',
       setHeart: async (o, heart) => {
         const { res } = await PUT(`/api/${slug}/organizers/${o.id}`, { name: o.name, heart }, { token: TOKEN });
         return res.ok;
@@ -1565,6 +1596,8 @@ async function main() {
       createBody:  { title: '[TEST] Gig', date: '2099-12-31' },
       invalidBody: { date: '2099-12-31' },
       updateBody:  { title: '[TEST] Gig updated', date: '2099-12-31' },
+      badUpdate:   { date: '2099-13-45' },
+      linkField:   'additional_link',
     });
     await testMultiUserAuth(slug, TOKEN);
   }

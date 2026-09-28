@@ -27,6 +27,8 @@ function loadHandler(rel, route, opts) {
   // postgres.js has two call shapes: tagged template (query) and sql(identifier)
   // / sql`fragment` used inside another query. The stub answers both.
   const sql = (strings, ...values) => {
+    // sql({ col: value }) — the insert/update helper: keep the object.
+    if (strings && typeof strings === 'object' && !Array.isArray(strings)) return { helper: strings };
     if (!Array.isArray(strings)) return { fragment: String(strings) };
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
     const isFragment = !/^(SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(text);
@@ -68,6 +70,9 @@ async function call(handler, method, url, body) {
   return res;
 }
 
+// The columns an INSERT/UPDATE writes through sql({ … }).
+const written = c => (c.values.find(v => v && v.helper) || {}).helper || {};
+
 const STORED = { id: 5, artist_id: 1, name: 'Old', deleted: false, phone: '+49 1', contact_name: 'Anna', social_links: {} };
 const byId = text => (text.startsWith('SELECT * FROM venues') ? [STORED] : [{ ...STORED }]);
 
@@ -89,9 +94,9 @@ async function run(r) {
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', phone: ' 0711 123 ', contact_name: 'Max' });
     assertEq(res.statusCode, 201);
     const insert = calls.find(c => c.text.startsWith('INSERT INTO venues'));
-    assert(insert.text.includes('phone') && insert.text.includes('contact_name'), 'columns missing in INSERT');
-    assert(insert.values.includes('0711 123'), 'trimmed phone not passed');
-    assert(insert.values.includes('Max'), 'contact_name not passed');
+    assertEq(written(insert).phone, '0711 123', 'trimmed phone not passed');
+    assertEq(written(insert).contact_name, 'Max', 'contact_name not passed');
+    assertEq(written(insert).artist_id, 1, 'artist_id comes from the session');
   });
 
   await testAsync('POST stores postcode, generic_email and website', async () => {
@@ -100,43 +105,44 @@ async function run(r) {
       { name: 'Club', postcode: '78462', generic_email: 'booking@club.de', website: 'https://club.de' });
     assertEq(res.statusCode, 201);
     const insert = calls.find(c => c.text.startsWith('INSERT INTO venues'));
-    for (const col of ['postcode', 'generic_email', 'website']) assert(insert.text.includes(col), `${col} missing in INSERT`);
-    for (const val of ['78462', 'booking@club.de', 'https://club.de']) assert(insert.values.includes(val), `${val} not passed`);
+    assertEq(written(insert).postcode, '78462');
+    assertEq(written(insert).generic_email, 'booking@club.de');
+    assertEq(written(insert).website, 'https://club.de');
   });
 
   await testAsync('POST rejects postcode over 20 chars → 400', async () => {
     const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', postcode: '1'.repeat(21) });
     assertEq(res.statusCode, 400);
-    assertEq(res.body?.error, 'postcode too long');
+    assert(/^postcode too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects website over 500 chars → 400', async () => {
     const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', website: 'https://x.de/' + 'a'.repeat(500) });
     assertEq(res.statusCode, 400);
-    assertEq(res.body?.error, 'website too long');
+    assert(/^website too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects generic_email over 254 chars → 400', async () => {
     const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', generic_email: 'a'.repeat(250) + '@x.de' });
     assertEq(res.statusCode, 400);
-    assertEq(res.body?.error, 'generic_email too long');
+    assert(/^generic_email too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects phone over 100 chars → 400', async () => {
     const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', phone: 'x'.repeat(101) });
     assertEq(res.statusCode, 400);
-    assertEq(res.body?.error, 'phone too long');
+    assert(/^phone too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects contact_name over 200 chars → 400', async () => {
     const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', contact_name: 'x'.repeat(201) });
     assertEq(res.statusCode, 400);
-    assertEq(res.body?.error, 'contact_name too long');
+    assert(/^contact_name too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('PUT updates phone and contact_name', async () => {
@@ -144,15 +150,27 @@ async function run(r) {
     const res = await call(handler, 'PUT', '/api/test/venues/5', { name: 'Old', phone: '+41 2', contact_name: 'Ben' });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE venues'));
-    assert(update.values.includes('+41 2') && update.values.includes('Ben'), 'new values not passed to UPDATE');
+    assertEq(written(update).phone, '+41 2');
+    assertEq(written(update).contact_name, 'Ben');
   });
 
-  await testAsync('PUT without the fields keeps stored values', async () => {
+  await testAsync('PUT writes only the fields sent', async () => {
     const { handler, calls } = loadHandler('api/[artist]/venues/[...path].js', byId);
     const res = await call(handler, 'PUT', '/api/test/venues/5', { name: 'Old' });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE venues'));
-    assert(update.values.includes('+49 1') && update.values.includes('Anna'), 'stored values not kept');
+    assertEq(Object.keys(written(update)), ['name'], 'untouched fields must not be written');
+  });
+
+  await testAsync('PUT with null clears a field; bad values are 400, not 500', async () => {
+    const { handler, calls } = loadHandler('api/[artist]/venues/[...path].js', byId);
+    const res = await call(handler, 'PUT', '/api/test/venues/5', { phone: null });
+    assertEq(res.statusCode, 200);
+    assertEq(written(calls.find(c => c.text.startsWith('UPDATE venues'))).phone, null);
+    for (const body of [{ size: 'big' }, { deadline: '2026-02-31' }, { website: 'javascript:alert(1)' }, { name: '' }, { alive: 'maybe' }]) {
+      const bad = await call(loadHandler('api/[artist]/venues/[...path].js', byId).handler, 'PUT', '/api/test/venues/5', body);
+      assertEq(bad.statusCode, 400, JSON.stringify(body));
+    }
   });
 
   await testAsync('GET sorts by a whitelisted column', async () => {
@@ -288,7 +306,7 @@ async function run(r) {
     const { handler } = loadHandler('api/[artist]/venues/[...path].js', byId);
     const res = await call(handler, 'PUT', '/api/test/venues/5', { name: 'Old', phone: 'x'.repeat(101) });
     assertEq(res.statusCode, 400);
-    assertEq(res.body?.error, 'phone too long');
+    assert(/^phone too long/.test(res.body?.error), res.body?.error);
   });
 }
 

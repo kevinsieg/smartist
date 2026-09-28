@@ -1,7 +1,8 @@
-const { getDb, getArtist, getSlug, parsePage } = require('../_db');
+const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
-const { validateStr } = require('../_validate');
+const { parseFields } = require('../_validate');
+const { ORGANIZER_FIELDS } = require('../_domain/records');
 const { requireFeature } = require('../_plans');
 
 module.exports = wrap(async function handler(req, res) {
@@ -49,23 +50,9 @@ module.exports = wrap(async function handler(req, res) {
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
     if (!requireFeature(res, artist, 'organizers')) return;
-    const b       = req.body ?? {};
-    const name    = validateStr(b.name, 200);
-    if (name    === false) return res.status(400).json({ error: 'name too long' });
-    if (!name)             return res.status(400).json({ error: 'name is required' });
-    const type    = validateStr(b.type, 50);
-    if (type    === false) return res.status(400).json({ error: 'type too long' });
-    const city    = validateStr(b.city, 200);
-    if (city    === false) return res.status(400).json({ error: 'city too long' });
-    const country = validateStr(b.country, 100);
-    if (country === false) return res.status(400).json({ error: 'country too long' });
-    const comment = validateStr(b.comment, 2000);
-    if (comment === false) return res.status(400).json({ error: 'comment too long' });
-    const [org] = await sql`
-      INSERT INTO organizers (artist_id, name, type, email, city, country, comment)
-      VALUES (${artist.id}, ${name}, ${type}, ${b.email ?? null}, ${city}, ${country}, ${comment})
-      RETURNING *
-    `;
+    const { value, error } = parseFields(req.body, ORGANIZER_FIELDS);
+    if (error) return res.status(400).json({ error });
+    const [org] = await sql`INSERT INTO organizers ${sql({ ...value, artist_id: artist.id })} RETURNING *`;
     return res.status(201).json(org);
   }
 

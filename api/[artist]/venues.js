@@ -1,7 +1,8 @@
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
-const { validateStr, validateNum } = require('../_validate');
+const { validateStr, parseFields } = require('../_validate');
+const { VENUE_FIELDS } = require('../_domain/records');
 const { VENUE_PUBLIC_STATUSES } = require('../_constants');
 const { requireFeature } = require('../_plans');
 
@@ -133,45 +134,9 @@ module.exports = wrap(async function handler(req, res) {
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
     if (!requireFeature(res, artist, 'venues')) return;
-    const b        = req.body ?? {};
-    const name     = validateStr(b.name, 200);
-    if (name === false) return res.status(400).json({ error: 'name too long' });
-    if (!name)          return res.status(400).json({ error: 'name is required' });
-    const street_number = validateStr(b.street_number, 20);
-    if (street_number === false) return res.status(400).json({ error: 'street_number too long' });
-    const street   = validateStr(b.street, 300);
-    if (street   === false) return res.status(400).json({ error: 'street too long' });
-    const city     = validateStr(b.city, 200);
-    if (city     === false) return res.status(400).json({ error: 'city too long' });
-    const country  = validateStr(b.country, 100);
-    if (country  === false) return res.status(400).json({ error: 'country too long' });
-    const category = validateStr(b.category, 100);
-    if (category === false) return res.status(400).json({ error: 'category too long' });
-    const status   = validateStr(b.status, 50);
-    if (status   === false) return res.status(400).json({ error: 'status too long' });
-    const comment  = validateStr(b.comment, 2000);
-    if (comment  === false) return res.status(400).json({ error: 'comment too long' });
-    const phone = validateStr(b.phone, 100);
-    if (phone === false) return res.status(400).json({ error: 'phone too long' });
-    const contact_name = validateStr(b.contact_name, 200);
-    if (contact_name === false) return res.status(400).json({ error: 'contact_name too long' });
-    const postcode = validateStr(b.postcode, 20);
-    if (postcode === false) return res.status(400).json({ error: 'postcode too long' });
-    const generic_email = validateStr(b.generic_email, 254);
-    if (generic_email === false) return res.status(400).json({ error: 'generic_email too long' });
-    const website = validateStr(b.website, 500);
-    if (website === false) return res.status(400).json({ error: 'website too long' });
-    const lat = validateNum(b.lat);
-    if (lat === false) return res.status(400).json({ error: 'lat must be a number' });
-    const lng = validateNum(b.lng);
-    if (lng === false) return res.status(400).json({ error: 'lng must be a number' });
-    const [venue] = await sql`
-      INSERT INTO venues (artist_id, name, street_number, street, postcode, city, country, category, status, comment,
-                          generic_email, website, lat, lng, phone, contact_name)
-      VALUES (${artist.id}, ${name}, ${street_number}, ${street}, ${postcode}, ${city}, ${country}, ${category}, ${status}, ${comment},
-              ${generic_email}, ${website}, ${lat}, ${lng}, ${phone}, ${contact_name})
-      RETURNING *
-    `;
+    const { value, error } = parseFields(req.body, VENUE_FIELDS);
+    if (error) return res.status(400).json({ error });
+    const [venue] = await sql`INSERT INTO venues ${sql({ ...value, artist_id: artist.id })} RETURNING *`;
     return res.status(201).json(venue);
   }
 

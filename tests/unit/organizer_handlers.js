@@ -13,6 +13,9 @@ const ARTIST = { id: 1, slug: 'test', name: 'Test Band', config: { plan: 'pro' }
 const FREE_ARTIST = { id: 1, slug: 'test', name: 'Test Band', config: { plan: 'free' } };
 const ORG = { id: 5, artist_id: 1, name: 'Giesserei', city: 'Konstanz', deleted: false, social_links: {} };
 
+// The columns an INSERT/UPDATE writes through sql({ … }).
+const written = c => (c.values.find(v => v && v.helper) || {}).helper || {};
+
 function mp(rel) { return require.resolve(path.join(__dirname, '../..', rel)); }
 
 function mockRes() {
@@ -29,6 +32,8 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
   for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
   const calls = [];
   const sql = (strings, ...values) => {
+    // sql({ col: value }) — the insert/update helper: keep the object.
+    if (strings && typeof strings === 'object' && !Array.isArray(strings)) return { helper: strings };
     if (!Array.isArray(strings)) return { fragment: String(strings) };
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
     calls.push({ text, values });
@@ -142,7 +147,7 @@ async function run(r) {
     const { handler } = loadHandler(LIST, () => [ORG]);
     const res = await call(handler, 'POST', '/api/test/organizers', { body: { name: 'x'.repeat(201) } });
     assertEq(res.statusCode, 400);
-    assertEq(res.body?.error, 'name too long');
+    assert(/^name too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST creates and returns 201', async () => {
@@ -151,7 +156,7 @@ async function run(r) {
       { body: { name: 'Giesserei', city: 'Konstanz', type: 'organization' } });
     assertEq(res.statusCode, 201);
     const insert = calls.find(c => c.text.startsWith('INSERT INTO organizers'));
-    assert(insert.values.includes('Giesserei'), 'name not written');
+    assertEq(written(insert).name, 'Giesserei', 'name not written');
   });
 
   // ── item ───────────────────────────────────────────────────────────────────
@@ -192,7 +197,7 @@ async function run(r) {
       { query: { path: ['5'] }, body: { name: 'Renamed', social_links: { instagram: 'ig' } } });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE organizers'));
-    assert(/social_links .*\|\|/.test(update.text), 'social links should merge, not replace');
+    assertEq(written(update).social_links, { facebook: 'fb', instagram: 'ig' }, 'social links should merge, not replace');
   });
 
   // ── delete ─────────────────────────────────────────────────────────────────
