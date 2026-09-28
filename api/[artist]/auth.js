@@ -10,7 +10,7 @@ const { escHtml }      = require('../_html');
 const { origin: appOrigin }  = require('../_domain/http');
 const { wrap }         = require('../_handler');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
-const { validateStr }  = require('../_validate');
+const { validateStr, validateEmail } = require('../_validate');
 const logger           = require('../_logger');
 
 // Invites send mail to any address with the band's name in it, so they are
@@ -337,10 +337,10 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST' && action === 'invite') {
     if (!requireRole(req, res, 'admin')) return;
     const { email, role } = req.body ?? {};
-    const cleanEmail = validateStr(email, 200);
-    if (!cleanEmail) return res.status(400).json({ error: 'Email required' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail))
-      return res.status(400).json({ error: 'Invalid email address' });
+    const rawEmail = validateStr(email, 200);
+    if (rawEmail === null) return res.status(400).json({ error: 'Email required' });
+    const cleanEmail = rawEmail && validateEmail(rawEmail);
+    if (!cleanEmail) return res.status(400).json({ error: 'Invalid email address' });
     if (!['admin', 'member', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
 
     const [existing] = await sql`SELECT id FROM users WHERE artist_id = ${artist.id} AND email = ${cleanEmail.toLowerCase()}`;

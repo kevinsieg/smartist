@@ -5,6 +5,7 @@ const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
 const { validateStr } = require('../../_validate');
 const { energyToScale } = require('../../_song_values');
 const { requireFeature } = require('../../_plans');
+const { checkRateLimit } = require('../../_ratelimit');
 const { songDetail } = require('../../_domain/songs');
 const { importWorks, importRightholders } = require('../../_domain/gema');
 
@@ -60,6 +61,10 @@ module.exports = wrap(async function handler(req, res) {
       return res.status(400).json({ error: 'csv must be a non-empty string' });
     if (csv.length > 5_000_000)
       return res.status(400).json({ error: 'CSV too large (max 5 MB)' });
+
+    // Each call parses up to 5 MB and writes a batch; a page run is a handful.
+    if (await checkRateLimit(`gema-import:${band.id}`, 30, 600))
+      return res.status(429).json({ error: 'Too many imports — try again in a few minutes' });
 
     const sql = getDb();
     const result = type === 'beteiligte'

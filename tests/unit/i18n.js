@@ -61,6 +61,26 @@ function run(r) {
   test('translate(en, profile.title) → Profile', () => assertEq(translate(en, 'profile.title'), 'Profile'));
   test('translate(en, key) is never the key itself', () =>
     assert(enKeys.every(k => translate(en, k) !== k)));
+
+  // A key referenced in the app but absent from the locale files renders as
+  // the raw key. Keys built at runtime ('x' + suffix) are not seen here.
+  console.log(B('\nevery referenced key exists'));
+  test('data-i18n, data-i18n-attr and t(\'literal\') keys are all in en.json', () => {
+    const fs = require('fs');
+    const walk = d => fs.readdirSync(d, { withFileTypes: true })
+      .flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+    const missing = new Set();
+    for (const f of walk(path.join(__dirname, '../../app')).filter(f => /\.(html|js)$/.test(f))) {
+      const src = fs.readFileSync(f, 'utf8');
+      const keys = [
+        ...[...src.matchAll(/data-i18n="([^"]+)"/g)].map(m => m[1]),
+        ...[...src.matchAll(/data-i18n-attr="([^"]+)"/g)].flatMap(m => m[1].split(';').map(p => (p.split(':')[1] || '').trim())),
+        ...[...src.matchAll(/(?<![\w.$])t\(\s*'([\w.]+)'\s*[,)]/g)].map(m => m[1]),
+      ];
+      for (const k of keys) if (k && !(k in en)) missing.add(`${k} (${path.basename(f)})`);
+    }
+    assertEq([...missing], []);
+  });
 }
 
 module.exports = run;
