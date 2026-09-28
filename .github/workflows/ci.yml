@@ -76,6 +76,10 @@ jobs:
         if: steps.creds.outputs.ok == 'true'
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
+          # The suite logs in as a named user of a Pro workspace (tests/api.js).
+          # The email is a secret, not a variable: Actions logs of a public
+          # repository are public, and secrets are masked in them.
+          ARTIST_EMAIL: ${{ secrets.ARTIST_EMAIL }}
           ARTIST_PASSWORD: ${{ secrets.ARTIST_PASSWORD }}
           ARTIST_SLUG: ${{ vars.ARTIST_SLUG }}
         run: cd tests && node api.js
