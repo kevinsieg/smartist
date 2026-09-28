@@ -6,7 +6,7 @@ PostgreSQL via **Neon** (hosted). All tables are scoped to an `artist_id` — a 
 
 **postgres.js** (`postgres` npm package, v3). Connects over the standard PostgreSQL wire protocol (port 5432) using Neon's pooler connection string.
 
-`@neondatabase/serverless` is not used by the API — its HTTP transport has no transaction support (`sql.begin()` is unavailable). Only `scripts/apply_schema.js` uses it, to run `schema.sql` over HTTP. postgres.js supports the full interface: tagged-template queries, transactions, and prepared statements.
+The scripts use the same driver through `scripts/_lib.js` (`connect()` turns SSL off for a database on localhost). `@neondatabase/serverless` is no longer a dependency: its HTTP transport has no transactions (`sql.begin()`).
 
 The swap point is the `DB.connect` line in `api/_db.js`. The rest of the codebase is driver-agnostic (`sql\`...\`` tagged templates only).
 

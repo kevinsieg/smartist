@@ -17,27 +17,12 @@
 
 'use strict';
 
-const { neon } = require('@neondatabase/serverless');
 const readline = require('readline');
 const fs       = require('fs');
 const path     = require('path');
+const lib      = require('./_lib');
 
-// ── Env ────────────────────────────────────────────────────────────────────
-
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
-}
-loadEnv(path.join(__dirname, '..', '.env.local'));
+lib.loadEnv();
 
 // ── Args ───────────────────────────────────────────────────────────────────
 
@@ -301,10 +286,10 @@ function showComparison(existing, incoming) {
 
 // ── DB prompt ─────────────────────────────────────────────────────────────
 
+// Asked on this script's own readline (it prompts for duplicates too); a second
+// one on stdin, as lib.confirmDb opens, would swallow answers.
 function confirmDb(url) {
-  let host;
-  try { host = new URL(url).hostname; } catch { host = '(unknown)'; }
-  console.log(`\n  database: ${host}`);
+  console.log(`\n  database: ${lib.dbHost(url)}`);
   return ask('  Continue? (y/n): ').then(a => {
     if (!/^y/i.test(a)) { console.log('  Aborted.'); process.exit(0); }
   });
@@ -316,7 +301,7 @@ function confirmDb(url) {
   rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   await confirmDb(process.env.DATABASE_URL);
-  const sql = neon(process.env.DATABASE_URL);
+  const sql = lib.connect(process.env.DATABASE_URL);
 
   const [artist] = await sql`SELECT id FROM artists WHERE slug = ${slug} LIMIT 1`;
   if (!artist) {
@@ -429,5 +414,6 @@ function confirmDb(url) {
   }
 
   rl.close();
+  await sql.end();
   console.log(`\nDone — ${imported} inserted, ${merged} merged, ${skipped} skipped.`);
 })().catch(e => { console.error(e.message); rl?.close(); process.exit(1); });
