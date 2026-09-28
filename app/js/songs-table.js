@@ -6,7 +6,7 @@
 function _renderBulkEditTable() {
   // bulk edit table — populated below by moving old renderTable body
   const saved = getSavedWidths();
-  const headers = COLS.map((c, i) => {
+  const headers = _visibleCols().map((c, i) => {
     const w = saved[c.key] ?? c.width;
     const sticky = i === 0 ? ' col-sticky' : '';
     const filter = FILTER_COLS[c.key] ? FILTER_COLS[c.key]() : '';
@@ -129,7 +129,7 @@ function initResizableColumns() {
 
 function renderRow(song) {
   const sid = song.id || song._newId;
-  const cells = COLS.map((c, i) => {
+  const cells = _visibleCols().map((c, i) => {
     const val = getVal(song, c.key);
     const sticky = i === 0 ? ' col-sticky' : '';
     if (c.type === 'stat') {

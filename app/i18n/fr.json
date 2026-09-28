@@ -1175,5 +1175,7 @@
   "setlist.originLabel": "Morceaux :",
   "setlist.originAll": "Tous",
   "setlist.originOwn": "Compositions",
-  "setlist.originCovers": "Reprises"
+  "setlist.originCovers": "Reprises",
+  "settings.hiddenSongFieldsLabel": "Champs de morceau masqués",
+  "settings.hiddenSongFieldsHint": "Les champs cochés disparaissent des morceaux, des setlists, des impressions et de la vue scène. Les valeurs existantes sont conservées."
 }

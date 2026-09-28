@@ -244,12 +244,12 @@ module.exports = wrap(async function handler(req, res) {
             comment            = u.comment,
             last_communication = u.last_communication,
             deadline           = u.deadline,
-            heart              = u.heart,
+            heart              = u.heart::boolean,  -- sent as text: postgres.js does not serialise boolean arrays
             last_updated       = NOW()
           FROM unnest(${col('id')}::int[], ${col('status')}::text[], ${col('category')}::text[],
                       ${col('booking_channel')}::text[], ${col('remuneration')}::text[], ${col('season')}::text[],
                       ${col('preferred_period')}::text[], ${col('comment')}::text[],
-                      ${col('last_communication')}::date[], ${col('deadline')}::date[], ${col('heart')}::bool[])
+                      ${col('last_communication')}::date[], ${col('deadline')}::date[], ${col('heart').map(String)}::text[])
                AS u(id, status, category, booking_channel, remuneration, season,
                     preferred_period, comment, last_communication, deadline, heart)
           WHERE venues.id = u.id AND venues.artist_id = ${artist.id} AND venues.deleted = false

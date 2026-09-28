@@ -223,6 +223,18 @@ var COLS = [
   { key: 'comment',             get label() { return t('songs.colLabelComment'); },    type: 'text',   cls: 'col-comment', width: 160 },
 ];
 
+// Instrument fields a band can hide in Settings (artists.config.hiddenSongFields).
+// The data stays; only the bulk table and the panel edit form leave them out.
+var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp'];
+
+function _isSongFieldHidden(key) {
+  return songFieldHidden(_songsCfg && _songsCfg.config, key);
+}
+
+function _visibleCols() {
+  return COLS.filter(function(c) { return !_isSongFieldHidden(c.key); });
+}
+
 var COL_WIDTHS_KEY = 'songs_col_widths';
 
 function minsToTime(mins) {

@@ -1175,5 +1175,7 @@
   "setlist.originLabel": "Songs:",
   "setlist.originAll": "Alle",
   "setlist.originOwn": "Eigene Songs",
-  "setlist.originCovers": "Covers"
+  "setlist.originCovers": "Covers",
+  "settings.hiddenSongFieldsLabel": "Ausgeblendete Songfelder",
+  "settings.hiddenSongFieldsHint": "Angehakte Felder verschwinden aus Songs, Setlists, Ausdrucken und der Bühnenansicht. Vorhandene Werte bleiben erhalten."
 }
