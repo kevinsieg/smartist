@@ -149,13 +149,14 @@ the browser before upload.
 
 ## Client
 
-- **No build step.** Pages are plain HTML with one script per page. `common.js`
-  builds the header, `footer.js` builds the footer (the same one on every
+- **No build step.** Pages are plain HTML with plain scripts. Four shared
+  scripts load first on every page — `core.js` (pure helpers, also on the stage
+  view), `session.js`, `ui.js`, `shell.js` — and `shell.js` builds the header, `footer.js` builds the footer (the same one on every
   page), and in-app navigation swaps page content without a full reload
   (`navigate()`). Page scripts therefore share one global scope: use `var` and
   private names (enforced by `tests/unit/page_scripts.js`).
 - **Two list factories exist:**
-  - `createSortableList` in `common.js`, used by gigs, venues and organizers.
+  - `createSortableList` in `ui.js`, used by gigs, venues and organizers.
   - `createListView` in `list-view.js`, used by songs and setlist history.
 
   `createListView` can do more. Gigs has not moved to it because it renders two
