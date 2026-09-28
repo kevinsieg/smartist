@@ -293,9 +293,11 @@ node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nig
 ## Tests
 
 ```bash
-node tests/unit.js                        # validate + token helpers; runs in CI
+npm run test:unit                         # unit + page-script suites (stubbed SQL, no DB); runs in CI
 cd tests && ARTIST_PASSWORD=… npm test      # full integration suite against vercel dev (port 3000)
 npm run test:dev                          # against Vercel Preview URL
 ```
+
+CI also runs the integration suite against a throwaway `postgres:16`: schema applied twice, `tests/harness/seed.js`, handlers served by `tests/harness/server.js` (a `vercel.json` router, no Vercel login). Steps in `docs/ci-cd.md`. Node 22 everywhere (`engines` in `package.json`).
 
 Workspaces are private, so every read and write test runs with a session (`ARTIST_PASSWORD` as bearer); without it only the anonymous checks run. Write tests create `[TEST]` rows and delete them again; an interrupted run can leave some behind (see `docs/ci-cd.md`). CI previews sit behind Vercel Deployment Protection — the suite sends `VERCEL_AUTOMATION_BYPASS_SECRET` as `x-vercel-protection-bypass`.
