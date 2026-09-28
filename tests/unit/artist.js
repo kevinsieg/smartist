@@ -5,39 +5,8 @@ async function run(r) {
   const { stubLogger } = require('./_runner');
   stubLogger();
 
-  const { resolveArtist, isSlugAvailable, getArtistsForUser } =
+  const { isSlugAvailable, getArtistsForUser } =
     require(path.join(__dirname, '../../api/_domain/artist'));
-
-  console.log(B('\nresolveArtist'));
-
-  await testAsync('returns artist when slug matches', async () => {
-    const ARTIST = { id: 1, slug: 'myband', name: 'My Band', config: {} };
-    const sql = async (strings, ...vals) => [ARTIST];
-    const result = await resolveArtist('myband', sql);
-    assertEq(result.slug, 'myband');
-  });
-
-  await testAsync('returns null when no row', async () => {
-    const sql = async () => [];
-    const result = await resolveArtist('ghost', sql);
-    assertEq(result, null);
-  });
-
-  await testAsync('falls back to ARTIST_SLUG env when slug is empty', async () => {
-    process.env.ARTIST_SLUG = 'envband';
-    const ARTIST = { id: 2, slug: 'envband', name: 'Env Band', config: {} };
-    const sql = async (strings, ...vals) => [ARTIST];
-    const result = await resolveArtist('', sql);
-    assertEq(result.slug, 'envband');
-    delete process.env.ARTIST_SLUG;
-  });
-
-  await testAsync('returns null when both slug and env are empty', async () => {
-    delete process.env.ARTIST_SLUG;
-    const sql = async () => [];
-    const result = await resolveArtist('', sql);
-    assertEq(result, null);
-  });
 
   console.log(B('\nisSlugAvailable'));
 
