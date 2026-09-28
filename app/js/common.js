@@ -292,6 +292,26 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Favourite heart for list rows (songs, venues, organizers). onclick is a JS expression.
+function heartButtonHtml(on, onclick, title, readOnly) {
+  var cls = 'heart-btn' + (on ? ' heart-btn--on' : '');
+  if (readOnly) return on ? '<span class="' + cls + '">&#9829;</span>' : '<span class="heart-btn"></span>';
+  return '<button type="button" class="' + cls + '" aria-pressed="' + on + '"' +
+    ' title="' + escHtml(title) + '" aria-label="' + escHtml(title) + '"' +
+    ' onclick="event.stopPropagation();' + onclick + '">' +
+    (on ? '&#9829;' : '&#9825;') + '</button>';
+}
+
+// Flip item.heart locally, then persist(wanted). On failure the icon goes back, so what
+// you see always matches what is stored. persist must throw when the save fails.
+async function toggleHeart(item, persist, refresh) {
+  var wanted = !item.heart;
+  item.heart = wanted;
+  refresh();
+  try { await persist(wanted); }
+  catch { item.heart = !wanted; refresh(); }
+}
+
 // A4 at 14mm/16mm margins ≈ 757pt usable height.
 // Subtract: header ~52pt, h2 ~14pt, gaps ~10pt → ~681pt for songs.
 // Each row: title line (f*1.35) + meta line (f*0.65*1.1) + border/padding (~4pt)

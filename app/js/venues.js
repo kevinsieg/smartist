@@ -208,7 +208,12 @@ function _showGeoPreview(lat, lng) {
     _previewMap = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([lat, lng], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(_previewMap);
     _previewMarker = L.circleMarker([lat, lng], { radius: 7, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.9 }).addTo(_previewMap);
-    setTimeout(function() { _previewMap.invalidateSize(); }, 50);
+    // Double RAF: wait until the modal has been laid out, otherwise Leaflet measures 0×0.
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+      if (!_previewMap) return;
+      _previewMap.invalidateSize();
+      _previewMap.setView([lat, lng], 13);
+    }); });
   });
 }
 
@@ -324,6 +329,10 @@ function switchVenueTab(view) {
 }
 
 var VENUE_COLUMNS = [
+  { width: '28px', actions: true, render: function(v) {
+    return heartButtonHtml(!!v.heart, '_toggleVenueHeart(' + Number(v.id) + ')', t('venues.favourite'),
+                           isViewMode() || v.deleted);
+  }},
   { field: 'name',    get label() { return t('venues.colName'); },     width: '1.5fr', sortable: true, filterable: true },
   { field: 'postcode',get label() { return t('venues.colPostcode'); }, width: '90px',  sortable: true, filterable: true, muted: true },
   { field: 'city',    get label() { return t('venues.colCity'); },     width: '1fr',   sortable: true, filterable: true, muted: true },
@@ -369,7 +378,7 @@ initPage(async function(cfg) {
     containerId:    'venues-list',
     sortBarId:      'sort-bar',
     columns:        VENUE_COLUMNS,
-    defaultSort:    'name',
+    defaultSort:    null,   // keep the server order: favourites first, then by name
     rowClass:       v => v.deleted ? 'deleted' : '',
     onRowClick:     v => { if (!v.deleted) openVenueGigsModal(v); },
     emptyHint:      t('venues.noVenuesYet'),
@@ -413,6 +422,16 @@ initPage(async function(cfg) {
     categoryEl.addEventListener('change', async function() {
       if (!_confirmDiscardBulk()) return;
       _venuesCategory = categoryEl.value;
+      _venuesOffset = 0;
+      await loadVenues();
+    });
+  }
+
+  var favEl = document.getElementById('filter-favourite');
+  if (favEl) {
+    favEl.addEventListener('change', async function() {
+      if (!_confirmDiscardBulk()) { favEl.checked = _venuesFavourite; return; }
+      _venuesFavourite = favEl.checked;
       _venuesOffset = 0;
       await loadVenues();
     });
@@ -472,6 +491,7 @@ var _venueDirty = new Set();
 var _venueBulkSortState = { field: 'name', dir: 1 };
 var _venuesPageSize = 0;   // read lazily: this file is also evaluated without a DOM in tests
 var _venuesLetter = '';
+var _venuesFavourite = false;
 
 // Anything that reloads the table throws away unsaved edits — ask first, every time.
 function _confirmDiscardBulk() {
@@ -669,6 +689,7 @@ async function loadVenues() {
   if (_venuesCategory) params.set('category', _venuesCategory);
   if (_venuesCountry)  params.set('country',  _venuesCountry);
   if (_venuesLetter)   params.set('letter',   _venuesLetter);
+  if (_venuesFavourite) params.set('favourite', '1');
   if (isVenueBulkEdit()) {
     params.set('sort', _venueBulkSortState.field);
     params.set('dir',  _venueBulkSortState.dir === 1 ? 'asc' : 'desc');
@@ -683,6 +704,16 @@ async function loadVenues() {
   updateVenuesFooter();
   _renderLetterBar();
   _populateCountryFilter();
+}
+
+async function _toggleVenueHeart(id) {
+  var v = allVenues.find(function(x) { return x.id === id; });
+  if (!v) return;
+  await toggleHeart(v, async function(wanted) {
+    var r = await apiFetch('/api/' + artistSlug + '/venues', 'PATCH', [{ id: id, heart: wanted }]);
+    var json = r.ok ? await r.json().catch(function() { return {}; }) : {};
+    if (!r.ok || (json.rejected && json.rejected.length)) throw new Error('save failed');
+  }, function() { venueTable.refresh(); placeholderTable.refresh(); });
 }
 
 var _venueCountries = null;
@@ -827,9 +858,9 @@ function openEditModal(id) {
   setStatus('vm-status-msg', '');
   _pendingLat = v.lat || null; _pendingLng = v.lng || null; _geocodeAccepted = !!(v.lat && v.lng);
   _hideGeoPreview();
-  if (_geocodeAccepted) _showGeoPreview(v.lat, v.lng);
   renderVenueGigs(id, v.name);
   openModal('venue-modal');
+  if (_geocodeAccepted) _showGeoPreview(v.lat, v.lng);
 }
 
 function closeVenueModal() { delete _venueRefsCache[editingId]; closeModal('venue-modal'); }
