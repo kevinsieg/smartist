@@ -35,7 +35,7 @@ openssl rand -hex 32
 |---|---|
 | `APP_SECRET` | 32 random bytes as hex. Not a passphrase — it is an HMAC key, never typed by a human. |
 
-This signs the user session tokens (`{userId, role, exp, pwv}` — `pwv` is a password fingerprint, so a password change ends older sessions) that every authenticated request carries. `api/_token.js` **throws at module load when it is missing**, and `api/_auth.js` requires that module, so without it every serverless function crashes on cold start and the whole API returns 500 — including `/api/config`, so the app will not even render. A deployment that is missing only this variable looks completely dead.
+This signs the user session tokens (`{userId, role, exp, pwv}` — `pwv` is a password fingerprint, so a password change ends older sessions) that every authenticated request carries. Without it no one can sign in: signing a token fails (500) and every session is rejected (401). `GET /api/config?action=health` reports it as missing (see the checklist).
 
 Give each project its own value. Tokens are only ever verified by the deployment that issued them, so separate keys mean a leak in one workspace cannot forge sessions in another. Set it for **all environments**. Treat it as permanent: changing it invalidates every active session on that deployment.
 
@@ -383,6 +383,16 @@ is linked to — each tenant project has its own `DATABASE_URL`:
 DATABASE_URL='<that project\'s production url>' node scripts/apply_schema.js
 ```
 
+Each migration block records its date in `schema_migrations`. To see what a
+database is missing without changing anything:
+
+```bash
+DATABASE_URL='<url>' node scripts/apply_schema.js --check   # exit 1 when a migration is pending
+```
+
+`GET /api/config?action=health` on a deployment answers the same question for
+the database that deployment uses (`"schema": "behind"`).
+
 Features that send email (password reset, invites, account deletion, email
 change) need the tenant's sending domain verified in Resend first.
 
@@ -417,6 +427,7 @@ change) need the tenant's sending domain verified in Resend first.
 
 **Verification**
 - [ ] At least one successful production deploy — Vercel shows green
+- [ ] `curl https://<domain>/api/config?action=health` answers 200 with `"ok": true` — a 503 lists the missing variables (names only) or says the database is unreachable or behind
 - [ ] Login works at the custom domain with the account from `create_user.js`
 - [ ] `curl …/api/config` returns 200 (see Step 6)
 - [ ] Settings → public catalogue / public stage links set as the band wants (both off by default)

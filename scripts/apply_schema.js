@@ -7,56 +7,33 @@
 // Usage:
 //   node scripts/apply_schema.js                          # dev DB from .env
 //   DATABASE_URL=<prod-url> node scripts/apply_schema.js  # production
+//   node scripts/apply_schema.js --check                  # list missing migrations, change nothing
+//   node scripts/apply_schema.js --yes                    # no prompt (CI, throwaway databases)
 //
-// Shows the DB hostname and asks for confirmation before connecting.
+// Shows the DB hostname and asks for confirmation before changing anything.
 
-const fs       = require('fs');
-const path     = require('path');
-const readline = require('readline');
-const { neon } = require('@neondatabase/serverless');
+const fs   = require('fs');
+const path = require('path');
+const lib  = require('./_lib');
 
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
+// A runner for raw statements over the shared connection.
+function connect(url) {
+  const pg = lib.connect(url);
+  const run = strings => pg.unsafe(strings.join(''));
+  run.end = () => pg.end();
+  return run;
 }
-loadEnv(path.join(__dirname, '..', '.env.local'));
-loadEnv(path.join(__dirname, '..', '.env'));
 
 const B = s => `\x1b[1m${s}\x1b[0m`;
 const G = s => `\x1b[32m${s}\x1b[0m`;
 const R = s => `\x1b[31m${s}\x1b[0m`;
 const D = s => `\x1b[2m${s}\x1b[0m`;
 
-async function main() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.error(R('DATABASE_URL not set (pass it inline for prod: DATABASE_URL=… node scripts/apply_schema.js)'));
-    process.exit(1);
-  }
-
-  let host;
-  try { host = new URL(url).hostname; } catch { host = '(unknown)'; }
-  console.log(`\n  ${D('database:')} ${B(host)}`);
-
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise(res => rl.question('  Apply schema.sql to this database? (y/n): ', res));
-  rl.close();
-  if (!/^y/i.test(answer.trim())) { console.log(D('\n  Aborted.\n')); process.exit(0); }
-
-  const sql = neon(url);
-  const src = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-  // Strip -- comments (whole-line and inline) before splitting on ';' —
-  // a semicolon inside a comment would otherwise truncate the statement.
-  // Inline strip only applies when the -- is outside single quotes.
+// Strip -- comments (whole-line and inline) before splitting on ';' —
+// a semicolon inside a comment would otherwise truncate the statement.
+// Inline strip only applies when the -- is outside single quotes.
+// The split is naive on purpose: schema.sql holds no DO $$ blocks or functions.
+function splitStatements(src) {
   const stripComment = line => {
     let inQuote = false;
     for (let i = 0; i < line.length - 1; i++) {
@@ -65,26 +42,75 @@ async function main() {
     }
     return line;
   };
-  const statements = src
+  return src
     .split('\n')
     .map(stripComment)
     .join('\n')
     .split(';')
     .map(s => s.trim())
     .filter(Boolean);
+}
+
+// Migration ids recorded by schema.sql, in file order (statements only — the
+// example in the header comment does not count).
+function migrationIds(src) {
+  const re = /INSERT INTO schema_migrations \(id\) VALUES \('([^']+)'\)/g;
+  return [...splitStatements(src).join(';\n').matchAll(re)].map(m => m[1]);
+}
+
+async function check(sql, src) {
+  const ids = migrationIds(src);
+  let have = [];
+  try { have = (await sql(['SELECT id FROM schema_migrations'])).map(r => r.id); }
+  catch (e) { if (!/does not exist/i.test(e.message)) throw e; }
+  const pending = ids.filter(id => !have.includes(id));
+  if (!pending.length) { console.log(`\n  ${G('✓')} up to date (${ids[ids.length - 1]})\n`); return 0; }
+  console.log(`\n  ${R('pending:')} ${pending.join(', ')}\n  ${D('run without --check to apply')}\n`);
+  return 1;
+}
+
+async function main() {
+  lib.loadEnv();
+  const args = process.argv.slice(2);
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error(R('DATABASE_URL not set (pass it inline for prod: DATABASE_URL=… node scripts/apply_schema.js)'));
+    process.exit(1);
+  }
+
+  const src = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+
+  // --check only reads: no confirmation, exit code 1 when a migration is missing.
+  if (args.includes('--check')) {
+    console.log(`\n  ${D('database:')} ${B(lib.dbHost(url))}`);
+    const sql = connect(url);
+    const code = await check(sql, src);
+    await sql.end();
+    process.exit(code);
+  }
+
+  // --yes skips the prompt (CI against a throwaway database).
+  await lib.confirmDb(url, { question: 'Apply schema.sql to this database? (y/n): ', yes: args.includes('--yes') });
+
+  const sql = connect(url);
+  const statements = splitStatements(src);
 
   let applied = 0, skipped = 0;
   for (const stmt of statements) {
     try {
-      await sql([stmt]); // neon HTTP: tagged template with raw string, no params
+      await sql([stmt]);
       applied++;
     } catch (e) {
       if (e.message.toLowerCase().includes('already exists')) { skipped++; continue; }
       console.error(`\n  ${R('failed:')} ${e.message}\n  ${D(stmt.slice(0, 120))}\n`);
+      await sql.end();
       process.exit(1);
     }
   }
+  await sql.end();
   console.log(`\n  ${G('✓')} ${applied} statements applied, ${skipped} already existed\n`);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { splitStatements, migrationIds };

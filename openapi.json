@@ -100,9 +100,11 @@
             "nullable": true
           },
           "energy": {
-            "type": "string",
+            "type": "integer",
             "nullable": true,
-            "description": "low / middle / high"
+            "minimum": 0,
+            "maximum": 10,
+            "description": "0 calm … 10 intense"
           },
           "time_signature": {
             "type": "string",
@@ -129,9 +131,18 @@
             "nullable": true,
             "description": "Private note — omitted for visitors without a session"
           },
+          "language": {
+            "type": "string",
+            "nullable": true,
+            "description": "Language code (EN, DE, …); a linked GEMA work's language shadows it"
+          },
+          "has_lyrics": {
+            "type": "boolean",
+            "description": "Whether the song has lyrics. Lists never carry the text; GET /api/{band}/songs/{id} returns it as `lyrics`, and GET /api/{band}/songs?lyrics=1 adds it to the list (CSV export)."
+          },
           "extra": {
             "type": "object",
-            "description": "Free-form per-song data (`lyrics`, `capo`, `isrc`, `language`, `listenUrl`, `sheetUrl`, `playbackUrl`, `referenceUrl`, `songinfoUrl`, …). Keys ending in `Url` must be http(s); a URL into the storage bucket is only accepted when the upload flow stored it."
+            "description": "Free-form per-song data (`capo`, `isrc`, `listenUrl`, `sheetUrl`, `playbackUrl`, `referenceUrl`, `songinfoUrl`, …). Keys ending in `Url` must be http(s); a URL into the storage bucket is only accepted when the upload flow stored it. `lyrics` and `language` sent here by older clients are moved to their own fields."
           },
           "deleted": {
             "type": "boolean"
@@ -700,6 +711,15 @@
               "type": "string"
             },
             "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration. Other actions: `check-slug`, `my-artists`, `photo-url`, `favicon-url`, OAuth and admin actions."
           }
         ],
         "description": "Band slug, name, branding config, plan and usage. `songs` and `counts` are included only with a session or when the band has a public catalogue. `role` is the caller's role in this band (null without a session). The `slug` is the `{band}` path parameter for every other endpoint.",
@@ -1414,7 +1434,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role. Returns a 5-minute presigned PUT URL for a recording (mp3, m4a, ogg, wav, flac; 50 MB). The URL signs the content type and the exact byte count; the key is `audio/<artist id>/<uuid>-<name>`.",
+        "description": "Member role. Returns a 5-minute presigned PUT URL for a recording (mp3, m4a, ogg, wav, flac; 50 MB). The URL signs the content type and the exact byte count; the key is `audio/<artist id>/<uuid>-<name>`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1505,7 +1525,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
+        "description": "Member role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1602,7 +1622,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role.",
+        "description": "Member role.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -1655,7 +1675,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role. Returns a 5-minute presigned PUT URL for a sheet-music PDF (20 MB). The URL signs the content type and the exact byte count; the key is `sheets/<artist id>/<uuid>-<name>`.",
+        "description": "Member role. Returns a 5-minute presigned PUT URL for a sheet-music PDF (20 MB). The URL signs the content type and the exact byte count; the key is `sheets/<artist id>/<uuid>-<name>`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1746,7 +1766,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
+        "description": "Member role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1843,7 +1863,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role.",
+        "description": "Member role.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -1896,7 +1916,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role. Returns a 5-minute presigned PUT URL for a playback track (mp3, m4a, ogg, wav, flac; 50 MB). The URL signs the content type and the exact byte count; the key is `playback/<artist id>/<uuid>-<name>`.",
+        "description": "Member role. Returns a 5-minute presigned PUT URL for a playback track (mp3, m4a, ogg, wav, flac; 50 MB). The URL signs the content type and the exact byte count; the key is `playback/<artist id>/<uuid>-<name>`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1987,7 +2007,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
+        "description": "Member role. Checks the object exists with the right type and size under this band's key prefix, stores the URL on the song, counts it against the storage limit and removes the file it replaces.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2084,7 +2104,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Admin role.",
+        "description": "Member role.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -2557,6 +2577,16 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "song_q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Instead of the list: `[{ id, gig_id }]` of the setlists containing a live song whose title contains this text (case-insensitive)."
           }
         ],
         "description": "Never public — only single setlists can be opened from a stage link.",
