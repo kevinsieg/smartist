@@ -223,6 +223,18 @@ var COLS = [
   { key: 'comment',             get label() { return t('songs.colLabelComment'); },    type: 'text',   cls: 'col-comment', width: 160 },
 ];
 
+// Instrument fields a band can hide in Settings (artists.config.hiddenSongFields).
+// The data stays; only the bulk table and the panel edit form leave them out.
+var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp'];
+
+function _isSongFieldHidden(key) {
+  return songFieldHidden(_songsCfg && _songsCfg.config, key);
+}
+
+function _visibleCols() {
+  return COLS.filter(function(c) { return !_isSongFieldHidden(c.key); });
+}
+
 var COL_WIDTHS_KEY = 'songs_col_widths';
 
 function minsToTime(mins) {
@@ -474,14 +486,7 @@ function renderListRowHtml(s) {
   var borderCls = s.active ? 'songs-list-row--active' : 'songs-list-row--inactive';
   var titleCls  = s.active ? '' : ' songs-list-row-title--inactive';
 
-  var heartOn  = !!s.heart;
-  var heartCls  = 'songs-list-row-heart' + (heartOn ? ' songs-list-row-heart--on' : '');
-  var heartBtn  = _viewMode
-    ? (heartOn ? '<span class="' + heartCls + '">&#9829;</span>' : '<span class="songs-list-row-heart"></span>')
-    : '<button type="button" class="' + heartCls + '" aria-pressed="' + heartOn + '"' +
-      ' title="' + t('songs.colTitleHeart') + '" aria-label="' + t('songs.colTitleHeart') + '"' +
-      ' onclick="event.stopPropagation();toggleFavourite(' + Number(s.id) + ')">' +
-      (heartOn ? '&#9829;' : '&#9825;') + '</button>';
+  var heartBtn = heartButtonHtml(!!s.heart, 'toggleFavourite(' + Number(s.id) + ')', t('songs.colTitleHeart'), _viewMode);
 
   var icons = '';
   if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
@@ -505,25 +510,17 @@ function renderListRowHtml(s) {
 }
 
 
-// Favourite toggle straight from the list: flip it locally, then persist. On failure the
-// icon goes back, so what you see always matches what is stored.
 async function toggleFavourite(id) {
   if (_viewMode) return;
   var song = songs.find(function(s) { return s.id === id; });
   if (!song) return;
-  var wanted = !song.heart;
-  song.heart = wanted;
-  if (_songsView) _songsView.refresh();
-  try {
+  await toggleHeart(song, async function(wanted) {
     var r = await apiFetch('/api/' + artistSlug + '/songs', 'PATCH',
       [{ id: id, title: song.title, active: song.active, heart: wanted }]);
     var json = r.ok ? await r.json().catch(function() { return {}; }) : {};
     if (!r.ok || (json.rejected && json.rejected.length)) throw new Error('save failed');
     invalidateConfigCache();
-  } catch {
-    song.heart = !wanted;
-    if (_songsView) _songsView.refresh();
-  }
+  }, function() { if (_songsView) _songsView.refresh(); });
 }
 
 function _openSongArrangement(id) {

@@ -41,6 +41,7 @@ var FEEL_LABELS = [
 
 var artistSlug = '';
 var bandConfig = null;
+var _bandName = '';
 var allSongs = [];
 var currentSet = [];
 var _activeView = 'generator';
@@ -80,6 +81,7 @@ async function init() {
     const cfg = await loadConfig();
     artistSlug   = cfg.slug;
     bandConfig = cfg.config ?? {};
+    _bandName  = cfg.name || '';
     allSongs   = cfg.songs ?? [];
     applyNav(cfg.name, cfg.config);
     _viewMode = isViewMode();
@@ -139,12 +141,26 @@ function getFieldValue(song, field) {
 
 var activeFilters = new Map(); // field -> Set<value>
 
+// Own song: no interpret, or the band itself. Everything else counts as a cover.
+function _isOwnSong(song) {
+  const who = (song.interpret || '').trim().toLowerCase();
+  return !who || who === _bandName.trim().toLowerCase();
+}
+
+function _matchesOrigin(song) {
+  const origin = document.getElementById('song-origin')?.value || '';
+  if (origin === 'own')    return _isOwnSong(song);
+  if (origin === 'covers') return !_isOwnSong(song);
+  return true;
+}
+
 function getFilteredSongs() {
   const activeOnly = document.getElementById('active-only')?.checked ?? true;
   const feelRange  = getFeelRange();
   return allSongs.filter(song => {
     if (activeOnly && !song.active) return false;
     if (song.heart) return true;  // heart songs bypass all filters
+    if (!_matchesOrigin(song)) return false;
     for (const [field, values] of activeFilters) {
       if (values.size === 0) continue;
       const v = getFieldValue(song, field);
@@ -256,7 +272,7 @@ function _buildFillPool(inSet, activeOnly) {
   const range = getFeelRange();
   if (!range) return [];
   const base = allSongs.filter(s => {
-    if (!(!activeOnly || s.active) || inSet.has(s.id)) return false;
+    if (!(!activeOnly || s.active) || inSet.has(s.id) || !_matchesOrigin(s)) return false;
     const f = songFeel(s);
     return f != null && (f < range.min || f > range.max);
   });
@@ -388,13 +404,21 @@ function renderControls() {
           ${t('setlist.activeOnly')}
         </label>
         <label class="active-toggle">
+          ${t('setlist.originLabel')}
+          <select id="song-origin" class="filter-select">
+            <option value="">${t('setlist.originAll')}</option>
+            <option value="own">${t('setlist.originOwn')}</option>
+            <option value="covers">${t('setlist.originCovers')}</option>
+          </select>
+        </label>
+        <label class="active-toggle">
           <input type="checkbox" id="split-sets">
           ${t('setlist.splitSets')}
         </label>
-        <span class="active-toggle">
+        <span class="active-toggle"${songFieldHidden(bandConfig, 'extra.banjoCapo') && songFieldHidden(bandConfig, 'extra.gitCapo') ? ' hidden' : ''}>
           ${t('setlist.minimizeCapo')}
-          <label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>
-          <label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> ${t('setlist.capoGuitar')}</label>
+          ${songFieldHidden(bandConfig, 'extra.banjoCapo') ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>`}
+          ${songFieldHidden(bandConfig, 'extra.gitCapo')   ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> ${t('setlist.capoGuitar')}</label>`}
         </span>
       </div>
     </div>
@@ -436,10 +460,12 @@ function renderResult(songs) {
     // Don't show capo-change across the break
     const prev = (i > 0 && !(splitAt && i === splitAt)) ? songs[i - 1] : null;
 
-    const banjo = song.extra?.banjoCapo != null ? String(song.extra.banjoCapo) : null;
-    const git   = song.extra?.gitCapo   != null ? String(song.extra.gitCapo)   : null;
-    const prevBanjo = prev?.extra?.banjoCapo != null ? String(prev.extra.banjoCapo) : null;
-    const prevGit   = prev?.extra?.gitCapo   != null ? String(prev.extra.gitCapo)   : null;
+    const showBanjo = !songFieldHidden(bandConfig, 'extra.banjoCapo');
+    const showGit   = !songFieldHidden(bandConfig, 'extra.gitCapo');
+    const banjo = showBanjo && song.extra?.banjoCapo != null ? String(song.extra.banjoCapo) : null;
+    const git   = showGit   && song.extra?.gitCapo   != null ? String(song.extra.gitCapo)   : null;
+    const prevBanjo = showBanjo && prev?.extra?.banjoCapo != null ? String(prev.extra.banjoCapo) : null;
+    const prevGit   = showGit   && prev?.extra?.gitCapo   != null ? String(prev.extra.gitCapo)   : null;
     const capoChanged = (banjo !== null && prevBanjo !== null && banjo !== prevBanjo)
                      || (git   !== null && prevGit   !== null && git   !== prevGit);
     const capoParts = [
@@ -450,7 +476,7 @@ function renderResult(songs) {
       ? `<span class="capo-badge${capoChanged ? ' capo-change' : ''}" title="${escHtml(capoChanged ? t('setlist.capoChanged') : t('setlist.capoTitle'))}">Capo: ${capoParts.join(' | ')}</span>`
       : '';
 
-    const s = (v, field, title) => v ? `<span data-field="${escHtml(field)}" title="${escHtml(title)}">${escHtml(v)}</span>` : '';
+    const s = (v, field, title) => v && !songFieldHidden(bandConfig, field) ? `<span data-field="${escHtml(field)}" title="${escHtml(title)}">${escHtml(v)}</span>` : '';
     const metaSpans = [
       s(song.extra?.lead || '',  'extra.lead',   t('setlist.leadTitle')),
       s(song.key ? formatKey(song.key) : '',  'key',           t('setlist.keyTitle')),
@@ -1514,6 +1540,7 @@ function _openSongPanel(setlistSid, songId) {
   var defaultFields = ['key', 'genre', 'energy', 'length_min', 'extra.lead', 'extra.banjoCapo', 'extra.gitCapo'];
   var shownFields = displayFields.length ? displayFields.map(function(f) { return f.field; }) : defaultFields;
   if (shownFields.indexOf('length_min') === -1) shownFields = shownFields.concat(['length_min']);
+  shownFields = shownFields.filter(function(f) { return !songFieldHidden(bandConfig, f); });
 
   var cells = shownFields.map(function(field) {
     var val = cellVal(field);
