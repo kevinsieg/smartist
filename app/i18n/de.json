@@ -1169,5 +1169,13 @@
   "workspaces.title": "Ihre Workspaces",
   "workspaces.unauthHint": "Sie müssen angemeldet sein, um Ihre Workspaces zu sehen.",
   "home.savePassword": "Passwort speichern",
-  "footer.impressum": "Impressum"
+  "footer.impressum": "Impressum",
+  "venues.favourite": "Favorit",
+  "venues.favouritesOnly": "Nur Favoriten",
+  "setlist.originLabel": "Songs:",
+  "setlist.originAll": "Alle",
+  "setlist.originOwn": "Eigene Songs",
+  "setlist.originCovers": "Covers",
+  "settings.hiddenSongFieldsLabel": "Ausgeblendete Songfelder",
+  "settings.hiddenSongFieldsHint": "Angehakte Felder verschwinden aus Songs, Setlists, Ausdrucken und der Bühnenansicht. Vorhandene Werte bleiben erhalten."
 }

@@ -382,3 +382,7 @@ UPDATE users       SET email         = lower(email)         WHERE email         
 UPDATE users       SET pending_email = lower(pending_email) WHERE pending_email <> lower(pending_email);
 UPDATE subscribers SET email         = lower(email)         WHERE email         <> lower(email);
 ALTER TABLE users ADD CONSTRAINT users_email_lowercase CHECK (email = lower(email));
+
+-- 2026-09-28: favourite venues and organizers, same meaning as songs.heart
+ALTER TABLE venues     ADD COLUMN IF NOT EXISTS heart BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE organizers ADD COLUMN IF NOT EXISTS heart BOOLEAN NOT NULL DEFAULT false;

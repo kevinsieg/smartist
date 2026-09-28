@@ -8,6 +8,7 @@ var _orgsTotal = 0;
 var _orgsOffset = 0;
 var _orgsQ = '';
 var _orgsTimer = null;
+var _orgsFavourite = false;
 
 function _orgTypeLabel(type) {
   var map = { person: t('organizers.typePerson'), organization: t('organizers.typeOrg'),
@@ -16,6 +17,10 @@ function _orgTypeLabel(type) {
 }
 
 var ORGANIZER_COLUMNS = [
+  { width: '28px', actions: true, render: function(o) {
+    return heartButtonHtml(!!o.heart, '_toggleOrganizerHeart(' + Number(o.id) + ')', t('venues.favourite'),
+                           isViewMode() || o.deleted);
+  }},
   { field: 'name',    get label() { return t('venues.colName'); },    width: '1.5fr', sortable: true, filterable: true },
   { field: 'type',    get label() { return t('organizers.fieldType'); },    width: '90px',  sortable: true,
     render: o => o.type ? `<span class="sl-badge">${escHtml(_orgTypeLabel(o.type))}</span>` : '' },
@@ -38,7 +43,7 @@ initPage(async function(cfg) {
     containerId:   'organizers-list',
     sortBarId:     'sort-bar',
     columns:       ORGANIZER_COLUMNS,
-    defaultSort:   'name',
+    defaultSort:   null,   // keep the server order: favourites first, then by name
     rowClass:      o => o.deleted ? 'deleted' : '',
     onExpand:      o => expandOrganizer(o),
     emptyHint:     t('organizers.noOrganizersYet'),
@@ -56,6 +61,15 @@ initPage(async function(cfg) {
     });
   }
 
+  const favEl = document.getElementById('filter-favourite');
+  if (favEl) {
+    favEl.addEventListener('change', async function() {
+      _orgsFavourite = favEl.checked;
+      _orgsOffset = 0;
+      await loadOrganizers();
+    });
+  }
+
   await loadOrganizers();
 
   initGeoFields('om-city', 'om-country');
@@ -69,6 +83,7 @@ initPage(async function(cfg) {
 async function loadOrganizers() {
   const params = new URLSearchParams({ limit: 50, offset: _orgsOffset });
   if (_orgsQ) params.set('q', _orgsQ);
+  if (_orgsFavourite) params.set('favourite', '1');
   const r = await apiFetch(`/api/${artistSlug}/organizers?${params}`);
   const { rows, total } = await r.json();
   _orgsTotal = total;
@@ -84,6 +99,15 @@ async function loadOrganizers() {
 async function loadMoreOrganizers() {
   _orgsOffset += 50;
   await loadOrganizers();
+}
+
+async function _toggleOrganizerHeart(id) {
+  var o = allOrganizers.find(function(x) { return x.id === id; });
+  if (!o) return;
+  await toggleHeart(o, async function(wanted) {
+    var r = await apiFetch('/api/' + artistSlug + '/organizers/' + id, 'PUT', { name: o.name, heart: wanted });
+    if (!r.ok) throw new Error('save failed');
+  }, function() { organizerTable.refresh(); });
 }
 
 function updateOrgsFooter() {
