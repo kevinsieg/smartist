@@ -1557,9 +1557,12 @@ function _openSongPanel(setlistSid, songId) {
     ? '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="white-space:pre-wrap;color:var(--third-color);font-size:0.82rem">' + escHtml(song.comment) + '</div></div>'
     : '';
 
-  var lyricsBlock = (song.extra && song.extra.lyrics)
+  // Lyrics are not in the song list: fetched with the song's details below.
+  var hasLyrics = !!(song.has_lyrics || song.lyrics);
+  var lyricsBlock = hasLyrics
     ? '<div class="vsp-section-label">' + t('setlist.lyricsLabel') + '</div>' +
-      '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" style="white-space:pre-wrap;font-size:0.8rem;max-height:12rem;overflow-y:auto">' + escHtml(song.extra.lyrics) + '</div></div>'
+      '<div class="vsp-cell vsp-cell--full"><div class="vsp-cell-value" id="hist-song-lyrics" style="white-space:pre-wrap;font-size:0.8rem;max-height:12rem;overflow-y:auto">' +
+        (song.lyrics ? escHtml(song.lyrics) : t('common.loading')) + '</div></div>'
     : '';
 
   detail.innerHTML =
@@ -1569,6 +1572,15 @@ function _openSongPanel(setlistSid, songId) {
     '<div class="vsp-actions" style="margin-top:0.75rem;">' +
       '<button class="btn" onclick="navigate(\'/songs?id=' + Number(song.id) + '\')">' + t('setlist.openInSongs') + '</button>' +
     '</div>';
+  if (hasLyrics && song.lyrics === undefined) {
+    loadSongLyrics(_artistSlug, song).then(function(text) {
+      var el = document.getElementById('hist-song-lyrics');
+      if (el) el.textContent = text;
+    }).catch(function() {
+      var el = document.getElementById('hist-song-lyrics');
+      if (el) el.textContent = '';
+    });
+  }
 }
 
 function _histStage(sid) {

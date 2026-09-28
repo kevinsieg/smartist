@@ -276,6 +276,8 @@ async function initSong(params, el, cfg) {
   document.title = `smartist · ${song.title} · ${cfg.name}`;
 
   const extra   = song.extra || {};
+  // Lyrics come with the song's details (GET /songs/:id), not inside extra.
+  const lyrics  = song.lyrics || '';
   const gitCapo = extra.gitCapo   != null && !_stageHidden(cfg, 'extra.gitCapo')   ? extra.gitCapo   : null;
   const bjCapo  = extra.banjoCapo != null && !_stageHidden(cfg, 'extra.banjoCapo') ? extra.banjoCapo : null;
   const audioRe = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
@@ -323,7 +325,7 @@ async function initSong(params, el, cfg) {
   const linksHtml = linkItems.length ? `<div class="song-stage-section song-stage-links">${linkItems.join('')}</div>` : '';
 
   var _FIT_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>';
-  const lyricsHtml = extra.lyrics
+  const lyricsHtml = lyrics
     ? `<div class="song-stage-lyrics" id="_stage_lyrics"></div>
        <div class="lyrics-size-bar">
          <button class="stage-share-btn" onclick="stageFontDown()" title="Smaller text"><span style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
@@ -344,8 +346,8 @@ async function initSong(params, el, cfg) {
     ${linksHtml}
     ${lyricsHtml}`;
 
-  if (extra.lyrics) {
-    document.getElementById('_stage_lyrics').textContent = extra.lyrics;
+  if (lyrics) {
+    document.getElementById('_stage_lyrics').textContent = lyrics;
     _applyLyricsSize();
   }
 

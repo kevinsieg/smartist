@@ -7,11 +7,16 @@ const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('
 const { ownsVenue, ownsOrganizer } = require('../_ownership');
 
 // venue_id / organizer_id come from the body; both must be this artist's rows.
-async function checkRefs(sql, artistId, body, res) {
+async function refsOwned(sql, artistId, body) {
   const [venueOk, organizerOk] = await Promise.all([
     ownsVenue(sql, artistId, body.venue_id ?? null),
     ownsOrganizer(sql, artistId, body.organizer_id ?? null),
   ]);
+  return { venueOk, organizerOk };
+}
+
+async function checkRefs(sql, artistId, body, res) {
+  const { venueOk, organizerOk } = await refsOwned(sql, artistId, body);
   if (!venueOk) {
     res.status(400).json({ error: 'Invalid venue_id' }); return false;
   }
@@ -29,40 +34,43 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       if (!artist) return res.status(404).json({ error: 'Artist not found' });
       if (!user && !canBrowseCatalogue(artist))
         return res.status(401).json({ error: 'Sign in to view this' });
-      let [gig] = await sql`
-        SELECT g.*, v.name AS venue_name, o.name AS organizer_name
-        FROM gigs g
-        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-        LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
-        WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
-      `;
-      if (!gig) return res.status(404).json({ error: 'Gig not found' });
+      // The gig, and with ?refs its setlists and their songs: every query is
+      // scoped by gig id and band, so none needs another's result first.
+      const [[row], setlists, setlistSongs] = await Promise.all([
+        sql`
+          SELECT g.*, v.name AS venue_name, v.city AS venue_city,
+                 o.name AS organizer_name, o.city AS organizer_city
+          FROM gigs g
+          LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+          LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
+          WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
+            ${user ? sql`` : sql`AND g.deleted = false`}
+        `,
+        req.query.refs ? sql`
+          SELECT id, title FROM setlists
+          WHERE gig_id = ${gigId} AND artist_id = ${artist.id}
+          ORDER BY id DESC
+        ` : [],
+        req.query.refs ? sql`
+          SELECT ss.setlist_id, ss.position, s.title
+          FROM setlists sl
+          JOIN setlist_songs ss ON ss.setlist_id = sl.id
+          JOIN songs s ON s.id = ss.song_id AND s.artist_id = sl.artist_id
+          WHERE sl.gig_id = ${gigId} AND sl.artist_id = ${artist.id}
+          ORDER BY ss.setlist_id, ss.position
+        ` : [],
+      ]);
+      if (!row) return res.status(404).json({ error: 'Gig not found' });
+      const { venue_city, organizer_city, ...fields } = row;
+      let gig = fields;
       // Public visitors never see the private gig comment.
       if (!user) { const { comment: _, ...rest } = gig; gig = rest; }
       if (req.query.refs) {
-        const [setlists, venue, organizer] = await Promise.all([
-          sql`
-            SELECT id, title FROM setlists
-            WHERE gig_id = ${gigId} AND artist_id = ${artist.id}
-            ORDER BY id DESC
-          `,
-          gig.venue_id
-            ? sql`SELECT id, name, city FROM venues WHERE id = ${gig.venue_id} AND artist_id = ${artist.id}`.then(r => r[0] ?? null)
-            : null,
-          gig.organizer_id
-            ? sql`SELECT id, name, city FROM organizers WHERE id = ${gig.organizer_id} AND artist_id = ${artist.id}`.then(r => r[0] ?? null)
-            : null,
-        ]);
-        const setlistIds = setlists.map(s => s.id);
-        const setlistSongs = setlistIds.length
-          ? await sql`
-              SELECT ss.setlist_id, ss.position, s.title
-              FROM setlist_songs ss
-              JOIN songs s ON s.id = ss.song_id AND s.artist_id = ${artist.id}
-              WHERE ss.setlist_id = ANY(${setlistIds}::int[])
-              ORDER BY ss.setlist_id, ss.position
-            `
-          : [];
+        // Venue and organizer come from the gig's own joins (both scoped).
+        const venue = row.venue_name != null
+          ? { id: row.venue_id, name: row.venue_name, city: venue_city } : null;
+        const organizer = row.organizer_name != null
+          ? { id: row.organizer_id, name: row.organizer_name, city: organizer_city } : null;
         return res.json({ gig, refs: { setlists, setlistSongs, venue, organizer } });
       }
       return res.json(gig);
@@ -70,7 +78,13 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
-    const [gig] = await sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
+    // A PUT's venue/organizer ownership checks don't depend on the gig row:
+    // run them alongside it.
+    const refsCheck = req.method === 'PUT' && req.query.action !== 'poster';
+    const [[gig], refs] = await Promise.all([
+      sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`,
+      refsCheck ? refsOwned(sql, artist.id, req.body ?? {}) : null,
+    ]);
     if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
     // ── POST ?action=poster-url — get presigned upload URLs ──────────────────
@@ -140,7 +154,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       if (comment  === false) return res.status(400).json({ error: 'comment too long' });
       const location = validateStr(body.location, 200);
       if (location === false) return res.status(400).json({ error: 'location too long' });
-      if (!await checkRefs(sql, artist.id, body, res)) return;
+      if (!refs.venueOk)     return res.status(400).json({ error: 'Invalid venue_id' });
+      if (!refs.organizerOk) return res.status(400).json({ error: 'Invalid organizer_id' });
       const [updated] = await sql`
         UPDATE gigs SET
           title = ${title}, date = ${body.date || null},
@@ -275,6 +290,7 @@ module.exports = wrap(async function handler(req, res) {
       LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
       LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
       WHERE g.artist_id = ${artist.id}
+        ${user ? sql`` : sql`AND g.deleted = false`}
       ORDER BY g.date DESC NULLS LAST, g.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;

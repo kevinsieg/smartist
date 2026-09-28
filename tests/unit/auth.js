@@ -144,9 +144,13 @@ async function run(r) {
   function stubAuthDeps(tokenClaim, memberRows) {
     const rows = memberRows !== undefined ? memberRows
       : (tokenClaim ? [{ id: tokenClaim.userId, role: tokenClaim.role }] : []);
+    // requireAuth reads the band and the membership in one row (member_* columns).
+    const m = rows[0];
+    const combined = [{ ...FAKE_ARTIST, member_id: m ? m.id : null, member_role: m ? m.role : null,
+      member_password_hash: m ? m.password_hash ?? null : null }];
     require.cache[dbPath2] = {
       id: dbPath2, filename: dbPath2, loaded: true,
-      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => async () => rows },
+      exports: { getArtist: async () => FAKE_ARTIST, getDb: () => async () => combined },
     };
     require.cache[tokenPath2] = {
       id: tokenPath2, filename: tokenPath2, loaded: true,

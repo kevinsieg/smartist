@@ -386,3 +386,60 @@ ALTER TABLE users ADD CONSTRAINT users_email_lowercase CHECK (email = lower(emai
 -- 2026-09-28: favourite venues and organizers, same meaning as songs.heart
 ALTER TABLE venues     ADD COLUMN IF NOT EXISTS heart BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE organizers ADD COLUMN IF NOT EXISTS heart BOOLEAN NOT NULL DEFAULT false;
+
+-- 2026-09-29: songs load fast. Lyrics (up to 20 000 characters each) move out of
+-- songs.extra into their own table, so the song list no longer carries them;
+-- they are read with one song's details. Language becomes a real column.
+-- Both moves are safe to re-run: rows still carrying the old keys (written by
+-- an older deployment between this migration and the code rollout) are moved
+-- again, and the newer value wins.
+CREATE TABLE IF NOT EXISTS song_lyrics (
+  song_id    INTEGER PRIMARY KEY REFERENCES songs(id)   ON DELETE CASCADE,
+  artist_id  INTEGER NOT NULL    REFERENCES artists(id) ON DELETE CASCADE,
+  lyrics     TEXT    NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS song_lyrics_artist_id_idx ON song_lyrics(artist_id);
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS language TEXT;
+INSERT INTO song_lyrics (song_id, artist_id, lyrics)
+  SELECT id, artist_id, extra->>'lyrics' FROM songs
+  WHERE NULLIF(btrim(extra->>'lyrics'), '') IS NOT NULL
+  ON CONFLICT (song_id) DO UPDATE SET lyrics = EXCLUDED.lyrics, updated_at = now();
+UPDATE songs SET extra = extra - 'lyrics' WHERE extra ? 'lyrics';
+UPDATE songs SET language = NULLIF(upper(btrim(extra->>'language')), ''), extra = extra - 'language'
+  WHERE extra ? 'language';
+
+-- 2026-09-29: the audit log's CHECK only allowed create/update/delete, so every
+-- lyrics and media entry was rejected (and the error swallowed by
+-- insertAuditLog). NOT VALID: checks new rows only, never fails on old ones.
+ALTER TABLE song_logs DROP CONSTRAINT IF EXISTS song_logs_action_check;
+ALTER TABLE song_logs ADD CONSTRAINT song_logs_action_known CHECK (action IN (
+  'create', 'update', 'delete', 'lyrics_update', 'lyrics_delete',
+  'audio_replace', 'audio_delete', 'sheet_replace', 'sheet_delete',
+  'playback_replace', 'playback_delete')) NOT VALID;
+
+-- 2026-09-29: foreign keys that deletion had to work around by hand. Songs are
+-- only ever hard-deleted together with their band, so cascading setlist rows
+-- loses nothing; an inviter's removal leaves the invitee's row in place.
+ALTER TABLE setlist_songs ADD CONSTRAINT setlist_songs_song_cascade_fkey
+  FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE;
+ALTER TABLE setlist_songs DROP CONSTRAINT IF EXISTS setlist_songs_song_id_fkey;
+ALTER TABLE users ADD CONSTRAINT users_invited_by_set_null_fkey
+  FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_invited_by_fkey;
+
+-- 2026-09-29: redundant indexes. songs_list_idx (artist_id, deleted, title)
+-- serves every songs query; the unique (artist_id, gema_work_number) key
+-- already leads with artist_id.
+DROP INDEX IF EXISTS songs_artist_id_idx;
+DROP INDEX IF EXISTS songs_band_active_idx;
+DROP INDEX IF EXISTS gema_works_artist_id_idx;
+
+-- 2026-09-29: at most one active arrangement per song, enforced. Older rows
+-- that broke the rule keep only the most recently updated one active.
+UPDATE song_arrangements SET is_active = false
+  WHERE is_active AND id NOT IN (
+    SELECT DISTINCT ON (song_id) id FROM song_arrangements
+    WHERE is_active ORDER BY song_id, updated_at DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS song_arrangements_one_active_idx
+  ON song_arrangements(song_id) WHERE is_active;

@@ -45,27 +45,30 @@ async function checkCredentials(token, artist) {
 // access to a workspace the user does not belong to. Role comes from the DB
 // row (per-workspace, revocable), not from the token.
 //
-// The membership row is looked up by slug, not artist id, so it can run in
-// parallel with getArtist (see loadArtistAndMember) — one round trip, not two.
-async function findMember(userId, slug) {
-  const sql = getDb();
-  const [member] = await sql`
-    SELECT u2.id, u2.role, u1.password_hash
-    FROM users u1
-    JOIN users u2 ON u2.email = u1.email
-    JOIN artists a ON a.id = u2.artist_id
-    WHERE u1.id = ${userId} AND a.slug = ${slug}
-    LIMIT 1
-  `;
-  return member ?? null;
-}
-
+// The band and the caller's membership in it come back from one statement:
+// every authenticated request starts here, and two queries cost twice the
+// round-trips (they do not overlap on the function's single connection).
 async function loadArtistAndMember(token, slug) {
   const claim = token ? verifyUserToken(token) : null;
-  const [artist, member] = await Promise.all([
-    getArtist(slug),
-    claim ? findMember(claim.userId, slug) : null,
-  ]);
+  if (!claim) return { artist: await getArtist(slug), claim, member: null };
+  const sql = getDb();
+  const [row] = await sql`
+    SELECT a.*, m.id AS member_id, m.role AS member_role, m.password_hash AS member_password_hash
+    FROM artists a
+    LEFT JOIN LATERAL (
+      SELECT u2.id, u2.role, u1.password_hash
+      FROM users u1
+      JOIN users u2 ON u2.email = u1.email AND u2.artist_id = a.id
+      WHERE u1.id = ${claim.userId}
+      LIMIT 1
+    ) m ON true
+    WHERE a.slug = ${slug}
+    LIMIT 1
+  `;
+  if (!row) return { artist: null, claim, member: null };
+  const { member_id, member_role, member_password_hash, ...artist } = row;
+  const member = member_id == null ? null
+    : { id: member_id, role: member_role, password_hash: member_password_hash };
   return { artist, claim, member };
 }
 

@@ -33,7 +33,9 @@ function makeSql(route) {
     calls.push(text);
     return route(text);
   };
-  sql.begin = async fn => fn(sql);
+  // Like postgres.js: a callback that returns an array of queries gets them
+  // run in order, and begin resolves to their results.
+  sql.begin = async fn => { const r = await fn(sql); return Array.isArray(r) ? Promise.all(r) : r; };
   sql.calls = calls;
   return sql;
 }
@@ -100,9 +102,8 @@ async function run(r) {
   });
 
   await testAsync('arrangement activate commits in a transaction → 200', async () => {
-    const { handler } = loadHandler('api/[artist]/songs/[...path].js', text => {
-      if (text.startsWith('SELECT id FROM song_arrangements')) return [{ id: 3 }];
-      if (text.startsWith('SELECT * FROM song_arrangements')) return [{ id: 3, is_active: true, rows: [] }];
+    const { handler, sql } = loadHandler('api/[artist]/songs/[...path].js', text => {
+      if (text.startsWith('UPDATE song_arrangements SET is_active = true')) return [{ id: 3, is_active: true, rows: [] }];
       return [];
     });
     const res = mockRes();
@@ -110,6 +111,19 @@ async function run(r) {
       query: { artist: 'test' }, body: {}, headers: { authorization: 'Bearer t' } }, res);
     assertEq(res.statusCode, 200);
     assertEq(res.body.is_active, true);
+    // At most one active version per song (unique index): the others are
+    // switched off first, in the same transaction.
+    const updates = sql.calls.filter(c => c.startsWith('UPDATE song_arrangements'));
+    assertEq(updates.length, 2);
+    assert(updates[0].includes('is_active = false'), 'deactivation must come first');
+  });
+
+  await testAsync('activating an unknown arrangement → 404', async () => {
+    const { handler } = loadHandler('api/[artist]/songs/[...path].js', () => []);
+    const res = mockRes();
+    await handler({ method: 'POST', url: '/api/test/songs/10/arrangements/99/activate',
+      query: { artist: 'test' }, body: {}, headers: { authorization: 'Bearer t' } }, res);
+    assertEq(res.statusCode, 404);
   });
 }
 

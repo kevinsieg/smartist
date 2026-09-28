@@ -867,6 +867,21 @@ async function apiFetch(url, method = 'GET', body) {
   return r;
 }
 
+// Lyrics are not part of any song list (a band's lyrics run to megabytes); they
+// come with one song's details. Caches the text on the song object — undefined
+// means not loaded yet, null means the song has none.
+async function loadSongLyrics(slug, song) {
+  if (!song || !song.id) return '';
+  if (song.lyrics !== undefined) return song.lyrics || '';
+  if (song.has_lyrics === false) { song.lyrics = null; return ''; }
+  const r = await apiFetch('/api/' + slug + '/songs/' + Number(song.id));
+  if (!r.ok) throw new Error('lyrics fetch failed');
+  const detail = await r.json();
+  song.lyrics = detail.lyrics || null;
+  song.has_lyrics = !!song.lyrics;
+  return song.lyrics || '';
+}
+
 // Standard page bootstrap: config → nav → page-specific callback.
 // Requires login — unauthenticated visits redirect to login immediately.
 // Config fetch failure (unknown slug, network) redirects to /workspaces.

@@ -8,7 +8,8 @@
 // gig off another band's venue, which also blocks that band's deletions
 // through the ON DELETE RESTRICT / no-cascade references.
 
-// true when every id is a live song of this artist. Empty list → true.
+// true when every id is a song of this artist. Soft-deleted songs count: an
+// older setlist may still list them and must stay editable. Empty list → true.
 async function ownsSongs(sql, artistId, ids) {
   if (!ids.length) return true;
   const [row] = await sql`

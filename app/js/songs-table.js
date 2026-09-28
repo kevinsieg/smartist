@@ -193,12 +193,12 @@ function renderRow(song) {
       </td>`;
     }
     if (c.type === 'lyrics') {
-      const hasLyrics = !!(val && String(val).trim());
+      // The list carries has_lyrics; the text is loaded when the modal opens.
+      const hasLyrics = !!(song.has_lyrics || song.lyrics);
       const actionBtn = hasLyrics
         ? `<button class="lyrics-open-btn" onclick="openLyrics('${sid}')" title="${t('songs.viewLyrics')}">¶</button>`
         : (_viewMode ? '' : `<button class="lyrics-add-btn"  onclick="openLyricsEdit('${sid}')" title="${t('songs.addLyrics')}">+</button>`);
       return `<td class="${c.cls}${sticky} lyrics-cell">
-        <textarea data-id="${sid}" data-key="${c.key}" style="display:none">${escHtml(String(val ?? ''))}</textarea>
         ${actionBtn}
       </td>`;
     }
@@ -241,8 +241,8 @@ function renderRow(song) {
       if (isLang && song.gema_work_number) {
         return `<td class="${c.cls}${sticky}"><span class="stat-cell">${escHtml(val || '—')}</span></td>`;
       }
-      const cur = isLang ? (song.extra?.language || c.default || '') : (val ?? '');
-      const dataKey = isLang ? 'extra.language' : c.key;
+      const cur = isLang ? (song.language || c.default || '') : (val ?? '');
+      const dataKey = isLang ? 'language' : c.key;
       let list = c.options || [];
       if (cur && list.indexOf(cur) === -1) list = [cur, ...list];
       const placeholder = isLang ? '' : '<option value="">—</option>';

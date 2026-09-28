@@ -1,17 +1,17 @@
-const crypto = require('crypto');
-const { getDb, getArtist, insertAuditLog, getSlug, parsePage } = require('../_db');
+const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
-const { suggestLyricsWithAI } = require('../_ai');
-const { checkRateLimit, clientIp } = require('../_ratelimit');
-const { LYRICS_SOURCES, plainFromSynced } = require('../_lyrics');
+const { clientIp } = require('../_ratelimit');
+const { suggestLyrics } = require('../_lyrics');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
-const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('../_r2');
-const { isOwnMediaUrl } = require('../_ownership');
-const { wouldExceedStorage, storageLimitBytes, songLimit } = require('../_plans');
+const { keyFromUrl } = require('../_r2');
+const { MEDIA_CONFIGS, presignMedia, confirmMedia, deleteMedia } = require('../_media');
+const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre } = require('../_song_values');
-const logger = require('../_logger');
+const {
+  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, writeLyrics,
+} = require('../_domain/songs');
 
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
@@ -38,6 +38,20 @@ function extraError(extra, current = {}) {
   return null;
 }
 
+// A flag from the request, or the stored value when it is absent or not a flag
+// (null must not clear a NOT NULL column).
+function toBool(v, fallback) {
+  if (v === true || v === 'true') return true;
+  if (v === false || v === 'false') return false;
+  return fallback;
+}
+
+// Song id from a body field (lyrics_update_id, media_confirm_id, …), or null.
+function bodyId(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
   const sql = getDb();
@@ -59,8 +73,12 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY changed_at DESC LIMIT 20
       `;
     } else {
+      // The recent-changes list shows titles only; the full row snapshots
+      // stay in the database.
       logs = await sql`
-        SELECT * FROM song_logs WHERE artist_id = ${band.id}
+        SELECT id, song_id, action, changed_at,
+               jsonb_build_object('title', song_data->'title') AS song_data
+        FROM song_logs WHERE artist_id = ${band.id}
         ORDER BY changed_at DESC LIMIT 10
       `;
     }
@@ -89,6 +107,9 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(setlists);
   }
 
+  // ── GET the song list ───────────────────────────────────────────────────────
+  // Without lyrics: each row says has_lyrics, and the text comes with one
+  // song's details (GET /songs/:id). ?lyrics=1 adds the text for the CSV export.
   if (req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
@@ -98,30 +119,10 @@ module.exports = wrap(async function handler(req, res) {
     if (viewMode) {
       const { limit: rawLimit, offset } = parsePage(req);
       const limit = Math.min(rawLimit, 30);
-      const activeOnly = req.query.active !== '0';
-      const rows = await sql`
-        SELECT s.*,
-          COUNT(DISTINCT ss.setlist_id)::int AS play_count,
-          MAX(sl.created_at)                 AS last_played_at,
-          g.iswc, g.gema_work_number, g.language AS gema_language,
-          COUNT(*) OVER()::int AS total
-        FROM songs s
-        LEFT JOIN setlist_songs ss ON ss.song_id = s.id
-        LEFT JOIN setlists sl      ON sl.id = ss.setlist_id
-        LEFT JOIN LATERAL (
-          SELECT iswc, gema_work_number, language
-          FROM gema_works
-          WHERE song_id = s.id
-          ORDER BY gema_work_number
-          LIMIT 1
-        ) g ON true
-        WHERE s.artist_id = ${band.id}
-          AND s.deleted = false
-          AND (${!activeOnly} OR s.active = true)
-        GROUP BY s.id, g.iswc, g.gema_work_number, g.language
-        ORDER BY s.title
-        LIMIT ${limit} OFFSET ${offset}
-      `;
+      const rows = await listSongs(sql, band.id, {
+        page: { limit, offset },
+        activeOnly: req.query.active !== '0',
+      });
       const total = Number(rows[0]?.total ?? 0);
       res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
       return res.json({
@@ -131,31 +132,10 @@ module.exports = wrap(async function handler(req, res) {
         offset,
       });
     }
-    const songs = await sql`
-      SELECT s.*,
-        COUNT(DISTINCT ss.setlist_id)::int AS play_count,
-        MAX(sl.created_at)                 AS last_played_at,
-        g.iswc, g.gema_work_number, g.language AS gema_language,
-        EXISTS (
-          SELECT 1 FROM song_arrangements sa
-          WHERE sa.song_id = s.id AND sa.artist_id = s.artist_id
-        ) AS has_arrangement
-      FROM songs s
-      LEFT JOIN setlist_songs ss ON ss.song_id = s.id
-      LEFT JOIN setlists sl      ON sl.id = ss.setlist_id
-      LEFT JOIN LATERAL (
-        SELECT iswc, gema_work_number, language
-        FROM gema_works
-        WHERE song_id = s.id
-        ORDER BY gema_work_number
-        LIMIT 1
-      ) g ON true
-      WHERE s.artist_id = ${band.id}
-        AND s.deleted = false
-      GROUP BY s.id, g.iswc, g.gema_work_number, g.language
-      ORDER BY s.title
-    `;
-    return res.json(songs);
+    return res.json(await listSongs(sql, band.id, {
+      withArrangement: true,
+      withLyrics: req.query.lyrics === '1',
+    }));
   }
 
   // ── POST lyrics-suggest ───────────────────────────────────────────────────
@@ -164,109 +144,24 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST' && req.body?.lyrics_suggest_id != null) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
-
-    const songId = Number(req.body.lyrics_suggest_id);
-    if (!Number.isInteger(songId) || songId <= 0)
-      return res.status(400).json({ error: 'Invalid song id' });
-
-    const [song] = await sql`
-      SELECT s.title, s.interpret, s.reference_interpret,
-        COALESCE(g.language, s.extra->>'language') AS language,
-        g.gema_genre AS genre
-      FROM songs s
-      LEFT JOIN LATERAL (
-        SELECT language, gema_genre FROM gema_works
-        WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
-      ) g ON true
-      WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
-    `;
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    const artist = song.reference_interpret || song.interpret;
-    if (!artist) return res.status(400).json({ error: 'No artist on this song — cannot search for lyrics' });
-
-    if (await checkRateLimit(`lyrics-suggest:${band.id}:${songId}`, 3, 300))
-      return res.status(429).json({ error: 'Too many requests. Try again in a few minutes.' });
-    if (await checkRateLimit(`lyrics-suggest-ip:${clientIp(req)}`, 10, 3600))
-      return res.status(429).json({ error: 'Too many requests from this IP.' });
-
-    const { title, language, genre } = song;
-    const ctx = { band: band.slug, songId, title, artist };
-    const found = (lyrics, source) => res.json({ lyrics, source, sources: LYRICS_SOURCES });
-    const miss  = (aiSkipped = false) => res.json({ lyrics: null, sources: LYRICS_SOURCES, aiSkipped });
-
-    try {
-      const r = await fetch(
-        `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`,
-        { signal: AbortSignal.timeout(5000) },
-      );
-      if (r.ok) {
-        const data = await r.json().catch(() => null);
-        if (data?.lyrics?.length > 50) {
-          await logger.info('lyrics_suggest', { ...ctx, source: 'lyrics.ovh' });
-          return found(data.lyrics.trim(), 'lyrics.ovh');
-        }
-      }
-      await logger.info('lyrics_suggest_miss', { ...ctx, source: 'lyrics.ovh', status: r.status });
-    } catch (e) {
-      await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lyrics.ovh', error: e.message });
-    }
-
-    try {
-      const r = await fetch(
-        `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`,
-        { signal: AbortSignal.timeout(5000) },
-      );
-      if (r.ok) {
-        const data = await r.json().catch(() => null);
-        const top = Array.isArray(data) && data[0];
-        if (top) {
-          const lyrics = top.plainLyrics || plainFromSynced(top.syncedLyrics);
-          if (lyrics?.length > 50) {
-            await logger.info('lyrics_suggest', { ...ctx, source: 'lrclib' });
-            return found(lyrics.trim(), 'lrclib');
-          }
-        }
-      }
-      await logger.info('lyrics_suggest_miss', { ...ctx, source: 'lrclib', status: r.status });
-    } catch (e) {
-      await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lrclib', error: e.message });
-    }
-
-    const { lyrics, skipped } = await suggestLyricsWithAI(title, artist, { language, genre });
-    if (lyrics) {
-      await logger.info('lyrics_suggest', { ...ctx, source: 'ai' });
-      return found(lyrics, 'ai');
-    }
-
-    await logger.info('lyrics_suggest_miss', { ...ctx, source: 'ai', skipped: skipped ?? false });
-    return miss(skipped ?? false);
+    const songId = bodyId(req.body.lyrics_suggest_id);
+    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
+    const result = await suggestLyrics(sql, band, songId, clientIp(req));
+    return res.status(result.status).json(result.body);
   }
 
   // ── POST lyrics update (replaces PUT /songs/:id/lyrics) ───────────────────
   if (req.method === 'POST' && req.body?.lyrics_update_id != null) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
-
-    const songId = Number(req.body.lyrics_update_id);
-    if (!Number.isInteger(songId) || songId <= 0)
-      return res.status(400).json({ error: 'Invalid song id' });
-
-    const { lyrics } = req.body;
-    if (typeof lyrics !== 'string')
+    const songId = bodyId(req.body.lyrics_update_id);
+    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
+    if (typeof req.body.lyrics !== 'string')
       return res.status(400).json({ error: 'lyrics must be a string' });
-    if (lyrics.length > 20000)
-      return res.status(400).json({ error: 'Lyrics too long (max 20 000 characters)' });
-
-    const lyricsVal = lyrics.trim() || null;
-    const [song] = await sql`
-      UPDATE songs SET extra = extra || ${{ lyrics: lyricsVal }}
-      WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
-      RETURNING id, title
-    `;
+    const lyrics = cleanLyrics(req.body.lyrics);
+    if (lyrics.error) return res.status(400).json({ error: lyrics.error });
+    const song = await writeLyrics(sql, band.id, songId, lyrics.value);
     if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    await insertAuditLog(sql, band.id, song.id, 'lyrics_update', { title: song.title });
     return res.json({ ok: true });
   }
 
@@ -274,178 +169,39 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST' && req.body?.lyrics_delete_id != null) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
-
-    const songId = Number(req.body.lyrics_delete_id);
-    if (!Number.isInteger(songId) || songId <= 0)
-      return res.status(400).json({ error: 'Invalid song id' });
-
-    const [song] = await sql`
-      SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
-    `;
+    const songId = bodyId(req.body.lyrics_delete_id);
+    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
+    const song = await writeLyrics(sql, band.id, songId, null, 'lyrics_delete');
     if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    await sql`UPDATE songs SET extra = extra - 'lyrics' WHERE id = ${songId} AND artist_id = ${band.id}`;
     return res.json({ ok: true });
   }
 
   // ── POST upload presign / confirm / delete (workaround: multi-segment PUT/DELETE to
   //    /songs/:id/:type fails on Vercel catch-alls in dynamic dirs) ────────────────────────
-  // Shared config for all three media handlers below.
-  // eslint-disable-next-line no-inner-declarations
-  const MEDIA_CONFIGS = {
-    audio:    { keyPrefix: 'audio/',    extraKey: 'listenUrl',   maxBytes: 50*1024*1024, actionPrefix: 'audio',    allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
-    sheet:    { keyPrefix: 'sheets/',   extraKey: 'sheetUrl',    maxBytes: 20*1024*1024, actionPrefix: 'sheet',    mimePrefix: 'application/pdf' },
-    playback: { keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50*1024*1024, actionPrefix: 'playback', allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' },
-  };
-
-  // Confirm upload: save publicUrl to DB, verify file exists in R2, delete previous file.
-  if (req.method === 'POST' && req.body?.media_confirm_id != null) {
+  if (req.method === 'POST' && (req.body?.media_confirm_id != null
+      || req.body?.media_delete_id != null || req.body?.upload_presign_id != null)) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
+    const b = req.body;
+    const songId = bodyId(b.media_confirm_id ?? b.media_delete_id ?? b.upload_presign_id);
+    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
 
-    const songId = Number(req.body.media_confirm_id);
-    if (!Number.isInteger(songId) || songId <= 0)
-      return res.status(400).json({ error: 'Invalid song id' });
-
-    const config = MEDIA_CONFIGS[req.body.media_type];
-    if (!config) return res.status(400).json({ error: 'media_type must be audio, sheet, or playback' });
-
-    const { publicUrl } = req.body;
-    if (!publicUrl || typeof publicUrl !== 'string')
-      return res.status(400).json({ error: 'publicUrl required' });
-
-    const base = process.env.R2_PUBLIC_URL;
-    // Keys carry the band id (see upload_presign_id), so a band can only
-    // confirm — and later delete — files it uploaded itself.
-    if (!base || !publicUrl.startsWith(`${base}/${config.keyPrefix}${band.id}/`))
-      return res.status(400).json({ error: 'Invalid publicUrl' });
-
-    const head = await verifyUpload(keyFromUrl(publicUrl));
-    if (!head) return res.status(400).json({ error: 'Uploaded file not found in storage' });
-    if (!head.contentType.startsWith(config.mimePrefix)) {
-      await deleteFromR2(publicUrl);
-      return res.status(400).json({ error: `Uploaded file content type does not match ${config.mimePrefix}` });
-    }
-    if (head.size > config.maxBytes) {
-      await deleteFromR2(publicUrl);
-      return res.status(400).json({ error: `Uploaded file exceeds ${config.maxBytes / 1024 / 1024} MB` });
-    }
-
-    const [song] = await sql`SELECT * FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    // A replacement frees the previous file's bytes, so the cap check is on the
-    // NET change (new − old), not the gross add — otherwise replacing a file with
-    // a same-size one would falsely trip the limit near the cap.
-    const previousUrl = song.extra?.[config.extraKey] ?? null;
-    // Re-confirming the URL already stored (a retried request) is not a
-    // replacement and adds nothing — those bytes are counted already.
-    const isReplacement = previousUrl != null && previousUrl !== publicUrl;
-    const prevHead = isReplacement
-      ? await verifyUpload(keyFromUrl(previousUrl)) : null;
-    const prevSize = prevHead ? prevHead.size : 0;
-
-    if (wouldExceedStorage(band, (band.storage_used_bytes || 0) - prevSize, head.size)) {
-      await deleteFromR2(publicUrl);
-      return res.status(402).json({
-        error: 'storage_limit',
-        limit: storageLimitBytes(band),
-        used:  Number(band.storage_used_bytes || 0),
-      });
-    }
-
-    const newExtra = { ...(song.extra ?? {}), [config.extraKey]: publicUrl };
-    const [updated] = await sql`UPDATE songs SET extra = ${newExtra} WHERE id = ${songId} AND artist_id = ${band.id} RETURNING *`;
-
-    // Delete first: whether the old object really went away decides the net
-    // change, so the counter settles in one round-trip instead of a +n then −m
-    // pair (which also left it briefly overstated).
-    const removed  = (isReplacement && isOwnMediaUrl(previousUrl, band.id, keyFromUrl)) ? await deleteFromR2(previousUrl) : false;
-    const freed    = (removed && prevHead) ? prevHead.size : 0;
-    const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
-
-    if (netBytes !== 0)
-      await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${netBytes}) WHERE id = ${band.id}`;
-
-    if (isReplacement) {
-      await insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_replace`, {
-        previousFilename: filenameFromUrl(previousUrl),
-        newFilename:      filenameFromUrl(publicUrl),
-        replacedAt:       new Date().toISOString(),
-      });
+    let result;
+    if (b.upload_presign_id != null) {
+      const config = MEDIA_CONFIGS[b.upload_type];
+      if (!config) return res.status(400).json({ error: 'upload_type must be audio, sheet, or playback' });
+      result = await presignMedia(sql, band, songId, config, b);
     } else {
-      await insertAuditLog(sql, band.id, songId, 'update', updated);
+      const config = MEDIA_CONFIGS[b.media_type];
+      if (!config) return res.status(400).json({ error: 'media_type must be audio, sheet, or playback' });
+      result = b.media_confirm_id != null
+        ? await confirmMedia(sql, band, songId, config, b.publicUrl)
+        : await deleteMedia(sql, band, songId, config);
     }
-    return res.json({ ok: true, publicUrl });
+    return res.status(result.status).json(result.body);
   }
 
-  // Delete media file from R2 and clear the DB field.
-  if (req.method === 'POST' && req.body?.media_delete_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-
-    const songId = Number(req.body.media_delete_id);
-    if (!Number.isInteger(songId) || songId <= 0)
-      return res.status(400).json({ error: 'Invalid song id' });
-
-    const config = MEDIA_CONFIGS[req.body.media_type];
-    if (!config) return res.status(400).json({ error: 'media_type must be audio, sheet, or playback' });
-
-    const [song] = await sql`SELECT extra FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    const url = song.extra?.[config.extraKey];
-    const writes = [sql`UPDATE songs SET extra = extra - ${config.extraKey} WHERE id = ${songId} AND artist_id = ${band.id}`];
-    if (url) {
-      const delHead = await verifyUpload(keyFromUrl(url));
-      const removed = isOwnMediaUrl(url, band.id, keyFromUrl) ? await deleteFromR2(url) : false;
-      if (removed && delHead) writes.push(sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${delHead.size}) WHERE id = ${band.id}`);
-      writes.push(insertAuditLog(sql, band.id, songId, `${config.actionPrefix}_delete`, {
-        filename:  filenameFromUrl(url),
-        deletedAt: new Date().toISOString(),
-      }));
-    }
-    await Promise.all(writes);
-    return res.json({ ok: true });
-  }
-
-  if (req.method === 'POST' && req.body?.upload_presign_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-
-    const songId = Number(req.body.upload_presign_id);
-    if (!Number.isInteger(songId) || songId <= 0)
-      return res.status(400).json({ error: 'Invalid song id' });
-    const config = MEDIA_CONFIGS[req.body.upload_type];
-    if (!config) return res.status(400).json({ error: 'upload_type must be audio, sheet, or playback' });
-
-    const { filename, contentType, size } = req.body;
-    if (!filename || typeof filename !== 'string')
-      return res.status(400).json({ error: 'filename required' });
-
-    const maxMB = config.maxBytes / 1024 / 1024;
-    if (config.allowedExts) {
-      const ext = filename.split('.').pop().toLowerCase();
-      if (!config.allowedExts.has(ext))
-        return res.status(400).json({ error: `Unsupported file type. Allowed: ${[...config.allowedExts].join(', ')}` });
-      if (!contentType || !String(contentType).startsWith(config.mimePrefix))
-        return res.status(400).json({ error: `contentType must be ${config.mimePrefix}*` });
-    } else {
-      if (!filename.toLowerCase().endsWith('.pdf'))
-        return res.status(400).json({ error: 'Only PDF files are allowed' });
-    }
-
-    if (!Number.isInteger(Number(size)) || Number(size) <= 0 || Number(size) > config.maxBytes)
-      return res.status(400).json({ error: `size required, max ${maxMB} MB` });
-
-    const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
-    const key = `${config.keyPrefix}${band.id}/${crypto.randomUUID()}-${safeName}`;
-    return res.json(await createPresignedUrl(key, config.allowedExts ? contentType : 'application/pdf', Number(size)));
-  }
-
+  // ── POST create one song ────────────────────────────────────────────────────
   if (req.method === 'POST') {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
@@ -461,7 +217,10 @@ module.exports = wrap(async function handler(req, res) {
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
-            comment: rawComment, extra } = req.body ?? {};
+            comment: rawComment } = req.body ?? {};
+    // Lyrics and language are columns now; an older client still sends them in extra.
+    const moved = splitMovedKeys(req.body?.extra);
+    const extra = moved.extra;
 
     const title = validateStr(rawTitle, 200);
     if (title === false) return res.status(400).json({ error: 'title too long' });
@@ -485,24 +244,38 @@ module.exports = wrap(async function handler(req, res) {
     if (reference_interpret === false) return res.status(400).json({ error: 'reference_interpret too long' });
     const comment = validateStr(rawComment, 2000);
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
+    const language = cleanLanguage(req.body?.language !== undefined ? req.body.language : moved.language);
+    if (language === false) return res.status(400).json({ error: 'language too long' });
+    const lyrics = cleanLyrics(req.body?.lyrics !== undefined ? req.body.lyrics : moved.lyrics);
+    if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
     if (extraErr) return res.status(400).json({ error: extraErr });
 
+    // Song, lyrics and audit entry in one statement.
     const [song] = await sql`
-      INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
-                         bpm, length_min, interpret, reference_interpret, comment, extra)
-      VALUES (${band.id}, ${title}, ${active ?? true}, ${heart ?? false}, ${key},
-              ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
-              ${interpret}, ${reference_interpret},
-              ${comment}, ${extra ?? {}})
-      RETURNING *
+      WITH s AS (
+        INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
+                           bpm, length_min, interpret, reference_interpret, comment, language, extra)
+        VALUES (${band.id}, ${title}, ${active ?? true}, ${heart ?? false}, ${key},
+                ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
+                ${interpret}, ${reference_interpret},
+                ${comment}, ${language}, ${extra ?? {}})
+        RETURNING *
+      ), saved_lyrics AS (
+        INSERT INTO song_lyrics (song_id, artist_id, lyrics)
+        SELECT id, artist_id, ${lyrics.value}::text FROM s WHERE ${lyrics.value}::text IS NOT NULL
+      ), logged AS (
+        INSERT INTO song_logs (artist_id, song_id, action, song_data)
+        SELECT artist_id, id, 'create', to_jsonb(s) FROM s
+      )
+      SELECT s.*, (${lyrics.value}::text IS NOT NULL) AS has_lyrics FROM s
     `;
-    await insertAuditLog(sql, band.id, song.id, 'create', song);
     return res.status(201).json(song);
   }
 
-  // Batch update: [{ id, title, active, key, genre, tempo, length_min,
-  //                   interpret, reference_interpret, comment, extra }, ...]
+  // Batch update: [{ id, title, active, key, genre, energy, length_min,
+  //                   interpret, reference_interpret, comment, language, extra }, ...]
+  // Lyrics are not written here — they have their own endpoint.
   if (req.method === 'PATCH') {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
@@ -519,7 +292,7 @@ module.exports = wrap(async function handler(req, res) {
                           interpret: 200, reference_interpret: 500, comment: 2000 };
     const NUM_FIELDS = ['bpm', 'length_min'];
 
-    const ids = updates.map(u => Number(u.id)).filter(n => Number.isInteger(n) && n > 0);
+    const ids = updates.map(u => Number(u?.id)).filter(n => Number.isInteger(n) && n > 0);
     const [storedRows, knownGenres] = await Promise.all([
       ids.length
         ? sql`SELECT * FROM songs WHERE artist_id = ${band.id} AND id = ANY(${ids}::int[]) AND deleted = false`
@@ -528,9 +301,10 @@ module.exports = wrap(async function handler(req, res) {
     ]);
     const stored = new Map(storedRows.map(row => [row.id, row]));
 
-    let applied = 0;
     const rejected = [];
-    for (const update of updates) {
+    const accepted = new Map(); // id → row; a repeated id keeps the last update
+    for (const raw of updates) {
+      const update = raw && typeof raw === 'object' ? raw : {};
       const songId = Number(update.id);
       if (!Number.isInteger(songId) || songId <= 0) {
         rejected.push({ id: update.id ?? null, error: 'invalid song id' });
@@ -539,7 +313,8 @@ module.exports = wrap(async function handler(req, res) {
       const current = stored.get(songId);
       if (!current) { rejected.push({ id: songId, error: 'song not found' }); continue; }
 
-      const value = {};
+      const moved = splitMovedKeys(update.extra);
+      const value = { id: songId };
       let error = null;
       for (const [field, maxLen] of Object.entries(TEXT_LIMITS)) {
         if (!(field in update)) { value[field] = current[field]; continue; }
@@ -561,29 +336,60 @@ module.exports = wrap(async function handler(req, res) {
           value[field] = v;
         }
       }
-      if (!error) error = extraError(update.extra, current.extra);
+      if (!error) {
+        const rawLang = 'language' in update ? update.language : moved.language;
+        if (rawLang === undefined) value.language = current.language ?? null;
+        else {
+          value.language = cleanLanguage(rawLang);
+          if (value.language === false) error = 'language too long (max 10)';
+        }
+      }
+      if (!error) error = extraError(moved.extra, current.extra);
       if (error) { rejected.push({ id: songId, error }); continue; }
 
-      const [updated] = await sql`
-        UPDATE songs SET
-          title               = ${value.title},
-          active              = ${'active' in update ? update.active : current.active},
-          heart               = ${'heart'  in update ? update.heart  : current.heart},
-          key                 = ${value.key},
-          genre               = ${value.genre},
-          energy              = ${value.energy},
-          time_signature      = ${value.time_signature},
-          bpm                 = ${value.bpm},
-          length_min          = ${value.length_min},
-          interpret           = ${value.interpret},
-          reference_interpret = ${value.reference_interpret},
-          comment             = ${value.comment},
-          extra               = songs.extra || ${update.extra ?? {}}
-        WHERE id = ${songId} AND artist_id = ${band.id}
-        RETURNING *
+      value.active = toBool(update.active, current.active);
+      value.heart  = toBool(update.heart,  current.heart);
+      value.extra  = moved.extra ?? {};
+      accepted.set(songId, value);
+    }
+
+    // One statement for the whole batch — the rows, merged extra and one
+    // audit entry each — instead of two round-trips per song.
+    let applied = 0;
+    if (accepted.size) {
+      const rows = [...accepted.values()];
+      const updated = await sql`
+        WITH u AS (
+          UPDATE songs SET
+            title               = v.title,
+            active              = v.active,
+            heart               = v.heart,
+            key                 = v.key,
+            genre               = v.genre,
+            energy              = v.energy,
+            time_signature      = v.time_signature,
+            bpm                 = v.bpm,
+            length_min          = v.length_min,
+            interpret           = v.interpret,
+            reference_interpret = v.reference_interpret,
+            comment             = v.comment,
+            language            = v.language,
+            extra               = songs.extra || COALESCE(v.extra, '{}'::jsonb)
+          FROM jsonb_to_recordset(${sql.json(rows)}) AS v(
+            id int, title text, active boolean, heart boolean, key text, genre text,
+            energy numeric, time_signature text, bpm numeric, length_min numeric,
+            interpret text, reference_interpret text, comment text, language text, extra jsonb)
+          WHERE songs.id = v.id AND songs.artist_id = ${band.id} AND songs.deleted = false
+          RETURNING songs.*
+        ), logged AS (
+          INSERT INTO song_logs (artist_id, song_id, action, song_data)
+          SELECT artist_id, id, 'update', to_jsonb(u) FROM u
+        )
+        SELECT id FROM u
       `;
-      if (updated) { await insertAuditLog(sql, band.id, updated.id, 'update', updated); applied++; }
-      else rejected.push({ id: songId, error: 'song not found' });
+      const done = new Set(updated.map(r => r.id));
+      applied = done.size;
+      for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
     return res.json({ ok: true, count: applied, rejected });
   }
