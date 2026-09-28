@@ -131,7 +131,6 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 | `DATABASE_URL`         | Production Neon connection string                            | Dev Neon connection string                     |
 | `APP_ORIGIN`           | `https://yourdomain.com`                                     | Preview URL (`<project>-git-dev-*.vercel.app`) |
 |                        | *Set it:* links in password-reset, invite and sign-up emails are built from it (fallback: the request's `Host`) | |
-| `ARTIST_ADMIN_EMAIL`   | `you@yourdomain.com`                                         | `you+dev@yourdomain.com`                       |
 | `R2_BUCKET_NAME`       | Production bucket name                                       | Dev bucket name                                |
 | `R2_ACCESS_KEY_ID`     | Prod R2 Access Key ID                                        | Dev R2 Access Key ID                           |
 | `R2_SECRET_ACCESS_KEY` | Prod R2 Secret Access Key                                    | Dev R2 Secret Access Key                       |
@@ -272,7 +271,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 | Table               | Purpose                                                                     |
 | ------------------- | --------------------------------------------------------------------------- |
-| `artists`           | Slug, name, optional legacy band password hash, UI config (JSONB)           |
+| `artists`           | Slug, name, UI config (JSONB); `password_hash` is unused (retired band password) |
 | `songs`             | Catalogue — standard fields + `extra` JSONB; soft-delete via `deleted` flag |
 | `venues`            | CRM venue directory — soft-delete, linked to gigs via FK                    |
 | `organizers`        | CRM organizer/promoter directory — soft-delete, linked to gigs via FK       |
@@ -294,7 +293,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 ## API
 
-All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (or, on older single-band installs, the band password). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
+All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
 
 A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *stage* = also open without a session when the band turned on *public catalogue* / *public stage links* in Settings (both off by default); — = no session needed.
 

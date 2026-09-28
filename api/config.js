@@ -2,10 +2,10 @@ const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr } = require('./_validate');
 const { checkRateLimit, clientIp } = require('./_ratelimit');
-const { requireAuth, getAccess, canBrowseCatalogue, checkCredentials } = require('./_auth');
+const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, passwordMatches } = require('./_token');
-const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
+const { isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
 const { configSongs } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const { envReport, SCHEMA_VERSION } = require('./_env');
@@ -184,14 +184,6 @@ async function myArtists(req, res) {
     // (account deleted) while its signed token is still in date.
     if (!artists.length) return res.status(401).json({ error: 'Unauthorised' });
     return res.json({ artists });
-  }
-  // Legacy bootstrap sessions (artist password as bearer) have no users row —
-  // on single-tenant installs their only workspace is the deployment's.
-  if (authHeader && process.env.ARTIST_SLUG) {
-    const band = await resolveArtist('', sql);
-    if (band && await checkCredentials(authHeader, band)) {
-      return res.json({ artists: [{ slug: band.slug, name: band.name, role: 'admin' }] });
-    }
   }
   return res.status(401).json({ error: 'Unauthorised' });
 }

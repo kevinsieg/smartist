@@ -42,7 +42,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 
 1. **`req.query.path` not populated** in catch-all files inside dynamic dirs. Handlers fall back to `req.url.split('?')[0].split('/segment/')[1]?.split('/')`.
 2. **Multi-segment POST to catch-alls fails silently** — vercel returns its own HTML 404 (not the handler). Example: `POST /api/:artist/setlists/:id/duplicate` was broken. Fix: move such endpoints to the plain `setlists.js` handler using body fields (`duplicate_id`, `share_id`). Same fallback for `req.query.artist`: `req.query.artist || req.url.split('?')[0].split('/')[2]`.
-3. **Detect early:** run `ARTIST_PASSWORD=… node tests/api.js` against local `vercel dev`. Routing bugs that only appear in dev (not on Vercel) will fail these tests.
+3. **Detect early:** run `ARTIST_EMAIL=… ARTIST_PASSWORD=… node tests/api.js` against local `vercel dev`. Routing bugs that only appear in dev (not on Vercel) will fail these tests.
 
 ---
 
@@ -116,7 +116,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
-| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint: changing a password revokes older sessions (`passwordMatches`). |
+| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint: changing a password revokes older sessions (`passwordMatches`). |
 | `_ownership.js` | `ownsSongs/ownsGig/ownsVenue/ownsOrganizer` — **every foreign id from a request body must pass one** (ids are one sequence across tenants); `isOwnMediaUrl` gates R2 deletes |
 
 ---
@@ -297,10 +297,10 @@ node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nig
 
 ```bash
 npm run test:unit                         # unit + page-script suites (stubbed SQL, no DB); runs in CI
-cd tests && ARTIST_PASSWORD=… npm test      # full integration suite against vercel dev (port 3000)
+cd tests && ARTIST_EMAIL=… ARTIST_PASSWORD=… npm test   # full integration suite against vercel dev (port 3000)
 npm run test:dev                          # against Vercel Preview URL
 ```
 
 CI also runs the integration suite against a throwaway `postgres:16`: schema applied twice, `tests/harness/seed.js`, handlers served by `tests/harness/server.js` (a `vercel.json` router, no Vercel login). Steps in `docs/ci-cd.md`. Node 22 everywhere (`engines` in `package.json`).
 
-Workspaces are private, so every read and write test runs with a session (`ARTIST_PASSWORD` as bearer); without it only the anonymous checks run. Write tests create `[TEST]` rows and delete them again; an interrupted run can leave some behind (see `docs/ci-cd.md`). CI previews sit behind Vercel Deployment Protection — the suite sends `VERCEL_AUTOMATION_BYPASS_SECRET` as `x-vercel-protection-bypass`.
+Workspaces are private, so every read and write test runs with a session: the suite logs in as `ARTIST_EMAIL` / `ARTIST_PASSWORD`; without them only the anonymous checks run. Write tests create `[TEST]` rows and delete them again; an interrupted run can leave some behind (see `docs/ci-cd.md`). CI previews sit behind Vercel Deployment Protection — the suite sends `VERCEL_AUTOMATION_BYPASS_SECRET` as `x-vercel-protection-bypass`.

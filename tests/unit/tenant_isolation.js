@@ -214,15 +214,26 @@ async function run(r) {
   const authPath = mp('api/_auth'), tokenPath = mp('api/_token'), dbPath = mp('api/_db');
   for (const p of [authPath, tokenPath, dbPath]) delete require.cache[p];
   const { generateMagicToken, verifyMagicToken, generateUserToken, verifyUserToken, passwordMatches } = require(tokenPath);
-  const { checkCredentials } = require(authPath);
-  const band = { password_hash: crypto.randomBytes(16).toString('hex') };
+  const band = { id: 42, slug: 'band', password_hash: crypto.randomBytes(16).toString('hex') };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true,
+    exports: { getArtist: async () => band, getDb: () => { throw new Error('no db'); } } };
+  const { getAccess } = require(authPath);
+  const roleFor = async token => (await getAccess({ headers: { authorization: `Bearer ${token}` } }, 'band')).user?.role ?? null;
 
   await testAsync('a demo-gate token is a member session, never admin', async () => {
-    assertEq(await checkCredentials(generateMagicToken(band.password_hash, 'demo'), band), 'member');
+    const { demoSeed } = require(tokenPath);
+    assertEq(await roleFor(generateMagicToken(demoSeed(band.id), 'demo')), 'member');
   });
-  await testAsync('a login link is still an admin session for the band password', async () => {
-    assertEq(await checkCredentials(generateMagicToken(band.password_hash, 'login'), band), 'admin');
+  await testAsync('a demo token for another band opens nothing here', async () => {
+    const { demoSeed } = require(tokenPath);
+    assertEq(await roleFor(generateMagicToken(demoSeed(band.id + 1), 'demo')), null);
   });
+  await testAsync('the retired band password is no session', async () => {
+    assertEq(await roleFor('the-band-password'), null);
+    assertEq(await roleFor(generateMagicToken(band.password_hash, 'login')), null);
+    assertEq(await roleFor(generateMagicToken(band.password_hash, 'demo')), null);
+  });
+  delete require.cache[dbPath]; delete require.cache[authPath];
   test('a sign-in link cannot be redeemed as a reset link, and back', () => {
     assertEq(verifyMagicToken(generateMagicToken(band.password_hash, 'login'), band.password_hash, 'reset'), false);
     assertEq(verifyMagicToken(generateMagicToken(band.password_hash, 'reset'), band.password_hash, 'login'), false);

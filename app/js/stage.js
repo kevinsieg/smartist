@@ -25,8 +25,13 @@ function _stageDate(value) {
   return lang === 'de' ? day + '.' + month + '.' + year : day + '/' + month + '/' + year.slice(2);
 }
 
+// The session token, wherever "remember me" put it (stage has no common.js).
+function _stageToken() {
+  return sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
+}
+
 function _stageAuthHeaders() {
-  var t = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
+  var t = _stageToken();
   return t ? { Authorization: 'Bearer ' + t } : {};
 }
 
@@ -428,15 +433,17 @@ function stageShareCopyLink() {
 function stageShareEmail() {
   document.getElementById('stage-share-menu').style.display = 'none';
   document.removeEventListener('click', _closeStageMenu);
-  var hasToken = !!sessionStorage.getItem('smartist_token');
+  var hasToken = !!_stageToken();
   var pwField = document.getElementById('stage-modal-pw-field');
   if (pwField) pwField.style.display = hasToken ? 'none' : '';
+  var signin = document.getElementById('stage-share-signin');
+  if (signin) signin.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
   document.getElementById('stage-share-status').textContent = '';
   document.getElementById('stage-share-email').value = '';
   var sendBtn = document.getElementById('stage-share-send');
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send PDF'; }
   document.getElementById('stage-share-modal').style.display = 'flex';
-  var focusId = hasToken ? 'stage-share-email' : 'stage-share-pw';
+  var focusId = hasToken ? 'stage-share-email' : 'stage-share-signin';
   setTimeout(function() {
     var el = document.getElementById(focusId);
     if (el) el.focus();
@@ -454,13 +461,9 @@ async function stageSendEmail() {
     return;
   }
 
-  var token = sessionStorage.getItem('smartist_token');
-  var pwEl  = document.getElementById('stage-share-pw');
-  if (pwEl && pwEl.value.trim()) token = pwEl.value.trim();
-
+  var token = _stageToken();
   if (!token) {
-    status.textContent = 'Password required.';
-    if (pwEl) pwEl.focus();
+    status.textContent = 'Sign in to send the setlist.';
     return;
   }
 

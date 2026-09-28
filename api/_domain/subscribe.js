@@ -2,7 +2,7 @@ const { getArtist, getDb } = require('../_db');
 const { validateEmail, validateStr } = require('../_validate');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { sendEmail } = require('../_email');
-const { generateMagicToken } = require('../_token');
+const { generateMagicToken, demoSeed } = require('../_token');
 const logger = require('../_logger');
 
 // POST { source: 'contact' } — landing-page contact form.
@@ -64,7 +64,7 @@ async function subscribe(req, res) {
     `;
     const demoSlug   = process.env.DEMO_ARTIST_SLUG || 'demo';
     const demoArtist = await getArtist(demoSlug);
-    const demoToken  = demoArtist?.password_hash ? generateMagicToken(demoArtist.password_hash, 'demo') : null;
+    const demoToken  = demoArtist ? generateMagicToken(demoSeed(demoArtist.id), 'demo') : null;
     return res.status(200).json({ ok: true, token: demoToken, slug: demoArtist?.slug || demoSlug });
   }
 

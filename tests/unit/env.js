@@ -38,7 +38,7 @@ function run(r) {
 
   test('every variable the API reads is listed in api/_env.js or known optional', () => {
     // Optional ones with safe defaults, not worth a warning.
-    const OPTIONAL = new Set(['ARTIST_SLUG', 'ARTIST_ADMIN_EMAIL', 'GEMINI_API_KEY', 'GROQ_API_KEY',
+    const OPTIONAL = new Set(['ARTIST_SLUG', 'GEMINI_API_KEY', 'GROQ_API_KEY',
       'MISTRAL_API_KEY', 'FACEBOOK_TRUST_EMAIL', 'SUPER_ADMIN_EMAILS', 'DEMO_ARTIST_SLUG',
       'CONTACT_EMAIL', 'VERCEL_ENV', 'BETTERSTACK_TOKEN']);
     const listed = new Set([...REQUIRED, ...RECOMMENDED, ...PAIRS.flat(), ...OPTIONAL]);

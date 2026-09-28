@@ -69,7 +69,7 @@ One row per artist (a workspace). The API is keyed by `slug`, taken from the URL
 | `id` | serial PK | |
 | `slug` | text UNIQUE NOT NULL | URL-safe identifier used in all API routes |
 | `name` | text NOT NULL | Display name |
-| `password_hash` | text | Legacy shared band password (bcrypt). NULL for workspaces created through signup — people log in with their own `users` row |
+| `password_hash` | text | Unused: the shared band password is retired, every login is a `users` row. Kept until every deployment has moved; drop later |
 | `storage_used_bytes` | bigint DEFAULT 0 | Song-media bytes counted against the plan's storage cap |
 | `config` | jsonb DEFAULT `{}` | UI config — see [Artist config](#artist-config) |
 | `social_links` | jsonb DEFAULT `{}` | Legacy social links field (platforms now in `config.platforms`) |

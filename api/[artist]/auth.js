@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getArtist, getDb, getSlug }            = require('../_db');
-const { checkCredentials, requireAuth, requireRole } = require('../_auth');
+const { requireAuth, requireRole } = require('../_auth');
 const { generateUserToken, generateMagicToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('../_domain/artist');
 const { DUMMY_HASH } = require('../_domain/login');
@@ -124,23 +124,15 @@ module.exports = wrap(async function handler(req, res) {
       WHERE artist_id = ${band.id} AND email = ${cleanEmail}
     `;
 
-    let resetEmail, tokenSeed;
-    if (user) {
-      resetEmail = user.email;
-      // The seed is the signing key, and it doubles as the expiry: setting a
-      // password changes the hash, so the link that set it stops verifying and
-      // any other outstanding link dies with it. A password-less account has no
-      // hash to sign with — an empty key would make those tokens forgeable — so
-      // it borrows APP_SECRET, bound to the user id so one such token cannot be
-      // replayed against another account.
-      tokenSeed = user.password_hash || `${process.env.APP_SECRET}:${user.id}`;
-    } else {
-      // Bootstrap fallback: match ARTIST_ADMIN_EMAIL
-      const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
-      if (!adminEmail || cleanEmail !== adminEmail.toLowerCase() || !band.password_hash) return res.json({ ok: true });
-      resetEmail = adminEmail;
-      tokenSeed  = band.password_hash;
-    }
+    if (!user) return res.json({ ok: true }); // silent: no account enumeration
+    const resetEmail = user.email;
+    // The seed is the signing key, and it doubles as the expiry: setting a
+    // password changes the hash, so the link that set it stops verifying and
+    // any other outstanding link dies with it. A password-less account has no
+    // hash to sign with — an empty key would make those tokens forgeable — so
+    // it borrows APP_SECRET, bound to the user id so one such token cannot be
+    // replayed against another account.
+    const tokenSeed = user.password_hash || `${process.env.APP_SECRET}:${user.id}`;
 
     const resetToken = generateMagicToken(tokenSeed, 'reset');
     const origin = appOrigin(req);
@@ -191,23 +183,16 @@ module.exports = wrap(async function handler(req, res) {
           const artists      = await getArtistsForUser(user.id, sql);
           return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
         }
-        return res.status(401).json({ error: 'Invalid or expired login link' });
-      }
-      // Bootstrap magic token (no hint → single-user install)
-      if (await checkCredentials(magic, band)) {
-        return res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
       }
       return res.status(401).json({ error: 'Invalid or expired login link' });
     }
 
-    // Legacy bootstrap: password-only (no email field, old installs)
+    // The shared band password is retired: every login is a named user.
     if (!email && password) {
-      if (String(password).length > 1000) return res.status(400).json({ error: 'Invalid' });
-      const [limited, band] = await Promise.all([checkRateLimit(`auth:${clientIp(req)}`, 10, 60), getArtist(slug)]);
-      if (limited) return res.status(429).json({ error: 'Too many attempts — try again later' });
-      if (!band) return res.status(404).json({ error: 'Artist not found' });
-      if (!await checkCredentials(password, band)) return res.status(401).json({ error: 'Invalid password' });
-      return res.json({ ok: true, adminEmail: process.env.ARTIST_ADMIN_EMAIL || null });
+      return res.status(400).json({
+        error: 'Sign in with your email address. The shared band password is no longer used.',
+        code: 'band_password_retired',
+      });
     }
 
     // Email + password login
@@ -225,17 +210,7 @@ module.exports = wrap(async function handler(req, res) {
     // No row still costs one bcrypt round, so timing does not reveal accounts.
     const ok = user ? await bcrypt.compare(password, user.password_hash)
                     : (await bcrypt.compare(String(password), DUMMY_HASH), false);
-    if (!ok) {
-      // Bootstrap fallback: legacy single-tenant installs have no users rows —
-      // accept ARTIST_ADMIN_EMAIL with the artist password.
-      const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
-      if (!user && adminEmail
-          && String(email).trim().toLowerCase() === adminEmail.toLowerCase()
-          && await checkCredentials(password, band)) {
-        return res.json({ ok: true, adminEmail });
-      }
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
+    if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
 
     const ttl     = rememberMe ? TTL_30D : TTL_8H;
     const token   = generateUserToken(user.id, user.role, ttl, user.password_hash);

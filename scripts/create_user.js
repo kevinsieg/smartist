@@ -10,10 +10,9 @@
  *
  * Why this exists: signup (api/_domain/registration.js) creates a *new* band,
  * and invite (api/[artist]/auth.js) needs an already-authenticated admin. A band
- * created before multi-user auth — or by scripts/setup.js — has no `users` rows
- * at all and logs in through the legacy band password, which issues no user
- * token. Such a workspace can never reach /admin, and nobody can be invited into
- * it. This script writes that first row so the normal flows take over.
+ * created before multi-user auth has no `users` rows at all, and since the shared
+ * band password was retired nobody can sign in to it. This script writes that
+ * first row so the normal flows take over.
  *
  * The password is read from the terminal without echoing and stored as a bcrypt
  * hash, the same way the invite-acceptance path does it.
