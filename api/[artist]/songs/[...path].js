@@ -1,15 +1,15 @@
-const { getDb, insertAuditLog, getSlug } = require('../../_db');
+const { getDb, getSlug } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
-const { checkRateLimit, clientIp } = require('../../_ratelimit');
-const { suggestLyricsWithAI } = require('../../_ai');
-const { makeMediaFn } = require('../../_media');
-const { LYRICS_SOURCES, plainFromSynced } = require('../../_lyrics');
+const { clientIp } = require('../../_ratelimit');
+const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
+const { suggestLyrics } = require('../../_lyrics');
 const { GEMA_ROLE_TYPES } = require('../../_constants');
 const { validateStr } = require('../../_validate');
 const logger = require('../../_logger');
 const { energyToScale } = require('../../_song_values');
 const { requireFeature } = require('../../_plans');
+const { songDetail, cleanLyrics, writeLyrics } = require('../../_domain/songs');
 
 // ── GEMA import helpers (merged from gema/import.js) ─────────────────────────
 // Matches the logic in scripts/import_gema.js — keep in sync if either changes.
@@ -117,9 +117,9 @@ function parseGermanDate(s) {
 }
 
 const MEDIA = {
-  audio:    makeMediaFn({ keyPrefix: 'audio/',    extraKey: 'listenUrl',   maxBytes: 50*1024*1024, actionPrefix: 'audio',    allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' }),
-  sheet:    makeMediaFn({ keyPrefix: 'sheets/',   extraKey: 'sheetUrl',    maxBytes: 20*1024*1024, actionPrefix: 'sheet',    mimePrefix: 'application/pdf' }),
-  playback: makeMediaFn({ keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50*1024*1024, actionPrefix: 'playback', allowedExts: new Set(['mp3','m4a','ogg','wav','flac']), mimePrefix: 'audio/' }),
+  audio:    makeMediaFn(MEDIA_CONFIGS.audio),
+  sheet:    makeMediaFn(MEDIA_CONFIGS.sheet),
+  playback: makeMediaFn(MEDIA_CONFIGS.playback),
 };
 
 module.exports = wrap(async function handler(req, res) {
@@ -150,6 +150,7 @@ module.exports = wrap(async function handler(req, res) {
   }
   const slug = getSlug(req);
 
+
   // ── GEMA import (merged from gema/import.js via vercel.json rewrite) ──────
   if (rawId === 'gema-import') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -176,7 +177,27 @@ module.exports = wrap(async function handler(req, res) {
       catch (e) { return res.status(400).json({ error: e.message }); }
       if (!csvRows.length) return res.status(400).json({ error: 'No data rows found in CSV' });
 
-      const songs = await sql`SELECT id, title FROM songs WHERE artist_id = ${band.id} AND deleted = false`;
+      // Identify which works in the CSV are "own compositions" — i.e. the owner's
+      // IP-Name-Nr appears as composer or lyricist in the rightholders table.
+      // ownerIpNr can come from the request (typed into the UI) or from bands.config.
+      const ownerIpNr = ownerIpNameNumber || band.config?.gemaIpNameNumber || null;
+      const workNums = csvRows.map(r => r.Werknummer);
+      // The three lookups are independent of each other.
+      const [songs, owned, existing] = await Promise.all([
+        sql`SELECT id, title FROM songs WHERE artist_id = ${band.id} AND deleted = false`,
+        ownerIpNr ? sql`
+          SELECT DISTINCT gw.gema_work_number
+          FROM gema_rightholders gr
+          JOIN gema_works gw ON gw.id = gr.gema_work_id
+          WHERE gw.artist_id = ${band.id}
+            AND gr.ip_name_number = ${String(ownerIpNr)}
+            AND gr.role = ANY(${GEMA_ROLE_TYPES})
+        ` : [],
+        sql`
+          SELECT gema_work_number FROM gema_works
+          WHERE artist_id = ${band.id} AND gema_work_number = ANY(${workNums})
+        `,
+      ]);
       // Two-pass title matching:
       //   1. exact uppercase — handles mixed-case song titles
       //   2. normalised     — ASCII-folds German umlauts so "Ü" == "UE", strips punctuation
@@ -184,35 +205,16 @@ module.exports = wrap(async function handler(req, res) {
       const songMapNorm  = new Map(songs.map(s => [normalizeTitle(s.title), s.id]));
       const songById     = new Map(songs.map(s => [s.id, s.title]));
 
-      // Identify which works in the CSV are "own compositions" — i.e. the owner's
-      // IP-Name-Nr appears as composer or lyricist in the rightholders table.
-      // ownerIpNr can come from the request (typed into the UI) or from bands.config.
-      const ownerIpNr = ownerIpNameNumber || band.config?.gemaIpNameNumber || null;
-      let ownWorkNums = new Set(); // gema_work_number values where owner is composer/lyricist
-      if (ownerIpNr) {
-        const owned = await sql`
-          SELECT DISTINCT gw.gema_work_number
-          FROM gema_rightholders gr
-          JOIN gema_works gw ON gw.id = gr.gema_work_id
-          WHERE gw.artist_id = ${band.id}
-            AND gr.ip_name_number = ${String(ownerIpNr)}
-            AND gr.role = ANY(${GEMA_ROLE_TYPES})
-        `;
-        // Index by both exact and base number (strip -NNN version suffix) for robustness
-        for (const { gema_work_number: wn } of owned) {
-          ownWorkNums.add(wn);
-          ownWorkNums.add(wn.replace(/-\d+$/, ''));
-        }
+      const ownWorkNums = new Set(); // gema_work_number values where owner is composer/lyricist
+      // Index by both exact and base number (strip -NNN version suffix) for robustness
+      for (const { gema_work_number: wn } of owned) {
+        ownWorkNums.add(wn);
+        ownWorkNums.add(wn.replace(/-\d+$/, ''));
       }
-
-      const workNums = csvRows.map(r => r.Werknummer);
-      const existing = await sql`
-        SELECT gema_work_number FROM gema_works
-        WHERE artist_id = ${band.id} AND gema_work_number = ANY(${workNums})
-      `;
       const existingSet = new Set(existing.map(w => w.gema_work_number));
 
       const rows = [];
+      const records = new Map(); // work number → DB record; a repeated number keeps the last row
       let matchedExact = 0, matchedNorm = 0, ownUnmatched = 0, otherProject = 0, newCount = 0, errors = 0;
 
       for (const r of csvRows) {
@@ -253,54 +255,77 @@ module.exports = wrap(async function handler(req, res) {
           isrc: r.ISRC || null,
         };
         rows.push(row);
+        records.set(r.Werknummer, {
+          row,
+          rec: type === 'info'
+            ? {
+                gema_work_number:    r.Werknummer,
+                title,
+                language:            row.language,
+                performers:          r['Interpretinnen / Interpreten'] || null,
+                gema_genre:          r.Gattung || null,
+                duration_sec:        row.durationSec,
+                first_registered_at: parseGermanDate(r['Erstmals geladen']),
+                last_updated_at:     parseGermanDate(r['Letzte Aktualisierung']),
+                song_id:             songId,
+              }
+            : {
+                gema_work_number:       r.Werknummer,
+                title,
+                iswc:                   row.iswc,
+                isrc:                   row.isrc,
+                publisher_work_numbers: r.Verlagswerknummern || null,
+                song_id:                songId,
+              },
+        });
+      }
 
-        if (!dryRun) {
-          try {
-            if (type === 'info') {
-              await sql`
-                INSERT INTO gema_works
-                  (artist_id, gema_work_number, title, language, performers, gema_genre,
-                   duration_sec, first_registered_at, last_updated_at, song_id)
-                VALUES
-                  (${band.id}, ${r.Werknummer}, ${title},
-                   ${row.language},
-                   ${r['Interpretinnen / Interpreten'] || null},
-                   ${r.Gattung || null},
-                   ${row.durationSec},
-                   ${parseGermanDate(r['Erstmals geladen'])},
-                   ${parseGermanDate(r['Letzte Aktualisierung'])},
-                   ${songId})
-                ON CONFLICT (artist_id, gema_work_number) DO UPDATE SET
-                  title               = EXCLUDED.title,
-                  language            = COALESCE(EXCLUDED.language,           gema_works.language),
-                  performers          = COALESCE(EXCLUDED.performers,          gema_works.performers),
-                  gema_genre          = COALESCE(EXCLUDED.gema_genre,          gema_works.gema_genre),
-                  duration_sec        = COALESCE(EXCLUDED.duration_sec,        gema_works.duration_sec),
-                  first_registered_at = COALESCE(EXCLUDED.first_registered_at, gema_works.first_registered_at),
-                  last_updated_at     = COALESCE(EXCLUDED.last_updated_at,     gema_works.last_updated_at),
-                  song_id             = COALESCE(gema_works.song_id, EXCLUDED.song_id)
-              `;
-            } else {
-              await sql`
-                INSERT INTO gema_works
-                  (artist_id, gema_work_number, title, iswc, isrc, publisher_work_numbers, song_id)
-                VALUES
-                  (${band.id}, ${r.Werknummer}, ${title},
-                   ${row.iswc}, ${row.isrc},
-                   ${r.Verlagswerknummern || null},
-                   ${songId})
-                ON CONFLICT (artist_id, gema_work_number) DO UPDATE SET
-                  title                  = EXCLUDED.title,
-                  iswc                   = COALESCE(EXCLUDED.iswc,                   gema_works.iswc),
-                  isrc                   = COALESCE(EXCLUDED.isrc,                   gema_works.isrc),
-                  publisher_work_numbers = COALESCE(EXCLUDED.publisher_work_numbers,  gema_works.publisher_work_numbers),
-                  song_id                = COALESCE(gema_works.song_id, EXCLUDED.song_id)
-              `;
+      if (!dryRun && records.size) {
+        const upsert = (db, recs) => (type === 'info' ? db`
+          INSERT INTO gema_works
+            (artist_id, gema_work_number, title, language, performers, gema_genre,
+             duration_sec, first_registered_at, last_updated_at, song_id)
+          SELECT ${band.id}, v.gema_work_number, v.title, v.language, v.performers, v.gema_genre,
+                 v.duration_sec, v.first_registered_at, v.last_updated_at, v.song_id
+          FROM jsonb_to_recordset(${sql.json(recs)}) AS v(
+            gema_work_number text, title text, language text, performers text, gema_genre text,
+            duration_sec int, first_registered_at date, last_updated_at date, song_id int)
+          ON CONFLICT (artist_id, gema_work_number) DO UPDATE SET
+            title               = EXCLUDED.title,
+            language            = COALESCE(EXCLUDED.language,           gema_works.language),
+            performers          = COALESCE(EXCLUDED.performers,          gema_works.performers),
+            gema_genre          = COALESCE(EXCLUDED.gema_genre,          gema_works.gema_genre),
+            duration_sec        = COALESCE(EXCLUDED.duration_sec,        gema_works.duration_sec),
+            first_registered_at = COALESCE(EXCLUDED.first_registered_at, gema_works.first_registered_at),
+            last_updated_at     = COALESCE(EXCLUDED.last_updated_at,     gema_works.last_updated_at),
+            song_id             = COALESCE(gema_works.song_id, EXCLUDED.song_id)
+        ` : db`
+          INSERT INTO gema_works
+            (artist_id, gema_work_number, title, iswc, isrc, publisher_work_numbers, song_id)
+          SELECT ${band.id}, v.gema_work_number, v.title, v.iswc, v.isrc, v.publisher_work_numbers, v.song_id
+          FROM jsonb_to_recordset(${sql.json(recs)}) AS v(
+            gema_work_number text, title text, iswc text, isrc text,
+            publisher_work_numbers text, song_id int)
+          ON CONFLICT (artist_id, gema_work_number) DO UPDATE SET
+            title                  = EXCLUDED.title,
+            iswc                   = COALESCE(EXCLUDED.iswc,                   gema_works.iswc),
+            isrc                   = COALESCE(EXCLUDED.isrc,                   gema_works.isrc),
+            publisher_work_numbers = COALESCE(EXCLUDED.publisher_work_numbers,  gema_works.publisher_work_numbers),
+            song_id                = COALESCE(gema_works.song_id, EXCLUDED.song_id)
+        `);
+        // One statement for the whole file. Only if that fails are the rows
+        // retried one by one, so the preview can say which row was at fault.
+        try {
+          await upsert(sql, [...records.values()].map(x => x.rec));
+        } catch (batchErr) {
+          await logger.warn('gema_import_batch_failed', { artistId: band.id, type, error: batchErr.message });
+          for (const { row, rec } of records.values()) {
+            try { await upsert(sql, [rec]); }
+            catch (err) {
+              await logger.error('gema_import_row_error', { artistId: band.id, type, workNumber: rec.gema_work_number, error: err.message });
+              row.error = err.message;
+              errors++;
             }
-          } catch (err) {
-            await logger.error('gema_import_row_error', { artistId: band.id, type, workNumber: r.Werknummer, error: err.message });
-            row.error = err.message;
-            errors++;
           }
         }
       }
@@ -332,14 +357,15 @@ module.exports = wrap(async function handler(req, res) {
     //   exact:    "15299392-001" → work (primary)
     //   base:     "15299392"     → work (fallback — GEMA versioning may differ between exports)
     // The base-number strip removes the trailing "-NNN" version suffix.
+    // Existing rightholder counts come with the same query.
     const allDbWorks = await sql`
-      SELECT id, gema_work_number, title FROM gema_works WHERE artist_id = ${band.id}
+      SELECT w.id, w.gema_work_number, w.title,
+             (SELECT count(*)::int FROM gema_rightholders r WHERE r.gema_work_id = w.id) AS rightholders
+      FROM gema_works w WHERE w.artist_id = ${band.id}
     `;
     const workByExact = new Map(allDbWorks.map(w => [w.gema_work_number, w]));
     const workByBase  = new Map(allDbWorks.map(w => [w.gema_work_number.replace(/-\d+$/, ''), w]));
     const findWork = wn => workByExact.get(wn) ?? workByBase.get(wn.replace(/-\d+$/, ''));
-
-    const workMap = new Map(); // csv work number → db work
 
     // Group rightholders by work number and resolve each to a DB work
     const byWork = new Map();
@@ -347,61 +373,66 @@ module.exports = wrap(async function handler(req, res) {
       if (!byWork.has(r.gema_work_number)) byWork.set(r.gema_work_number, []);
       byWork.get(r.gema_work_number).push(r);
     }
-    for (const wn of byWork.keys()) {
-      const w = findWork(wn);
-      if (w) workMap.set(wn, w);
-    }
-
-    // Count existing rightholders per resolved work for the preview
-    const resolvedWorkIds = [...new Set([...workMap.values()].map(w => w.id))];
-    const existingCounts = resolvedWorkIds.length ? await sql`
-      SELECT gema_work_id, count(*)::int AS count FROM gema_rightholders
-      WHERE gema_work_id = ANY(${resolvedWorkIds})
-      GROUP BY gema_work_id
-    ` : [];
-    const existingCountMap = new Map(existingCounts.map(r => [r.gema_work_id, r.count]));
 
     const rows = [];
+    const writes = new Map(); // db work id → { rows: [preview rows], rightholders }
     let worksFound = 0, worksMissing = 0, errors = 0;
 
     for (const [wn, rightholders] of byWork.entries()) {
-      const work  = workMap.get(wn);
+      const work  = findWork(wn);
       const found = !!work;
       if (found) worksFound++; else worksMissing++;
 
-      const existingCount = work ? (existingCountMap.get(work.id) ?? 0) : 0;
       const row = {
         gema_work_number: wn,
         title:            work?.title ?? '(not in database — run Werkinformationen import first)',
         found,
         rightholderCount: rightholders.length,
-        existingCount,
+        existingCount:    work ? work.rightholders : 0,
         // Include names for preview so the user can spot wrong data
         rightholders: rightholders.map(r => ({ name: r.name, role: r.role, ar_share: r.ar_share, society_ar: r.society_ar })),
       };
       rows.push(row);
+      if (found) {
+        // Two CSV numbers can resolve to the same work (exact and base match):
+        // the later one replaces the earlier, as the per-work loop did.
+        writes.set(work.id, { preview: [...(writes.get(work.id)?.preview ?? []), row], rightholders });
+      }
+    }
 
-      if (!dryRun && found) {
-        try {
-          await sql`DELETE FROM gema_rightholders WHERE gema_work_id = ${work.id}`;
-          for (const r of rightholders) {
-            await sql`
-              INSERT INTO gema_rightholders
-                (gema_work_id, name, ip_name_number, role, role_order, publisher_relation,
-                 ar_share, vr_share, ar_share_cumulated, vr_share_cumulated,
-                 society_ar, society_vr, represents_name, represents_ip, represents_role)
-              VALUES
-                (${work.id}, ${r.name}, ${r.ip_name_number}, ${r.role}, ${r.role_order},
-                 ${r.publisher_relation}, ${r.ar_share}, ${r.vr_share},
-                 ${r.ar_share_cumulated}, ${r.vr_share_cumulated},
-                 ${r.society_ar}, ${r.society_vr},
-                 ${r.represents_name}, ${r.represents_ip}, ${r.represents_role})
-            `;
+    if (!dryRun && writes.size) {
+      // Replace-all per work: delete the old rightholders and insert the new
+      // ones in one transaction, so a failure never leaves a work empty.
+      const replace = (ids, recs) => sql.begin(async tx => {
+        await tx`DELETE FROM gema_rightholders WHERE gema_work_id = ANY(${ids}::int[])`;
+        if (recs.length) await tx`
+          INSERT INTO gema_rightholders
+            (gema_work_id, name, ip_name_number, role, role_order, publisher_relation,
+             ar_share, vr_share, ar_share_cumulated, vr_share_cumulated,
+             society_ar, society_vr, represents_name, represents_ip, represents_role)
+          SELECT v.gema_work_id, v.name, v.ip_name_number, v.role, v.role_order, v.publisher_relation,
+                 v.ar_share, v.vr_share, v.ar_share_cumulated, v.vr_share_cumulated,
+                 v.society_ar, v.society_vr, v.represents_name, v.represents_ip, v.represents_role
+          FROM jsonb_to_recordset(${sql.json(recs)}) AS v(
+            gema_work_id int, name text, ip_name_number text, role text, role_order text,
+            publisher_relation text, ar_share numeric, vr_share numeric,
+            ar_share_cumulated numeric, vr_share_cumulated numeric,
+            society_ar text, society_vr text, represents_name text, represents_ip text,
+            represents_role text)
+        `;
+      });
+      const recsOf = (id, list) => list.map(r => ({ ...r, gema_work_id: id }));
+      try {
+        await replace([...writes.keys()], [...writes.entries()].flatMap(([id, w]) => recsOf(id, w.rightholders)));
+      } catch (batchErr) {
+        await logger.warn('gema_import_batch_failed', { artistId: band.id, type, error: batchErr.message });
+        for (const [id, w] of writes.entries()) {
+          try { await replace([id], recsOf(id, w.rightholders)); }
+          catch (err) {
+            await logger.error('gema_import_row_error', { artistId: band.id, type, workNumber: w.preview[0].gema_work_number, error: err.message });
+            for (const row of w.preview) row.error = err.message;
+            errors++;
           }
-        } catch (err) {
-          await logger.error('gema_import_row_error', { artistId: band.id, type, workNumber: wn, error: err.message });
-          row.error = err.message;
-          errors++;
         }
       }
     }
@@ -509,19 +540,31 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(updated);
   }
 
+
   // ── POST /api/:artist/songs/:id/arrangements/:arrId/activate ─────────────
+  // Deactivate the others, then activate this one — two statements in that
+  // order, because at most one version per song may be active (unique index).
+  // One transaction; the first touches nothing unless the target
+  // exists, so an unknown id changes nothing.
   if (action === 'arrangements' && arrId && arrSub === 'activate' && req.method === 'POST') {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
-    const [target] = await sql`SELECT id FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
-    if (!target) return res.status(404).json({ error: 'Arrangement not found' });
-    await sql.begin(async tx => {
-      await tx`UPDATE song_arrangements SET is_active = false WHERE song_id = ${songId} AND artist_id = ${band.id}`;
-      await tx`UPDATE song_arrangements SET is_active = true, updated_at = NOW() WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
-    });
-    const [updated] = await sql`SELECT * FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
+    const [, [updated]] = await sql.begin(tx => [
+      tx`
+        UPDATE song_arrangements SET is_active = false
+        WHERE song_id = ${songId} AND artist_id = ${band.id} AND is_active AND id <> ${arrId}
+          AND EXISTS (SELECT 1 FROM song_arrangements
+                      WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id})
+      `,
+      tx`
+        UPDATE song_arrangements SET is_active = true, updated_at = NOW()
+        WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}
+        RETURNING *
+      `,
+    ]);
+    if (!updated) return res.status(404).json({ error: 'Arrangement not found' });
     return res.json(updated);
   }
 
@@ -531,13 +574,15 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
-    const [arr] = await sql`SELECT id FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
+    const [arr] = await sql`
+      DELETE FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}
+      RETURNING id
+    `;
     if (!arr) return res.status(404).json({ error: 'Arrangement not found' });
-    await sql`DELETE FROM song_arrangements WHERE id = ${arrId} AND song_id = ${songId} AND artist_id = ${band.id}`;
     return res.status(204).end();
   }
 
-  // ── GET single song (used by stage view); includes arrangements ─────────────
+  // ── GET single song (song details, stage view); includes lyrics and arrangements
   if (!action && req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
     if (!band) return res.status(404).json({ error: 'Band not found' });
@@ -546,17 +591,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
     const sql = getDb();
-    const [[song], arrangements] = await Promise.all([
-      sql`
-        SELECT s.*,
-          g.iswc, g.gema_work_number, g.language AS gema_language
-        FROM songs s
-        LEFT JOIN LATERAL (
-          SELECT iswc, gema_work_number, language
-          FROM gema_works WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
-        ) g ON true
-        WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
-      `,
+    const [song, arrangements] = await Promise.all([
+      songDetail(sql, band.id, songId),
       sql`
         SELECT id, name, is_active, updated_at
         FROM song_arrangements
@@ -571,6 +607,8 @@ module.exports = wrap(async function handler(req, res) {
   }
 
   // ── DELETE song ───────────────────────────────────────────────────────────
+  // Soft delete: the row, its lyrics and its arrangements stay, so a restore
+  // brings all of it back. Flag and audit entry in one statement.
   if (!action) {
     if (req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -579,16 +617,17 @@ module.exports = wrap(async function handler(req, res) {
 
     const sql = getDb();
     const [song] = await sql`
-      UPDATE songs SET deleted = true
-      WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
-      RETURNING *
+      WITH s AS (
+        UPDATE songs SET deleted = true
+        WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
+        RETURNING *
+      ), logged AS (
+        INSERT INTO song_logs (artist_id, song_id, action, song_data)
+        SELECT artist_id, id, 'delete', to_jsonb(s) FROM s
+      )
+      SELECT id FROM s
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    await Promise.all([
-      sql`DELETE FROM song_arrangements WHERE song_id = ${songId} AND artist_id = ${band.id}`,
-      insertAuditLog(sql, band.id, songId, 'delete', song),
-    ]);
     return res.status(204).end();
   }
 
@@ -600,39 +639,55 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
 
     const sql = getDb();
-    const [[log], [existing]] = await Promise.all([
+    // The common case — the row is still there, flagged — is one statement:
+    // clear the flag and log it, if a delete record exists.
+    const [restored] = await sql`
+      WITH s AS (
+        UPDATE songs SET deleted = false
+        WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = true
+          AND EXISTS (SELECT 1 FROM song_logs
+                      WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete')
+        RETURNING *
+      ), logged AS (
+        INSERT INTO song_logs (artist_id, song_id, action, song_data)
+        SELECT artist_id, id, 'create', to_jsonb(s) FROM s
+      )
+      SELECT * FROM s
+    `;
+    if (restored) return res.status(201).json(restored);
+
+    // The row is gone (hard-deleted before soft delete existed): rebuild it
+    // from the last delete snapshot — unless the song is live, when there is
+    // nothing to restore.
+    const [[log], [live]] = await Promise.all([
       sql`
-        SELECT * FROM song_logs
+        SELECT song_data FROM song_logs
         WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete'
         ORDER BY changed_at DESC
         LIMIT 1
       `,
-      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = true`,
+      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id}`,
     ]);
     if (!log) return res.status(404).json({ error: 'No delete record found for this song' });
-
-    let song;
-    if (existing) {
-      [song] = await sql`
-        UPDATE songs SET deleted = false
-        WHERE id = ${songId} AND artist_id = ${band.id}
-        RETURNING *
-      `;
-    } else {
-      const d = log.song_data;
-      [song] = await sql`
+    if (live) return res.status(409).json({ error: 'Song is not deleted' });
+    const d = log.song_data;
+    const [song] = await sql`
+      WITH s AS (
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
-                           length_min, interpret, reference_interpret, comment, extra)
+                           bpm, length_min, interpret, reference_interpret, comment, language, extra)
         VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.heart ?? false}, ${d.key ?? null},
                 ${d.genre ?? null}, ${energyToScale(d.energy ?? d.tempo) ?? null}, ${d.time_signature ?? null},
-                ${d.length_min ?? null},
+                ${d.bpm ?? null}, ${d.length_min ?? null},
                 ${d.interpret ?? null}, ${d.reference_interpret ?? null},
-                ${d.comment ?? null}, ${d.extra ?? {}})
+                ${d.comment ?? null}, ${d.language ?? d.extra?.language ?? null},
+                ${(({ lyrics: _l, language: _g, ...rest }) => rest)(d.extra ?? {})})
         RETURNING *
-      `;
-    }
-
-    await insertAuditLog(sql, band.id, song.id, 'create', song);
+      ), logged AS (
+        INSERT INTO song_logs (artist_id, song_id, action, song_data)
+        SELECT artist_id, id, 'create', to_jsonb(s) FROM s
+      )
+      SELECT * FROM s
+    `;
     return res.status(201).json(song);
   }
 
@@ -688,39 +743,26 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ works, rightholders });
   }
 
-  // ── PUT/DELETE lyrics ─────────────────────────────────────────────────────
+
+  // ── PUT/DELETE lyrics (body-dispatched POSTs in songs.js do the same) ─────
   if (action === 'lyrics') {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
-
     const sql = getDb();
 
     if (req.method === 'PUT') {
-      const { lyrics } = req.body ?? {};
-      if (typeof lyrics !== 'string')
+      if (typeof req.body?.lyrics !== 'string')
         return res.status(400).json({ error: 'lyrics must be a string' });
-      if (lyrics.length > 20000)
-        return res.status(400).json({ error: 'Lyrics too long (max 20 000 characters)' });
-
-      const lyricsVal = lyrics.trim() || null;
-      const [song] = await sql`
-        UPDATE songs SET extra = extra || ${{ lyrics: lyricsVal }}
-        WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
-        RETURNING id, title
-      `;
+      const lyrics = cleanLyrics(req.body.lyrics);
+      if (lyrics.error) return res.status(400).json({ error: lyrics.error });
+      const song = await writeLyrics(sql, band.id, songId, lyrics.value);
       if (!song) return res.status(404).json({ error: 'Song not found' });
-
-      await insertAuditLog(sql, band.id, song.id, 'lyrics_update', { title: song.title });
       return res.json({ ok: true });
     }
 
     if (req.method === 'DELETE') {
-      const [song] = await sql`
-        SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false
-      `;
+      const song = await writeLyrics(sql, band.id, songId, null, 'lyrics_delete');
       if (!song) return res.status(404).json({ error: 'Song not found' });
-
-      await sql`UPDATE songs SET extra = extra - 'lyrics' WHERE id = ${songId} AND artist_id = ${band.id}`;
       return res.json({ ok: true });
     }
 
@@ -730,82 +772,10 @@ module.exports = wrap(async function handler(req, res) {
   // ── POST lyrics-suggest ───────────────────────────────────────────────────
   if (action === 'lyrics-suggest') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
-
-    const sql = getDb();
-    const [song] = await sql`
-      SELECT s.title, s.interpret, s.reference_interpret,
-        COALESCE(g.language, s.extra->>'language') AS language,
-        g.gema_genre AS genre
-      FROM songs s
-      LEFT JOIN LATERAL (
-        SELECT language, gema_genre FROM gema_works
-        WHERE song_id = s.id ORDER BY gema_work_number LIMIT 1
-      ) g ON true
-      WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
-    `;
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-
-    const artist = song.reference_interpret || song.interpret;
-    if (!artist) return res.status(400).json({ error: 'No artist on this song — cannot search for lyrics' });
-
-    if (await checkRateLimit(`lyrics-suggest:${band.id}:${songId}`, 3, 300))
-      return res.status(429).json({ error: 'Too many requests — wait a few minutes' });
-    if (await checkRateLimit(`lyrics-suggest-ip:${clientIp(req)}`, 10, 3600))
-      return res.status(429).json({ error: 'Too many requests — try again later' });
-
-    const title    = song.title.replace(/\b\w/g, c => c.toUpperCase());
-    const language = song.language || null;
-    const genre    = song.genre    || null;
-    const ctx      = { artistId: band.id, songId, title, artist, language, genre };
-    const found    = (lyrics, source) => res.json({ lyrics, source, sources: LYRICS_SOURCES });
-    const miss     = (aiSkipped = false) => res.json({ lyrics: null, sources: LYRICS_SOURCES, aiSkipped });
-
-    try {
-      const r = await fetch(
-        `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`,
-        { signal: AbortSignal.timeout(6000) }
-      );
-      if (r.ok) {
-        const data = await r.json();
-        if (data.lyrics?.length > 50) {
-          await logger.info('lyrics_suggest', { ...ctx, source: 'lyrics.ovh' });
-          return found(data.lyrics.trim(), 'lyrics.ovh');
-        }
-      }
-      await logger.info('lyrics_suggest_miss', { ...ctx, source: 'lyrics.ovh', status: r.status });
-    } catch (e) {
-      await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lyrics.ovh', error: e.message });
-    }
-
-    try {
-      const r = await fetch(
-        `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`,
-        { headers: { 'Lrclib-Client': 'smartist-band-tools' }, signal: AbortSignal.timeout(6000) }
-      );
-      if (r.ok) {
-        const data   = await r.json();
-        const lyrics = data.plainLyrics || plainFromSynced(data.syncedLyrics);
-        if (lyrics?.length > 50) {
-          await logger.info('lyrics_suggest', { ...ctx, source: 'lrclib' });
-          return found(lyrics.trim(), 'lrclib');
-        }
-      }
-      await logger.info('lyrics_suggest_miss', { ...ctx, source: 'lrclib', status: r.status });
-    } catch (e) {
-      await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lrclib', error: e.message });
-    }
-
-    const { lyrics, skipped } = await suggestLyricsWithAI(title, artist, { language, genre });
-    if (lyrics) {
-      await logger.info('lyrics_suggest', { ...ctx, source: 'ai' });
-      return found(lyrics, 'ai');
-    }
-
-    await logger.info('lyrics_suggest_miss', { ...ctx, source: 'ai', skipped: skipped ?? false });
-    return miss(skipped ?? false);
+    const result = await suggestLyrics(getDb(), band, songId, clientIp(req));
+    return res.status(result.status).json(result.body);
   }
 
   return res.status(404).json({ error: 'Not found' });

@@ -16,31 +16,57 @@ function _lyricsSetMode(mode) { // 'view' or 'edit'
   _lyricsSaveStatus('', false);
 }
 
-function openLyrics(sid) {
+// The song list carries has_lyrics only; the text is fetched with the song's
+// details the first time the modal opens (loadSongLyrics in common.js).
+async function _lyricsLoad(sid, song) {
+  try {
+    const text = await loadSongLyrics(artistSlug, song);
+    return currentLyricsSid === sid ? text : null; // modal moved on meanwhile
+  } catch {
+    if (currentLyricsSid === sid) _lyricsSaveStatus(t('songs.lyricsCouldNotFetch'), true);
+    return null;
+  }
+}
+
+async function openLyrics(sid) {
   const song  = songs.find(s => String(s.id) === String(sid));
   const title = song?.title ?? 'Lyrics';
-  const text  = song?.extra?.lyrics ?? '';
 
   currentLyricsSid = sid;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
-  document.getElementById('lyrics-view').textContent  = text;
-  document.getElementById('lyrics-edit').value        = text;
+  document.getElementById('lyrics-view').textContent  = song?.lyrics === undefined ? t('songs.loading') : (song.lyrics ?? '');
+  document.getElementById('lyrics-edit').value        = song?.lyrics ?? '';
   document.getElementById('lyrics-delete-confirm').style.display = 'none';
   document.getElementById('lyrics-delete-btn').style.display     = _viewMode ? 'none' : '';
   _lyricsSetMode('view');
   document.getElementById('lyrics-modal').classList.add('open');
+
+  const text = await _lyricsLoad(sid, song);
+  if (text === null) return;
+  document.getElementById('lyrics-view').textContent = text;
+  document.getElementById('lyrics-edit').value       = text;
 }
 
-function openLyricsEdit(sid) {
+async function openLyricsEdit(sid) {
   const song  = songs.find(s => String(s.id) === String(sid));
   const title = song?.title ?? 'Lyrics';
 
   currentLyricsSid = sid;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
-  document.getElementById('lyrics-edit').value        = song?.extra?.lyrics ?? '';
+  document.getElementById('lyrics-edit').value        = song?.lyrics ?? '';
   _lyricsSetMode('edit');
   document.getElementById('lyrics-modal').classList.add('open');
   document.getElementById('lyrics-edit').focus();
+
+  if (song?.lyrics !== undefined) return;
+  const edit = document.getElementById('lyrics-edit');
+  edit.disabled = true;
+  const text = await _lyricsLoad(sid, song);
+  edit.disabled = false;
+  if (text === null) return;
+  // Only fill it if nothing was typed while the text was loading.
+  if (!edit.value) edit.value = text;
+  edit.focus();
 }
 
 function closeLyrics() {
@@ -106,14 +132,15 @@ function _lyricsDiscardSuggestion() {
 }
 
 function startEditLyrics() {
-  document.getElementById('lyrics-edit').value = document.getElementById('lyrics-view').textContent;
+  const song = songs.find(s => String(s.id) === String(currentLyricsSid));
+  document.getElementById('lyrics-edit').value = song?.lyrics ?? '';
   _lyricsSetMode('edit');
   document.getElementById('lyrics-edit').focus();
 }
 
 function cancelEditLyrics() {
   const song = songs.find(s => String(s.id) === String(currentLyricsSid));
-  if (song?.extra?.lyrics) {
+  if (song?.lyrics) {
     _lyricsSetMode('view');
   } else {
     closeLyrics();
@@ -135,7 +162,7 @@ async function saveLyrics() {
 
   // New, unsaved song: stash lyrics in the panel; they persist when it's created.
   if (_isNewPanelSid(sid)) {
-    const hidden = document.querySelector(`input[data-key="extra.lyrics"][data-id="${sid}"]`);
+    const hidden = document.querySelector(`input[data-key="lyrics"][data-id="${sid}"]`);
     if (hidden) { hidden.value = text; markPanelEditDirty(); }
     closeLyrics();
     return;
@@ -164,11 +191,10 @@ async function saveLyrics() {
     // Update local cache and DOM
     const song = songs.find(s => String(s.id) === String(sid));
     const trimmed = text.trim() || null;
-    if (song) { song.extra = { ...(song.extra ?? {}), lyrics: trimmed }; }
+    if (song) { song.lyrics = trimmed; song.has_lyrics = !!trimmed; }
 
     const td = document.querySelector(`#row-${sid} .lyrics-cell`);
     if (td) {
-      td.querySelector('textarea').value = trimmed ?? '';
       const existing = td.querySelector('.lyrics-open-btn, .lyrics-add-btn');
       if (trimmed && existing?.classList.contains('lyrics-add-btn')) {
         existing.className = 'lyrics-open-btn';
@@ -225,11 +251,10 @@ async function confirmDeleteLyrics() {
     invalidateConfigCache();
 
     const song = songs.find(s => String(s.id) === String(sid));
-    if (song?.extra) delete song.extra.lyrics;
+    if (song) { song.lyrics = null; song.has_lyrics = false; }
 
     const td = document.querySelector(`#row-${sid} .lyrics-cell`);
     if (td) {
-      td.querySelector('textarea').value = '';
       const btn = td.querySelector('.lyrics-open-btn');
       if (btn) {
         btn.className = 'lyrics-add-btn';

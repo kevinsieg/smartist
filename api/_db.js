@@ -16,8 +16,18 @@ const postgres = require('postgres');
 // prepare: false — Neon's pooler keeps named prepared statements on its server
 // connections, so after a column changes type every `SELECT *` on that table
 // failed with "cached plan must not change result type" until the pool recycled.
+// Cost of that: postgres.js sends every query with parameters as Parse/Describe,
+// waits for the parameter types, then Bind/Execute — two round-trips — and a
+// query waiting for its description holds up the ones behind it. So on this
+// single connection (max: 1) queries started together with Promise.all still
+// run one after the other. Fewer statements (one CTE instead of three
+// queries) is what saves time here, not more parallelism.
+// connect_timeout: fail a request after 10 s instead of the 30 s default when
+// the database does not answer (a suspended compute that never wakes).
+// fetch_types stays on: without it postgres.js cannot send JS arrays as
+// parameters (`${ids}::int[]`), which every batch query here relies on.
 const DB = {
-  connect: url => postgres(url, { ssl: 'require', max: 1, prepare: false }),
+  connect: url => postgres(url, { ssl: 'require', max: 1, prepare: false, connect_timeout: 10 }),
 };
 // ─────────────────────────────────────────────────────────────────────────────
 

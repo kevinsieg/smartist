@@ -2,6 +2,12 @@
 const { getDb } = require('./_db');
 const logger = require('./_logger');
 
+// Keys carry an IP, an address or a song id, so most are used once and never
+// again: their rows would pile up forever. About one call in SWEEP_EVERY also
+// clears rows idle for longer than any window used here (the longest is an
+// hour). A failed sweep never fails the request.
+const SWEEP_EVERY = 200;
+
 // Sliding-window rate limiter backed by the rate_limits table.
 // Returns true if the request should be blocked (limit exceeded).
 // Each key gets one row; the window resets automatically when it expires.
@@ -9,7 +15,10 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
   const sql = getDb();
   const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
   try {
-    const [row] = await sql`
+    const sweep = Math.random() < 1 / SWEEP_EVERY
+      ? Promise.resolve(sql`DELETE FROM rate_limits WHERE window_start < now() - interval '1 day'`).catch(() => null)
+      : null;
+    const [[row]] = await Promise.all([sql`
       INSERT INTO rate_limits (key, window_start, count)
       VALUES (${key}, NOW(), 1)
       ON CONFLICT (key) DO UPDATE SET
@@ -22,7 +31,7 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
           ELSE rate_limits.count + 1
         END
       RETURNING count
-    `;
+    `, sweep]);
     return row.count > maxRequests;
   } catch (err) {
     if (isMissingRateLimitTable(err)) {

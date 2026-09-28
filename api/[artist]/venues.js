@@ -96,7 +96,7 @@ module.exports = wrap(async function handler(req, res) {
           AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
           AND EXISTS (
             SELECT 1 FROM gigs g
-            WHERE g.venue_id = venues.id AND g.deleted = false
+            WHERE g.venue_id = venues.id AND g.artist_id = venues.artist_id AND g.deleted = false
           )
         ORDER BY deleted ASC, ${orderBy}
         LIMIT ${limit} OFFSET ${offset}

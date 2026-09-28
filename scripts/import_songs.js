@@ -23,9 +23,13 @@
  *       "interpret": "Artist",          // optional
  *       "reference_interpret": "Ref",   // optional
  *       "comment": "Notes",             // optional
+ *       "language": "EN",               // optional, language code
+ *       "lyrics": "Verse 1…",           // optional, stored in song_lyrics
  *       "extra": { "capo": 2 }          // optional, band-specific fields
  *     }
  *   ]
+ *
+ * "lyrics" and "language" inside "extra" (the old export shape) are read too.
  *
  * Reads DATABASE_URL from .env.local in the project root if not set in env.
  */
@@ -118,10 +122,15 @@ function confirmDb(url) {
       continue;
     }
 
+    const { lyrics: extraLyrics, language: extraLanguage, ...extra } = s.extra ?? {};
+    const lyrics   = String(s.lyrics ?? extraLyrics ?? '').trim() || null;
+    const language = String(s.language ?? extraLanguage ?? '').trim().toUpperCase() || null;
+    // Song and lyrics in one statement.
     await sql`
+      WITH s AS (
       INSERT INTO songs
         (artist_id, title, active, heart, key, genre, energy, time_signature, bpm, length_min,
-         interpret, reference_interpret, comment, extra)
+         interpret, reference_interpret, comment, language, extra)
       VALUES (
         ${artist.id},
         ${String(s.title).trim()},
@@ -136,8 +145,13 @@ function confirmDb(url) {
         ${s.interpret           ?? null},
         ${s.reference_interpret ?? null},
         ${s.comment    ?? null},
-        ${s.extra      ?? {}}
+        ${language},
+        ${extra}
       )
+      RETURNING id, artist_id
+      )
+      INSERT INTO song_lyrics (song_id, artist_id, lyrics)
+      SELECT id, artist_id, ${lyrics}::text FROM s WHERE ${lyrics}::text IS NOT NULL
     `;
 
     imported++;

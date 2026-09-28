@@ -86,13 +86,24 @@ module.exports = wrap(async function handler(req, res) {
       `;
       return res.json(updated);
     }
-    if (cascade?.includes('setlists')) {
-      await sql`DELETE FROM setlists WHERE gig_id IN (SELECT id FROM gigs WHERE organizer_id = ${id} AND artist_id = ${artist.id})`;
+    // One transaction: a refused delete (409) leaves the cascaded
+    // gigs and setlists in place instead of already gone.
+    try {
+      await sql.begin(tx => [
+        ...(cascade?.includes('setlists') ? [tx`
+          DELETE FROM setlists
+          WHERE artist_id = ${artist.id}
+            AND gig_id IN (SELECT id FROM gigs WHERE organizer_id = ${id} AND artist_id = ${artist.id})
+        `] : []),
+        ...(cascade?.includes('gigs') ? [tx`DELETE FROM gigs WHERE organizer_id = ${id} AND artist_id = ${artist.id}`] : []),
+        tx`DELETE FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`,
+      ]);
+    } catch (e) {
+      if (e.code === '23503') {
+        return res.status(409).json({ error: 'This organizer is still linked to one or more gigs. Remove the organizer from those gigs first, then delete.' });
+      }
+      throw e;
     }
-    if (cascade?.includes('gigs')) {
-      await sql`DELETE FROM gigs WHERE organizer_id = ${id} AND artist_id = ${artist.id}`;
-    }
-    await sql`DELETE FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`;
     return res.json({ deleted: true, hard: true });
   }
 

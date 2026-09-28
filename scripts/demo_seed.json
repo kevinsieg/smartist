@@ -18,8 +18,8 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": "Our opener — high energy start",
+    "language": null,
     "extra": {
-     "lyrics": "[Verse 1]\nEngine turning, headlights burning\nDown the empty midnight road\nLeft the town behind me yearning\nDropped every heavy load\n\n[Chorus]\nMidnight drive, feel alive\nNothing left to hide\nMidnight drive, gonna survive\nRolling with the tide\n\n[Verse 2]\nStars above me, road below me\nMiles to go before the dawn\nSomething tells me where I'm going\nSomething pulls me on and on\n\n[Bridge]\nDon't look back, don't look back\nOnly forward, only free\nDon't look back, don't look back\nThis road was made for me",
      "listenUrl": "https://soundcloud.com/example/midnight-drive"
     },
     "deleted": false
@@ -39,8 +39,8 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": "B.B. King-style, key may drop to Eb live",
+    "language": null,
     "extra": {
-     "lyrics": "[Verse 1]\nSitting by the river, watching water roll\nGot a kind of emptiness that swallows up my soul\nPeople in this river town, they pass me every day\nNobody stops to listen to a word I have to say\n\n[Chorus]\nRiver town blues, got nowhere to go\nRiver town blues, got nothing to show\nThe river keeps on rolling, rolling to the sea\nAnd all I've got to keep me is this old melody\n\n[Verse 2]\nGrandma said this river town was built on solid ground\nBut the ground beneath my feet ain't making any sound\nEvery boat that passes leaves a wake upon the shore\nAnd I keep on waiting for something more",
      "listenUrl": "https://soundcloud.com/example/river-town-blues"
     },
     "deleted": false
@@ -60,9 +60,8 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": null,
-    "extra": {
-     "lyrics": "[Verse 1]\nWoke up to the morning light\nShadows dancing on the wall\nYesterday has gone with the night\nAnd I'm standing ten feet tall\n\n[Chorus]\nMorning light, morning light\nEverything is gonna be alright\nMorning light, shine on me\nSet this troubled spirit free\n\n[Verse 2]\nCoffee warm and window cold\nFrost on every pane of glass\nStories waiting to be told\nAbout a life that moves too fast\n\n[Outro]\nLet the morning light in\nLet the morning light in"
-    },
+    "language": null,
+    "extra": {},
     "deleted": false
    },
    {
@@ -80,9 +79,8 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": null,
-    "extra": {
-     "lyrics": "[Verse 1]\nBeen playing this old guitar\nSince the day that you left town\nEvery note rings like a scar\nEvery tune brings me down\n\n[Chorus]\nBroken strings, broken things\nThat's what a leaving lover brings\nBroken strings on a worn-out neck\nAll that's left of this wreck\n\n[Verse 2]\nThe sound hole swallows up my words\nThe tuning pegs are stripped and bare\nMy playing doesn't reach the birds\nJust hangs alone in empty air\n\n[Solo section]\n(guitar solo)\n\n[Outro]\nBroken strings... broken strings..."
-    },
+    "language": null,
+    "extra": {},
     "deleted": false
    },
    {
@@ -100,9 +98,9 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
-     "capo": 2,
-     "lyrics": "[Verse 1]\nBought a one-way ticket down\nAt the station past midnight\nLeft this cold and rainy town\nWith nothing but the clothes on my back\n\n[Chorus]\nLast train south, hear her blow\nTaking me where the warm winds blow\nLast train south, rolling free\nGonna find out who I'm meant to be\n\n[Verse 2]\nConductor punched my crumpled card\nSaid boy you're going quite a way\nI said I know it's gonna be hard\nBut I can't stand another grey day\n\n[Bridge]\nFields are rolling past the glass\nTowns I've never seen before\nAll the things I thought would last\nAre gone — I'm not keeping score"
+     "capo": 2
     },
     "deleted": false
    },
@@ -121,9 +119,8 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": null,
-    "extra": {
-     "lyrics": "[Verse 1]\nYou sold me dreams like a street magician\nDressed up promises in gold\nEverything went right on your commission\nUntil the whole story got too old\n\n[Pre-chorus]\nNow I see the wires\nNow I see the game\n\n[Chorus]\nSmoke and mirrors, smoke and mirrors\nThat's the only thing you know\nSmoke and mirrors, smoke and mirrors\nWatch it all disappear in the show\n\n[Verse 2]\nThe audience is leaving one by one\nThe curtain's fraying at the seams\nTurns out the magic was never done\nJust me believing in your schemes"
-    },
+    "language": null,
+    "extra": {},
     "deleted": false
    },
    {
@@ -141,9 +138,9 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
-     "capo": 0,
-     "lyrics": "[Verse 1]\nI've been down a hundred roads\nCarried a hundred different loads\nEvery town a different face\nEvery bar a different place\n\n[Chorus]\nThis is the wanderer's song\nI've been away so long\nHome is where the music plays\nThese are the wanderer's days\n\n[Verse 2]\nI've slept in barns and back seat cars\nWatched the highway stars go by\nEvery stranger shares their stories\nAnd every morning is a new sky\n\n[Bridge]\nThey say a rolling stone gathers no moss\nBut I've gathered miles and songs and nights\nEvery road I've crossed a different boss\nEvery dawn a different set of lights"
+     "capo": 0
     },
     "deleted": false
    },
@@ -162,9 +159,8 @@
     "interpret": null,
     "reference_interpret": null,
     "comment": null,
-    "extra": {
-     "lyrics": "[Verse 1]\nCome home to an empty room\nYour chair still at the table\nThe whole house smells like perfume\nAnd a half-written fable\n\n[Chorus]\nEmpty room, empty walls\nEmpty hallway, empty halls\nEmpty room echoes back\nEvery single thing I lack\n\n[Verse 2]\nYour records on the shelf up there\nI can't bring myself to play them\nYour coat still hanging by the stair\nI can't bring myself to move them\n\n[Guitar break]\n\n[Verse 3]\nMaybe someday I'll pack this up\nMaybe someday I'll move along\nBut tonight I'll drink this cup\nAnd sing this empty room song"
-    },
+    "language": null,
+    "extra": {},
     "deleted": false
    },
    {
@@ -182,6 +178,7 @@
     "interpret": "Deep Purple",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=aGgGhXP2KQk",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Highway_Star_(song)"
@@ -203,6 +200,7 @@
     "interpret": "Led Zeppelin",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=HQmmM_qwG4k",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Whole_Lotta_Love"
@@ -224,6 +222,7 @@
     "interpret": "The Beatles",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=45cYwDMibGo",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Come_Together"
@@ -245,6 +244,7 @@
     "interpret": "ZZ Top",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=JBL9h7XTQUU",
      "songinfoUrl": "https://en.wikipedia.org/wiki/La_Grange_(ZZ_Top_song)"
@@ -266,6 +266,7 @@
     "interpret": "Jimi Hendrix",
     "reference_interpret": null,
     "comment": "Slow intro, build up gradually",
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=pNzHxDHQgCk",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Little_Wing"
@@ -287,6 +288,7 @@
     "interpret": "Bob Dylan",
     "reference_interpret": "Jimi Hendrix",
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=TLV4_xaYynY",
      "songinfoUrl": "https://en.wikipedia.org/wiki/All_Along_the_Watchtower"
@@ -308,6 +310,7 @@
     "interpret": "Eagles",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=BciS5krYL80",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Hotel_California_(Eagles_song)"
@@ -329,6 +332,7 @@
     "interpret": "Bob Dylan",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 0,
      "listenUrl": "https://www.youtube.com/watch?v=BhcqlBMxCz0",
@@ -351,6 +355,7 @@
     "interpret": "Bob Dylan",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 2,
      "listenUrl": "https://www.youtube.com/watch?v=vWwgrjjIMXA",
@@ -373,6 +378,7 @@
     "interpret": "Robert Johnson",
     "reference_interpret": "Cream",
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=MFpO2AJI9mk",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Cross_Road_Blues"
@@ -394,6 +400,7 @@
     "interpret": "B.B. King",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=oica5jG7FpU",
      "songinfoUrl": "https://en.wikipedia.org/wiki/The_Thrill_Is_Gone"
@@ -415,6 +422,7 @@
     "interpret": "Stevie Ray Vaughan",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=pB3hFoEULHU",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Pride_and_Joy_(Stevie_Ray_Vaughan_song)"
@@ -436,6 +444,7 @@
     "interpret": "Albert King",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=5JlXHxS5lho",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Born_Under_a_Bad_Sign"
@@ -457,14 +466,13 @@
     "interpret": "Bill Withers",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "git2": false,
      "harp": false,
      "lead": null,
      "author": null,
-     "lyrics": "Ain't no sunshine when she's gone\nIt's not warm when she's away\nAin't no sunshine when she's gone\nAnd she's always gone too long\nAnytime she's goes away\n\nWonder this time where she's gone\nWonder if she's gone to stay\nAin't no sunshine when she's gone\nAnd this house just ain't no home\nAnytime she goes away\n\nAnd I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know\nHey, I ought to leave young thing alone\nBut ain't no sunshine when she's gone, whoa, whoa\n\nAin't no sunshine when she's gone\nOnly darkness every day\nAin't no sunshine when she's gone\nAnd this house just ain't no home\nAnytime she goes away\n\nAnytime she goes away\nAnytime she goes away\nAnytime she goes away",
      "gitCapo": null,
-     "language": "4/4",
      "sheetUrl": null,
      "banjoCapo": null,
      "listenUrl": "https://www.youtube.com/watch?v=CICIOJqEb5c",
@@ -489,6 +497,7 @@
     "interpret": "Old Crow Medicine Show",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 2,
      "listenUrl": "https://www.youtube.com/watch?v=9SJ5RopHLsE",
@@ -511,6 +520,7 @@
     "interpret": "John Denver",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 0,
      "listenUrl": "https://www.youtube.com/watch?v=1vrEljMfXYo",
@@ -533,6 +543,7 @@
     "interpret": "The Animals",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 0,
      "listenUrl": "https://www.youtube.com/watch?v=liZkHQmDIFQ",
@@ -555,6 +566,7 @@
     "interpret": "Neil Young",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 5,
      "listenUrl": "https://www.youtube.com/watch?v=An8oH3M-Leo",
@@ -577,6 +589,7 @@
     "interpret": "The Band",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=FFqb1I-hiHE",
      "songinfoUrl": "https://en.wikipedia.org/wiki/The_Weight_(song)"
@@ -598,6 +611,7 @@
     "interpret": "Sting",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 2,
      "listenUrl": "https://www.youtube.com/watch?v=fCaDs4Mf3jE",
@@ -620,6 +634,7 @@
     "interpret": "Stevie Wonder",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=0CFuCYNx-1g",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Superstition_(song)"
@@ -641,6 +656,7 @@
     "interpret": "Stevie Wonder",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=WtKd0jCHaBs",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Signed,_Sealed,_Delivered_I%27m_Yours"
@@ -662,6 +678,7 @@
     "interpret": "Aretha Franklin",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=6FOUqQt3Kg0",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Respect_(Otis_Redding_song)"
@@ -683,6 +700,7 @@
     "interpret": "Wilson Pickett",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=7dS9A3CaXpE",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Mustang_Sally"
@@ -704,6 +722,7 @@
     "interpret": "Ray Charles",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=Zl2DSPZjfO8",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Georgia_on_My_Mind"
@@ -725,6 +744,7 @@
     "interpret": "Bob Marley",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=nQ5R7kGVDSg",
      "songinfoUrl": "https://en.wikipedia.org/wiki/No_Woman,_No_Cry"
@@ -746,6 +766,7 @@
     "interpret": "Bob Marley",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 2,
      "listenUrl": "https://www.youtube.com/watch?v=OHBfMFqIFZQ",
@@ -768,14 +789,13 @@
     "interpret": "Radiohead",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "git2": false,
      "harp": false,
      "lead": null,
      "author": null,
-     "lyrics": "When you were here before\nCouldn't look you in the eye\nYou're just like an angel\nYour skin makes me cry\nYou float like a feather\nIn a beautiful world\nAnd I wish I was special\nYou're so fuckin' special\n\nBut I'm a creep, I'm a weirdo.\nWhat the hell am I doing here?\nI don't belong here.\n\nI don't care if it hurts\nI want to have control\nI want a perfect body\nI want a perfect soul\nI want you to notice\nWhen I'm not around\nYou're so fuckin' special\nI wish I was special\n\nBut I'm a creep, I'm a weirdo.\nWhat the hell am I doing here?\nI don't belong here.\n\nShe's running out the door,\nShe's running out\nShe's run run run run...\n\nWhatever makes you happy\nWhatever you want\nYou're so fuckin' special\nI wish I was special...\n\nBut I'm a creep, I'm a weirdo,\nWhat the hell am I doing here?\nI don't belong here.\nI don't belong here.",
      "gitCapo": null,
-     "language": "4/4",
      "sheetUrl": null,
      "banjoCapo": null,
      "listenUrl": "https://www.youtube.com/watch?v=XFkzRNyygfk",
@@ -800,6 +820,7 @@
     "interpret": "Counting Crows",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "capo": 5,
      "listenUrl": "https://www.youtube.com/watch?v=jhb9BjxJR8s",
@@ -822,6 +843,7 @@
     "interpret": "The Police",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=3T1c7GkzRQQ",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Roxanne_(The_Police_song)"
@@ -843,6 +865,7 @@
     "interpret": "U2",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=XmSdTa9kaiQ",
      "songinfoUrl": "https://en.wikipedia.org/wiki/With_or_Without_You"
@@ -864,6 +887,7 @@
     "interpret": "Eric Clapton",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=JOZBEGnl_G0",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Tears_in_Heaven"
@@ -885,6 +909,7 @@
     "interpret": "Eric Clapton",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=F4XF3GHMeW4",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Wonderful_Tonight"
@@ -906,6 +931,7 @@
     "interpret": "Ben E. King",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=hwZNL7QVJjE",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Stand_by_Me_(Ben_E._King_song)"
@@ -927,6 +953,7 @@
     "interpret": "Chuck Berry",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=ZgmGkCKiq2I",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Johnny_B._Goode"
@@ -948,14 +975,13 @@
     "interpret": "Nina Simone",
     "reference_interpret": null,
     "comment": "Open with this on acoustic nights",
+    "language": "EN",
     "extra": {
      "git2": true,
      "harp": true,
      "lead": "Olaf",
      "author": null,
-     "lyrics": null,
      "gitCapo": null,
-     "language": "EN",
      "sheetUrl": null,
      "banjoCapo": null,
      "listenUrl": "https://www.youtube.com/watch?v=oHs5pTt7V28",
@@ -980,6 +1006,7 @@
     "interpret": "Van Morrison",
     "reference_interpret": null,
     "comment": "Too overplayed — retired",
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=UfMGSQjGGsc",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Brown_Eyed_Girl"
@@ -1001,6 +1028,7 @@
     "interpret": "Robert Johnson",
     "reference_interpret": null,
     "comment": null,
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=v9Sl_p8FMkA",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Sweet_Home_Chicago"
@@ -1022,11 +1050,74 @@
     "interpret": "Toto",
     "reference_interpret": null,
     "comment": "Dropped — doesn't fit the setlist vibe",
+    "language": null,
     "extra": {
      "listenUrl": "https://www.youtube.com/watch?v=FTQbiNvZqaY",
      "songinfoUrl": "https://en.wikipedia.org/wiki/Africa_(Toto_song)"
     },
     "deleted": false
+   }
+  ],
+  "song_lyrics": [
+   {
+    "song_id": 1,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nEngine turning, headlights burning\nDown the empty midnight road\nLeft the town behind me yearning\nDropped every heavy load\n\n[Chorus]\nMidnight drive, feel alive\nNothing left to hide\nMidnight drive, gonna survive\nRolling with the tide\n\n[Verse 2]\nStars above me, road below me\nMiles to go before the dawn\nSomething tells me where I'm going\nSomething pulls me on and on\n\n[Bridge]\nDon't look back, don't look back\nOnly forward, only free\nDon't look back, don't look back\nThis road was made for me",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 2,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nSitting by the river, watching water roll\nGot a kind of emptiness that swallows up my soul\nPeople in this river town, they pass me every day\nNobody stops to listen to a word I have to say\n\n[Chorus]\nRiver town blues, got nowhere to go\nRiver town blues, got nothing to show\nThe river keeps on rolling, rolling to the sea\nAnd all I've got to keep me is this old melody\n\n[Verse 2]\nGrandma said this river town was built on solid ground\nBut the ground beneath my feet ain't making any sound\nEvery boat that passes leaves a wake upon the shore\nAnd I keep on waiting for something more",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 3,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nWoke up to the morning light\nShadows dancing on the wall\nYesterday has gone with the night\nAnd I'm standing ten feet tall\n\n[Chorus]\nMorning light, morning light\nEverything is gonna be alright\nMorning light, shine on me\nSet this troubled spirit free\n\n[Verse 2]\nCoffee warm and window cold\nFrost on every pane of glass\nStories waiting to be told\nAbout a life that moves too fast\n\n[Outro]\nLet the morning light in\nLet the morning light in",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 4,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nBeen playing this old guitar\nSince the day that you left town\nEvery note rings like a scar\nEvery tune brings me down\n\n[Chorus]\nBroken strings, broken things\nThat's what a leaving lover brings\nBroken strings on a worn-out neck\nAll that's left of this wreck\n\n[Verse 2]\nThe sound hole swallows up my words\nThe tuning pegs are stripped and bare\nMy playing doesn't reach the birds\nJust hangs alone in empty air\n\n[Solo section]\n(guitar solo)\n\n[Outro]\nBroken strings... broken strings...",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 5,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nBought a one-way ticket down\nAt the station past midnight\nLeft this cold and rainy town\nWith nothing but the clothes on my back\n\n[Chorus]\nLast train south, hear her blow\nTaking me where the warm winds blow\nLast train south, rolling free\nGonna find out who I'm meant to be\n\n[Verse 2]\nConductor punched my crumpled card\nSaid boy you're going quite a way\nI said I know it's gonna be hard\nBut I can't stand another grey day\n\n[Bridge]\nFields are rolling past the glass\nTowns I've never seen before\nAll the things I thought would last\nAre gone — I'm not keeping score",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 6,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nYou sold me dreams like a street magician\nDressed up promises in gold\nEverything went right on your commission\nUntil the whole story got too old\n\n[Pre-chorus]\nNow I see the wires\nNow I see the game\n\n[Chorus]\nSmoke and mirrors, smoke and mirrors\nThat's the only thing you know\nSmoke and mirrors, smoke and mirrors\nWatch it all disappear in the show\n\n[Verse 2]\nThe audience is leaving one by one\nThe curtain's fraying at the seams\nTurns out the magic was never done\nJust me believing in your schemes",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 7,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nI've been down a hundred roads\nCarried a hundred different loads\nEvery town a different face\nEvery bar a different place\n\n[Chorus]\nThis is the wanderer's song\nI've been away so long\nHome is where the music plays\nThese are the wanderer's days\n\n[Verse 2]\nI've slept in barns and back seat cars\nWatched the highway stars go by\nEvery stranger shares their stories\nAnd every morning is a new sky\n\n[Bridge]\nThey say a rolling stone gathers no moss\nBut I've gathered miles and songs and nights\nEvery road I've crossed a different boss\nEvery dawn a different set of lights",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 8,
+    "artist_id": 1,
+    "lyrics": "[Verse 1]\nCome home to an empty room\nYour chair still at the table\nThe whole house smells like perfume\nAnd a half-written fable\n\n[Chorus]\nEmpty room, empty walls\nEmpty hallway, empty halls\nEmpty room echoes back\nEvery single thing I lack\n\n[Verse 2]\nYour records on the shelf up there\nI can't bring myself to play them\nYour coat still hanging by the stair\nI can't bring myself to move them\n\n[Guitar break]\n\n[Verse 3]\nMaybe someday I'll pack this up\nMaybe someday I'll move along\nBut tonight I'll drink this cup\nAnd sing this empty room song",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 22,
+    "artist_id": 1,
+    "lyrics": "Ain't no sunshine when she's gone\nIt's not warm when she's away\nAin't no sunshine when she's gone\nAnd she's always gone too long\nAnytime she's goes away\n\nWonder this time where she's gone\nWonder if she's gone to stay\nAin't no sunshine when she's gone\nAnd this house just ain't no home\nAnytime she goes away\n\nAnd I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know, I know, I know, I know\nI know, I know\nHey, I ought to leave young thing alone\nBut ain't no sunshine when she's gone, whoa, whoa\n\nAin't no sunshine when she's gone\nOnly darkness every day\nAin't no sunshine when she's gone\nAnd this house just ain't no home\nAnytime she goes away\n\nAnytime she goes away\nAnytime she goes away\nAnytime she goes away",
+    "updated_at": "2026-09-22T10:03:37.874Z"
+   },
+   {
+    "song_id": 36,
+    "artist_id": 1,
+    "lyrics": "When you were here before\nCouldn't look you in the eye\nYou're just like an angel\nYour skin makes me cry\nYou float like a feather\nIn a beautiful world\nAnd I wish I was special\nYou're so fuckin' special\n\nBut I'm a creep, I'm a weirdo.\nWhat the hell am I doing here?\nI don't belong here.\n\nI don't care if it hurts\nI want to have control\nI want a perfect body\nI want a perfect soul\nI want you to notice\nWhen I'm not around\nYou're so fuckin' special\nI wish I was special\n\nBut I'm a creep, I'm a weirdo.\nWhat the hell am I doing here?\nI don't belong here.\n\nShe's running out the door,\nShe's running out\nShe's run run run run...\n\nWhatever makes you happy\nWhatever you want\nYou're so fuckin' special\nI wish I was special...\n\nBut I'm a creep, I'm a weirdo,\nWhat the hell am I doing here?\nI don't belong here.\nI don't belong here.",
+    "updated_at": "2026-09-22T10:03:37.874Z"
    }
   ],
   "venues": [

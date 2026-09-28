@@ -196,7 +196,7 @@ var COLS = [
   { key: 'extra.listenUrl',    label: '▶',                  type: 'listen',   cls: 'col-listen',   width: 52, get title() { return t('songs.colTitleListen'); }  },
   { key: 'extra.sheetUrl',     label: '≡',                  type: 'sheet',    cls: 'col-sheet',    width: 52, get title() { return t('songs.colTitleSheet'); }   },
   { key: 'extra.playbackUrl',  label: '▷',                  type: 'playback', cls: 'col-playback', width: 52, get title() { return t('songs.colTitlePlayback'); }       },
-  { key: 'extra.lyrics',       label: '¶',                  type: 'lyrics',   cls: 'col-lyrics',   width: 52, get title() { return t('songs.colTitleLyrics'); }                          },
+  { key: 'lyrics',             label: '¶',                  type: 'lyrics',   cls: 'col-lyrics',   width: 52, get title() { return t('songs.colTitleLyrics'); }                          },
   { key: 'has_arrangement',    label: '&#8862;',            type: 'arr',      cls: 'col-arr',      width: 44, get title() { return t('songs.colTitleArrangement'); }                      },
   { key: 'play_count',          get label() { return t('songs.colLabelPlays'); },     type: 'stat',   cls: 'col-plays',   width: 50  },
   { key: 'last_played_at',      get label() { return t('songs.colLabelLastLive'); },  type: 'stat',   cls: 'col-last',    width: 86  },
@@ -481,7 +481,7 @@ function renderListRowHtml(s) {
   var key       = escHtml(String(getVal(s, 'key') || ''));
   var tempo     = escHtml(energyLabel(getVal(s, 'energy')));
   var hasListen = !!getVal(s, 'extra.listenUrl');
-  var hasLyrics = !!(String(getVal(s, 'extra.lyrics') || '').trim());
+  var hasLyrics = !!(s.has_lyrics || s.lyrics);
 
   var borderCls = s.active ? 'songs-list-row--active' : 'songs-list-row--inactive';
   var titleCls  = s.active ? '' : ' songs-list-row-title--inactive';
@@ -560,14 +560,29 @@ function _vspSection(heading, cellsHtml) {
   return '<div class="vsp-section-label">' + heading + '</div><div class="vsp-grid">' + cellsHtml + '</div>';
 }
 
-function exportCsv() {
+// Lyrics are not in the song list: the export asks for them once, in one
+// request, and keeps them on the song objects for later.
+async function _ensureAllLyrics(list) {
+  if (!getToken() || !list.some(function(s) { return s.has_lyrics && s.lyrics === undefined; })) return;
+  var r = await apiFetch('/api/' + artistSlug + '/songs?lyrics=1');
+  if (!r.ok) throw new Error('lyrics fetch failed');
+  var byId = {};
+  (await r.json()).forEach(function(row) { byId[row.id] = row.lyrics || null; });
+  list.forEach(function(s) { if (s.lyrics === undefined && s.id in byId) s.lyrics = byId[s.id]; });
+}
+
+async function exportCsv() {
+  var list = getVisibleSongs();
+  try { await _ensureAllLyrics(list); }
+  catch { _setBulkStatus('error', t('songs.lyricsCouldNotFetch')); return; }
   exportTableCsv(
-    getVisibleSongs(),
+    list,
     COLS.map(function(c) {
       return {
         label: c.label,
         getValue: function(song) {
-          var raw = getVal(song, c.key);
+          // Language: the GEMA work's when one is linked, else the song's own.
+          var raw = c.key === 'gema_language' ? (song.gema_language || song.language) : getVal(song, c.key);
           if (c.type === 'bool') return (raw == null) ? '' : (raw ? 'true' : 'false');
           if (c.type === 'time') return minsToTime(raw);
           return (raw === null || raw === undefined) ? '' : String(raw);

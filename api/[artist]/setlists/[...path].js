@@ -8,6 +8,7 @@ const { sendEmail } = require('../../_email');
 const { wrap } = require('../../_handler');
 const { toCsv, buildZip } = require('../../_export');
 const logger = require('../../_logger');
+const { duplicateSetlist, setlistForShare } = require('../../_domain/setlists');
 
 module.exports = wrap(async function handler(req, res) {
   // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
@@ -26,7 +27,12 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     const sql = getDb();
     const [songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs] = await Promise.all([
-      sql`SELECT * FROM songs WHERE artist_id = ${band.id} ORDER BY id`,
+      // Lyrics live in their own table; in the CSV they stay a column of songs.
+      sql`
+        SELECT s.*, l.lyrics FROM songs s
+        LEFT JOIN song_lyrics l ON l.song_id = s.id
+        WHERE s.artist_id = ${band.id} ORDER BY s.id
+      `,
       // Arrangements are real, hand-entered data and this export is offered on
       // /profile as the last chance before permanent deletion — anything the
       // deletion destroys has to be in here.
@@ -72,53 +78,50 @@ module.exports = wrap(async function handler(req, res) {
 
   const sql = getDb();
 
-  // ── GET/PUT setlist ───────────────────────────────────────────────────────
+  // ── GET/PUT/DELETE setlist ────────────────────────────────────────────────
   if (!action) {
     if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
 
-    let band, anonymous = false;
-    if (req.method === 'PUT' || req.method === 'DELETE') {
-      band = await requireAuth(req, res, slug, 'member');
-      if (!band) return;
-    } else {
-      const { artist, user } = await getAccess(req, slug);
-      if (!artist) return res.status(404).json({ error: 'Band not found' });
+    if (req.method === 'GET') {
+      const { artist: band, user } = await getAccess(req, slug);
+      if (!band) return res.status(404).json({ error: 'Band not found' });
       // A single setlist by id is what a shared /stage link opens. The list of
       // setlists stays private, so nobody can enumerate them from here.
-      if (!user && !canOpenStage(artist))
+      if (!user && !canOpenStage(band))
         return res.status(401).json({ error: 'Sign in to view this' });
-      band = artist;
-      anonymous = !user;
-    }
-
-    const [[setlist], songs] = await Promise.all([
-      sql`
-        SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
-        FROM setlists s
-        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-        WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
-      `,
-      req.method === 'GET' ? sql`
-        SELECT songs.*, ss.position
-        FROM setlist_songs ss
-        JOIN songs ON ss.song_id = songs.id
-        WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${band.id}
-        ORDER BY ss.position
-      ` : null,
-    ]);
-    if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
-
-    if (req.method === 'DELETE') {
-      await sql`DELETE FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}`;
-      return res.json({ deleted: true });
-    }
-
-    if (req.method === 'GET') {
+      const [[setlist], songs] = await Promise.all([
+        sql`
+          SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
+          FROM setlists s
+          LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+          LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+          WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
+        `,
+        sql`
+          SELECT songs.*, ss.position,
+                 EXISTS (SELECT 1 FROM song_lyrics l WHERE l.song_id = songs.id) AS has_lyrics
+          FROM setlist_songs ss
+          JOIN songs ON ss.song_id = songs.id
+          WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${band.id}
+          ORDER BY ss.position
+        `,
+      ]);
+      if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
       // Visitors on a public stage link never see the band's private song
       // notes. The setlist's own comment stays: stage shows it as a subtitle.
-      if (anonymous) for (const s of songs) delete s.comment;
+      if (!user) for (const s of songs) delete s.comment;
       return res.json({ ...setlist, songs });
+    }
+
+    const band = await requireAuth(req, res, slug, 'member');
+    if (!band) return;
+
+    if (req.method === 'DELETE') {
+      const [deleted] = await sql`
+        DELETE FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id} RETURNING id
+      `;
+      if (!deleted) return res.status(404).json({ error: 'Setlist not found' });
+      return res.json({ deleted: true });
     }
 
     // PUT — update metadata + rebuild song list
@@ -134,39 +137,39 @@ module.exports = wrap(async function handler(req, res) {
     const gigId = rawGigId != null ? Number(rawGigId) : null;
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
-    const [songsOk, gigOk] = await Promise.all([
+    // Existence and ownership checks are independent of each other.
+    const [[setlist], songsOk, gigOk] = await Promise.all([
+      sql`SELECT id FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}`,
       ownsSongs(sql, band.id, validIds),
       ownsGig(sql, band.id, gigId),
     ]);
+    if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
     if (!songsOk) return res.status(400).json({ error: 'Invalid song_ids' });
     if (!gigOk)   return res.status(400).json({ error: 'Invalid gig_id' });
 
-    await sql`
-      UPDATE setlists SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
-      WHERE id = ${setlistId} AND artist_id = ${band.id}
-    `;
-    await sql`DELETE FROM setlist_songs WHERE setlist_id = ${setlistId}`;
-
-    if (validIds.length > 0) {
-      const setlistIds = validIds.map(() => setlistId);
-      const positions  = validIds.map((_, i) => i);
-      await sql`
+    // One transaction: a failed insert can no longer leave the
+    // setlist emptied by the delete before it.
+    const results = await sql.begin(tx => [
+      tx`
+        UPDATE setlists SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
+        WHERE id = ${setlistId} AND artist_id = ${band.id}
+      `,
+      tx`DELETE FROM setlist_songs WHERE setlist_id = ${setlistId}`,
+      ...(validIds.length ? [tx`
         INSERT INTO setlist_songs (setlist_id, song_id, position)
-        SELECT * FROM unnest(${setlistIds}::int[], ${validIds}::int[], ${positions}::int[])
-      `;
-    }
-
-    const [updated] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
-             COUNT(ss.song_id)::int AS song_count
-      FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
-      WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
-      GROUP BY s.id, g.title, g.date, g.location, v.name
-    `;
-    return res.json(updated);
+        SELECT ${setlistId}, u.song_id, u.ord - 1
+        FROM unnest(${validIds}::int[]) WITH ORDINALITY AS u(song_id, ord)
+      `] : []),
+      tx`
+        SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
+               ${validIds.length}::int AS song_count
+        FROM setlists s
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
+      `,
+    ]);
+    return res.json(results[results.length - 1][0]);
   }
 
   // ── POST duplicate ────────────────────────────────────────────────────────
@@ -176,42 +179,8 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
-    const [[source], sourceSongs] = await Promise.all([
-      sql`SELECT * FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}`,
-      sql`
-        SELECT song_id, position FROM setlist_songs
-        WHERE setlist_id = ${setlistId}
-        ORDER BY position
-      `,
-    ]);
-    if (!source) return res.status(404).json({ error: 'Setlist not found' });
-
-    const [copy] = await sql`
-      INSERT INTO setlists (artist_id, title, gig_id, comment)
-      VALUES (${band.id}, ${source.title ? source.title + ' (copy)' : null}, null, ${source.comment ?? null})
-      RETURNING *
-    `;
-
-    if (sourceSongs.length > 0) {
-      const copyIds   = sourceSongs.map(() => copy.id);
-      const songIds   = sourceSongs.map(s => s.song_id);
-      const positions = sourceSongs.map(s => s.position);
-      await sql`
-        INSERT INTO setlist_songs (setlist_id, song_id, position)
-        SELECT * FROM unnest(${copyIds}::int[], ${songIds}::int[], ${positions}::int[])
-      `;
-    }
-
-    const [created] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
-             COUNT(ss.song_id)::int AS song_count
-      FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
-      WHERE s.id = ${copy.id}
-      GROUP BY s.id, g.title, g.date, g.location, v.name
-    `;
+    const [created] = await duplicateSetlist(sql, band.id, setlistId);
+    if (!created) return res.status(404).json({ error: 'Setlist not found' });
     return res.status(201).json(created);
   }
 
@@ -222,25 +191,12 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
-    const [setlist] = await sql`
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
-      FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
-    `;
-    if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
-
-    const songs = await sql`
-      SELECT songs.*, ss.position
-      FROM setlist_songs ss
-      JOIN songs ON ss.song_id = songs.id
-      WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${band.id}
-      ORDER BY ss.position
-    `;
-
     const email = validateEmail(req.body?.email);
     if (!email) return res.status(400).json({ error: 'Valid email required' });
+
+    const { setlist, songs } = await setlistForShare(sql, band.id, setlistId);
+    if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
+
     // Mail to any address: capped per band and per IP so a session is not a relay.
     if (await checkRateLimit(`share:${band.id}`, 30, 3600)
         || await checkRateLimit(`share-ip:${clientIp(req)}`, 30, 3600))
