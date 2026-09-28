@@ -165,7 +165,7 @@ function _openSongPanelContent(item, panelEl) {
 
   // Async: setlist count
   // apiFetch, not fetch: this endpoint needs the token in a private workspace.
-  apiFetch('/api/' + artistSlug + '/songs?setlists=' + sid)
+  apiFetch('/api/' + artistSlug + '/songs/' + sid + '/setlists')
     .then(function(r) { return r.ok ? r.json() : []; })
     .then(function(ids) {
       var linkEl = document.getElementById('vsp-setlist-link');

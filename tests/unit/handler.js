@@ -43,7 +43,7 @@ async function withStubbedLogger(fn) {
 }
 
 async function run(r) {
-  const { testAsync, assertEq, B } = r;
+  const { testAsync, assert, assertEq, B } = r;
 
   console.log(B('\nhandler wrapper'));
 
@@ -71,7 +71,9 @@ async function run(r) {
       await wrap(async () => { throw new Error('database password leaked'); })(req, res);
 
       assertEq(res.statusCode, 500);
-      assertEq(res.body, { error: 'Internal server error' });
+      assertEq(res.body.error, 'Internal server error');
+      assert(/^[0-9a-f]{8}$/.test(res.body.requestId), 'a request id to match the log line');
+      assertEq(Object.keys(res.body).sort(), ['error', 'requestId'], 'nothing else leaks');
       assertEq(res.jsonCalls, 1);
       assertEq(logs.length, 1);
       assertEq(logs[0].level, 'error');

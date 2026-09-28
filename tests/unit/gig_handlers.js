@@ -13,6 +13,9 @@ stubLogger();
 const ARTIST = { id: 1, slug: 'test', name: 'Test Band', config: { plan: 'pro' } };
 const GIG = { id: 7, artist_id: 1, title: 'Open Stage', date: '2026-05-01', deleted: false };
 
+// The columns an INSERT/UPDATE writes through sql({ … }).
+const written = c => (c.values.find(v => v && v.helper) || {}).helper || {};
+
 function mp(rel) { return require.resolve(path.join(__dirname, '../..', rel)); }
 
 function mockRes() {
@@ -29,6 +32,8 @@ function loadHandler(route) {
   for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
   const calls = [];
   const sql = (strings, ...values) => {
+    // sql({ col: value }) — the insert/update helper: keep the object.
+    if (strings && typeof strings === 'object' && !Array.isArray(strings)) return { helper: strings };
     if (!Array.isArray(strings)) return { fragment: String(strings) };
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
     calls.push({ text, values });
@@ -117,7 +122,7 @@ async function run(r) {
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE gigs'));
     assert(update, 'no UPDATE issued');
-    assert(update.values.includes('Renamed'), 'new title not passed');
+    assertEq(written(update), { title: 'Renamed' }, 'only the title is written');
   });
 
   await testAsync('POST without an id creates a gig', async () => {

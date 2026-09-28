@@ -9,8 +9,16 @@ the schema is in `DATABASE.md`.
 ## Layers
 
 - **`api/`**: thin HTTP handlers. They parse, call domain code, respond.
-- **`api/_domain/`**: business logic, with no HTTP and no DOM. Most of
-  `api/config.js` is a router into these modules.
+- **`api/_domain/`**: business logic, no DOM. Most of `api/config.js` is a
+  router into these modules. Two shapes live here: the older account modules
+  (login, signup, reset, oauth, subscribe, admin, deletion handlers) still take
+  `req`/`res`; the newer ones (songs, gema, records, setlists) take `sql` and
+  plain values and return data or `{ status, body }`, so scripts can call them
+  too (`scripts/import_gema.js` runs the same import as the page). New code
+  follows the second shape.
+- **Round-trips, not parallelism**: with `prepare: false` on one connection,
+  `Promise.all` does not overlap queries. Fewer statements is what saves time
+  (see `api/_db.js`).
 - **`api/_*.js`**: infrastructure (db, email, storage, logger, tokens, rate
   limits). Each swappable provider sits behind one block at the top of its file.
 - **`app/js/services/`**: API client wrappers used by the standalone pages.

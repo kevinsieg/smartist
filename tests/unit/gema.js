@@ -3,8 +3,8 @@ const { stubLogger } = require('./_runner');
 
 stubLogger();
 
-const gemaImport =
-  require(path.join(__dirname, '../../api/[artist]/songs/[...path]'))._test;
+// Parsers shared by the pro-import route and scripts/import_gema.js.
+const gemaImport = require(path.join(__dirname, '../../api/_domain/gema'));
 
 function run(r) {
   const { test, assert, assertEq, B } = r;

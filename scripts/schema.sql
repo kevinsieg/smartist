@@ -330,11 +330,17 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
 -- ── Future migrations ────────────────────────────────────────────────────────
 -- Add ALTER TABLE … ADD COLUMN IF NOT EXISTS blocks here when the schema evolves.
 -- Each block should carry a comment with the date it was added so the history
--- is readable without git blame.
+-- is readable without git blame, and end by recording that date in
+-- schema_migrations. Set SCHEMA_VERSION in api/_env.js to the newest date:
+-- GET /api/config?action=health then says whether a database is behind, and
+-- `node scripts/apply_schema.js --check` lists what a database is missing.
 --
 -- Example:
 --   -- 2026-06-01: add public share token to setlists
 --   ALTER TABLE setlists ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE;
+--   INSERT INTO schema_migrations (id) VALUES ('2026-06-01') ON CONFLICT DO NOTHING;
+--
+-- Blocks older than the ledger (before 2026-09-29) record nothing.
 
 -- 2026-05-27: add street address fields to venues
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS street_number TEXT;
@@ -443,3 +449,37 @@ UPDATE song_arrangements SET is_active = false
     WHERE is_active ORDER BY song_id, updated_at DESC, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS song_arrangements_one_active_idx
   ON song_arrangements(song_id) WHERE is_active;
+
+-- 2026-09-28: references stay inside one band. Ids are one sequence across all
+-- bands, so a plain id FK accepts another band's row; these composite keys make
+-- the database refuse it, whatever the API checks. The (id, artist_id) unique
+-- keys are what the composite FKs point at. SET NULL (col) clears only the id,
+-- never artist_id (Postgres 15+). setlist_songs has no artist_id and is covered
+-- by _ownership.js only.
+ALTER TABLE venues     ADD CONSTRAINT venues_id_artist_key     UNIQUE (id, artist_id);
+ALTER TABLE organizers ADD CONSTRAINT organizers_id_artist_key UNIQUE (id, artist_id);
+ALTER TABLE gigs       ADD CONSTRAINT gigs_id_artist_key       UNIQUE (id, artist_id);
+ALTER TABLE songs      ADD CONSTRAINT songs_id_artist_key      UNIQUE (id, artist_id);
+ALTER TABLE gigs ADD CONSTRAINT gigs_venue_same_band_fkey
+  FOREIGN KEY (venue_id, artist_id) REFERENCES venues(id, artist_id) ON DELETE RESTRICT;
+ALTER TABLE gigs ADD CONSTRAINT gigs_organizer_same_band_fkey
+  FOREIGN KEY (organizer_id, artist_id) REFERENCES organizers(id, artist_id) ON DELETE RESTRICT;
+ALTER TABLE setlists ADD CONSTRAINT setlists_gig_same_band_fkey
+  FOREIGN KEY (gig_id, artist_id) REFERENCES gigs(id, artist_id) ON DELETE SET NULL (gig_id);
+ALTER TABLE song_logs ADD CONSTRAINT song_logs_song_same_band_fkey
+  FOREIGN KEY (song_id, artist_id) REFERENCES songs(id, artist_id) ON DELETE SET NULL (song_id);
+ALTER TABLE song_arrangements ADD CONSTRAINT song_arrangements_song_same_band_fkey
+  FOREIGN KEY (song_id, artist_id) REFERENCES songs(id, artist_id) ON DELETE CASCADE;
+ALTER TABLE song_lyrics ADD CONSTRAINT song_lyrics_song_same_band_fkey
+  FOREIGN KEY (song_id, artist_id) REFERENCES songs(id, artist_id) ON DELETE CASCADE;
+ALTER TABLE gema_works ADD CONSTRAINT gema_works_song_same_band_fkey
+  FOREIGN KEY (song_id, artist_id) REFERENCES songs(id, artist_id) ON DELETE SET NULL (song_id);
+
+-- 2026-09-30: migration ledger. Each block from here on ends by recording its
+-- date; the health check and `apply_schema.js --check` read it. Everything
+-- above is covered by this first entry.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id         TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO schema_migrations (id) VALUES ('2026-09-30') ON CONFLICT DO NOTHING;
