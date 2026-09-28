@@ -448,6 +448,8 @@ function renderWorkspace(cfg) {
   _wirePrivacyToggle('public-stage-toggle', 'public-stage-msg', 'publicStage',
     'settings.stageNowPublic', 'settings.stageNowPrivate');
 
+  _renderHiddenSongFields(cfg);
+
   renderFieldTags('display-fields', cfg.config && cfg.config.displayFields);
   renderFieldTags('filter-fields',  cfg.config && cfg.config.filterFields);
 
@@ -866,6 +868,37 @@ function renderPlan(cfg) {
       btn.disabled = false;
     }
   };
+}
+
+// Mirrors HIDEABLE_SONG_FIELDS in songs.js; read by songs, setlist, print and stage.
+var _HIDEABLE_SONG_FIELDS = [
+  { field: 'extra.lead',      label: 'songs.fieldLead' },
+  { field: 'extra.gitCapo',   label: 'songs.fieldGitCapo' },
+  { field: 'extra.banjoCapo', label: 'songs.fieldBanjoCapo' },
+  { field: 'extra.git2',      label: 'songs.fieldGuitar2' },
+  { field: 'extra.harp',      label: 'songs.fieldHarmonica' },
+];
+
+function _renderHiddenSongFields(cfg) {
+  var box = document.getElementById('hidden-song-fields');
+  if (!box) return;
+  var hidden = (cfg.config && cfg.config.hiddenSongFields) || [];
+  box.innerHTML = _HIDEABLE_SONG_FIELDS.map(function (f) {
+    return '<label class="config-check-row"><input type="checkbox" class="auth-action" value="' + f.field + '"' +
+      (hidden.indexOf(f.field) !== -1 ? ' checked' : '') + '> <span>' + escHtml(t(f.label)) + '</span></label>';
+  }).join('');
+  box.addEventListener('change', async function () {
+    var fields = Array.from(box.querySelectorAll('input:checked')).map(function (el) { return el.value; });
+    var msg = document.getElementById('hidden-song-fields-msg');
+    msg.textContent = t('settings.saving'); msg.className = 'save-msg';
+    if (await patchConfig({ hiddenSongFields: fields })) {
+      if (_profileCfg) _profileCfg.config.hiddenSongFields = fields;
+      msg.textContent = t('settings.saved');
+      setTimeout(function () { msg.textContent = ''; }, 2500);
+    } else {
+      msg.textContent = t('settings.saveFailed'); msg.className = 'save-msg err';
+    }
+  });
 }
 
 async function patchConfig(configUpdate) {

@@ -174,6 +174,12 @@ async function init() {
   }
 }
 
+// Copy of songFieldHidden in common.js — stage loads no common.js.
+function _stageHidden(cfg, key) {
+  var hidden = cfg && cfg.config && cfg.config.hiddenSongFields;
+  return Array.isArray(hidden) && hidden.indexOf(key) !== -1;
+}
+
 async function initSetlist(params, el, cfg) {
   const setlistId = Number(params.get('id'));
   if (!setlistId) {
@@ -200,8 +206,8 @@ async function initSetlist(params, el, cfg) {
   let totalMin = 0;
   const items = songs.map((song, i) => {
     totalMin += song.length_min || 0;
-    const gitCapo = song.extra && song.extra.gitCapo != null ? song.extra.gitCapo : null;
-    const bjCapo  = song.extra && song.extra.banjoCapo != null ? song.extra.banjoCapo : null;
+    const gitCapo = song.extra && song.extra.gitCapo != null && !_stageHidden(cfg, 'extra.gitCapo') ? song.extra.gitCapo : null;
+    const bjCapo  = song.extra && song.extra.banjoCapo != null && !_stageHidden(cfg, 'extra.banjoCapo') ? song.extra.banjoCapo : null;
     return `<li class="stage-song">
       <span class="stage-num">${i + 1}.</span>
       <a class="stage-song-title stage-song-link" href="/${cfg.slug}/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
@@ -270,8 +276,8 @@ async function initSong(params, el, cfg) {
   document.title = `smartist · ${song.title} · ${cfg.name}`;
 
   const extra   = song.extra || {};
-  const gitCapo = extra.gitCapo   != null ? extra.gitCapo   : null;
-  const bjCapo  = extra.banjoCapo != null ? extra.banjoCapo : null;
+  const gitCapo = extra.gitCapo   != null && !_stageHidden(cfg, 'extra.gitCapo')   ? extra.gitCapo   : null;
+  const bjCapo  = extra.banjoCapo != null && !_stageHidden(cfg, 'extra.banjoCapo') ? extra.banjoCapo : null;
   const audioRe = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
 
   // Subtitle: interpret · genre
@@ -283,7 +289,7 @@ async function initSong(params, el, cfg) {
     song.key         ? `<span class="stage-key">${escHtml(song.key)}</span>`          : '',
     gitCapo !== null ? `<span class="stage-capo">Git: ${escHtml(String(gitCapo))}</span>` : '',
     bjCapo  !== null ? `<span class="stage-capo">Bj: ${escHtml(String(bjCapo))}</span>`  : '',
-    extra.lead       ? `<span class="stage-capo">${escHtml(extra.lead)}</span>`        : '',
+    extra.lead && !_stageHidden(cfg, 'extra.lead') ? `<span class="stage-capo">${escHtml(extra.lead)}</span>`        : '',
     song.tempo       ? `<span class="stage-capo">${escHtml(song.tempo)}</span>`        : '',
     song.bpm         ? `<span class="stage-capo">${song.bpm} bpm</span>`               : '',
     song.length_min  ? `<span class="stage-capo">${formatLength(song.length_min)}</span>` : '',

@@ -1169,5 +1169,13 @@
   "workspaces.title": "Your workspaces",
   "workspaces.unauthHint": "You need to be logged in to see your workspaces.",
   "home.savePassword": "Save password",
-  "footer.impressum": "Impressum"
+  "footer.impressum": "Impressum",
+  "venues.favourite": "Favourite",
+  "venues.favouritesOnly": "Favourites only",
+  "setlist.originLabel": "Songs:",
+  "setlist.originAll": "All",
+  "setlist.originOwn": "Own songs",
+  "setlist.originCovers": "Covers",
+  "settings.hiddenSongFieldsLabel": "Hidden song fields",
+  "settings.hiddenSongFieldsHint": "Ticked fields disappear from songs, setlists, printouts and stage view. Existing values are kept."
 }

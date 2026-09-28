@@ -54,6 +54,8 @@ module.exports = wrap(async function handler(req, res) {
     if (country === false) return res.status(400).json({ error: 'country too long' });
     const comment = validateStr(body.comment, 2000);
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
+    if ('heart' in body && typeof body.heart !== 'boolean')
+      return res.status(400).json({ error: 'heart must be a boolean' });
     const [updated] = await sql`
       UPDATE organizers SET
         name = ${name},
@@ -67,6 +69,7 @@ module.exports = wrap(async function handler(req, res) {
         last_communication = ${body.last_communication ?? org.last_communication},
         comment = ${comment ?? org.comment},
         extra = ${org.extra}::jsonb || ${body.extra ?? {}}::jsonb,
+        heart = ${body.heart ?? org.heart},
         last_updated = NOW()
       WHERE id = ${id} AND artist_id = ${artist.id}
       RETURNING *

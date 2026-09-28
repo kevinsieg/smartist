@@ -292,6 +292,32 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Instrument fields a band hid in Settings (config.hiddenSongFields, e.g. 'extra.lead').
+function songFieldHidden(config, key) {
+  var hidden = config && config.hiddenSongFields;
+  return Array.isArray(hidden) && hidden.indexOf(key) !== -1;
+}
+
+// Favourite heart for list rows (songs, venues, organizers). onclick is a JS expression.
+function heartButtonHtml(on, onclick, title, readOnly) {
+  var cls = 'heart-btn' + (on ? ' heart-btn--on' : '');
+  if (readOnly) return on ? '<span class="' + cls + '">&#9829;</span>' : '<span class="heart-btn"></span>';
+  return '<button type="button" class="' + cls + '" aria-pressed="' + on + '"' +
+    ' title="' + escHtml(title) + '" aria-label="' + escHtml(title) + '"' +
+    ' onclick="event.stopPropagation();' + onclick + '">' +
+    (on ? '&#9829;' : '&#9825;') + '</button>';
+}
+
+// Flip item.heart locally, then persist(wanted). On failure the icon goes back, so what
+// you see always matches what is stored. persist must throw when the save fails.
+async function toggleHeart(item, persist, refresh) {
+  var wanted = !item.heart;
+  item.heart = wanted;
+  refresh();
+  try { await persist(wanted); }
+  catch { item.heart = !wanted; refresh(); }
+}
+
 // A4 at 14mm/16mm margins ≈ 757pt usable height.
 // Subtract: header ~52pt, h2 ~14pt, gaps ~10pt → ~681pt for songs.
 // Each row: title line (f*1.35) + meta line (f*0.65*1.1) + border/padding (~4pt)
@@ -356,12 +382,13 @@ function printSetlistSongs(songs, title, cfg) {
   var tsEl = document.getElementById('print-timestamp');
   if (tsEl) tsEl.textContent = date + ' — ' + time;
 
+  var hidden = function(key) { return songFieldHidden(cfg && cfg.config, key); };
   var items = songs.map(function(song, i) {
     var span = function(v, field, ttl) {
-      return v ? '<span data-field="' + escHtml(field) + '" title="' + escHtml(ttl) + '">' + escHtml(v) + '</span>' : '';
+      return v && !hidden(field) ? '<span data-field="' + escHtml(field) + '" title="' + escHtml(ttl) + '">' + escHtml(v) + '</span>' : '';
     };
-    var banjo = song.extra && song.extra.banjoCapo != null ? String(song.extra.banjoCapo) : null;
-    var git   = song.extra && song.extra.gitCapo   != null ? String(song.extra.gitCapo)   : null;
+    var banjo = song.extra && song.extra.banjoCapo != null && !hidden('extra.banjoCapo') ? String(song.extra.banjoCapo) : null;
+    var git   = song.extra && song.extra.gitCapo   != null && !hidden('extra.gitCapo')   ? String(song.extra.gitCapo)   : null;
     var capoParts = [
       banjo !== null && banjo !== '0' ? 'B ' + escHtml(banjo) : '',
       git   !== null && git   !== '0' ? 'G ' + escHtml(git)   : ''

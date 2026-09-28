@@ -26,6 +26,7 @@ module.exports = wrap(async function handler(req, res) {
     const { limit, offset } = parsePage(req);
     const q = (req.query.q || '').trim();
     const pattern = q ? `%${q}%` : null;
+    const favourite = req.query.favourite === '1';
     const rows = await sql`
       SELECT *, COUNT(*) OVER() AS total
       FROM organizers
@@ -36,7 +37,8 @@ module.exports = wrap(async function handler(req, res) {
           OR city    ILIKE ${pattern}
           OR country ILIKE ${pattern}
           OR email   ILIKE ${pattern})
-      ORDER BY deleted ASC, name ASC
+        AND (NOT ${favourite} OR heart)
+      ORDER BY deleted ASC, heart DESC, name ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
     if (!rows.length) {
