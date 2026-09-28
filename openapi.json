@@ -3,7 +3,7 @@
   "info": {
     "title": "Smartist API",
     "version": "1.1.0",
-    "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/{band}/auth` (email + password) or from Google sign-in. Older single-band installs also accept the band password itself. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
+    "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/{band}/auth` (email + password) or from Google sign-in. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
     "license": {
       "name": "AGPL-3.0-or-later",
       "url": "https://www.gnu.org/licenses/agpl-3.0.html"
@@ -24,7 +24,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Session token from login or Google sign-in (legacy installs: the band password)"
+        "description": "Session token from login or Google sign-in"
       }
     },
     "parameters": {
@@ -800,7 +800,7 @@
             "$ref": "#/components/parameters/band"
           }
         ],
-        "description": "Email + password login for a member of this band. Returns a session token for `Authorization: Bearer`, valid 8 hours (30 days with `rememberMe`). Changing or resetting the password ends every earlier session. Older single-band installs also accept `{ password }` alone (the band password); that returns `{ ok: true }` and the password itself is the bearer token. Rate-limited per IP.",
+        "description": "Email + password login for a member of this band. Returns a session token for `Authorization: Bearer`, valid 8 hours (30 days with `rememberMe`). Changing or resetting the password ends every earlier session. A password without an email is refused with 400 (`code: band_password_retired`). Rate-limited per IP.",
         "requestBody": {
           "required": true,
           "content": {

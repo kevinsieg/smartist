@@ -10,8 +10,8 @@
 // user token is a different shape keyed on APP_SECRET, so the check could never
 // pass. Every attempt ended on "Invalid or expired login link".
 //
-// It worked on the single-band deployments because those take the
-// ARTIST_ADMIN_EMAIL fallback, which mints a real magic token. Only the
+// It worked on the single-band deployments because those took the
+// ARTIST_ADMIN_EMAIL fallback (since removed), which minted a real magic token. Only the
 // multi-workspace branch was broken, and nobody had a public account until the
 // day this was found.
 

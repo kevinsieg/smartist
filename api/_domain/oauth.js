@@ -1,10 +1,10 @@
 const crypto = require('crypto');
 const { getDb } = require('../_db');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
-const { generateMagicToken, generateUserToken, TTL_8H } = require('../_token');
+const { generateUserToken, TTL_8H } = require('../_token');
 const logger = require('../_logger');
 const { resolveOAuthEmail, generateState, verifyState } = require('./identity');
-const { resolveArtist, getArtistsForUser } = require('./artist');
+const { getArtistsForUser } = require('./artist');
 const { createSignupToken } = require('./registration');
 const { origin } = require('./http');
 const { FB_GRAPH_VERSION } = require('../_constants');
@@ -151,17 +151,8 @@ async function oauthCallback(req, res) {
       `${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
   }
 
-  // Single-tenant fallback (ARTIST_ADMIN_EMAIL)
-  const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
-  if (!adminEmail || email.toLowerCase() !== adminEmail.toLowerCase()) {
-    await logger.warn('oauth_email_mismatch', { provider, email });
-    return fail('email_not_authorised');
-  }
-  const band = await resolveArtist('', sql);
-  if (!band || !band.password_hash) return fail('band_not_found');
-  await logger.info('oauth_login', { provider, email });
-  const token = generateMagicToken(band.password_hash);
-  return res.redirect(302, `${o}/login#magic=${encodeURIComponent(token)}`);
+  await logger.warn('oauth_email_mismatch', { provider, email });
+  return fail('email_not_authorised');
 }
 
 module.exports = { googleUrl, facebookUrl, oauthCallback };

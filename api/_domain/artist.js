@@ -6,7 +6,7 @@ const RESERVED_SLUGS = new Set([
 async function resolveArtist(slug, sql) {
   const s = slug || process.env.ARTIST_SLUG || '';
   if (!s) return null;
-  const [row] = await sql`SELECT id, slug, name, config, password_hash FROM artists WHERE slug = ${s} LIMIT 1`;
+  const [row] = await sql`SELECT id, slug, name, config FROM artists WHERE slug = ${s} LIMIT 1`;
   return row || null;
 }
 

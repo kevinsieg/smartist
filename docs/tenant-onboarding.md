@@ -150,15 +150,15 @@ DATABASE_URL=<neon-main-url> node scripts/setup.js
 The wizard will:
 1. Detect schema exists — skip
 2. Show existing artists — choose **new**
-3. Prompt for slug (e.g. `myband`), display name, and password (**minimum 6 characters**)
+3. Prompt for slug (e.g. `myband`), display name, and the admin's email and password (**minimum 8 characters**)
 4. Configure song display/filter fields and logo URL
-5. Write the `artists` row
+5. Write the `artists` row and the admin's `users` row
 
 The slug must match `ARTIST_SLUG` in the Vercel env vars exactly.
 
-Then create the first real account. The wizard's band password is a legacy
-shared login with no `users` row, so it cannot invite anyone or change its
-password from `/profile`:
+The admin signs in with that email and invites everyone else from Settings.
+A band that exists without any `users` row (created before accounts, or by
+hand) gets its first login with:
 
 ```bash
 DATABASE_URL=<neon-main-url> node scripts/create_user.js --artist myband --email you@example.com
@@ -171,8 +171,8 @@ DATABASE_URL=<neon-dev-url> node scripts/setup.js
 ```
 
 **Troubleshooting:**
-- *"syntax error at end of input"* when applying schema → run `psql $DATABASE_URL < scripts/schema.sql` then re-run setup.js
-- *"Password must be at least 6 characters"* → use a longer password; re-run the wizard
+- *"syntax error at end of input"* when applying schema → run `node scripts/apply_schema.js` then re-run setup.js
+- *"Password must be at least 8 characters"* → use a longer password; re-run the wizard
 - Wrong slug entered → fix with `psql $DATABASE_URL -c "UPDATE artists SET slug = 'correct' WHERE slug = 'wrong';"`
 
 ### Step 2 — Create the Vercel project
@@ -190,7 +190,6 @@ Vercel project → Settings → Environment Variables:
 |---|---|---|
 | `DATABASE_URL` | Neon `main` branch URL | Neon `dev` branch URL |
 | `APP_ORIGIN` | `https://smartist.band.example.com` | leave blank (uses auto preview URL) |
-| `ARTIST_ADMIN_EMAIL` | your email | your email |
 | `R2_BUCKET_NAME` | `smartist-myband` | `smartist-myband-dev` |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | prod R2 token | dev R2 token |
 | `R2_PUBLIC_URL` | prod bucket public URL | dev bucket public URL |

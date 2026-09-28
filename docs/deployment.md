@@ -13,7 +13,6 @@ The same code serves both; one environment variable decides which:
 | | `ARTIST_SLUG` set | `ARTIST_SLUG` absent |
 |---|---|---|
 | Config reports | `singleTenant: true` | `singleTenant: false` |
-| Login with no `users` rows | legacy band password | n/a · real accounts only |
 | After login, no workspaces | straight to `/<slug>/dashboard` | `/onboarding` (create a band) |
 | Visitor can sign up | no | yes |
 

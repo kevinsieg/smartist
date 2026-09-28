@@ -698,7 +698,7 @@ function openAcceptModal() {
   if (token) loadGigs();
   document.getElementById('accept-modal').classList.add('open');
   setTimeout(() => {
-    const focus = token ? 'setlist-title' : 'password-input';
+    const focus = token ? 'setlist-title' : 'signin-btn';
     document.getElementById(focus)?.focus();
   }, 50);
 }
@@ -708,35 +708,14 @@ function _closeAcceptModal() {
   document.getElementById('auth-error').className = 'status-msg';
   document.getElementById('save-error').className = 'status-msg';
   document.getElementById('new-gig-form').classList.remove('open');
-  document.getElementById('password-input').value = '';
   document.getElementById('setlist-title').value = '';
   document.getElementById('setlist-comment').value = '';
 }
 registerModal('accept-modal', _closeAcceptModal);
 
-document.getElementById('verify-btn').addEventListener('click', async () => {
-  const pw = document.getElementById('password-input').value.trim();
-  if (!pw) return;
-  const r = await fetch(`/api/${artistSlug}/auth`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pw }),
-  });
-  if (r.ok) {
-    sessionStorage.setItem(AUTH_TOKEN_KEY, pw);
-    document.getElementById('auth-step').style.display = 'none';
-    document.getElementById('save-step').style.display = 'block';
-    loadGigs();
-    setTimeout(() => document.getElementById('setlist-title')?.focus(), 50);
-  } else {
-    const err = document.getElementById('auth-error');
-    err.textContent = t('setlist.wrongPassword');
-    err.className = 'status-msg error';
-  }
-});
-
-document.getElementById('password-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('verify-btn').click();
+// Sessions come from the login page; it brings the visitor back here.
+document.getElementById('signin-btn').addEventListener('click', () => {
+  window.location.assign(loginPageUrl());
 });
 
 async function loadGigs() {
@@ -1637,7 +1616,6 @@ function _histShare(sid) {
   sid = String(sid);
   var inner = document.getElementById('view-side-panel-inner');
   if (!inner) return;
-  var hasToken = !!getToken();
 
   inner.innerHTML =
     '<div class="vsp-header">' +
@@ -1646,10 +1624,6 @@ function _histShare(sid) {
     '</div>' +
     '<p style="padding:0 1rem;font-size:0.84rem;color:var(--third-color);">' + t('setlist.shareSendPdf') + '</p>' +
     '<div style="padding:0 1rem;">' +
-      (!hasToken
-        ? '<div class="modal-field"><label for="hist-share-pw">' + t('setlist.sharePasswordLabel') + '</label>' +
-          '<input type="password" id="hist-share-pw" autocomplete="current-password" placeholder="' + t('setlist.passwordPlaceholder') + '"></div>'
-        : '') +
       '<div class="modal-field"><label for="hist-share-email">' + t('setlist.shareEmailLabel') + '</label>' +
         '<input type="email" id="hist-share-email" placeholder="' + t('setlist.shareEmailPlaceholder') + '"></div>' +
       '<div class="status-msg" id="hist-share-status"></div>' +
@@ -1659,8 +1633,7 @@ function _histShare(sid) {
       '</div>' +
     '</div>';
 
-  var focusId = hasToken ? 'hist-share-email' : 'hist-share-pw';
-  setTimeout(function() { var el = document.getElementById(focusId); if (el) el.focus(); }, 50);
+  setTimeout(function() { var el = document.getElementById('hist-share-email'); if (el) el.focus(); }, 50);
 }
 
 async function _histShareSend(sid) {
@@ -1675,14 +1648,7 @@ async function _histShareSend(sid) {
   }
 
   var token = getToken();
-  var pwEl = document.getElementById('hist-share-pw');
-  if (pwEl && pwEl.value.trim()) token = pwEl.value.trim();
-
-  if (!token) {
-    if (st) { st.textContent = t('setlist.sharePasswordRequired'); st.className = 'status-msg error'; }
-    if (pwEl) pwEl.focus();
-    return;
-  }
+  if (!token) { window.location.assign(loginPageUrl()); return; }
 
   var btn = document.getElementById('hist-share-send');
   if (btn) { btn.disabled = true; btn.textContent = t('setlist.shareSending'); }
