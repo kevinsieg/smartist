@@ -85,10 +85,12 @@ Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist histor
 | `id` | serial PK | |
 | `artist_id` | integer FK → artists CASCADE | |
 | `title` | text NOT NULL | |
-| `active` | boolean DEFAULT true | Controls visibility in setlist generator |
+| `active` | boolean NOT NULL DEFAULT true | Controls visibility in setlist generator |
+| `heart` | boolean NOT NULL DEFAULT false | Favourite; always included in auto-generation |
 | `key` | text | Musical key, e.g. `G`, `Am` |
 | `genre` | text | Genre or style grouping |
-| `tempo` | text | Descriptive tempo: `Slow`, `Medium`, `Fast` |
+| `energy` | smallint, 0–10 | 0 calm … 10 intense; shown as Low/Middle/High |
+| `time_signature` | text | e.g. `4/4`, `6/8` |
 | `bpm` | integer | Beats per minute |
 | `length_min` | real | Duration in decimal minutes — `3.5` = 3:30 |
 | `interpret` | text | Main performer associated with the song |
@@ -98,7 +100,7 @@ Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist histor
 | `extra` | jsonb DEFAULT `{}` | Artist-specific fields (capo, isrc, listenUrl, …) |
 | `deleted` | boolean NOT NULL DEFAULT false | Soft-delete flag |
 
-**Indexes:** `songs_list_idx (artist_id, deleted, title)` — serves every song query.
+**Indexes:** `songs_list_idx (artist_id, deleted, title)` — serves every song query; `songs_artist_id_idx`, `songs_band_active_idx (artist_id, active)`.
 
 ---
 
