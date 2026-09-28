@@ -31,6 +31,7 @@ function makeSql(route) {
     return route(text, values);
   };
   sql.begin = async fn => fn(sql);
+  sql.json = v => ({ json: v });
   sql.calls = calls;
   return sql;
 }
@@ -157,7 +158,8 @@ async function run(r) {
   console.log(B('\nsong links — no script, no foreign bucket objects'));
 
   const stored = { id: 10, title: 'Song', extra: { listenUrl: 'https://media.example.test/audio/1/a.mp3' } };
-  const songRoute = text => (text.startsWith('SELECT * FROM songs') ? [stored] : text.startsWith('UPDATE songs') ? [stored] : []);
+  // The PATCH batch is one WITH … UPDATE … RETURNING statement.
+  const songRoute = text => (text.startsWith('SELECT * FROM songs') ? [stored] : text.startsWith('WITH u AS') ? [stored] : []);
 
   for (const [label, extra, ok] of [
     ['a javascript: sheet link is refused', { sheetUrl: 'javascript:alert(1)' }, false],

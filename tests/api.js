@@ -1111,8 +1111,49 @@ async function testLyricsLifecycle(slug, token, songId) {
   await test('GET /songs/:id reflects saved lyrics', async () => {
     const { res, json } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
     assertStatus(res, json, 200);
-    assert(json.extra?.lyrics === testLyrics.trim(),
-      `lyrics mismatch — got: ${JSON.stringify(json.extra?.lyrics)}`);
+    assert(json.lyrics === testLyrics.trim(),
+      `lyrics mismatch — got: ${JSON.stringify(json.lyrics)}`);
+    assert(json.has_lyrics === true, 'has_lyrics should be true');
+    assert(!json.extra?.lyrics, 'lyrics must not be stored in extra any more');
+  });
+
+  await test('GET /songs list carries has_lyrics, not the text', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs`, AUTH);
+    assertStatus(res, json, 200);
+    const row = json.find(s => s.id === songId);
+    assert(row, 'song missing from list');
+    assert(row.has_lyrics === true, 'has_lyrics should be true in the list');
+    assert(row.lyrics === undefined && !row.extra?.lyrics, 'list must not carry lyrics text');
+  });
+
+  await test('GET /songs?lyrics=1 adds the text (CSV export)', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs?lyrics=1`, AUTH);
+    assertStatus(res, json, 200);
+    const row = json.find(s => s.id === songId);
+    assert(row?.lyrics === testLyrics.trim(), `lyrics mismatch — got: ${JSON.stringify(row?.lyrics)}`);
+  });
+
+  await test('lyrics edits are in the audit log', async () => {
+    const { res, json } = await GET(`/api/${slug}/song-logs`, AUTH);
+    assertStatus(res, json, 200);
+    assert(json.some(l => l.song_id === songId && l.action === 'lyrics_update'),
+      'expected a lyrics_update entry');
+  });
+
+  await test('PATCH /songs writes language as a column', async () => {
+    const { res, json } = await PATCH(`/api/${slug}/songs`, [{ id: songId, language: 'fr' }], { token });
+    assertStatus(res, json, 200);
+    const { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
+    assert(song.language === 'FR', `language — got: ${JSON.stringify(song.language)}`);
+    assert(!song.extra?.language, 'language must not be stored in extra');
+  });
+
+  await test('PATCH /songs accepts language inside extra from older clients', async () => {
+    const { res, json } = await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { language: 'DE' } }], { token });
+    assertStatus(res, json, 200);
+    const { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
+    assert(song.language === 'DE', `language — got: ${JSON.stringify(song.language)}`);
+    assert(!song.extra?.language, 'language must not be stored in extra');
   });
 
   await test('POST /songs lyrics_delete_id clears field → 200', async () => {
@@ -1125,8 +1166,8 @@ async function testLyricsLifecycle(slug, token, songId) {
   await test('GET /songs/:id confirms lyrics removed', async () => {
     const { res, json } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
     assertStatus(res, json, 200);
-    assert(!json.extra?.lyrics,
-      `expected no lyrics, got: ${JSON.stringify(json.extra?.lyrics)}`);
+    assert(!json.lyrics && json.has_lyrics === false,
+      `expected no lyrics, got: ${JSON.stringify(json.lyrics)}`);
   });
 
   await test('POST /songs lyrics_delete_id again (already empty) → 200', async () => {
@@ -1234,6 +1275,23 @@ async function testWrite(slug, token, firstSong, config) {
       const { res, json } = await POST(`/api/${slug}/songs/${song.id}/restore`, undefined, { token });
       assertStatus(res, json, 201);
       assert(json.id, 'missing id on restored song');
+    });
+
+    await test('POST /songs with lyrics and language → stored as columns', async () => {
+      const { res, json } = await POST(`/api/${slug}/songs`,
+        { title: '[TEST] With lyrics', active: false, language: 'en', extra: { lyrics: 'Line one\nLine two' } }, { token });
+      assertStatus(res, json, 201);
+      assert(json.has_lyrics === true, 'has_lyrics should be true');
+      assert(json.language === 'EN', `language — got ${JSON.stringify(json.language)}`);
+      assert(!json.extra?.lyrics, 'lyrics must not land in extra');
+      const { json: detail } = await GET(`/api/${slug}/songs/${json.id}`, AUTH);
+      assert(detail.lyrics === 'Line one\nLine two', `lyrics — got ${JSON.stringify(detail.lyrics)}`);
+      // Soft delete keeps lyrics and arrangements, so a restore brings them back.
+      await DELETE(`/api/${slug}/songs/${json.id}`, { token });
+      await POST(`/api/${slug}/songs/${json.id}/restore`, undefined, { token });
+      const { json: back } = await GET(`/api/${slug}/songs/${json.id}`, AUTH);
+      assert(back.lyrics === 'Line one\nLine two', 'lyrics lost across delete + restore');
+      await DELETE(`/api/${slug}/songs/${json.id}`, { token });
     });
 
     // Final cleanup — leave DB clean

@@ -20,6 +20,7 @@ Schema file: `scripts/schema.sql` (idempotent — safe to re-run against any dat
 artists
   │
   ├─── songs ──────────────────────── song_logs
+  │      │                        ├── song_lyrics
   │      │                        └── song_arrangements
   │      └─(via setlist_songs)──── setlists ──── gig_id (optional) ──┐
   │                                                                    │
@@ -77,7 +78,7 @@ One row per artist (a workspace). The API is keyed by `slug`, taken from the URL
 
 ### `songs`
 
-Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist history and audit log remain intact.
+Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist history and audit log remain intact; their lyrics and arrangements stay too, so a restore brings them back.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -93,10 +94,26 @@ Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist histor
 | `interpret` | text | Main performer associated with the song |
 | `reference_interpret` | text | Artist of a specific reference recording |
 | `comment` | text | Free-form notes |
-| `extra` | jsonb DEFAULT `{}` | Artist-specific fields (capo, isrc, language, listenUrl, …) |
+| `language` | text | Language code (`EN`, `DE`, …); a linked GEMA work's language shadows it |
+| `extra` | jsonb DEFAULT `{}` | Artist-specific fields (capo, isrc, listenUrl, …) |
 | `deleted` | boolean NOT NULL DEFAULT false | Soft-delete flag |
 
-**Indexes:** `songs_artist_id_idx`, `songs_band_active_idx (artist_id, active)`
+**Indexes:** `songs_list_idx (artist_id, deleted, title)` — serves every song query.
+
+---
+
+### `song_lyrics`
+
+One song's lyrics, kept out of `songs` so the song list stays small: lists return `has_lyrics`, and the text is read with one song's details (`GET /api/:artist/songs/:id`) or, for the CSV export, `GET /api/:artist/songs?lyrics=1`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `song_id` | integer PK FK → songs CASCADE | |
+| `artist_id` | integer FK → artists CASCADE | |
+| `lyrics` | text NOT NULL | Up to 20 000 characters; no row means no lyrics |
+| `updated_at` | timestamptz DEFAULT now() | |
+
+**Indexes:** `song_lyrics_artist_id_idx`
 
 ---
 
@@ -218,12 +235,12 @@ A saved setlist. Songs are stored in `setlist_songs`.
 
 Junction table: setlist ↔ song with explicit ordering. PK `(setlist_id, position)` enforces unique slots.
 
-`song_id` has **no** CASCADE — soft-deleting a song keeps its row in the DB so historical setlists remain intact.
+Soft-deleting a song keeps its row, so historical setlists remain intact. `song_id` cascades: songs are only hard-deleted together with their band.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `setlist_id` | integer PK FK → setlists CASCADE | |
-| `song_id` | integer FK → songs | No cascade |
+| `song_id` | integer FK → songs CASCADE | |
 | `position` | integer PK | 0-based display order |
 
 **Indexes:** `setlist_songs_song_id_idx (song_id)`
@@ -246,7 +263,7 @@ Versioned arrangement charts for a song. Each song can have multiple named versi
 | `created_at` | timestamptz DEFAULT NOW() | |
 | `updated_at` | timestamptz DEFAULT NOW() | |
 
-**Indexes:** `song_arrangements_song_id_idx`, `song_arrangements_artist_id_idx (artist_id, song_id)`
+**Indexes:** `song_arrangements_song_id_idx`, `song_arrangements_artist_id_idx (artist_id, song_id)`, `song_arrangements_one_active_idx` (unique `song_id` WHERE `is_active` — at most one active version per song)
 
 **Row shape** (one element of the `rows` array):
 
@@ -278,7 +295,7 @@ Append-only audit log. Every create, update, or soft-delete on a song writes a f
 | `id` | serial PK | |
 | `artist_id` | integer FK → artists CASCADE | Denormalised for fast per-artist queries |
 | `song_id` | integer FK → songs SET NULL, nullable | |
-| `action` | text CHECK IN ('create','update','delete') | |
+| `action` | text CHECK (`song_logs_action_known`) | `create`, `update`, `delete`, `lyrics_update`, `lyrics_delete`, `audio_replace`/`_delete`, `sheet_replace`/`_delete`, `playback_replace`/`_delete` |
 | `song_data` | jsonb NOT NULL | Complete `songs` row at time of action |
 | `changed_at` | timestamptz DEFAULT NOW() | |
 
@@ -366,7 +383,7 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `password_hash` text | bcrypt; NULL until an invite is accepted, or for Google-only accounts |
 | `role` text | `admin`, `member` or `viewer` |
 | `invite_token_hash`, `invite_expires_at` | SHA-256 of the emailed invite token; 7 days |
-| `invited_by` FK → `users` | |
+| `invited_by` FK → `users` SET NULL | |
 | `pending_email`, `email_change_token_hash`, `email_change_expires_at` | Email change waiting for confirmation from the new address (24 h) |
 | `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |
 | `created_at` timestamptz | |
@@ -393,7 +410,8 @@ Songs, venues, organizers, and gigs use `deleted = true` rather than physical de
 |---|---|---|
 | `songs` → `artists` | CASCADE | Song only makes sense within its artist |
 | `setlist_songs.setlist_id` → `setlists` | CASCADE | Junction row is meaningless without its setlist |
-| `setlist_songs.song_id` → `songs` | no cascade | Preserve historical setlist contents after song soft-delete |
+| `setlist_songs.song_id` → `songs` | CASCADE | Songs are soft-deleted; a hard delete only happens with the whole band |
+| `song_lyrics.song_id` → `songs` | CASCADE | Lyrics belong to their song |
 | `setlists.gig_id` → `gigs` | SET NULL | Setlist outlives its gig |
 | `gigs.venue_id` → `venues` | RESTRICT | Must clear link before removing venue |
 | `gigs.organizer_id` → `organizers` | RESTRICT | Must clear link before removing organizer |
@@ -401,7 +419,7 @@ Songs, venues, organizers, and gigs use `deleted = true` rather than physical de
 
 ### JSONB for extensible data
 
-`songs.extra` holds per-artist fields (capo, isrc, language, lyrics, …) without schema changes. `artists.config` drives the UI:
+`songs.extra` holds per-artist fields (capo, isrc, media URLs, …) without schema changes. Anything large or queried on its own gets a column or table instead (`songs.language`, `song_lyrics`). `artists.config` drives the UI:
 - `displayFields` / `filterFields` — song table columns and setlist generator filters
 - `logoUrl` — nav and print header logo
 - `publicCatalogue` / `publicStage` — opt-in anonymous access (both off unless `true`)
@@ -461,7 +479,7 @@ Full `artists.config` shape:
 
 ### Export all data for one artist
 
-`GET /api/:artist/export` (requires auth; rewritten to `/setlists/export`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `songs`, `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
+`GET /api/:artist/export` (requires auth; rewritten to `/setlists/export`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `songs` (with a `lyrics` and a `language` column), `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
 
 Built by `api/_export.js`. Soft-deleted rows are left out. Columns empty in every row are dropped, as are `artist_id` and `deleted`; `id`s stay so the files still join. `songs.extra` is flattened into its own columns (a key clashing with a real column becomes `extra_<key>`); other JSON columns are a JSON string in the cell. UTF-8 with BOM, CRLF, and cells starting with `= + - @` are prefixed with `'` so spreadsheets don't run them.
 
@@ -473,7 +491,7 @@ R2 file assets (audio, sheet PDFs, playback) are referenced by URL in `songs.ext
 
 ### Delete all data for one artist
 
-All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order, and `setlist_songs.song_id` has no cascade at all, so the song cascade fails while setlist entries still reference those songs.
+All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order. (`setlist_songs.song_id` cascades since 2026-09-29; the explicit steps below stay so the sequence also works on a database that has not had that migration.)
 
 **Safe deletion sequence — always use this pattern** (`scripts/delete_artist.js` runs the same steps):
 
@@ -499,8 +517,8 @@ WHERE organizer_id IN (SELECT id FROM organizers WHERE artist_id = (SELECT id FR
 DELETE FROM setlists
 WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
 
--- Single delete cascades to all nine artist-scoped tables automatically:
---   venues, organizers, gigs, songs, song_arrangements, setlists, song_logs, users,
+-- Single delete cascades to all artist-scoped tables automatically:
+--   venues, organizers, gigs, songs, song_lyrics, song_arrangements, setlists, song_logs, users,
 --   gema_works → gema_rightholders, setlist_songs (via setlists)
 DELETE FROM artists WHERE slug = 'yourslug';
 
@@ -515,14 +533,24 @@ In a shared-DB multi-tenant setup, this leaves all other artists' data completel
 
 ## Common query patterns
 
-**Songs with GEMA data** — used by `GET /api/config` (public config response):
+**Song list** — `listSongs` in `api/_domain/songs.js` (`GET /api/:artist/songs`). Play counts are aggregated once per band, lyrics are a flag:
 ```sql
-SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language
+WITH plays AS (
+  SELECT ss.song_id, count(DISTINCT ss.setlist_id)::int AS play_count, max(sl.created_at) AS last_played_at
+  FROM setlists sl JOIN setlist_songs ss ON ss.setlist_id = sl.id
+  WHERE sl.artist_id = $1
+  GROUP BY ss.song_id
+)
+SELECT s.*, COALESCE(p.play_count, 0) AS play_count, p.last_played_at,
+       g.iswc, g.gema_work_number, g.language AS gema_language,
+       (l.song_id IS NOT NULL) AS has_lyrics
 FROM songs s
+LEFT JOIN plays p       ON p.song_id = s.id
+LEFT JOIN song_lyrics l ON l.song_id = s.id
 LEFT JOIN LATERAL (
   SELECT iswc, gema_work_number, language
   FROM gema_works
-  WHERE song_id = s.id
+  WHERE song_id = s.id AND artist_id = s.artist_id
   ORDER BY gema_work_number
   LIMIT 1
 ) g ON true
