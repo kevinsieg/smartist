@@ -62,10 +62,11 @@ module.exports = wrap(async function handler(req, res) {
                       'deadline', 'season', 'preferred_period'];
     const sortField = SORTABLE.includes(req.query.sort) ? req.query.sort : null;
     const sortDir   = req.query.dir === 'desc' ? sql`DESC` : sql`ASC`;
-    // Without an explicit sort the old order stands: placeholders first, then by name.
+    // Favourites always lead; without an explicit sort, placeholders next, then by name.
     const orderBy   = sortField
-      ? sql`${sql(sortField)} ${sortDir} NULLS LAST, name ASC`
-      : sql`category = 'placeholder' DESC, name ASC`;
+      ? sql`heart DESC, ${sql(sortField)} ${sortDir} NULLS LAST, name ASC`
+      : sql`heart DESC, category = 'placeholder' DESC, name ASC`;
+    const favourite = req.query.favourite === '1';
     // A–Z jump: single letter, or '#' for names starting with anything else.
     const rawLetter = (req.query.letter || '').trim();
     const letter    = /^[A-Za-z]$/.test(rawLetter) ? `${rawLetter}%` : null;
@@ -91,6 +92,7 @@ module.exports = wrap(async function handler(req, res) {
           AND (${country}::text  IS NULL OR country  ILIKE ${country})
           AND (${letter}::text IS NULL OR name ILIKE ${letter})
           AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
+          AND (NOT ${favourite} OR heart)
           AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
           AND EXISTS (
             SELECT 1 FROM gigs g
@@ -114,6 +116,7 @@ module.exports = wrap(async function handler(req, res) {
           AND (${country}::text  IS NULL OR country  ILIKE ${country})
           AND (${letter}::text IS NULL OR name ILIKE ${letter})
           AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
+          AND (NOT ${favourite} OR heart)
           AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
         ORDER BY deleted ASC, ${orderBy}
         LIMIT ${limit} OFFSET ${offset}
@@ -218,6 +221,8 @@ module.exports = wrap(async function handler(req, res) {
         if (value === false || !isDate(value)) { error = `${field} must be a date (YYYY-MM-DD)`; break; }
         next[field] = value;
       }
+      if (!error && 'heart' in update && typeof update.heart !== 'boolean') error = 'heart must be a boolean';
+      next.heart = 'heart' in update ? update.heart : venue.heart;
       if (error) rejected.push({ id, error });
       else accepted.push(next);
     }
@@ -239,13 +244,14 @@ module.exports = wrap(async function handler(req, res) {
             comment            = u.comment,
             last_communication = u.last_communication,
             deadline           = u.deadline,
+            heart              = u.heart,
             last_updated       = NOW()
           FROM unnest(${col('id')}::int[], ${col('status')}::text[], ${col('category')}::text[],
                       ${col('booking_channel')}::text[], ${col('remuneration')}::text[], ${col('season')}::text[],
                       ${col('preferred_period')}::text[], ${col('comment')}::text[],
-                      ${col('last_communication')}::date[], ${col('deadline')}::date[])
+                      ${col('last_communication')}::date[], ${col('deadline')}::date[], ${col('heart')}::bool[])
                AS u(id, status, category, booking_channel, remuneration, season,
-                    preferred_period, comment, last_communication, deadline)
+                    preferred_period, comment, last_communication, deadline, heart)
           WHERE venues.id = u.id AND venues.artist_id = ${artist.id} AND venues.deleted = false
           RETURNING venues.id`;
         count = updated.length;

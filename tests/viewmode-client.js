@@ -47,15 +47,18 @@ function loadScript(relPath, columnsVar) {
     getToken() { return ctx.__vm ? null : 'tok'; },
     t(k) { return k; },
     escHtml(s) { return String(s == null ? '' : s); },
+    heartButtonHtml(on, onclick, title, readOnly) { return readOnly ? '<span>' : '<button onclick="' + onclick + '">'; },
     document: { addEventListener() {}, getElementById() { return null; } },
     window: {},
   };
   vm.createContext(ctx);
   vm.runInContext(src, ctx, { filename: relPath });
   const cols = ctx[columnsVar];
-  const actions = cols.find(c => c.actions);
+  // The last actions column holds the edit button; a leading one may hold the heart.
+  const actionCols = cols.filter(c => c.actions);
+  const actions = actionCols[actionCols.length - 1];
   assert(actions && typeof actions.render === 'function', `${columnsVar}: actions column not found`);
-  return { ctx, actions };
+  return { ctx, actions, heart: actionCols.length > 1 ? actionCols[0] : null };
 }
 
 (async () => {
@@ -83,12 +86,18 @@ function loadScript(relPath, columnsVar) {
 
   // ── venues ──────────────────────────────────────────────────────────────────
   {
-    const { ctx, actions } = loadScript('app/js/venues.js', 'VENUE_COLUMNS');
+    const { ctx, actions, heart } = loadScript('app/js/venues.js', 'VENUE_COLUMNS');
     const active = { id: 5, deleted: false, category: 'club' };
 
     test('venues authed: edit button present', () => {
       ctx.__vm = false;
       assert(actions.render(active).includes('openEditModal'), 'edit missing');
+    });
+    test('venues: heart toggles when authed, read-only in view mode', () => {
+      ctx.__vm = false;
+      assert(heart.render(active).includes('_toggleVenueHeart'), 'toggle missing');
+      ctx.__vm = true;
+      assert(!heart.render(active).includes('_toggleVenueHeart'), 'toggle still present');
     });
     test('venues view mode: edit button hidden', () => {
       ctx.__vm = true;
@@ -98,12 +107,18 @@ function loadScript(relPath, columnsVar) {
 
   // ── organizers ──────────────────────────────────────────────────────────────
   {
-    const { ctx, actions } = loadScript('app/js/organizers.js', 'ORGANIZER_COLUMNS');
+    const { ctx, actions, heart } = loadScript('app/js/organizers.js', 'ORGANIZER_COLUMNS');
     const active = { id: 9, deleted: false };
 
     test('organizers authed: edit button present', () => {
       ctx.__vm = false;
       assert(actions.render(active).includes('openEditModal'), 'edit missing');
+    });
+    test('organizers: heart toggles when authed, read-only in view mode', () => {
+      ctx.__vm = false;
+      assert(heart.render(active).includes('_toggleOrganizerHeart'), 'toggle missing');
+      ctx.__vm = true;
+      assert(!heart.render(active).includes('_toggleOrganizerHeart'), 'toggle still present');
     });
     test('organizers view mode: edit button hidden', () => {
       ctx.__vm = true;

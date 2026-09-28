@@ -41,6 +41,7 @@ var FEEL_LABELS = [
 
 var artistSlug = '';
 var bandConfig = null;
+var _bandName = '';
 var allSongs = [];
 var currentSet = [];
 var _activeView = 'generator';
@@ -80,6 +81,7 @@ async function init() {
     const cfg = await loadConfig();
     artistSlug   = cfg.slug;
     bandConfig = cfg.config ?? {};
+    _bandName  = cfg.name || '';
     allSongs   = cfg.songs ?? [];
     applyNav(cfg.name, cfg.config);
     _viewMode = isViewMode();
@@ -139,12 +141,26 @@ function getFieldValue(song, field) {
 
 var activeFilters = new Map(); // field -> Set<value>
 
+// Own song: no interpret, or the band itself. Everything else counts as a cover.
+function _isOwnSong(song) {
+  const who = (song.interpret || '').trim().toLowerCase();
+  return !who || who === _bandName.trim().toLowerCase();
+}
+
+function _matchesOrigin(song) {
+  const origin = document.getElementById('song-origin')?.value || '';
+  if (origin === 'own')    return _isOwnSong(song);
+  if (origin === 'covers') return !_isOwnSong(song);
+  return true;
+}
+
 function getFilteredSongs() {
   const activeOnly = document.getElementById('active-only')?.checked ?? true;
   const feelRange  = getFeelRange();
   return allSongs.filter(song => {
     if (activeOnly && !song.active) return false;
     if (song.heart) return true;  // heart songs bypass all filters
+    if (!_matchesOrigin(song)) return false;
     for (const [field, values] of activeFilters) {
       if (values.size === 0) continue;
       const v = getFieldValue(song, field);
@@ -256,7 +272,7 @@ function _buildFillPool(inSet, activeOnly) {
   const range = getFeelRange();
   if (!range) return [];
   const base = allSongs.filter(s => {
-    if (!(!activeOnly || s.active) || inSet.has(s.id)) return false;
+    if (!(!activeOnly || s.active) || inSet.has(s.id) || !_matchesOrigin(s)) return false;
     const f = songFeel(s);
     return f != null && (f < range.min || f > range.max);
   });
@@ -386,6 +402,14 @@ function renderControls() {
         <label class="active-toggle">
           <input type="checkbox" id="active-only" checked onchange="refreshFilterOptions()">
           ${t('setlist.activeOnly')}
+        </label>
+        <label class="active-toggle">
+          ${t('setlist.originLabel')}
+          <select id="song-origin" class="filter-select">
+            <option value="">${t('setlist.originAll')}</option>
+            <option value="own">${t('setlist.originOwn')}</option>
+            <option value="covers">${t('setlist.originCovers')}</option>
+          </select>
         </label>
         <label class="active-toggle">
           <input type="checkbox" id="split-sets">
