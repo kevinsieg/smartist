@@ -57,15 +57,19 @@ function run(r) {
     delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];
   });
 
-  test('missing APP_SECRET throws at require time', () => {
+  // The module loads without APP_SECRET (so the health check can report it);
+  // signing throws, verifying fails closed.
+  test('missing APP_SECRET: signing throws, verifying returns null', () => {
     const saved = process.env.APP_SECRET;
+    const good = require(path.join(__dirname, '../../api/_token')).generateUserToken(1, 'admin', 60000);
     delete process.env.APP_SECRET;
     delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];
     try {
-      require(path.join(__dirname, '../../api/_token'));
-      throw new Error('expected throw, got none');
-    } catch (e) {
-      assert(/APP_SECRET/.test(e.message), `expected APP_SECRET in message, got: ${e.message}`);
+      const tok = require(path.join(__dirname, '../../api/_token'));
+      let threw = null;
+      try { tok.generateUserToken(1, 'admin', 60000); } catch (e) { threw = e; }
+      assert(threw && /APP_SECRET/.test(threw.message), `expected APP_SECRET error, got: ${threw && threw.message}`);
+      assert(tok.verifyUserToken(good) === null, 'verify must fail closed');
     } finally {
       process.env.APP_SECRET = saved;
       delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];

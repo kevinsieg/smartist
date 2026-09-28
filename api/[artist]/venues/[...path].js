@@ -2,7 +2,8 @@ const { getDb, getSlug } = require('../../_db');
 const { requireAuth } = require('../../_auth');
 const { VENUE_PUBLIC_STATUSES } = require('../../_constants');
 const { wrap } = require('../../_handler');
-const { validateStr, validateNum } = require('../../_validate');
+const { parseFields } = require('../../_validate');
+const { VENUE_FIELDS, mergeJson } = require('../../_domain/records');
 const { requireFeature } = require('../../_plans');
 
 module.exports = wrap(async function handler(req, res) {
@@ -50,67 +51,13 @@ module.exports = wrap(async function handler(req, res) {
 
   if (req.method === 'PUT') {
     if (venue.deleted) return res.status(409).json({ error: 'Venue is deleted and cannot be modified' });
-    const body     = req.body ?? {};
-    const name     = validateStr(body.name, 200);
-    if (name     === false) return res.status(400).json({ error: 'name too long' });
-    if (!name)              return res.status(400).json({ error: 'name is required' });
-    const street_number = validateStr(body.street_number, 20);
-    if (street_number === false) return res.status(400).json({ error: 'street_number too long' });
-    const street   = validateStr(body.street, 300);
-    if (street   === false) return res.status(400).json({ error: 'street too long' });
-    const city     = validateStr(body.city, 200);
-    if (city     === false) return res.status(400).json({ error: 'city too long' });
-    const country  = validateStr(body.country, 100);
-    if (country  === false) return res.status(400).json({ error: 'country too long' });
-    const category = validateStr(body.category, 100);
-    if (category === false) return res.status(400).json({ error: 'category too long' });
-    const status   = validateStr(body.status, 50);
-    if (status   === false) return res.status(400).json({ error: 'status too long' });
-    const comment  = validateStr(body.comment, 2000);
-    if (comment  === false) return res.status(400).json({ error: 'comment too long' });
-    const phone = validateStr(body.phone, 100);
-    if (phone === false) return res.status(400).json({ error: 'phone too long' });
-    const contact_name = validateStr(body.contact_name, 200);
-    if (contact_name === false) return res.status(400).json({ error: 'contact_name too long' });
-    const lat = validateNum(body.lat);
-    if (lat === false) return res.status(400).json({ error: 'lat must be a number' });
-    const lng = validateNum(body.lng);
-    if (lng === false) return res.status(400).json({ error: 'lng must be a number' });
+    // Only the fields sent are written; an empty value clears one.
+    const { value, error } = parseFields(req.body, VENUE_FIELDS, { partial: true });
+    if (error) return res.status(400).json({ error });
+    if (!Object.keys(value).length) return res.json(venue);
+    mergeJson(value, venue, ['social_links']);
     const [updated] = await sql`
-      UPDATE venues SET
-        name = ${name},
-        street_number = ${street_number ?? venue.street_number},
-        street = ${street ?? venue.street},
-        alive = ${body.alive ?? venue.alive},
-        activated = ${body.activated ?? venue.activated},
-        declined = ${body.declined ?? venue.declined},
-        status = ${status ?? venue.status},
-        category = ${category ?? venue.category},
-        postcode = ${body.postcode ?? venue.postcode},
-        city = ${city ?? venue.city},
-        state = ${body.state ?? venue.state},
-        country = ${country ?? venue.country},
-        generic_email = ${body.generic_email ?? venue.generic_email},
-        phone = ${'phone' in body ? phone : venue.phone},
-        contact_name = ${'contact_name' in body ? contact_name : venue.contact_name},
-        website = ${body.website ?? venue.website},
-        social_links = ${venue.social_links}::jsonb || ${body.social_links ?? {}}::jsonb,
-        last_communication = ${body.last_communication ?? venue.last_communication},
-        booking_channel = ${body.booking_channel ?? venue.booking_channel},
-        number_of_cold_contacts = ${body.number_of_cold_contacts ?? venue.number_of_cold_contacts},
-        turnus = ${body.turnus ?? venue.turnus},
-        remuneration = ${body.remuneration ?? venue.remuneration},
-        overnight = ${body.overnight ?? venue.overnight},
-        season = ${body.season ?? venue.season},
-        preferred_period = ${body.preferred_period ?? venue.preferred_period},
-        comment = ${comment ?? venue.comment},
-        deadline = ${body.deadline ?? venue.deadline},
-        main_genre = ${body.main_genre ?? venue.main_genre},
-        size = ${body.size ?? venue.size},
-        language = ${body.language ?? venue.language},
-        lat = ${'lat' in body ? lat : venue.lat},
-        lng = ${'lng' in body ? lng : venue.lng},
-        last_updated = NOW()
+      UPDATE venues SET ${sql(value)}, last_updated = NOW()
       WHERE id = ${id} AND artist_id = ${artist.id}
       RETURNING *
     `;

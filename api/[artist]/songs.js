@@ -85,28 +85,6 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(logs);
   }
 
-  // ── GET setlist appearances for one song (/songs?setlists=<id>) ────────────
-  if (req.method === 'GET' && req.query.setlists != null) {
-    const songId = Number(req.query.setlists);
-    if (!Number.isInteger(songId) || songId <= 0)
-      return res.status(400).json({ error: 'Invalid song id' });
-    const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
-    if (!user && !canBrowseCatalogue(band))
-      return res.status(401).json({ error: 'Sign in to view this' });
-    const setlists = await sql`
-      SELECT sl.id, sl.title, sl.comment, sl.created_at,
-             g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
-      FROM setlists sl
-      JOIN setlist_songs ss ON ss.setlist_id = sl.id
-      LEFT JOIN gigs g ON sl.gig_id = g.id AND g.artist_id = sl.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      WHERE ss.song_id = ${songId} AND sl.artist_id = ${band.id}
-      ORDER BY sl.created_at DESC
-    `;
-    return res.json(setlists);
-  }
-
   // ── GET the song list ───────────────────────────────────────────────────────
   // Without lyrics: each row says has_lyrics, and the text comes with one
   // song's details (GET /songs/:id). ?lyrics=1 adds the text for the CSV export.

@@ -1,10 +1,9 @@
 const crypto = require('crypto');
 const { getDb, insertAuditLog, getSlug } = require('./_db');
 const { requireAuth } = require('./_auth');
-const { wrap } = require('./_handler');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
 const { isOwnMediaUrl } = require('./_ownership');
-const { wouldExceedStorage, storageLimitBytes } = require('./_plans');
+const { storageLimitBytes } = require('./_plans');
 
 // Song media (audio, sheet, playback) stored in R2. The three steps — presign,
 // confirm, delete — are shared by the REST-style catch-all routes
@@ -93,13 +92,21 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
   const prevHead = isReplacement ? await verifyUpload(keyFromUrl(previousUrl)) : null;
   const prevSize = prevHead ? prevHead.size : 0;
 
-  if (wouldExceedStorage(band, (band.storage_used_bytes || 0) - prevSize, head.size)) {
-    await deleteFromR2(publicUrl);
-    return out(402, {
-      error: 'storage_limit',
-      limit: storageLimitBytes(band),
-      used:  Number(band.storage_used_bytes || 0),
-    });
+  // Reserve the net change in the same statement that checks the cap: band was
+  // read before this request's R2 round-trips, so two uploads confirmed at once
+  // would both pass a check against that stale value.
+  const limit    = storageLimitBytes(band);
+  const reserved = previousUrl === publicUrl ? 0 : head.size - prevSize;
+  if (reserved !== 0) {
+    const [row] = await sql`
+      UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${reserved})
+      WHERE id = ${band.id}
+        AND (${limit}::bigint IS NULL OR storage_used_bytes + ${reserved} <= ${limit}::bigint)
+      RETURNING storage_used_bytes`;
+    if (!row) {
+      await deleteFromR2(publicUrl);
+      return out(402, { error: 'storage_limit', limit, used: Number(band.storage_used_bytes || 0) });
+    }
   }
 
   // Merged into extra, never a rewrite of the whole object: a lyrics or field
@@ -110,12 +117,9 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
     RETURNING *
   `;
 
-  // Delete first: whether the old object really went away decides the net
-  // change, so the counter settles in one statement instead of a +n then −m
-  // pair (which also left it briefly overstated).
-  const removed  = (isReplacement && isOwnMediaUrl(previousUrl, band.id, keyFromUrl)) ? await deleteFromR2(previousUrl) : false;
-  const freed    = (removed && prevHead) ? prevHead.size : 0;
-  const netBytes = (previousUrl === publicUrl ? 0 : head.size) - freed;
+  // The reservation assumed the old file goes away; if it stays, count it again.
+  const removed = (isReplacement && isOwnMediaUrl(previousUrl, band.id, keyFromUrl)) ? await deleteFromR2(previousUrl) : false;
+  const kept    = (!removed && prevHead) ? prevHead.size : 0;
 
   const log = isReplacement
     ? insertAuditLog(sql, band.id, songId, `${actionPrefix}_replace`, {
@@ -125,8 +129,8 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
       })
     : insertAuditLog(sql, band.id, songId, 'update', updated);
   await Promise.all([
-    netBytes !== 0
-      ? sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${netBytes}) WHERE id = ${band.id}`
+    kept !== 0
+      ? sql`UPDATE artists SET storage_used_bytes = storage_used_bytes + ${kept} WHERE id = ${band.id}`
       : null,
     log,
   ]);
@@ -164,7 +168,9 @@ function makeMediaFn(config) {
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });
 
-    const band = await requireAuth(req, res, slug, 'admin');
+    // Member, like the body-dispatched POSTs in songs.js the app uses: the two
+    // paths do the same thing, so a stricter role here protected nothing.
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const sql = getDb();
 
@@ -177,6 +183,4 @@ function makeMediaFn(config) {
   };
 }
 
-function makeMediaHandler(config) { return wrap(makeMediaFn(config)); }
-
-module.exports = { MEDIA_CONFIGS, makeMediaHandler, makeMediaFn, presignMedia, confirmMedia, deleteMedia };
+module.exports = { MEDIA_CONFIGS, makeMediaFn, presignMedia, confirmMedia, deleteMedia };

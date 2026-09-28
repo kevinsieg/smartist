@@ -1,7 +1,14 @@
 const crypto = require('crypto');
 
-if (!process.env.APP_SECRET) {
-  throw new Error('APP_SECRET env var is required — set it in .env or Vercel project settings');
+// Checked when a token is signed or verified, not at module load: a throw at
+// load took down every route of the function — including the health check
+// (GET /api/config?action=health) that reports the missing variable. Signing
+// still throws (→ 500), and verifying fails closed (→ 401).
+function secret() {
+  if (!process.env.APP_SECRET) {
+    throw new Error('APP_SECRET env var is required — set it in .env or Vercel project settings');
+  }
+  return process.env.APP_SECRET;
 }
 
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -43,14 +50,14 @@ const TTL_30D = 30 * 24 * 60 * 60 * 1000;
 // issued before it stops verifying (see passwordMatches / api/_auth.js).
 // Accounts without a password (OAuth) fingerprint the empty string.
 function passwordFingerprint(passwordHash) {
-  return crypto.createHmac('sha256', process.env.APP_SECRET)
+  return crypto.createHmac('sha256', secret())
     .update(`pwv:${passwordHash || ''}`).digest('hex').slice(0, 16);
 }
 
 function generateUserToken(userId, role, ttlMs, passwordHash = null) {
   const exp     = Date.now() + ttlMs;
   const payload = JSON.stringify({ userId, role, exp, pwv: passwordFingerprint(passwordHash) });
-  const sig     = crypto.createHmac('sha256', process.env.APP_SECRET)
+  const sig     = crypto.createHmac('sha256', secret())
     .update(payload).digest('hex');
   return Buffer.from(JSON.stringify({ payload, sig })).toString('base64url');
 }
@@ -59,7 +66,7 @@ function verifyUserToken(token) {
   try {
     if (!token) return null;
     const { payload, sig } = JSON.parse(Buffer.from(token, 'base64url').toString());
-    const expected = crypto.createHmac('sha256', process.env.APP_SECRET)
+    const expected = crypto.createHmac('sha256', secret())
       .update(payload).digest('hex');
     if (typeof sig !== 'string' || !/^[0-9a-f]{64}$/.test(sig)) return null;
     if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;

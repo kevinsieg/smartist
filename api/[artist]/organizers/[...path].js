@@ -1,7 +1,8 @@
-const { getDb, getArtist, getSlug } = require('../../_db');
+const { getDb, getSlug } = require('../../_db');
 const { requireAuth } = require('../../_auth');
 const { wrap } = require('../../_handler');
-const { validateStr } = require('../../_validate');
+const { parseFields } = require('../../_validate');
+const { ORGANIZER_FIELDS, mergeJson } = require('../../_domain/records');
 const { requireFeature } = require('../../_plans');
 
 module.exports = wrap(async function handler(req, res) {
@@ -42,35 +43,13 @@ module.exports = wrap(async function handler(req, res) {
 
   if (req.method === 'PUT') {
     if (org.deleted) return res.status(409).json({ error: 'Organizer is deleted and cannot be modified' });
-    const body    = req.body ?? {};
-    const name    = validateStr(body.name, 200);
-    if (name    === false) return res.status(400).json({ error: 'name too long' });
-    if (!name)             return res.status(400).json({ error: 'name is required' });
-    const type    = validateStr(body.type, 50);
-    if (type    === false) return res.status(400).json({ error: 'type too long' });
-    const city    = validateStr(body.city, 200);
-    if (city    === false) return res.status(400).json({ error: 'city too long' });
-    const country = validateStr(body.country, 100);
-    if (country === false) return res.status(400).json({ error: 'country too long' });
-    const comment = validateStr(body.comment, 2000);
-    if (comment === false) return res.status(400).json({ error: 'comment too long' });
-    if ('heart' in body && typeof body.heart !== 'boolean')
-      return res.status(400).json({ error: 'heart must be a boolean' });
+    // Only the fields sent are written; an empty value clears one.
+    const { value, error } = parseFields(req.body, ORGANIZER_FIELDS, { partial: true });
+    if (error) return res.status(400).json({ error });
+    if (!Object.keys(value).length) return res.json(org);
+    mergeJson(value, org, ['social_links', 'extra']);
     const [updated] = await sql`
-      UPDATE organizers SET
-        name = ${name},
-        type = ${type ?? org.type},
-        email = ${body.email ?? org.email},
-        phone = ${body.phone ?? org.phone},
-        website = ${body.website ?? org.website},
-        social_links = ${org.social_links}::jsonb || ${body.social_links ?? {}}::jsonb,
-        city = ${city ?? org.city},
-        country = ${country ?? org.country},
-        last_communication = ${body.last_communication ?? org.last_communication},
-        comment = ${comment ?? org.comment},
-        extra = ${org.extra}::jsonb || ${body.extra ?? {}}::jsonb,
-        heart = ${body.heart ?? org.heart},
-        last_updated = NOW()
+      UPDATE organizers SET ${sql(value)}, last_updated = NOW()
       WHERE id = ${id} AND artist_id = ${artist.id}
       RETURNING *
     `;

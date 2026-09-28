@@ -698,7 +698,7 @@ async function openAppearances(songId) {
   modal.classList.add('open');
 
   try {
-    const data = await apiFetch(`/api/${artistSlug}/songs?setlists=${songId}`).then(r => r.ok ? r.json() : []);
+    const data = await apiFetch(`/api/${artistSlug}/songs/${songId}/setlists`).then(r => r.ok ? r.json() : []);
     if (!data.length) {
       list.innerHTML = '<p class="appearance-empty">' + t('songs.notInAnySetlist') + '</p>';
       return;

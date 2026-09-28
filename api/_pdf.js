@@ -1,4 +1,5 @@
-const PDFDocument = require('pdfkit');
+// pdfkit is required inside buildSetlistPdf: it takes ~170 ms to load, and the
+// functions that import this module (setlists) mostly never build a PDF.
 
 const MARGIN = 50;
 const L = MARGIN;
@@ -21,6 +22,7 @@ function setlistTitle(setlist) {
 }
 
 function buildSetlistPdf(setlist, songs, bandName) {
+  const PDFDocument = require('pdfkit');
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: MARGIN });
     const chunks = [];

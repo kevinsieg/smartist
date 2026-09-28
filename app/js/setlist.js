@@ -763,12 +763,8 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
   const name  = document.getElementById('gig-name').value.trim();
   if (!name) return;
   const date  = document.getElementById('gig-date').value || null;
-  const token = getToken();
-  const r = await withBusy(document.getElementById('create-gig-btn'), () => fetch(`/api/${artistSlug}/gigs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ title: name, date }),
-  }));
+  const r = await withBusy(document.getElementById('create-gig-btn'),
+    () => apiFetch(`/api/${artistSlug}/gigs`, 'POST', { title: name, date }));
   if (!r) return;
   if (r.ok) {
     const gig = await r.json();
@@ -888,20 +884,12 @@ function _getVisibleSets(state) {
 }
 
 async function _resolveHistSongFilter(q) {
-  var matchingSongs = (allSongs || []).filter(function(s) {
-    return (s.title || '').toLowerCase().includes(q.toLowerCase());
-  });
-  if (!matchingSongs.length) return new Set();
+  if (!String(q).trim()) return new Set();
   try {
-    var results = await Promise.all(
-      matchingSongs.map(function(s) {
-        return apiFetch('/api/' + artistSlug + '/songs/' + s.id + '/setlists')
-          .then(function(r) { return r.json(); });
-      })
-    );
-    return new Set(results.reduce(function(acc, objs) {
-      return acc.concat(objs.map(function(o) { return o.id; }));
-    }, []));
+    // One request: the setlists holding a song whose title matches.
+    var r = await apiFetch('/api/' + artistSlug + '/setlists?song_q=' + encodeURIComponent(q));
+    var rows = r.ok ? await r.json() : [];
+    return new Set(rows.map(function(o) { return o.id; }));
   } catch {
     return new Set();
   }

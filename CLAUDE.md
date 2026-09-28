@@ -24,7 +24,7 @@ Merge-commit titles must not name `claude/…` branches — set the title explic
 | `dev` | Preview | Neon dev | default; push freely |
 | `main` | Production | Neon main | PR-merge only |
 
-**This code runs as several Vercel projects, one per deployment** (e.g. the public app plus one project per single-band domain), each with its own env vars and its own `DATABASE_URL`. A new required env var must be set on *every* project — `vercel project ls`, then `vercel env ls production --project <name>` — and a schema change applied to every production DB. A missing `APP_SECRET` once took two projects down for months — every API route 500ing — because only the linked project had it. Required vars and the post-deploy check: `docs/tenant-onboarding.md`.
+**This code runs as several Vercel projects, one per deployment** (e.g. the public app plus one project per single-band domain), each with its own env vars and its own `DATABASE_URL`. A new required env var must be set on *every* project — `vercel project ls`, then `vercel env ls production --project <name>` — and a schema change applied to every production DB. Every variable the API reads is listed in `api/_env.js` (enforced by `tests/unit/env.js`); `GET /api/config?action=health` reports missing ones (names only), whether the DB answers and whether it has the newest migration. A missing `APP_SECRET` once took two projects down for months — every API route 500ing — because only the linked project had it. Required vars and the post-deploy check: `docs/tenant-onboarding.md`.
 
 ---
 
@@ -53,7 +53,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/` | `app/js/home.js` |
 | `/dashboard` | `app/js/dashboard.js` |
 | `/setlist` | `app/js/setlist.js` |
-| `/setlist-history` | `app/js/setlist-history.js` |
+| `/setlist-history` | `app/js/setlist-history.js` — redirect to the setlist page's history tab |
 | `/songs` | `app/js/songs.js` (init, data, filters, list view) + `songs-table.js` (bulk edit), `songs-panel.js` (side panel), `songs-media.js` (audio/sheet/playback), `songs-lyrics.js` (lyrics + URL preview) — one global scope, loaded in that order with `songs.js` last because it calls `init()`; `tests/songs-split-client.js` executes them together |
 | `/pro-import` | `app/js/pro-import.js` |
 | `/gigs` | `app/js/gigs.js` |
@@ -64,6 +64,9 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
 | `/stage?id=N` | `app/js/stage.js` — **no `common.js`; no nav** |
 | `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, no `common.js`, English-only |
+| `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
+| `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
+| `/contact`, `/confirm-email`, `/demo` | `app/js/contact.js`; inline scripts in `confirm-email.html` and `demo.html` |
 
 `app/js/common.js` is loaded by every page except `stage.html`. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `common.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()` (which lives in `common.js`).
 
@@ -84,9 +87,9 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `api/[artist]/organizers.js` | `GET/POST /api/:artist/organizers` |
 | `api/[artist]/organizers/[...path].js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
 | `api/[artist]/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
-| `api/[artist]/setlists/[...path].js` | `GET/PUT /api/:artist/setlists/:id`; `GET /api/:artist/setlists/export` (via rewrite) |
+| `api/[artist]/setlists/[...path].js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `GET /api/:artist/export` (ZIP of CSVs, via rewrite) |
 | `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite) |
-| `api/[artist]/songs/[...path].js` | `DELETE` / `restore` / `setlists` / `gema` / `lyrics` / `lyrics-suggest` / `audio` / `sheet` / `playback` / `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite) |
+| `api/[artist]/songs/[...path].js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite). Lyrics writes go through `POST /songs` body fields |
 | `api/[artist]/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
 | `api/[artist]/venues/[...path].js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
 
@@ -107,7 +110,9 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
 | `_pdf.js` | `buildSetlistPdf(setlist, songs, artistName)` → Buffer; `setlistTitle(setlist)` |
 | `_r2.js` | `createPresignedUrl`, `deleteFromR2` — swap storage via `STORAGE` block at top |
-| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` (shared by the body-dispatched POSTs in `songs.js` and the REST routes); `makeMediaFn(config)` wraps them for the catch-all |
+| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` (shared by the body-dispatched POSTs in `songs.js` and the REST routes, both `member`); `makeMediaFn(config)` wraps them for the catch-all |
+| `_env.js` | Every env var the API reads (required / recommended / pairs), `envReport()`, and `SCHEMA_VERSION` — the newest migration id in `schema.sql` |
+| `_domain/gema.js` | GEMA CSV parsers and `importWorks` / `importRightholders` — used by the pro-import route and `scripts/import_gema.js` |
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
@@ -166,7 +171,7 @@ await sql`INSERT INTO setlist_songs (setlist_id, song_id, position)
 
 ## Database
 
-Tables: `artists`, `songs`, `song_lyrics`, `gigs`, `setlists`, `setlist_songs`, `song_logs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `rate_limits`, `subscribers`. Full schema (idempotent) in `scripts/schema.sql`. See `DATABASE.md` for entity diagram and column reference.
+Tables: `artists`, `songs`, `song_lyrics`, `gigs`, `schema_migrations`, `setlists`, `setlist_songs`, `song_logs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `rate_limits`, `subscribers`. Full schema (idempotent) in `scripts/schema.sql`. See `DATABASE.md` for entity diagram and column reference.
 
 Songs use a `deleted` flag (soft-delete; lyrics and arrangements stay, so a restore brings them back). `songs.language` is a column. `songs.extra` JSONB holds arbitrary per-song data (`isrc`, `listenUrl`, `sheetUrl`, `playbackUrl`, `capo`, …).
 
@@ -260,10 +265,13 @@ The app ships in **English (default), French, German**. `stage.html` and `api-do
 
 ## Scripts
 
-All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values.
+All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values. New scripts use `scripts/_lib.js` (`loadEnv`, `confirmDb`, `connect` — postgres.js, like the API).
+
+**Schema changes:** append a dated block to `scripts/schema.sql` that ends with `INSERT INTO schema_migrations (id) VALUES ('<date>') ON CONFLICT DO NOTHING;`, and set `SCHEMA_VERSION` in `api/_env.js` to that date (a unit test checks they match). No `DO $$` blocks — `apply_schema.js` splits on `;`.
 
 ```bash
 node scripts/setup.js                                      # first-time: schema + artist row
+node scripts/apply_schema.js [--check] [--yes]             # apply schema.sql; --check lists pending migrations
 node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
 node scripts/import_songs.js --artist <slug> songs.json
 node scripts/import_gema.js  --artist <slug> [--ids <csv>] [--info <csv>] [--beteiligte <csv>] [--dry-run]
@@ -288,9 +296,11 @@ node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nig
 ## Tests
 
 ```bash
-node tests/unit.js                        # validate + token helpers; runs in CI
+npm run test:unit                         # unit + page-script suites (stubbed SQL, no DB); runs in CI
 cd tests && ARTIST_PASSWORD=… npm test      # full integration suite against vercel dev (port 3000)
 npm run test:dev                          # against Vercel Preview URL
 ```
+
+CI also runs the integration suite against a throwaway `postgres:16`: schema applied twice, `tests/harness/seed.js`, handlers served by `tests/harness/server.js` (a `vercel.json` router, no Vercel login). Steps in `docs/ci-cd.md`. Node 22 everywhere (`engines` in `package.json`).
 
 Workspaces are private, so every read and write test runs with a session (`ARTIST_PASSWORD` as bearer); without it only the anonymous checks run. Write tests create `[TEST]` rows and delete them again; an interrupted run can leave some behind (see `docs/ci-cd.md`). CI previews sit behind Vercel Deployment Protection — the suite sends `VERCEL_AUTOMATION_BYPASS_SECRET` as `x-vercel-protection-bypass`.

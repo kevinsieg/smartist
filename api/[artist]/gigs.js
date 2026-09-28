@@ -2,7 +2,8 @@ const crypto = require('crypto');
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { wrap } = require('../_handler');
-const { validateStr } = require('../_validate');
+const { parseFields } = require('../_validate');
+const { GIG_FIELDS } = require('../_domain/records');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
 const { ownsVenue, ownsOrganizer } = require('../_ownership');
 
@@ -78,12 +79,14 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
-    // A PUT's venue/organizer ownership checks don't depend on the gig row:
-    // run them alongside it.
-    const refsCheck = req.method === 'PUT' && req.query.action !== 'poster';
+    // A PUT's fields are validated first; its venue/organizer ownership checks
+    // don't depend on the gig row, so they run alongside it.
+    const isUpdate = req.method === 'PUT' && req.query.action !== 'poster';
+    const parsed = isUpdate ? parseFields(req.body, GIG_FIELDS, { partial: true }) : null;
+    if (parsed?.error) return res.status(400).json({ error: parsed.error });
     const [[gig], refs] = await Promise.all([
       sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`,
-      refsCheck ? refsOwned(sql, artist.id, req.body ?? {}) : null,
+      isUpdate ? refsOwned(sql, artist.id, parsed.value) : null,
     ]);
     if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
@@ -146,29 +149,13 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     if (req.method === 'PUT') {
       if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
-      const body = req.body ?? {};
-      const title = validateStr(body.title, 200);
-      if (title === false) return res.status(400).json({ error: 'title too long' });
-      if (!title) return res.status(400).json({ error: 'title required' });
-      const comment  = validateStr(body.comment, 2000);
-      if (comment  === false) return res.status(400).json({ error: 'comment too long' });
-      const location = validateStr(body.location, 200);
-      if (location === false) return res.status(400).json({ error: 'location too long' });
       if (!refs.venueOk)     return res.status(400).json({ error: 'Invalid venue_id' });
       if (!refs.organizerOk) return res.status(400).json({ error: 'Invalid organizer_id' });
+      // Only the fields sent are written; an empty value clears one.
+      const value = parsed.value;
+      if (!Object.keys(value).length) return res.json(gig);
       const [updated] = await sql`
-        UPDATE gigs SET
-          title = ${title}, date = ${body.date || null},
-          venue_id = ${body.venue_id ?? gig.venue_id},
-          organizer_id = ${body.organizer_id ?? gig.organizer_id},
-          type = ${body.type ?? gig.type},
-          time_start = ${body.time_start ?? gig.time_start},
-          time_end = ${body.time_end ?? gig.time_end},
-          additional_link = ${body.additional_link ?? gig.additional_link},
-          additional_text = ${body.additional_text ?? gig.additional_text},
-          comment = ${comment ?? gig.comment},
-          location = ${location ?? gig.location},
-          last_updated = NOW()
+        UPDATE gigs SET ${sql(value)}, last_updated = NOW()
         WHERE id = ${gigId} AND artist_id = ${artist.id}
         RETURNING *
       `;
@@ -307,25 +294,10 @@ module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
-    const body = req.body ?? {};
-    const title = validateStr(body.title, 200);
-    if (title === false) return res.status(400).json({ error: 'title too long' });
-    if (!title) return res.status(400).json({ error: 'title is required' });
-    const comment  = validateStr(body.comment, 2000);
-    if (comment  === false) return res.status(400).json({ error: 'comment too long' });
-    const location = validateStr(body.location, 200);
-    if (location === false) return res.status(400).json({ error: 'location too long' });
-    if (!await checkRefs(sql, artist.id, body, res)) return;
-    const [gig] = await sql`
-      INSERT INTO gigs (artist_id, title, date, venue_id, organizer_id, type, time_start, time_end, additional_link, additional_text, comment, location)
-      VALUES (
-        ${artist.id}, ${title}, ${body.date ?? null},
-        ${body.venue_id ?? null}, ${body.organizer_id ?? null},
-        ${body.type ?? null}, ${body.time_start ?? null}, ${body.time_end ?? null},
-        ${body.additional_link ?? null}, ${body.additional_text ?? null}, ${comment ?? null}, ${location ?? null}
-      )
-      RETURNING *
-    `;
+    const { value, error } = parseFields(req.body, GIG_FIELDS);
+    if (error) return res.status(400).json({ error });
+    if (!await checkRefs(sql, artist.id, value, res)) return;
+    const [gig] = await sql`INSERT INTO gigs ${sql({ ...value, artist_id: artist.id })} RETURNING *`;
     return res.status(201).json(gig);
   }
 
