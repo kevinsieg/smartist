@@ -9,13 +9,14 @@ the schema is in `DATABASE.md`.
 ## Layers
 
 - **`api/`**: thin HTTP handlers. They parse, call domain code, respond.
-- **`api/_domain/`**: business logic, no DOM. Most of `api/config.js` is a
-  router into these modules. Two shapes live here: the older account modules
-  (login, signup, reset, oauth, subscribe, admin, deletion handlers) still take
-  `req`/`res`; the newer ones (songs, gema, records, setlists) take `sql` and
-  plain values and return data or `{ status, body }`, so scripts can call them
-  too (`scripts/import_gema.js` runs the same import as the page). New code
-  follows the second shape.
+- **`api/_domain/`**: business logic, no DOM, no request or response objects.
+  Modules take plain values and return data or a result: the account modules
+  (login, signup, reset, oauth, subscribe, admin, deletion) take
+  `{ body, query, headers, ip, origin }` and return `{ status, body }` (or
+  `{ status, redirect, headers }`), and `api/_domain/http.js` (`toInput`,
+  `send`, `handle`) is the only code that turns a request into input and a
+  result into a reply. Most of `api/config.js` is a router into these modules.
+  Scripts call the same code (`scripts/import_gema.js` runs the page's import).
 - **Round-trips, not parallelism**: with `prepare: false` on one connection,
   `Promise.all` does not overlap queries. Fewer statements is what saves time
   (see `api/_db.js`).

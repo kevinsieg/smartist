@@ -171,19 +171,12 @@ async function run(r) {
 
   console.log(B('\nfacebookUrl (login dialog)'));
 
-  function mockRes() {
-    const r = { _status: 200 };
-    r.status = (s) => { r._status = s; return r; };
-    r.json   = (b) => { r._body  = b; return r; };
-    r.setHeader = (k, v) => { r._headers = { ...(r._headers || {}), [k]: v }; };
-    return r;
-  }
-
   async function dialogUrl() {
     const { facebookUrl } = require(path.join(__dirname, '../../api/_domain/oauth'));
-    const res = mockRes();
-    await facebookUrl({ query: {}, headers: {}, url: '/api/config' }, res);
-    return res._body && res._body.url;
+    // Plain input in, plain result out — no request or response needed.
+    const result = await facebookUrl({ query: {}, headers: {}, origin: 'https://app.example.test' });
+    assert(/oauth_nonce=[0-9a-f]{32}/.test(result.headers['Set-Cookie']), 'no nonce cookie');
+    return result.body && result.body.url;
   }
 
   // email is the ONLY permission we ask for and the whole login depends on it.
