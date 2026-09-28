@@ -155,6 +155,8 @@ await sql`INSERT INTO setlist_songs (setlist_id, song_id, position)
 
 **Driver:** postgres.js (`postgres` npm package). Connects to Neon over the standard wire protocol. `sql.begin(async tx => {...})` is available for transactions. The swap point is `DB.connect` in `api/_db.js` — the rest of the codebase is driver-agnostic.
 
+**Round-trips:** with `prepare: false` (required on Neon's pooler) every query with parameters costs two round-trips, and on the function's single connection `Promise.all` does not overlap them. Save time by writing fewer statements — one CTE (`WITH s AS (INSERT … RETURNING *), l AS (INSERT INTO song_logs …) SELECT …`) instead of insert + log + re-select — not by adding parallelism.
+
 **JSONB:**
 - postgres.js serialises JS objects directly — do **not** `JSON.stringify()`.
 - Use `extra || ${update.extra}` (JSONB `||`) for partial PATCH; full replacement overwrites keys like `isrc` that the UI doesn't manage.

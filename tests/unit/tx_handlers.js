@@ -34,7 +34,7 @@ function makeSql(route) {
     return route(text);
   };
   // Like postgres.js: a callback that returns an array of queries gets them
-  // pipelined, and begin resolves to their results.
+  // run in order, and begin resolves to their results.
   sql.begin = async fn => { const r = await fn(sql); return Array.isArray(r) ? Promise.all(r) : r; };
   sql.calls = calls;
   return sql;

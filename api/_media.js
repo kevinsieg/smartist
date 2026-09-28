@@ -67,7 +67,7 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
   if (!base || !publicUrl.startsWith(`${base}/${keyPrefix}${band.id}/`))
     return out(400, { error: 'Invalid publicUrl' });
 
-  // Independent: the storage HEAD and the song lookup run side by side.
+  // Independent: the storage HEAD and the song lookup overlap.
   const [head, [song]] = await Promise.all([
     verifyUpload(keyFromUrl(publicUrl)),
     sql`SELECT extra->>${extraKey} AS url FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,

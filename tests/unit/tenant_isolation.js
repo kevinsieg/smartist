@@ -30,7 +30,8 @@ function makeSql(route) {
     calls.push({ text, values });
     return route(text, values);
   };
-  sql.begin = async fn => fn(sql);
+  // Like postgres.js: begin resolves an array of queries to their results.
+  sql.begin = async fn => { const r = await fn(sql); return Array.isArray(r) ? Promise.all(r) : r; };
   sql.json = v => ({ json: v });
   sql.calls = calls;
   return sql;
@@ -80,7 +81,8 @@ function ownershipRoute(text, values) {
   if (text.startsWith('SELECT 1 AS ok FROM gigs'))       return values[0] === 5 ? [{ ok: 1 }] : [];
   if (text.startsWith('SELECT 1 AS ok FROM venues'))     return values[0] === 7 ? [{ ok: 1 }] : [];
   if (text.startsWith('SELECT 1 AS ok FROM organizers')) return values[0] === 8 ? [{ ok: 1 }] : [];
-  if (text.startsWith('INSERT INTO setlists'))           return [{ id: 99 }];
+  // Setlist create is one WITH s AS (INSERT INTO setlists …) statement.
+  if (text.startsWith('WITH s AS ( INSERT INTO setlists')) return [{ id: 99 }];
   if (text.startsWith('INSERT INTO gigs'))               return [{ id: 55 }];
   if (text.startsWith('SELECT s.*'))                     return [{ id: 99 }];
   return [];
@@ -97,7 +99,7 @@ async function run(r) {
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10, 12345] } }, res);
     assertEq(res.statusCode, 400);
-    assert(!sql.calls.some(c => c.text.startsWith('INSERT INTO setlist')), 'nothing may be written');
+    assert(!sql.calls.some(c => c.text.includes('INSERT INTO setlist')), 'nothing may be written');
   });
 
   await testAsync('a setlist of own songs is created', async () => {
@@ -118,7 +120,7 @@ async function run(r) {
 
   await testAsync("updating a setlist cannot pull in another band's song", async () => {
     const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', (text, values) => {
-      if (text.startsWith('SELECT s.*, g.title AS gig_name')) return [{ id: 3 }];
+      if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
       return ownershipRoute(text, values);
     });
     const res = mockRes();
@@ -126,6 +128,26 @@ async function run(r) {
       body: { song_ids: [11, 777] } }, res);
     assertEq(res.statusCode, 400);
     assert(!sql.calls.some(c => c.text.startsWith('DELETE FROM setlist_songs')), 'the old list must survive');
+  });
+
+  await testAsync('updating a setlist rewrites its songs in one transaction', async () => {
+    const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', (text, values) => {
+      if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
+      if (text.startsWith('SELECT s.*, g.title AS gig_name')) return [{ id: 3, song_count: 2 }];
+      return ownershipRoute(text, values);
+    });
+    let inTx = false;
+    const begin = sql.begin;
+    sql.begin = async fn => { inTx = true; const out = await begin(fn); inTx = false; return out; };
+    const res = mockRes();
+    await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
+      body: { song_ids: [10, 11] } }, res);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body.song_count, 2);
+    assert(inTx === false, 'transaction closed');
+    const del = sql.calls.findIndex(c => c.text.startsWith('DELETE FROM setlist_songs'));
+    const ins = sql.calls.findIndex(c => c.text.startsWith('INSERT INTO setlist_songs'));
+    assert(del >= 0 && ins > del, 'delete then insert');
   });
 
   await testAsync('reading a setlist only joins this band\'s songs', async () => {

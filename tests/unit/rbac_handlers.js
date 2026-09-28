@@ -50,10 +50,13 @@ function loadHandler(relPath, { role = 'admin', rows } = {}) {
   // Re-require the handler and _auth fresh so the stubbed _db is picked up.
   for (const p of [dbPath, authPath, tokenPath, handlerPath]) delete require.cache[p];
 
-  const memberRow = role ? [{ id: 7, role }] : [];
+  // requireAuth reads the band and the caller's membership in one statement.
   const sql = async (strings, ...values) => {
     const text = strings.join(' ');
-    if (text.includes('JOIN users u2')) return memberRow; // resolveUser membership lookup
+    if (text.includes('JOIN users u2')) {
+      if (!values.includes(ARTIST.slug)) return [];
+      return [{ ...ARTIST, member_id: role ? 7 : null, member_role: role || null, member_password_hash: null }];
+    }
     return rows ? rows(text, values) : [];
   };
 

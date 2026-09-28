@@ -54,7 +54,8 @@ function loadSongs({ storedUrl = null, deleteOk = true } = {}) {
 
   const sql = async (strings, ...values) => {
     const text = strings.join(' ').replace(/\s+/g, ' ');
-    if (text.includes('JOIN users u2'))                             return [{ id: 7, role: 'member' }];
+    // requireAuth: band and membership in one row.
+    if (text.includes('JOIN users u2'))                             return [{ ...ARTIST, member_id: 7, member_role: 'member', member_password_hash: null }];
     // The media steps read only the one URL they need: extra->>key AS url.
     if (text.includes('AS url FROM songs'))                         return [{ url: extra[values[0]] ?? null }];
     if (text.includes('UPDATE songs SET extra'))                    return [{ id: 5, extra }];
