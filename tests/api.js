@@ -32,13 +32,19 @@ loadEnvFile(path.join(REPO_ROOT, '.env'));
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const SLUG     = process.env.ARTIST_SLUG;
+// Without ?slug= the server answers for its own default band (its ARTIST_SLUG),
+// which need not be the one under test.
+const CONFIG_URL = `/api/config?slug=${encodeURIComponent(SLUG || '')}`;
 const PASSWORD = process.env.ARTIST_PASSWORD;
+// With ARTIST_EMAIL the suite logs in as that user and runs on the session token;
+// without it, the band password is the bearer (legacy bootstrap session).
+const EMAIL    = process.env.ARTIST_EMAIL;
 const R2_BASE  = process.env.R2_PUBLIC_URL;
 
-// Workspaces are private: every read below runs with a session. The band
-// password works as a bearer token (legacy bootstrap session, admin role).
-const TOKEN = PASSWORD || null;
-const AUTH  = { token: TOKEN };
+// Workspaces are private: every read below runs with a session. main() swaps in
+// the user session token when ARTIST_EMAIL is set.
+let TOKEN = PASSWORD || null;
+const AUTH = { get token() { return TOKEN; } };
 
 // Vercel Deployment Protection answers every request to a protected preview
 // with its own 401 before the app sees it. Its "Protection Bypass for
@@ -116,7 +122,7 @@ async function testConfig() {
   let result = null;
 
   await test('returns band slug and name', async () => {
-    const { res, json } = await GET('/api/config');
+    const { res, json } = await GET(CONFIG_URL);
     assertStatus(res, json, 200);
     assert(typeof json.slug === 'string' && json.slug, 'missing slug');
     assert(typeof json.name === 'string' && json.name, 'missing name');
@@ -124,7 +130,7 @@ async function testConfig() {
   });
 
   await test('anonymous config ships songs only for a public catalogue', async () => {
-    const { res, json } = await GET('/api/config');
+    const { res, json } = await GET(CONFIG_URL);
     assertStatus(res, json, 200);
     if (json.config?.publicCatalogue === true)
       assert(Array.isArray(json.songs), 'public catalogue should ship songs');
@@ -133,7 +139,7 @@ async function testConfig() {
   });
 
   await test('anonymous config hides private config keys', async () => {
-    const { res, json } = await GET('/api/config');
+    const { res, json } = await GET(CONFIG_URL);
     assertStatus(res, json, 200);
     for (const k of ['gemaIpNameNumber', 'upgradedAt'])
       assert(!(k in (json.config || {})), `${k} leaked to an anonymous visitor`);
@@ -141,22 +147,22 @@ async function testConfig() {
 
   if (TOKEN) {
     await test('authenticated config ships the songs array', async () => {
-      const { res, json } = await GET('/api/config', AUTH);
+      const { res, json } = await GET(CONFIG_URL, AUTH);
       assertStatus(res, json, 200);
       assert(Array.isArray(json.songs), 'songs not an array');
     });
   }
 
   await test('unauthenticated config reports role null', async () => {
-    const { res, json } = await GET('/api/config');
+    const { res, json } = await GET(CONFIG_URL);
     assertStatus(res, json, 200);
     assert('role' in json, 'role field missing');
     assert(json.role === null, `expected role null, got ${JSON.stringify(json.role)}`);
   });
 
-  if (PASSWORD) {
+  if (PASSWORD && !EMAIL) {
     await test('bootstrap-token config reports role null (no users row)', async () => {
-      const { res, json } = await GET('/api/config', { token: PASSWORD });
+      const { res, json } = await GET(CONFIG_URL, { token: TOKEN });
       assertStatus(res, json, 200);
       assert(json.role === null, `expected bootstrap role null, got ${JSON.stringify(json.role)}`);
     });
@@ -699,7 +705,7 @@ async function testAuth(slug) {
 
   // Config PATCH auth
   await test('PATCH /config without token → 401', async () => {
-    const { res, json } = await PATCH('/api/config', { name: 'x' });
+    const { res, json } = await PATCH(CONFIG_URL, { name: 'x' });
     assertStatus(res, json, 401);
   });
 
@@ -815,7 +821,7 @@ async function testMultiUserAuth(slug, token) {
     assertStatus(res, json, 401);
   });
 
-  await test('POST change-password with bootstrap token → 400', async () => {
+  if (!EMAIL) await test('POST change-password with bootstrap token → 400', async () => {
     // Valid fields, but bootstrap login has no users row — rejected by the bootstrap guard.
     const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
       { currentPassword: 'a'.repeat(8), newPassword: 'b'.repeat(8) }, { token });
@@ -1153,7 +1159,8 @@ async function testWrite(slug, token, firstSong, config) {
   // Verify password
   let authed = false;
   await test('POST /auth with correct password → 200', async () => {
-    const { res, json } = await POST(`/api/${slug}/auth`, { password: token });
+    const body = EMAIL ? { email: EMAIL, password: PASSWORD } : { password: token };
+    const { res, json } = await POST(`/api/${slug}/auth`, body);
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
     authed = true;
@@ -1294,12 +1301,12 @@ async function testWrite(slug, token, firstSong, config) {
 
   // Config update
   await test('PATCH /config empty name → 400', async () => {
-    const { res, json } = await PATCH('/api/config', { name: '' }, { token });
+    const { res, json } = await PATCH(CONFIG_URL, { name: '' }, { token });
     assertStatus(res, json, 400);
   });
 
   await test('PATCH /config valid config update → 200', async () => {
-    const { res, json } = await PATCH('/api/config', { config: { _test: null } }, { token });
+    const { res, json } = await PATCH(CONFIG_URL, { config: { _test: null } }, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
   });
@@ -1325,7 +1332,7 @@ async function testWrite(slug, token, firstSong, config) {
 
 // itemUrl: gigs live in the collection handler (one function for both), so a single gig is
 // addressed as ?id=N; venues and organizers have their own catch-all and keep /:id.
-async function testCrudLifecycle(slug, token, config, { resource, createBody, invalidBody, updateBody, labelField,
+async function testCrudLifecycle(slug, token, config, { resource, createBody, invalidBody, updateBody, labelField, setHeart,
                                                         itemUrl = (id, qs = '') => `/api/${slug}/${resource}/${id}${qs}` }) {
   console.log(B(`\nWrite ops — ${resource}`));
 
@@ -1370,6 +1377,31 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
     assert(json[labelField] === updateBody[labelField], `${labelField} not reflected`);
   });
 
+  if (setHeart) {
+    await test(`${resource}: heart must be a boolean`, async () => {
+      assert(!(await setHeart(item, 'yes')), 'string heart accepted');
+    });
+
+    await test(`${resource}: heart set → favourite=1 lists it first`, async () => {
+      assert(await setHeart(item, true), 'heart save failed');
+      const q = encodeURIComponent('[TEST]');
+      const fav = await GET(`/api/${slug}/${resource}?favourite=1&q=${q}`, { token });
+      assertStatus(fav.res, fav.json, 200);
+      assert(fav.json.rows.some(r => r.id === item.id), 'favourite missing from favourite=1');
+      assert(fav.json.rows.every(r => r.heart === true), 'favourite=1 returned a non-favourite');
+      const all = await GET(`/api/${slug}/${resource}?q=${q}`, { token });
+      const firstPlain = all.json.rows.findIndex(r => !r.heart && !r.deleted);
+      const mine = all.json.rows.findIndex(r => r.id === item.id);
+      assert(firstPlain === -1 || mine < firstPlain, 'favourite not listed before non-favourites');
+    });
+
+    await test(`${resource}: heart cleared → gone from favourite=1`, async () => {
+      assert(await setHeart(item, false), 'heart clear failed');
+      const fav = await GET(`/api/${slug}/${resource}?favourite=1&q=${encodeURIComponent('[TEST]')}`, { token });
+      assert(!fav.json.rows.some(r => r.id === item.id), 'unfavourited row still listed');
+    });
+  }
+
   await test(`DELETE /${resource}/:id soft-delete → 200`, async () => {
     const { res, json } = await DELETE(itemUrl(item.id), { token });
     assertStatus(res, json, 200);
@@ -1400,6 +1432,15 @@ async function main() {
     process.exit(1);
   }
 
+  if (EMAIL && PASSWORD) {
+    const { res, json } = await POST(`/api/${SLUG}/auth`, { email: EMAIL, password: PASSWORD });
+    if (!res.ok || !json.token) {
+      console.log(R(`\nLogin as ${EMAIL} failed (${res.status}) — stopping before repeated failures lock the account.`));
+      process.exit(1);
+    }
+    TOKEN = json.token;
+  }
+
   const config = await testConfig();
   if (!config) { printSummary(); return; }
 
@@ -1420,7 +1461,7 @@ async function main() {
   }
 
   // Authenticated config carries the plan (for the venue gating checks).
-  const authed = (await GET('/api/config', AUTH)).json || config;
+  const authed = (await GET(CONFIG_URL, AUTH)).json || config;
 
   const [firstSong] = await Promise.all([
     testSongs(slug),
@@ -1433,22 +1474,30 @@ async function main() {
   await testArrangements(slug, firstSong);
 
   {
-    await testWrite(slug, PASSWORD, firstSong, authed);
-    await testCrudLifecycle(slug, PASSWORD, authed, {
+    await testWrite(slug, TOKEN, firstSong, authed);
+    await testCrudLifecycle(slug, TOKEN, authed, {
       resource: 'venues',
       labelField: 'name',
       createBody:  { name: '[TEST] Venue',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Venue updated', city: 'Teststadt' },
+      setHeart: async (v, heart) => {
+        const { res, json } = await PATCH(`/api/${slug}/venues`, [{ id: v.id, heart }], { token: TOKEN });
+        return res.ok && json.count === 1 && !(json.rejected || []).length;
+      },
     });
-    await testCrudLifecycle(slug, PASSWORD, authed, {
+    await testCrudLifecycle(slug, TOKEN, authed, {
       resource: 'organizers',
       labelField: 'name',
       createBody:  { name: '[TEST] Organizer',   city: 'Teststadt', country: 'DE' },
       invalidBody: { city: 'x' },
       updateBody:  { name: '[TEST] Organizer updated', city: 'Teststadt' },
+      setHeart: async (o, heart) => {
+        const { res } = await PUT(`/api/${slug}/organizers/${o.id}`, { name: o.name, heart }, { token: TOKEN });
+        return res.ok;
+      },
     });
-    await testCrudLifecycle(slug, PASSWORD, authed, {
+    await testCrudLifecycle(slug, TOKEN, authed, {
       resource: 'gigs',
       labelField: 'title',
       itemUrl: (id, qs = '') => `/api/${slug}/gigs?id=${id}${qs.replace('?', '&')}`,
@@ -1456,7 +1505,7 @@ async function main() {
       invalidBody: { date: '2099-12-31' },
       updateBody:  { title: '[TEST] Gig updated', date: '2099-12-31' },
     });
-    await testMultiUserAuth(slug, PASSWORD);
+    await testMultiUserAuth(slug, TOKEN);
   }
 
   printSummary();

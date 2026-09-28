@@ -415,10 +415,10 @@ function renderControls() {
           <input type="checkbox" id="split-sets">
           ${t('setlist.splitSets')}
         </label>
-        <span class="active-toggle">
+        <span class="active-toggle"${songFieldHidden(bandConfig, 'extra.banjoCapo') && songFieldHidden(bandConfig, 'extra.gitCapo') ? ' hidden' : ''}>
           ${t('setlist.minimizeCapo')}
-          <label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>
-          <label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> ${t('setlist.capoGuitar')}</label>
+          ${songFieldHidden(bandConfig, 'extra.banjoCapo') ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>`}
+          ${songFieldHidden(bandConfig, 'extra.gitCapo')   ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> ${t('setlist.capoGuitar')}</label>`}
         </span>
       </div>
     </div>
@@ -460,10 +460,12 @@ function renderResult(songs) {
     // Don't show capo-change across the break
     const prev = (i > 0 && !(splitAt && i === splitAt)) ? songs[i - 1] : null;
 
-    const banjo = song.extra?.banjoCapo != null ? String(song.extra.banjoCapo) : null;
-    const git   = song.extra?.gitCapo   != null ? String(song.extra.gitCapo)   : null;
-    const prevBanjo = prev?.extra?.banjoCapo != null ? String(prev.extra.banjoCapo) : null;
-    const prevGit   = prev?.extra?.gitCapo   != null ? String(prev.extra.gitCapo)   : null;
+    const showBanjo = !songFieldHidden(bandConfig, 'extra.banjoCapo');
+    const showGit   = !songFieldHidden(bandConfig, 'extra.gitCapo');
+    const banjo = showBanjo && song.extra?.banjoCapo != null ? String(song.extra.banjoCapo) : null;
+    const git   = showGit   && song.extra?.gitCapo   != null ? String(song.extra.gitCapo)   : null;
+    const prevBanjo = showBanjo && prev?.extra?.banjoCapo != null ? String(prev.extra.banjoCapo) : null;
+    const prevGit   = showGit   && prev?.extra?.gitCapo   != null ? String(prev.extra.gitCapo)   : null;
     const capoChanged = (banjo !== null && prevBanjo !== null && banjo !== prevBanjo)
                      || (git   !== null && prevGit   !== null && git   !== prevGit);
     const capoParts = [
@@ -474,7 +476,7 @@ function renderResult(songs) {
       ? `<span class="capo-badge${capoChanged ? ' capo-change' : ''}" title="${escHtml(capoChanged ? t('setlist.capoChanged') : t('setlist.capoTitle'))}">Capo: ${capoParts.join(' | ')}</span>`
       : '';
 
-    const s = (v, field, title) => v ? `<span data-field="${escHtml(field)}" title="${escHtml(title)}">${escHtml(v)}</span>` : '';
+    const s = (v, field, title) => v && !songFieldHidden(bandConfig, field) ? `<span data-field="${escHtml(field)}" title="${escHtml(title)}">${escHtml(v)}</span>` : '';
     const metaSpans = [
       s(song.extra?.lead || '',  'extra.lead',   t('setlist.leadTitle')),
       s(song.key ? formatKey(song.key) : '',  'key',           t('setlist.keyTitle')),
@@ -1538,6 +1540,7 @@ function _openSongPanel(setlistSid, songId) {
   var defaultFields = ['key', 'genre', 'energy', 'length_min', 'extra.lead', 'extra.banjoCapo', 'extra.gitCapo'];
   var shownFields = displayFields.length ? displayFields.map(function(f) { return f.field; }) : defaultFields;
   if (shownFields.indexOf('length_min') === -1) shownFields = shownFields.concat(['length_min']);
+  shownFields = shownFields.filter(function(f) { return !songFieldHidden(bandConfig, f); });
 
   var cells = shownFields.map(function(field) {
     var val = cellVal(field);

@@ -292,6 +292,12 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Instrument fields a band hid in Settings (config.hiddenSongFields, e.g. 'extra.lead').
+function songFieldHidden(config, key) {
+  var hidden = config && config.hiddenSongFields;
+  return Array.isArray(hidden) && hidden.indexOf(key) !== -1;
+}
+
 // Favourite heart for list rows (songs, venues, organizers). onclick is a JS expression.
 function heartButtonHtml(on, onclick, title, readOnly) {
   var cls = 'heart-btn' + (on ? ' heart-btn--on' : '');
@@ -376,12 +382,13 @@ function printSetlistSongs(songs, title, cfg) {
   var tsEl = document.getElementById('print-timestamp');
   if (tsEl) tsEl.textContent = date + ' — ' + time;
 
+  var hidden = function(key) { return songFieldHidden(cfg && cfg.config, key); };
   var items = songs.map(function(song, i) {
     var span = function(v, field, ttl) {
-      return v ? '<span data-field="' + escHtml(field) + '" title="' + escHtml(ttl) + '">' + escHtml(v) + '</span>' : '';
+      return v && !hidden(field) ? '<span data-field="' + escHtml(field) + '" title="' + escHtml(ttl) + '">' + escHtml(v) + '</span>' : '';
     };
-    var banjo = song.extra && song.extra.banjoCapo != null ? String(song.extra.banjoCapo) : null;
-    var git   = song.extra && song.extra.gitCapo   != null ? String(song.extra.gitCapo)   : null;
+    var banjo = song.extra && song.extra.banjoCapo != null && !hidden('extra.banjoCapo') ? String(song.extra.banjoCapo) : null;
+    var git   = song.extra && song.extra.gitCapo   != null && !hidden('extra.gitCapo')   ? String(song.extra.gitCapo)   : null;
     var capoParts = [
       banjo !== null && banjo !== '0' ? 'B ' + escHtml(banjo) : '',
       git   !== null && git   !== '0' ? 'G ' + escHtml(git)   : ''

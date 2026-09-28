@@ -1175,5 +1175,7 @@
   "setlist.originLabel": "Songs:",
   "setlist.originAll": "All",
   "setlist.originOwn": "Own songs",
-  "setlist.originCovers": "Covers"
+  "setlist.originCovers": "Covers",
+  "settings.hiddenSongFieldsLabel": "Hidden song fields",
+  "settings.hiddenSongFieldsHint": "Ticked fields disappear from songs, setlists, printouts and stage view. Existing values are kept."
 }

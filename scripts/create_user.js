@@ -162,6 +162,10 @@ async function main() {
       console.log(D('  password: taken from USER_PASSWORD'));
     } else {
       password = await askSecret('Password (min 8 characters): ');
+      while (password.length < 8) {
+        err('Password must be at least 8 characters.');
+        password = await askSecret('Password (min 8 characters): ');
+      }
       if ((await askSecret('Repeat password: ')) !== password) { err('Passwords do not match.'); process.exit(1); }
     }
     if (password.length < 8) { err('Password must be at least 8 characters.'); process.exit(1); }
