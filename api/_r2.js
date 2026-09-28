@@ -1,5 +1,16 @@
-const { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+// The S3 SDK (~300 ms to load) is required on first use, not at module load:
+// songs, gigs, setlists and config import this module for keyFromUrl or a rare
+// upload, and loading the SDK on every cold start slowed their plain reads.
+let _sdk;
+function sdk() {
+  if (!_sdk) {
+    _sdk = {
+      ...require('@aws-sdk/client-s3'),
+      getSignedUrl: require('@aws-sdk/s3-request-presigner').getSignedUrl,
+    };
+  }
+  return _sdk;
+}
 
 // ── Object storage provider ───────────────────────────────────────────────────
 // Current: Cloudflare R2 (S3-compatible, free tier: 10 GB storage, no egress fees)
@@ -26,6 +37,7 @@ const STORAGE = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getR2Client() {
+  const { S3Client } = sdk();
   return new S3Client({
     region:      STORAGE.region,
     endpoint:    STORAGE.endpoint(),
@@ -52,7 +64,7 @@ async function deleteFromR2(url) {
   const key = keyFromUrl(url);
   if (!key) return false;
   try {
-    await getR2Client().send(new DeleteObjectCommand({ Bucket: STORAGE.bucket(), Key: key }));
+    await getR2Client().send(new (sdk().DeleteObjectCommand)({ Bucket: STORAGE.bucket(), Key: key }));
     return true;
   } catch {
     return false;
@@ -65,6 +77,7 @@ async function deleteFromR2(url) {
 async function createPresignedUrl(key, contentType, contentLength) {
   const params = { Bucket: STORAGE.bucket(), Key: key, ContentType: contentType };
   if (Number.isInteger(contentLength) && contentLength > 0) params.ContentLength = contentLength;
+  const { PutObjectCommand, getSignedUrl } = sdk();
   const command = new PutObjectCommand(params);
   const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 300 });
   const publicUrl = `${STORAGE.publicUrl()}/${key}`;
@@ -73,7 +86,7 @@ async function createPresignedUrl(key, contentType, contentLength) {
 
 async function verifyUpload(key) {
   try {
-    const r = await getR2Client().send(new HeadObjectCommand({ Bucket: STORAGE.bucket(), Key: key }));
+    const r = await getR2Client().send(new (sdk().HeadObjectCommand)({ Bucket: STORAGE.bucket(), Key: key }));
     return { size: r.ContentLength ?? 0, contentType: r.ContentType ?? '' };
   } catch {
     return null;

@@ -24,7 +24,7 @@ Merge-commit titles must not name `claude/…` branches — set the title explic
 | `dev` | Preview | Neon dev | default; push freely |
 | `main` | Production | Neon main | PR-merge only |
 
-**This code runs as several Vercel projects, one per deployment** (e.g. the public app plus one project per single-band domain), each with its own env vars and its own `DATABASE_URL`. A new required env var must be set on *every* project — `vercel project ls`, then `vercel env ls production --project <name>` — and a schema change applied to every production DB. A missing `APP_SECRET` once took two projects down for months — every API route 500ing — because only the linked project had it. Required vars and the post-deploy check: `docs/tenant-onboarding.md`.
+**This code runs as several Vercel projects, one per deployment** (e.g. the public app plus one project per single-band domain), each with its own env vars and its own `DATABASE_URL`. A new required env var must be set on *every* project — `vercel project ls`, then `vercel env ls production --project <name>` — and a schema change applied to every production DB. Every variable the API reads is listed in `api/_env.js` (enforced by `tests/unit/env.js`); `GET /api/config?action=health` reports missing ones (names only), whether the DB answers and whether it has the newest migration. A missing `APP_SECRET` once took two projects down for months — every API route 500ing — because only the linked project had it. Required vars and the post-deploy check: `docs/tenant-onboarding.md`.
 
 ---
 
@@ -107,7 +107,9 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
 | `_pdf.js` | `buildSetlistPdf(setlist, songs, artistName)` → Buffer; `setlistTitle(setlist)` |
 | `_r2.js` | `createPresignedUrl`, `deleteFromR2` — swap storage via `STORAGE` block at top |
-| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` (shared by the body-dispatched POSTs in `songs.js` and the REST routes); `makeMediaFn(config)` wraps them for the catch-all |
+| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` (shared by the body-dispatched POSTs in `songs.js` and the REST routes, both `member`); `makeMediaFn(config)` wraps them for the catch-all |
+| `_env.js` | Every env var the API reads (required / recommended / pairs), `envReport()`, and `SCHEMA_VERSION` — the newest migration id in `schema.sql` |
+| `_domain/gema.js` | GEMA CSV parsers and `importWorks` / `importRightholders` — used by the pro-import route and `scripts/import_gema.js` |
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
@@ -166,7 +168,7 @@ await sql`INSERT INTO setlist_songs (setlist_id, song_id, position)
 
 ## Database
 
-Tables: `artists`, `songs`, `song_lyrics`, `gigs`, `setlists`, `setlist_songs`, `song_logs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `rate_limits`, `subscribers`. Full schema (idempotent) in `scripts/schema.sql`. See `DATABASE.md` for entity diagram and column reference.
+Tables: `artists`, `songs`, `song_lyrics`, `gigs`, `schema_migrations`, `setlists`, `setlist_songs`, `song_logs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `rate_limits`, `subscribers`. Full schema (idempotent) in `scripts/schema.sql`. See `DATABASE.md` for entity diagram and column reference.
 
 Songs use a `deleted` flag (soft-delete; lyrics and arrangements stay, so a restore brings them back). `songs.language` is a column. `songs.extra` JSONB holds arbitrary per-song data (`isrc`, `listenUrl`, `sheetUrl`, `playbackUrl`, `capo`, …).
 
@@ -260,10 +262,13 @@ The app ships in **English (default), French, German**. `stage.html` and `api-do
 
 ## Scripts
 
-All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values.
+All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values. New scripts use `scripts/_lib.js` (`loadEnv`, `confirmDb`, `connect` — postgres.js, like the API).
+
+**Schema changes:** append a dated block to `scripts/schema.sql` that ends with `INSERT INTO schema_migrations (id) VALUES ('<date>') ON CONFLICT DO NOTHING;`, and set `SCHEMA_VERSION` in `api/_env.js` to that date (a unit test checks they match). No `DO $$` blocks — `apply_schema.js` splits on `;`.
 
 ```bash
 node scripts/setup.js                                      # first-time: schema + artist row
+node scripts/apply_schema.js [--check] [--yes]             # apply schema.sql; --check lists pending migrations
 node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
 node scripts/import_songs.js --artist <slug> songs.json
 node scripts/import_gema.js  --artist <slug> [--ids <csv>] [--info <csv>] [--beteiligte <csv>] [--dry-run]

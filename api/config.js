@@ -8,6 +8,7 @@ const { verifyUserToken, passwordMatches } = require('./_token');
 const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
 const { configSongs } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
+const { envReport, SCHEMA_VERSION } = require('./_env');
 const admin = require('./_domain/admin');
 const signup = require('./_domain/signup');
 const oauth = require('./_domain/oauth');
@@ -48,6 +49,7 @@ module.exports = wrap(async function handler(req, res) {
   // Slug-independent GET endpoints — must be dispatched before the slug guard.
   // OAuth resolves the user by email, not by workspace, so it has no slug (the
   // client and the /auth/callback rewrite never send one).
+  if (req.query.action === 'health')         return health(req, res);
   if (req.query.action === 'check-slug')     return checkSlug(req, res);
   if (req.query.action === 'my-artists')     return myArtists(req, res);
   if (req.query.action === 'deletion-preflight') return deletion.preflight(req, res);
@@ -73,6 +75,31 @@ module.exports = wrap(async function handler(req, res) {
 
   return publicConfig(req, res, slugParam);
 });
+
+// ── GET ?action=health — post-deploy check ──────────────────────────────────────
+// Which required variables are missing (names only, never values), whether the
+// database answers, and whether it has the newest schema migration. 503 when
+// any of that is wrong, so a deploy script or uptime monitor can alert on it.
+async function health(req, res) {
+  const { missing, warnings } = envReport();
+  let database = 'not configured';
+  let schema = null;
+  if (process.env.DATABASE_URL) {
+    try {
+      const [row] = await getDb()`
+        SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE id = ${SCHEMA_VERSION}) AS current`;
+      database = 'ok';
+      schema = row.current ? 'current' : 'behind';
+    } catch (e) {
+      // No ledger table yet: the database answers but predates it.
+      if (e.code === '42P01') { database = 'ok'; schema = 'behind'; }
+      else database = 'error';
+    }
+  }
+  const ok = missing.length === 0 && database === 'ok' && schema === 'current';
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(ok ? 200 : 503).json({ ok, missing, warnings, database, schema, schemaVersion: SCHEMA_VERSION });
+}
 
 // ── POST ?action=upgrade — self-serve upgrade seam ──────────────────────────────
 // Today: free flip to Pro + sticky upgradedAt for demand tracking, returns mode

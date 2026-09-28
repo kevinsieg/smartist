@@ -330,11 +330,17 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
 -- ── Future migrations ────────────────────────────────────────────────────────
 -- Add ALTER TABLE … ADD COLUMN IF NOT EXISTS blocks here when the schema evolves.
 -- Each block should carry a comment with the date it was added so the history
--- is readable without git blame.
+-- is readable without git blame, and end by recording that date in
+-- schema_migrations. Set SCHEMA_VERSION in api/_env.js to the newest date:
+-- GET /api/config?action=health then says whether a database is behind, and
+-- `node scripts/apply_schema.js --check` lists what a database is missing.
 --
 -- Example:
 --   -- 2026-06-01: add public share token to setlists
 --   ALTER TABLE setlists ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE;
+--   INSERT INTO schema_migrations (id) VALUES ('2026-06-01') ON CONFLICT DO NOTHING;
+--
+-- Blocks older than the ledger (before 2026-09-29) record nothing.
 
 -- 2026-05-27: add street address fields to venues
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS street_number TEXT;
@@ -468,3 +474,12 @@ ALTER TABLE song_lyrics ADD CONSTRAINT song_lyrics_song_same_band_fkey
   FOREIGN KEY (song_id, artist_id) REFERENCES songs(id, artist_id) ON DELETE CASCADE;
 ALTER TABLE gema_works ADD CONSTRAINT gema_works_song_same_band_fkey
   FOREIGN KEY (song_id, artist_id) REFERENCES songs(id, artist_id) ON DELETE SET NULL (song_id);
+
+-- 2026-09-30: migration ledger. Each block from here on ends by recording its
+-- date; the health check and `apply_schema.js --check` read it. Everything
+-- above is covered by this first entry.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id         TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO schema_migrations (id) VALUES ('2026-09-30') ON CONFLICT DO NOTHING;

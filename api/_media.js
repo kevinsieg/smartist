@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 const { getDb, insertAuditLog, getSlug } = require('./_db');
 const { requireAuth } = require('./_auth');
-const { wrap } = require('./_handler');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
 const { isOwnMediaUrl } = require('./_ownership');
 const { storageLimitBytes } = require('./_plans');
@@ -169,7 +168,9 @@ function makeMediaFn(config) {
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });
 
-    const band = await requireAuth(req, res, slug, 'admin');
+    // Member, like the body-dispatched POSTs in songs.js the app uses: the two
+    // paths do the same thing, so a stricter role here protected nothing.
+    const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const sql = getDb();
 
@@ -182,6 +183,4 @@ function makeMediaFn(config) {
   };
 }
 
-function makeMediaHandler(config) { return wrap(makeMediaFn(config)); }
-
-module.exports = { MEDIA_CONFIGS, makeMediaHandler, makeMediaFn, presignMedia, confirmMedia, deleteMedia };
+module.exports = { MEDIA_CONFIGS, makeMediaFn, presignMedia, confirmMedia, deleteMedia };

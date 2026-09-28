@@ -19,6 +19,24 @@ module.exports = wrap(async function handler(req, res) {
     // The list of setlists is never public — only an individual one, reached
     // from a stage link (see setlists/[...path].js).
     if (!user) return res.status(401).json({ error: 'Sign in to view this' });
+
+    // ?song_q=<text>: the setlists (and their gigs) that contain a song whose
+    // title contains <text>. The gig and history filters asked
+    // /songs/:id/setlists once per matching song — one request per song.
+    if (req.query.song_q != null) {
+      const q = String(req.query.song_q).trim().slice(0, 100);
+      if (!q) return res.json([]);
+      const pattern = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
+      const rows = await sql`
+        SELECT DISTINCT sl.id, sl.gig_id
+        FROM setlists sl
+        JOIN setlist_songs ss ON ss.setlist_id = sl.id
+        JOIN songs s ON s.id = ss.song_id AND s.artist_id = sl.artist_id
+        WHERE sl.artist_id = ${artist.id} AND s.deleted = false AND s.title ILIKE ${pattern}
+      `;
+      return res.json(rows);
+    }
+
     const setlists = await sql`
       SELECT
         s.*,

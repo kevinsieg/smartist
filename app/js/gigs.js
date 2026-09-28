@@ -443,20 +443,11 @@ async function _runGigSongFilter(q) {
   clearTimeout(_gigSongTimer);
   if (!q) { _gigSongMatchGigIds = null; _applyGigsFilter(); return; }
   _gigSongTimer = setTimeout(async function() {
-    var matchingSongs = (cfg && cfg.songs || []).filter(function(s) {
-      return (s.title || '').toLowerCase().includes(q);
-    });
-    if (!matchingSongs.length) { _gigSongMatchGigIds = new Set(); _applyGigsFilter(); return; }
     try {
-      var results = await Promise.all(
-        matchingSongs.map(function(s) {
-          return apiFetch('/api/' + artistSlug + '/songs/' + s.id + '/setlists').then(function(r) { return r.ok ? r.json() : []; });
-        })
-      );
-      var setlistIds = new Set(results.reduce(function(acc, objs) { return acc.concat(objs.map(function(o) { return o.id; })); }, []));
-      _gigSongMatchGigIds = new Set(
-        _gigAllSetlists.filter(function(s) { return setlistIds.has(s.id) && s.gig_id; }).map(function(s) { return s.gig_id; })
-      );
+      // One request: the setlists holding a song whose title matches, with their gig.
+      var r = await apiFetch('/api/' + artistSlug + '/setlists?song_q=' + encodeURIComponent(q));
+      var rows = r.ok ? await r.json() : [];
+      _gigSongMatchGigIds = new Set(rows.filter(function(s) { return s.gig_id; }).map(function(s) { return s.gig_id; }));
     } catch {
       _gigSongMatchGigIds = new Set();
     }
