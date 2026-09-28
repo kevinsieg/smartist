@@ -342,7 +342,11 @@ async function run(r) {
   function memberSql(role, onQuery) {
     return async function(strings, ...values) {
       const q = strings.join('?');
-      if (q.includes('JOIN users u2')) return [{ id: 42, role }];
+      // requireAuth: band and membership in one row.
+      if (q.includes('JOIN users u2')) {
+        const slug = values.find(v => typeof v === 'string');
+        return [{ id: 1, slug, name: 'Test', config: {}, password_hash: 'hash', member_id: 42, member_role: role, member_password_hash: null }];
+      }
       return (onQuery && onQuery(q, values)) || [];
     };
   }

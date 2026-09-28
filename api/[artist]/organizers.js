@@ -30,7 +30,7 @@ module.exports = wrap(async function handler(req, res) {
     const rows = await sql`
       SELECT *, COUNT(*) OVER() AS total
       FROM organizers
-      WHERE artist_id = (SELECT id FROM artists WHERE slug = ${slug})
+      WHERE artist_id = ${authArtist.id}
         AND (${pattern}::text IS NULL
           OR name    ILIKE ${pattern}
           OR type    ILIKE ${pattern}
@@ -41,10 +41,6 @@ module.exports = wrap(async function handler(req, res) {
       ORDER BY deleted ASC, heart DESC, name ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
-    if (!rows.length) {
-      const [exists] = await sql`SELECT 1 FROM artists WHERE slug = ${slug} LIMIT 1`;
-      if (!exists) return res.status(404).json({ error: 'Artist not found' });
-    }
     const total = Number(rows[0]?.total ?? 0);
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }

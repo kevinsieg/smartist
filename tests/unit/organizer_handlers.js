@@ -121,10 +121,14 @@ async function run(r) {
     assert(select.values.includes('%giess%'), 'search pattern not applied');
   });
 
-  await testAsync('an unknown artist with no rows is a 404', async () => {
-    const { handler } = loadHandler(LIST, text => (text.includes('FROM artists') ? [] : []));
+  // requireAuth already resolved the band (and answers 404 for an unknown
+  // slug): an empty list is just empty, with no second look-up of the band.
+  await testAsync('an empty list is 200 and does not look the band up again', async () => {
+    const { handler, calls } = loadHandler(LIST, () => []);
     const res = await call(handler, 'GET', '/api/test/organizers');
-    assertEq(res.statusCode, 404);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body.rows, []);
+    assert(!calls.some(c => c.text.includes('FROM artists')), 'band looked up again');
   });
 
   // ── create ─────────────────────────────────────────────────────────────────

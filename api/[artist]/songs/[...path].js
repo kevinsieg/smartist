@@ -182,7 +182,7 @@ module.exports = wrap(async function handler(req, res) {
       // ownerIpNr can come from the request (typed into the UI) or from bands.config.
       const ownerIpNr = ownerIpNameNumber || band.config?.gemaIpNameNumber || null;
       const workNums = csvRows.map(r => r.Werknummer);
-      // The three lookups are independent: one round-trip.
+      // The three lookups are independent of each other.
       const [songs, owned, existing] = await Promise.all([
         sql`SELECT id, title FROM songs WHERE artist_id = ${band.id} AND deleted = false`,
         ownerIpNr ? sql`
@@ -544,7 +544,7 @@ module.exports = wrap(async function handler(req, res) {
   // ── POST /api/:artist/songs/:id/arrangements/:arrId/activate ─────────────
   // Deactivate the others, then activate this one — two statements in that
   // order, because at most one version per song may be active (unique index).
-  // Pipelined in one transaction; the first touches nothing unless the target
+  // One transaction; the first touches nothing unless the target
   // exists, so an unknown id changes nothing.
   if (action === 'arrangements' && arrId && arrSub === 'activate' && req.method === 'POST') {
     const band = await requireAuth(req, res, slug, 'member');
