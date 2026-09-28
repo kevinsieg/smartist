@@ -26,8 +26,12 @@ const postgres = require('postgres');
 // the database does not answer (a suspended compute that never wakes).
 // fetch_types stays on: without it postgres.js cannot send JS arrays as
 // parameters (`${ids}::int[]`), which every batch query here relies on.
+// ssl: off only for a database on this machine (the CI integration job).
 const DB = {
-  connect: url => postgres(url, { ssl: 'require', max: 1, prepare: false, connect_timeout: 10 }),
+  connect: url => postgres(url, {
+    ssl: /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url) ? false : 'require',
+    max: 1, prepare: false, connect_timeout: 10,
+  }),
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
