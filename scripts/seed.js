@@ -22,29 +22,9 @@
 
 'use strict';
 
-const { neon }   = require('@neondatabase/serverless');
-const readline   = require('readline');
-const fs         = require('fs');
-const path       = require('path');
+const lib        = require('./_lib');
 
-// ── Env ────────────────────────────────────────────────────────────────────
-
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
-}
-
-loadEnv(path.join(__dirname, '..', '.env'));
-loadEnv(path.join(__dirname, '..', '.env.local'));
+lib.loadEnv();
 
 // ── Print helpers ──────────────────────────────────────────────────────────
 
@@ -70,24 +50,7 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const sql = neon(DATABASE_URL);
-
-function confirmDb(url) {
-  let host;
-  try { host = new URL(url).hostname; } catch { host = '(unknown)'; }
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  console.log(`\n  ${D('database:')} ${B(host)}`);
-  return new Promise(resolve =>
-    rl.question(`  Continue? (y/n): `, answer => {
-      rl.close();
-      if (!/^y/i.test(answer.trim())) {
-        console.log(D('  Aborted.'));
-        process.exit(0);
-      }
-      resolve();
-    })
-  );
-}
+const sql = lib.connect(DATABASE_URL);
 
 // ── Seed data ──────────────────────────────────────────────────────────────
 
@@ -1437,7 +1400,7 @@ const SETLISTS = [
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function run() {
-  await confirmDb(DATABASE_URL);
+  await lib.confirmDb(DATABASE_URL);
 
   console.log(`\n${B('Smartist — Dev seeder')}`);
   console.log(D('─'.repeat(44)));
@@ -1575,18 +1538,19 @@ async function run() {
 
   console.log(`\n  ${B('Inserting generated venues and organizers…')}`);
   const { venues: extraVenues, organizers: extraOrganizers } = generateCrmRows(artist.id);
-  const col = (rows, k) => rows.map(r => r[k]);
+  // postgres.js cannot send a JS boolean array: booleans go as text, cast via text[]::bool[].
+  const col = (rows, k) => rows.map(r => typeof r[k] === 'boolean' ? String(r[k]) : r[k]);
   await sql`
     INSERT INTO venues (artist_id, name, city, country, postcode, size, status, category, generic_email, heart)
     SELECT ${artist.id}, * FROM unnest(
       ${col(extraVenues, 'name')}::text[], ${col(extraVenues, 'city')}::text[], ${col(extraVenues, 'country')}::text[],
       ${col(extraVenues, 'postcode')}::text[], ${col(extraVenues, 'size')}::int[], ${col(extraVenues, 'status')}::text[],
-      ${col(extraVenues, 'category')}::text[], ${col(extraVenues, 'generic_email')}::text[], ${col(extraVenues, 'heart')}::bool[])`;
+      ${col(extraVenues, 'category')}::text[], ${col(extraVenues, 'generic_email')}::text[], ${col(extraVenues, 'heart')}::text[]::bool[])`;
   await sql`
     INSERT INTO organizers (artist_id, name, type, email, city, country, heart)
     SELECT ${artist.id}, * FROM unnest(
       ${col(extraOrganizers, 'name')}::text[], ${col(extraOrganizers, 'type')}::text[], ${col(extraOrganizers, 'email')}::text[],
-      ${col(extraOrganizers, 'city')}::text[], ${col(extraOrganizers, 'country')}::text[], ${col(extraOrganizers, 'heart')}::bool[])`;
+      ${col(extraOrganizers, 'city')}::text[], ${col(extraOrganizers, 'country')}::text[], ${col(extraOrganizers, 'heart')}::text[]::bool[])`;
   ok(`  ${extraVenues.length} venues, ${extraOrganizers.length} organizers`);
 
   // ── Gigs ──────────────────────────────────────────────────────────────────
@@ -1726,7 +1690,6 @@ async function run() {
   console.log(`  GEMA        ${B(stats.gema_works)} works\n`);
 }
 
-run().catch(e => {
-  err(e.message);
-  process.exit(1);
-});
+run()
+  .catch(e => { err(e.message); process.exitCode = 1; })
+  .finally(() => sql.end());

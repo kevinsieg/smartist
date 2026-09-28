@@ -36,27 +36,12 @@
 
 'use strict';
 
-const { neon }   = require('@neondatabase/serverless');
-const readline   = require('readline');
 const fs         = require('fs');
 const path       = require('path');
+const lib        = require('./_lib');
 const { energyToScale } = require('../api/_song_values');
 
-// Load .env.local
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
-}
-loadEnv(path.join(__dirname, '..', '.env.local'));
+lib.loadEnv();
 
 // ── Args ───────────────────────────────────────────────────────────────────
 
@@ -77,29 +62,15 @@ if (!file) {
 }
 
 if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL is not set. Add it to .env.local or export it.');
+  console.error('DATABASE_URL is not set. Add it to .env / .env.local or export it.');
   process.exit(1);
 }
 
 // ── Import ─────────────────────────────────────────────────────────────────
 
-function confirmDb(url) {
-  let host;
-  try { host = new URL(url).hostname; } catch { host = '(unknown)'; }
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  console.log(`\n  database: ${host}`);
-  return new Promise(resolve =>
-    rl.question('  Continue? (y/n): ', answer => {
-      rl.close();
-      if (!/^y/i.test(answer.trim())) { console.log('  Aborted.'); process.exit(0); }
-      resolve();
-    })
-  );
-}
-
 (async () => {
-  await confirmDb(process.env.DATABASE_URL);
-  const sql   = neon(process.env.DATABASE_URL);
+  await lib.confirmDb(process.env.DATABASE_URL);
+  const sql   = lib.connect(process.env.DATABASE_URL);
   const songs = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
 
   if (!Array.isArray(songs) || songs.length === 0) {
@@ -159,4 +130,5 @@ function confirmDb(url) {
   }
 
   console.log(`\nDone — ${imported} songs imported, ${skipped} skipped (missing title).`);
+  await sql.end();
 })().catch(e => { console.error(e.message); process.exit(1); });

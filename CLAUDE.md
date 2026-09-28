@@ -265,12 +265,12 @@ The app ships in **English (default), French, German**. `stage.html` and `api-do
 
 ## Scripts
 
-All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values. New scripts use `scripts/_lib.js` (`loadEnv`, `confirmDb`, `connect` — postgres.js, like the API).
+All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values. Every script uses `scripts/_lib.js` (`loadEnv`, `confirmDb`, `connect` — postgres.js, like the API; SSL off only for localhost). postgres.js cannot send a JS boolean array: pass `'true'`/`'false'` as `::text[]::bool[]`.
 
 **Schema changes:** append a dated block to `scripts/schema.sql` that ends with `INSERT INTO schema_migrations (id) VALUES ('<date>') ON CONFLICT DO NOTHING;`, and set `SCHEMA_VERSION` in `api/_env.js` to that date (a unit test checks they match). No `DO $$` blocks — `apply_schema.js` splits on `;`.
 
 ```bash
-node scripts/setup.js                                      # first-time: schema + artist row
+node scripts/setup.js                                      # first-time: schema + band + its admin user
 node scripts/apply_schema.js [--check] [--yes]             # apply schema.sql; --check lists pending migrations
 node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
 node scripts/import_songs.js --artist <slug> songs.json
