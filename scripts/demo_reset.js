@@ -77,6 +77,8 @@ if (!process.env.DATABASE_URL) { err('DATABASE_URL is not set.'); process.exit(1
  */
 const TABLES = [
   { name: 'songs',             scope: 'artist', order: 'id' },
+  // Keyed by song_id, no serial id of its own.
+  { name: 'song_lyrics',       scope: 'artist', order: 'song_id', serialId: false },
   { name: 'venues',            scope: 'artist', order: 'id' },
   { name: 'organizers',        scope: 'artist', order: 'id' },
   { name: 'gigs',              scope: 'artist', order: 'id' },
@@ -135,6 +137,21 @@ async function runExport(sql, artist) {
 
 // ── Restore ────────────────────────────────────────────────────────────────
 
+function legacyLyrics(songs) {
+  return songs
+    .filter(r => typeof r.extra?.lyrics === 'string' && r.extra.lyrics.trim())
+    .map(r => ({ song_id: r.id, artist_id: r.artist_id, lyrics: r.extra.lyrics.trim() }));
+}
+
+// A snapshot taken before lyrics and language became columns still carries
+// them in extra: the language moves to its column, the lyrics to song_lyrics
+// (legacyLyrics).
+function songRow(row) {
+  if (!row.extra || typeof row.extra !== 'object') return row;
+  const { lyrics: _lyrics, language, ...extra } = row.extra;
+  return { ...row, language: row.language ?? language ?? null, extra };
+}
+
 async function runRestore(sql, artist) {
   if (!fs.existsSync(SEED_FILE)) {
     err(`No snapshot at ${path.relative(process.cwd(), SEED_FILE)} — run with --export first.`);
@@ -146,6 +163,7 @@ async function runRestore(sql, artist) {
     process.exit(1);
   }
   console.log(`  ${D('snapshot:')} ${seed.exportedAt}`);
+  if (!seed.tables.song_lyrics) seed.tables.song_lyrics = legacyLyrics(seed.tables.songs || []);
 
   await sql.begin(async tx => {
     let removed = 0;
@@ -158,7 +176,7 @@ async function runRestore(sql, artist) {
       const rows = seed.tables[table.name];
       if (!rows || !rows.length) continue;
       if (!await tableExists(tx, table.name)) { warn(`${table.name} missing here — ${rows.length} rows skipped`); continue; }
-      for (const row of rows) await tx`INSERT INTO ${tx(table.name)} ${tx(row)}`;
+      for (const row of rows) await tx`INSERT INTO ${tx(table.name)} ${tx(table.name === 'songs' ? songRow(row) : row)}`;
       added += rows.length;
       console.log(`  ${D(table.name.padEnd(18))} ${rows.length} restored`);
       // Keep the sequence ahead of the ids we just forced in, or the next

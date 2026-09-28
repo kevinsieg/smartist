@@ -44,7 +44,9 @@ function loadSongs({ storedUrl = null, deleteOk = true } = {}) {
   const emailPath   = modulePath('api/_email');
   const aiPath      = modulePath('api/_ai');
 
-  for (const p of [dbPath, authPath, tokenPath, handlerPath]) delete require.cache[p];
+  // _media holds the r2 / db stubs it was first loaded with: reload it too.
+  const mediaPath   = modulePath('api/_media');
+  for (const p of [dbPath, authPath, tokenPath, handlerPath, mediaPath]) delete require.cache[p];
 
   const deltas  = [];
   const deleted = [];
@@ -53,8 +55,8 @@ function loadSongs({ storedUrl = null, deleteOk = true } = {}) {
   const sql = async (strings, ...values) => {
     const text = strings.join(' ').replace(/\s+/g, ' ');
     if (text.includes('JOIN users u2'))                             return [{ id: 7, role: 'member' }];
-    if (text.includes('SELECT * FROM songs'))                       return [{ id: 5, extra }];
-    if (text.includes('SELECT extra FROM songs'))                   return [{ extra }];
+    // The media steps read only the one URL they need: extra->>key AS url.
+    if (text.includes('AS url FROM songs'))                         return [{ url: extra[values[0]] ?? null }];
     if (text.includes('UPDATE songs SET extra'))                    return [{ id: 5, extra }];
     // Counter writes in either shape: "storage_used_bytes + $n" or "... - $n",
     // with or without a GREATEST(0, ...) wrapper.

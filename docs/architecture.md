@@ -115,6 +115,18 @@ directly. Paid billing would only change what writes `config.plan`, through the
 
 ---
 
+## Songs and lyrics
+
+The song list is loaded on every songs, setlist and dashboard page, so it
+carries only what a list shows. Lyrics (up to 20 000 characters each) live in
+their own table, `song_lyrics`: a list row says `has_lyrics`, and the text comes
+with one song's details, the first time the panel, the lyrics modal or the
+stage view needs it. The CSV export asks for all of them in one request.
+Bulk writes (songs PATCH, GEMA import) are one statement per batch, with their
+audit entries in the same statement.
+
+---
+
 ## Media and storage
 
 Uploads go straight from the browser to R2 using presigned URLs, and the server

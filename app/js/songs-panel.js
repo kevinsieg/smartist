@@ -15,7 +15,8 @@ function _openSongPanelContent(item, panelEl) {
 
   var listenUrl   = getVal(song, 'extra.listenUrl');
   var playbackUrl = getVal(song, 'extra.playbackUrl');
-  var lyricsVal   = String(getVal(song, 'extra.lyrics') || '').trim();
+  // Lyrics are not in the list; the section fills in once they are loaded.
+  var hasLyrics   = !!(song.has_lyrics || song.lyrics);
   var sheetUrl    = getVal(song, 'extra.sheetUrl');
   var sidEsc      = escHtml(sid);
   var audioRe     = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
@@ -95,7 +96,7 @@ function _openSongPanelContent(item, panelEl) {
     (lastLive ? _vspCell(t('songs.fieldLastLive'), escHtml(formatDate(lastLive))) : '');
   var statsHtml = statsCells ? _vspSection(t('songs.sectionStats'), statsCells) : '';
 
-  var lang   = getVal(song, 'gema_language') || (song.extra && song.extra.language) || '';
+  var lang   = getVal(song, 'gema_language') || song.language || '';
   var gemaNr = getVal(song, 'gema_work_number');
   var iswc   = song.iswc || (song.extra && song.extra.iswc) || '';
   var isrc   = (song.extra && song.extra.isrc) || '';
@@ -106,8 +107,9 @@ function _openSongPanelContent(item, panelEl) {
     (isrc   ? _vspCell('ISRC',                  escHtml(String(isrc)))   : '');
   var rightsHtml = rightsCells ? _vspSection(t('songs.sectionRights'), rightsCells) : '';
 
-  var lyricsHtml = lyricsVal
-    ? '<div class="vsp-section-label">' + t('songs.lyricsTitle') + '</div><div class="vsp-lyrics">' + escHtml(lyricsVal) + '</div>'
+  var lyricsHtml = hasLyrics
+    ? '<div class="vsp-section-label">' + t('songs.lyricsTitle') + '</div><div class="vsp-lyrics" id="vsp-lyrics-' + escHtml(sid) + '">' +
+        (song.lyrics ? escHtml(song.lyrics) : '<span class="skeleton-line" style="width:9rem;height:0.65rem;display:inline-block;"></span>') + '</div>'
     : '';
 
   panelEl.innerHTML =
@@ -125,6 +127,17 @@ function _openSongPanelContent(item, panelEl) {
 
   // Async: setlist count + arrangement table — both use _panelSid for stale-panel check
   var _panelSid = sid;
+
+  // Async: lyrics come with the song's details, fetched the first time.
+  if (hasLyrics && song.lyrics === undefined) {
+    loadSongLyrics(artistSlug, song).then(function(text) {
+      var el = document.getElementById('vsp-lyrics-' + sid);
+      if (el) el.textContent = text;
+    }).catch(function() {
+      var el = document.getElementById('vsp-lyrics-' + sid);
+      if (el) el.textContent = t('songs.lyricsCouldNotFetch');
+    });
+  }
 
   // Async: arrangement table (auth-only, active version only)
   if (!_viewMode && song.has_arrangement) {
@@ -196,7 +209,7 @@ function _openSongEditForm(sid, panelEl) {
   var refUrl   = escHtml(getVal(song, 'extra.referenceUrl') || '');
   var infoUrl  = escHtml(getVal(song, 'extra.songinfoUrl') || '');
   var comment  = escHtml(getVal(song, 'comment') || '');
-  var lang     = (song.extra && song.extra.language) ? song.extra.language : 'EN';
+  var lang     = song.language || 'EN';
   var iswc     = song.iswc || (song.extra && song.extra.iswc) || '';
   var gemaNr   = song.gema_work_number || '';
   var isrc     = (song.extra && song.extra.isrc) || '';
@@ -257,7 +270,7 @@ function _openSongEditForm(sid, panelEl) {
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.lyricsTitle') + '</summary>' +
         '<div class="edit-section-body">' +
           '<button type="button" class="btn" onclick="_openLyricsFromPanel(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')">' + t('songs.openLyricsEditor') + '</button>' +
-          (isNew ? '<input type="hidden" data-id="' + id + '" data-key="extra.lyrics" value="">' : '') +
+          (isNew ? '<input type="hidden" data-id="' + id + '" data-key="lyrics" value="">' : '') +
         '</div>' +
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionSongInfo') + '</summary>' +
@@ -266,7 +279,7 @@ function _openSongEditForm(sid, panelEl) {
           _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; ' + t('songs.favouriteHint') + '</span></div>') +
           _editField(t('songs.fieldGenre'), inp('genre', genre)) +
           _editField(t('songs.fieldEnergy'), energyInputHtml(id, 'energy', energy, 'markPanelEditDirty()')) +
-          _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
+          _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
           (_isSongFieldHidden('extra.lead') ? '' : _editField(t('songs.fieldLead'), inp('extra.lead', lead))) +
           (_isSongFieldHidden('extra.git2') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>')) +
           (_isSongFieldHidden('extra.harp') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>' + t('songs.fieldHarmonica') + '</span></div>')) +
@@ -435,7 +448,7 @@ function _isNewPanelSid(sid) { return String(sid).indexOf('_new_panel_') === 0; 
 function _openLyricsFromPanel(formId, isNew, sid) {
   if (!isNew) { openLyricsEdit(sid); return; }
   currentLyricsSid = formId;
-  var hidden = document.querySelector('input[data-key="extra.lyrics"][data-id="' + formId + '"]');
+  var hidden = document.querySelector('input[data-key="lyrics"][data-id="' + formId + '"]');
   document.getElementById('lyrics-title').textContent = '¶ ' + t('songs.lyricsTitle');
   document.getElementById('lyrics-edit').value        = (hidden && hidden.value) || '';
   _lyricsSetMode('edit');

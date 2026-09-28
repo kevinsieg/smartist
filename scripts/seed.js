@@ -1485,15 +1485,20 @@ async function run() {
   console.log(`\n  ${B('Inserting songs…')}`);
   const songRows = [];
   for (const s of SONGS) {
+    // Lyrics and language are columns now (song_lyrics, songs.language), not extra keys.
+    const { lyrics = null, language = null, ...extra } = s.extra ?? {};
     const [row] = await sql`
       INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
-                         length_min, interpret, reference_interpret, comment, extra)
+                         length_min, interpret, reference_interpret, comment, language, extra)
       VALUES (${artist.id}, ${s.title}, ${s.active}, ${s.heart ?? false}, ${s.key ?? null},
               ${s.genre ?? null}, ${s.energy ?? null}, ${s.time_signature ?? null},
               ${s.length_min ?? null}, ${s.interpret ?? null}, ${s.reference_interpret ?? null},
-              ${s.comment ?? null}, ${s.extra})
+              ${s.comment ?? null}, ${language}, ${extra})
       RETURNING *
     `;
+    if (lyrics) {
+      await sql`INSERT INTO song_lyrics (song_id, artist_id, lyrics) VALUES (${row.id}, ${artist.id}, ${lyrics})`;
+    }
     songRows.push(row);
     ok(`  ${row.active ? '' : D('[inactive] ')}${row.title}`);
   }

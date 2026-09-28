@@ -26,7 +26,12 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     const sql = getDb();
     const [songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs] = await Promise.all([
-      sql`SELECT * FROM songs WHERE artist_id = ${band.id} ORDER BY id`,
+      // Lyrics live in their own table; in the CSV they stay a column of songs.
+      sql`
+        SELECT s.*, l.lyrics FROM songs s
+        LEFT JOIN song_lyrics l ON l.song_id = s.id
+        WHERE s.artist_id = ${band.id} ORDER BY s.id
+      `,
       // Arrangements are real, hand-entered data and this export is offered on
       // /profile as the last chance before permanent deletion — anything the
       // deletion destroys has to be in here.
@@ -100,7 +105,8 @@ module.exports = wrap(async function handler(req, res) {
         WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
       `,
       req.method === 'GET' ? sql`
-        SELECT songs.*, ss.position
+        SELECT songs.*, ss.position,
+               EXISTS (SELECT 1 FROM song_lyrics l WHERE l.song_id = songs.id) AS has_lyrics
         FROM setlist_songs ss
         JOIN songs ON ss.song_id = songs.id
         WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${band.id}

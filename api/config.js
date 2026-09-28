@@ -6,6 +6,7 @@ const { requireAuth, getAccess, canBrowseCatalogue, checkCredentials } = require
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, passwordMatches } = require('./_token');
 const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
+const { configSongs } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const admin = require('./_domain/admin');
 const signup = require('./_domain/signup');
@@ -186,8 +187,9 @@ async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) 
 const PRIVATE_CONFIG_KEYS = ['gemaIpNameNumber', 'upgradedAt'];
 
 // ── GET — public config (songs, counts, feature flags) ──────────────────────────
-// ?light=1 skips the songs payload (full song rows incl. lyrics + GEMA join)
-// for pages that only need name/config/counts — most of the app.
+// ?light=1 skips the songs payload (full song rows + GEMA join) for pages that
+// only need name/config/counts — most of the app. Lyrics are never in it; they
+// come with one song's details (see api/_domain/songs.js).
 // Private workspaces serve only name/config/flags (login-page branding) to
 // unauthenticated visitors — no songs, no counts.
 async function publicConfig(req, res, slugParam) {
@@ -199,19 +201,7 @@ async function publicConfig(req, res, slugParam) {
   const light = priv || req.query.light === '1';
 
   const [songs, [counts]] = await Promise.all([
-    light ? Promise.resolve([]) : sql`
-      SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language
-      FROM songs s
-      LEFT JOIN LATERAL (
-        SELECT iswc, gema_work_number, language
-        FROM gema_works
-        WHERE song_id = s.id
-        ORDER BY gema_work_number
-        LIMIT 1
-      ) g ON true
-      WHERE s.artist_id = ${band.id} AND s.deleted = false
-      ORDER BY s.title
-    `,
+    light ? Promise.resolve([]) : configSongs(sql, band.id),
     priv ? Promise.resolve([undefined]) : sql`
       SELECT
         (SELECT COUNT(*)::int FROM songs      WHERE artist_id = ${band.id} AND NOT deleted) AS songs,
