@@ -239,8 +239,8 @@ function _openSongEditForm(sid, panelEl) {
         '<div class="edit-section-body">' +
           _editField(t('songs.fieldTitle'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="' + t('songs.songTitlePlaceholder') + '">') +
           _editField(t('songs.fieldKey'), '<select class="edit-input" data-id="' + id + '" data-key="key" onchange="markPanelEditDirty()">' + _keyOptions(getVal(song, 'key')) + '</select>') +
-          _editField(t('songs.fieldGitCapo'), num('extra.gitCapo', gitCapo)) +
-          _editField(t('songs.fieldBanjoCapo'), num('extra.banjoCapo', bjCapo)) +
+          (_isSongFieldHidden('extra.gitCapo') ? '' : _editField(t('songs.fieldGitCapo'), num('extra.gitCapo', gitCapo))) +
+          (_isSongFieldHidden('extra.banjoCapo') ? '' : _editField(t('songs.fieldBanjoCapo'), num('extra.banjoCapo', bjCapo))) +
           _editField(t('songs.fieldBpm'), num('bpm', bpm)) +
           _editField(t('songs.fieldTimeSig'), '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
           _editField(t('songs.fieldLengthMmss'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
@@ -267,9 +267,9 @@ function _openSongEditForm(sid, panelEl) {
           _editField(t('songs.fieldGenre'), inp('genre', genre)) +
           _editField(t('songs.fieldEnergy'), energyInputHtml(id, 'energy', energy, 'markPanelEditDirty()')) +
           _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="extra.language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
-          _editField(t('songs.fieldLead'), inp('extra.lead', lead)) +
-          _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>') +
-          _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>' + t('songs.fieldHarmonica') + '</span></div>') +
+          (_isSongFieldHidden('extra.lead') ? '' : _editField(t('songs.fieldLead'), inp('extra.lead', lead))) +
+          (_isSongFieldHidden('extra.git2') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>')) +
+          (_isSongFieldHidden('extra.harp') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>' + t('songs.fieldHarmonica') + '</span></div>')) +
           _editField(t('songs.fieldRefInterpret'), inp('reference_interpret', refInt)) +
           _editField(t('songs.fieldSongInfoUrl'), inp('extra.songinfoUrl', infoUrl, 'url')) +
           _editField(t('songs.fieldComment'), inp('comment', comment)) +

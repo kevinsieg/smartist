@@ -94,7 +94,7 @@ function confirmDb(url) {
 const SONGS = [
   // ── Originals ─────────────────────────────────────────────────────────────
   {
-    title: 'Midnight Drive', active: true, key: 'D', genre: 'Rock', energy: 'Fast',
+    title: 'Midnight Drive', active: true, key: 'D', genre: 'Rock', energy: 8,
     length_min: 3.75, interpret: null, time_signature: '4/4',
     comment: 'Our opener — high energy start',
     extra: {
@@ -125,7 +125,7 @@ This road was made for me`,
     },
   },
   {
-    title: 'River Town Blues', active: true, key: 'E', genre: 'Blues', energy: 'Medium',
+    title: 'River Town Blues', active: true, key: 'E', genre: 'Blues', energy: 5,
     length_min: 4.25, interpret: null,
     comment: 'B.B. King-style, key may drop to Eb live',
     extra: {
@@ -150,7 +150,7 @@ And I keep on waiting for something more`,
     },
   },
   {
-    title: 'Morning Light', active: true, key: 'G', genre: 'Folk', energy: 'Slow',
+    title: 'Morning Light', active: true, key: 'G', genre: 'Folk', energy: 2,
     length_min: 3.5, interpret: null,
     extra: {
       lyrics: `[Verse 1]
@@ -177,7 +177,7 @@ Let the morning light in`,
     },
   },
   {
-    title: 'Broken Strings', active: true, key: 'Am', genre: 'Blues', energy: 'Slow',
+    title: 'Broken Strings', active: true, key: 'Am', genre: 'Blues', energy: 2,
     length_min: 4.0, interpret: null,
     extra: {
       lyrics: `[Verse 1]
@@ -206,7 +206,7 @@ Broken strings... broken strings...`,
     },
   },
   {
-    title: 'Last Train South', active: true, key: 'A', genre: 'Country', energy: 'Medium',
+    title: 'Last Train South', active: true, key: 'A', genre: 'Country', energy: 5,
     length_min: 3.75, interpret: null,
     extra: {
       capo: 2,
@@ -236,7 +236,7 @@ Are gone — I'm not keeping score`,
     },
   },
   {
-    title: 'Smoke and Mirrors', active: true, key: 'Dm', genre: 'Rock', energy: 'Fast',
+    title: 'Smoke and Mirrors', active: true, key: 'Dm', genre: 'Rock', energy: 8,
     length_min: 3.5, interpret: null,
     extra: {
       lyrics: `[Verse 1]
@@ -263,7 +263,7 @@ Just me believing in your schemes`,
     },
   },
   {
-    title: 'The Wanderer', active: true, key: 'C', genre: 'Folk', energy: 'Medium',
+    title: 'The Wanderer', active: true, key: 'C', genre: 'Folk', energy: 5,
     length_min: 4.0, interpret: null,
     extra: {
       capo: 0,
@@ -293,7 +293,7 @@ Every dawn a different set of lights`,
     },
   },
   {
-    title: 'Empty Room', active: true, key: 'E', genre: 'Blues', energy: 'Slow',
+    title: 'Empty Room', active: true, key: 'E', genre: 'Blues', energy: 2,
     length_min: 5.0, interpret: null,
     extra: {
       lyrics: `[Verse 1]
@@ -325,7 +325,7 @@ And sing this empty room song`,
   },
   // ── Covers — Rock / Classic ────────────────────────────────────────────────
   {
-    title: 'Highway Star', active: true, key: 'G', genre: 'Rock', energy: 'Fast',
+    title: 'Highway Star', active: true, key: 'G', genre: 'Rock', energy: 8,
     length_min: 4.5, interpret: 'Deep Purple',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=aGgGhXP2KQk',
@@ -333,7 +333,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Whole Lotta Love', active: true, key: 'E', genre: 'Rock', energy: 'Fast',
+    title: 'Whole Lotta Love', active: true, key: 'E', genre: 'Rock', energy: 8,
     length_min: 5.5, interpret: 'Led Zeppelin',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=HQmmM_qwG4k',
@@ -341,7 +341,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Come Together', active: true, key: 'Dm', genre: 'Rock', energy: 'Medium',
+    title: 'Come Together', active: true, key: 'Dm', genre: 'Rock', energy: 5,
     length_min: 4.2, interpret: 'The Beatles',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=45cYwDMibGo',
@@ -349,7 +349,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'La Grange', active: true, key: 'E', genre: 'Blues Rock', energy: 'Fast',
+    title: 'La Grange', active: true, key: 'E', genre: 'Blues Rock', energy: 8,
     length_min: 5.5, interpret: 'ZZ Top',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=JBL9h7XTQUU',
@@ -357,7 +357,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Little Wing', active: true, key: 'Em', genre: 'Rock', energy: 'Slow',
+    title: 'Little Wing', active: true, key: 'Em', genre: 'Rock', energy: 2,
     length_min: 2.5, interpret: 'Jimi Hendrix',
     comment: 'Slow intro, build up gradually',
     extra: {
@@ -366,7 +366,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'All Along the Watchtower', active: true, key: 'Am', genre: 'Rock', energy: 'Medium',
+    title: 'All Along the Watchtower', active: true, key: 'Am', genre: 'Rock', energy: 5,
     length_min: 4.0, interpret: 'Bob Dylan', reference_interpret: 'Jimi Hendrix',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=TLV4_xaYynY',
@@ -374,7 +374,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Hotel California', active: true, key: 'Bm', genre: 'Rock', energy: 'Medium',
+    title: 'Hotel California', active: true, key: 'Bm', genre: 'Rock', energy: 5,
     length_min: 6.5, interpret: 'Eagles',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=BciS5krYL80',
@@ -382,7 +382,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Knockin\' on Heaven\'s Door', active: true, key: 'G', genre: 'Folk Rock', energy: 'Slow',
+    title: 'Knockin\' on Heaven\'s Door', active: true, key: 'G', genre: 'Folk Rock', energy: 2,
     length_min: 2.75, interpret: 'Bob Dylan',
     extra: {
       capo: 0,
@@ -391,7 +391,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Blowin\' in the Wind', active: true, key: 'G', genre: 'Folk', energy: 'Slow',
+    title: 'Blowin\' in the Wind', active: true, key: 'G', genre: 'Folk', energy: 2,
     length_min: 2.75, interpret: 'Bob Dylan',
     extra: {
       capo: 2,
@@ -401,7 +401,7 @@ And sing this empty room song`,
   },
   // ── Covers — Blues ────────────────────────────────────────────────────────
   {
-    title: 'Crossroads', active: true, key: 'A', genre: 'Blues', energy: 'Fast',
+    title: 'Crossroads', active: true, key: 'A', genre: 'Blues', energy: 8,
     length_min: 3.75, interpret: 'Robert Johnson', reference_interpret: 'Cream',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=MFpO2AJI9mk',
@@ -409,7 +409,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'The Thrill Is Gone', active: true, key: 'Bm', genre: 'Blues', energy: 'Slow',
+    title: 'The Thrill Is Gone', active: true, key: 'Bm', genre: 'Blues', energy: 2,
     length_min: 5.0, interpret: 'B.B. King',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=oica5jG7FpU',
@@ -417,7 +417,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Pride and Joy', active: true, key: 'E', genre: 'Blues', energy: 'Medium',
+    title: 'Pride and Joy', active: true, key: 'E', genre: 'Blues', energy: 5,
     length_min: 3.5, interpret: 'Stevie Ray Vaughan',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=pB3hFoEULHU',
@@ -425,7 +425,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Born Under a Bad Sign', active: true, key: 'C#m', genre: 'Blues', energy: 'Medium',
+    title: 'Born Under a Bad Sign', active: true, key: 'C#m', genre: 'Blues', energy: 5,
     length_min: 3.25, interpret: 'Albert King',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=5JlXHxS5lho',
@@ -433,7 +433,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Ain\'t No Sunshine', active: true, key: 'Am', genre: 'Soul', energy: 'Slow',
+    title: 'Ain\'t No Sunshine', active: true, key: 'Am', genre: 'Soul', energy: 2,
     length_min: 2.1, interpret: 'Bill Withers',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=CICIOJqEb5c',
@@ -442,7 +442,7 @@ And sing this empty room song`,
   },
   // ── Covers — Folk / Country ───────────────────────────────────────────────
   {
-    title: 'Wagon Wheel', active: true, key: 'A', genre: 'Country', energy: 'Medium',
+    title: 'Wagon Wheel', active: true, key: 'A', genre: 'Country', energy: 5,
     length_min: 4.0, interpret: 'Old Crow Medicine Show',
     extra: {
       capo: 2,
@@ -451,7 +451,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Take Me Home, Country Roads', active: true, key: 'G', genre: 'Country', energy: 'Medium',
+    title: 'Take Me Home, Country Roads', active: true, key: 'G', genre: 'Country', energy: 5,
     length_min: 3.25, interpret: 'John Denver',
     extra: {
       capo: 0,
@@ -460,7 +460,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'The House of the Rising Sun', active: true, key: 'Am', genre: 'Folk', energy: 'Slow',
+    title: 'The House of the Rising Sun', active: true, key: 'Am', genre: 'Folk', energy: 2,
     length_min: 4.5, interpret: 'The Animals',
     extra: {
       capo: 0,
@@ -469,7 +469,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Old Man', active: true, key: 'D', genre: 'Folk', energy: 'Medium',
+    title: 'Old Man', active: true, key: 'D', genre: 'Folk', energy: 5,
     length_min: 3.5, interpret: 'Neil Young',
     extra: {
       capo: 5,
@@ -478,7 +478,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'The Weight', active: true, key: 'A', genre: 'Folk Rock', energy: 'Medium',
+    title: 'The Weight', active: true, key: 'A', genre: 'Folk Rock', energy: 5,
     length_min: 5.0, interpret: 'The Band',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=FFqb1I-hiHE',
@@ -486,7 +486,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Fields of Gold', active: true, key: 'Bm', genre: 'Pop', energy: 'Slow',
+    title: 'Fields of Gold', active: true, key: 'Bm', genre: 'Pop', energy: 2,
     length_min: 3.75, interpret: 'Sting',
     extra: {
       capo: 2,
@@ -496,7 +496,7 @@ And sing this empty room song`,
   },
   // ── Covers — Funk / Soul ──────────────────────────────────────────────────
   {
-    title: 'Superstition', active: true, key: 'Ebm', genre: 'Funk', energy: 'Medium',
+    title: 'Superstition', active: true, key: 'Ebm', genre: 'Funk', energy: 5,
     length_min: 4.0, interpret: 'Stevie Wonder',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=0CFuCYNx-1g',
@@ -504,7 +504,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Signed, Sealed, Delivered', active: true, key: 'F', genre: 'Soul', energy: 'Medium',
+    title: 'Signed, Sealed, Delivered', active: true, key: 'F', genre: 'Soul', energy: 5,
     length_min: 2.75, interpret: 'Stevie Wonder',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=WtKd0jCHaBs',
@@ -512,7 +512,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Respect', active: true, key: 'C', genre: 'Soul', energy: 'Medium',
+    title: 'Respect', active: true, key: 'C', genre: 'Soul', energy: 5,
     length_min: 2.5, interpret: 'Aretha Franklin',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=6FOUqQt3Kg0',
@@ -520,7 +520,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Mustang Sally', active: true, key: 'C', genre: 'Soul', energy: 'Medium',
+    title: 'Mustang Sally', active: true, key: 'C', genre: 'Soul', energy: 5,
     length_min: 3.25, interpret: 'Wilson Pickett',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=7dS9A3CaXpE',
@@ -528,7 +528,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Georgia on My Mind', active: true, key: 'F', genre: 'Soul', energy: 'Slow',
+    title: 'Georgia on My Mind', active: true, key: 'F', genre: 'Soul', energy: 2,
     length_min: 3.5, interpret: 'Ray Charles',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=Zl2DSPZjfO8',
@@ -537,7 +537,7 @@ And sing this empty room song`,
   },
   // ── Covers — Reggae ───────────────────────────────────────────────────────
   {
-    title: 'No Woman, No Cry', active: true, key: 'C', genre: 'Reggae', energy: 'Slow',
+    title: 'No Woman, No Cry', active: true, key: 'C', genre: 'Reggae', energy: 2,
     length_min: 6.5, interpret: 'Bob Marley',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=nQ5R7kGVDSg',
@@ -545,7 +545,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Redemption Song', active: true, key: 'G', genre: 'Reggae', energy: 'Slow',
+    title: 'Redemption Song', active: true, key: 'G', genre: 'Reggae', energy: 2,
     length_min: 3.5, interpret: 'Bob Marley',
     extra: {
       capo: 2,
@@ -555,7 +555,7 @@ And sing this empty room song`,
   },
   // ── Covers — Alternative / Indie ─────────────────────────────────────────
   {
-    title: 'Creep', active: true, key: 'G', genre: 'Alternative', energy: 'Slow',
+    title: 'Creep', active: true, key: 'G', genre: 'Alternative', energy: 2,
     length_min: 3.75, interpret: 'Radiohead',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=XFkzRNyygfk',
@@ -563,7 +563,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Mr. Jones', active: true, key: 'Am', genre: 'Alternative', energy: 'Medium',
+    title: 'Mr. Jones', active: true, key: 'Am', genre: 'Alternative', energy: 5,
     length_min: 4.5, interpret: 'Counting Crows',
     extra: {
       capo: 5,
@@ -572,7 +572,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Roxanne', active: true, key: 'Am', genre: 'Rock', energy: 'Medium',
+    title: 'Roxanne', active: true, key: 'Am', genre: 'Rock', energy: 5,
     length_min: 3.25, interpret: 'The Police',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=3T1c7GkzRQQ',
@@ -580,7 +580,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'With or Without You', active: true, key: 'D', genre: 'Rock', energy: 'Slow',
+    title: 'With or Without You', active: true, key: 'D', genre: 'Rock', energy: 2,
     length_min: 4.75, interpret: 'U2',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=XmSdTa9kaiQ',
@@ -588,7 +588,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Tears in Heaven', active: true, key: 'A', genre: 'Pop', energy: 'Slow',
+    title: 'Tears in Heaven', active: true, key: 'A', genre: 'Pop', energy: 2,
     length_min: 4.5, interpret: 'Eric Clapton',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=JOZBEGnl_G0',
@@ -596,7 +596,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Wonderful Tonight', active: true, key: 'G', genre: 'Rock', energy: 'Slow',
+    title: 'Wonderful Tonight', active: true, key: 'G', genre: 'Rock', energy: 2,
     length_min: 3.75, interpret: 'Eric Clapton',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=F4XF3GHMeW4',
@@ -604,7 +604,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Stand By Me', active: true, key: 'A', genre: 'Soul', energy: 'Medium',
+    title: 'Stand By Me', active: true, key: 'A', genre: 'Soul', energy: 5,
     length_min: 3.0, interpret: 'Ben E. King',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=hwZNL7QVJjE',
@@ -612,7 +612,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Johnny B. Goode', active: true, key: 'Bb', genre: 'Rock', energy: 'Fast',
+    title: 'Johnny B. Goode', active: true, key: 'Bb', genre: 'Rock', energy: 8,
     length_min: 2.75, interpret: 'Chuck Berry',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=ZgmGkCKiq2I',
@@ -620,7 +620,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Feeling Good', active: true, key: 'Dm', genre: 'Jazz', energy: 'Slow',
+    title: 'Feeling Good', active: true, key: 'Dm', genre: 'Jazz', energy: 2,
     length_min: 3.0, interpret: 'Nina Simone',
     comment: 'Open with this on acoustic nights',
     extra: {
@@ -630,7 +630,7 @@ And sing this empty room song`,
   },
   // ── Inactive ──────────────────────────────────────────────────────────────
   {
-    title: 'Brown Eyed Girl', active: false, key: 'G', genre: 'Rock', energy: 'Medium',
+    title: 'Brown Eyed Girl', active: false, key: 'G', genre: 'Rock', energy: 5,
     length_min: 3.5, interpret: 'Van Morrison',
     comment: 'Too overplayed — retired',
     extra: {
@@ -639,7 +639,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Sweet Home Chicago', active: false, key: 'E', genre: 'Blues', energy: 'Fast',
+    title: 'Sweet Home Chicago', active: false, key: 'E', genre: 'Blues', energy: 8,
     length_min: 3.0, interpret: 'Robert Johnson',
     extra: {
       listenUrl: 'https://www.youtube.com/watch?v=v9Sl_p8FMkA',
@@ -647,7 +647,7 @@ And sing this empty room song`,
     },
   },
   {
-    title: 'Africa', active: false, key: 'Abm', genre: 'Pop', energy: 'Medium',
+    title: 'Africa', active: false, key: 'Abm', genre: 'Pop', energy: 5,
     length_min: 4.5, interpret: 'Toto',
     comment: 'Dropped — doesn\'t fit the setlist vibe',
     extra: {
@@ -1022,6 +1022,55 @@ const ORGANIZERS = [
 ];
 
 // venue_key and organizer_key reference VENUES[*].name and ORGANIZERS[*].name
+// ── Generated CRM data ─────────────────────────────────────────────────────
+
+const CRM_PLACES = [
+  ['Berlin', 'DE', '10115'], ['Hamburg', 'DE', '20095'], ['Köln', 'DE', '50667'], ['Leipzig', 'DE', '04109'],
+  ['Freiburg', 'DE', '79098'], ['Wien', 'AT', '1010'], ['Graz', 'AT', '8010'], ['Zürich', 'CH', '8001'],
+  ['Basel', 'CH', '4001'], ['Lyon', 'FR', '69001'], ['Nantes', 'FR', '44000'], ['Brest', 'FR', '29200'],
+  ['Strasbourg', 'FR', '67000'], ['Gent', 'BE', '9000'], ['Utrecht', 'NL', '3511'], ['Aarhus', 'DK', '8000'],
+];
+const CRM_WORDS = ['Alte Mühle', 'Blue Note', 'Club Cave', 'Dorfkrug', 'Eulenspiegel', 'Fabrik', 'Grüner Salon',
+  'Hafenbar', 'Irish Pub', 'Jazzkeller', 'Kulturhaus', 'Lindenhof', 'Musikbunker', 'Nachtcafé', 'Offene Bühne',
+  'Pavillon', 'Quartier', 'Rathauskeller', 'Scheune', 'Theaterhaus', 'Unterwerk', 'Villa Kunterbunt',
+  'Weinstube', 'Xtra Bar', 'Yard Stage', 'Zollhaus', '3Klang', '1. Stock', 'Ölmühle', 'Éclat'];
+const CRM_STATUSES   = ['prospect', 'contacted', 'confirmed', 'active', 'declined'];
+const CRM_CATEGORIES = ['association', 'club', 'festival', 'private', 'pub', 'restaurant', 'street'];
+const CRM_ORG_TYPES  = ['person', 'organization', 'event', 'press', 'radio'];
+const CRM_ORG_WORDS  = ['Agentur', 'Booking', 'Festival', 'Kulturverein', 'Radio', 'Presse', 'Konzertbüro', 'Stadtfest'];
+
+// Deterministic, so a reseed produces the same rows.
+function generateCrmRows(artistId) {
+  const venues = [];
+  CRM_WORDS.forEach((word, w) => {
+    for (let i = 0; i < 5; i++) {
+      const [city, country, postcode] = CRM_PLACES[(w * 5 + i) % CRM_PLACES.length];
+      const n = w * 5 + i;
+      venues.push({
+        artist_id: artistId, name: `${word} ${city}`, city, country, postcode,
+        size: 50 + (n * 37) % 950,
+        status: CRM_STATUSES[n % CRM_STATUSES.length],
+        category: CRM_CATEGORIES[n % CRM_CATEGORIES.length],
+        generic_email: `booking${n}@example.org`,
+        heart: n % 11 === 0,
+      });
+    }
+  });
+  const organizers = [];
+  CRM_ORG_WORDS.forEach((word, w) => {
+    CRM_PLACES.forEach(([city, country], p) => {
+      if ((w + p) % 2) return;
+      const n = w * CRM_PLACES.length + p;
+      organizers.push({
+        artist_id: artistId, name: `${word} ${city}`, type: CRM_ORG_TYPES[n % CRM_ORG_TYPES.length],
+        email: `contact${n}@example.org`, city, country,
+        heart: n % 9 === 0,
+      });
+    });
+  });
+  return { venues, organizers };
+}
+
 const GIGS = [
   // ── 2022 ──────────────────────────────────────────────────────────────────
   {
@@ -1514,6 +1563,26 @@ async function run() {
     organizerByName[o.name] = row;
     ok(`  ${row.name}${row.type ? D(` (${row.type})`) : ''}`);
   }
+
+  // ── Generated CRM rows ────────────────────────────────────────────────────
+  // Enough venues and organizers to exercise paging (50 per page), the A–Z bar
+  // (including '#' for non-alphabetic names) and the favourites filter.
+
+  console.log(`\n  ${B('Inserting generated venues and organizers…')}`);
+  const { venues: extraVenues, organizers: extraOrganizers } = generateCrmRows(artist.id);
+  const col = (rows, k) => rows.map(r => r[k]);
+  await sql`
+    INSERT INTO venues (artist_id, name, city, country, postcode, size, status, category, generic_email, heart)
+    SELECT ${artist.id}, * FROM unnest(
+      ${col(extraVenues, 'name')}::text[], ${col(extraVenues, 'city')}::text[], ${col(extraVenues, 'country')}::text[],
+      ${col(extraVenues, 'postcode')}::text[], ${col(extraVenues, 'size')}::int[], ${col(extraVenues, 'status')}::text[],
+      ${col(extraVenues, 'category')}::text[], ${col(extraVenues, 'generic_email')}::text[], ${col(extraVenues, 'heart')}::bool[])`;
+  await sql`
+    INSERT INTO organizers (artist_id, name, type, email, city, country, heart)
+    SELECT ${artist.id}, * FROM unnest(
+      ${col(extraOrganizers, 'name')}::text[], ${col(extraOrganizers, 'type')}::text[], ${col(extraOrganizers, 'email')}::text[],
+      ${col(extraOrganizers, 'city')}::text[], ${col(extraOrganizers, 'country')}::text[], ${col(extraOrganizers, 'heart')}::bool[])`;
+  ok(`  ${extraVenues.length} venues, ${extraOrganizers.length} organizers`);
 
   // ── Gigs ──────────────────────────────────────────────────────────────────
 
