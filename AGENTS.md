@@ -47,6 +47,7 @@ production database.
 npm run test:unit    # always, before every push (no database needed)
 npm run test:all     # unit + API + browser smoke test on a local stack
 npm run dev:up       # the local stack alone: own Postgres, seeded band, :3000
+npm run dev:restart  # after changing api/ code: the server keeps modules in memory
 ```
 
 The local stack never touches a remote database. CI runs the same suites, plus
