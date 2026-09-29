@@ -101,7 +101,7 @@ async function handleAudioFile(input, sid) {
       if (!td.querySelector('.listen-play-btn')) {
         const btn = document.createElement('button');
         btn.className = 'listen-play-btn'; btn.title = t('songs.play'); btn.textContent = '▶';
-        btn.setAttribute('onclick', `openPlayer('${sid}')`);
+        btn.setAttribute('data-onclick', `openPlayer('${sid}')`);
         td.prepend(btn);
       }
     }
@@ -141,7 +141,7 @@ function openPlayer(sid) {
   const content  = document.getElementById('player-content');
 
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
     content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}"
       allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
@@ -209,7 +209,7 @@ async function confirmDeleteAudio() {
         btn.className = 'listen-upload-btn';
         btn.title = t('songs.uploadAudio');
         btn.textContent = '↑';
-        btn.setAttribute('onclick', `triggerAudioUpload('${sid}')`);
+        btn.setAttribute('data-onclick', `triggerAudioUpload('${sid}')`);
         td.appendChild(btn);
       }
     }
@@ -245,7 +245,7 @@ async function handleReplaceFile(input) {
     const embedUrl = toEmbedUrl(publicUrl);
     const content = document.getElementById('player-content');
     if (isAudio) {
-      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     } else if (embedUrl) {
       content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
     } else {
@@ -308,7 +308,7 @@ async function handleSheetFile(input, sid) {
       if (!td.querySelector('.sheet-open-btn')) {
         const btn = document.createElement('button');
         btn.className = 'sheet-open-btn'; btn.title = t('songs.openSheet'); btn.textContent = '≡';
-        btn.setAttribute('onclick', `openSheet('${sid}')`);
+        btn.setAttribute('data-onclick', `openSheet('${sid}')`);
         td.prepend(btn);
       }
     }
@@ -394,7 +394,7 @@ async function confirmDeleteSheet() {
         btn.className = 'sheet-upload-btn';
         btn.title = t('songs.uploadPdf');
         btn.textContent = '↑';
-        btn.setAttribute('onclick', `triggerSheetUpload('${sid}')`);
+        btn.setAttribute('data-onclick', `triggerSheetUpload('${sid}')`);
         td.appendChild(btn);
       }
     }
@@ -490,7 +490,7 @@ async function handlePlaybackFile(input, sid) {
       if (!td.querySelector('.playback-open-btn')) {
         const btn = document.createElement('button');
         btn.className = 'playback-open-btn'; btn.title = t('songs.playPlayback'); btn.textContent = '▷';
-        btn.setAttribute('onclick', `openPlayback('${sid}')`);
+        btn.setAttribute('data-onclick', `openPlayback('${sid}')`);
         td.prepend(btn);
       }
     }
@@ -520,7 +520,7 @@ function openPlayback(sid) {
   const embedUrl = toEmbedUrl(url);
   const content  = document.getElementById('playback-content');
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
     content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
@@ -584,7 +584,7 @@ async function confirmDeletePlayback() {
         btn.className = 'playback-upload-btn';
         btn.title = t('songs.uploadPlayback');
         btn.textContent = '↑';
-        btn.setAttribute('onclick', `triggerPlaybackUpload('${sid}')`);
+        btn.setAttribute('data-onclick', `triggerPlaybackUpload('${sid}')`);
         td.appendChild(btn);
       }
     }
@@ -617,7 +617,7 @@ async function handleReplacePlayback(input) {
     const td = document.querySelector(`#row-${sid} .playback-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('playback-content').innerHTML =
-      `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.playbackReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);

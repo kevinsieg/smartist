@@ -71,7 +71,7 @@ function _renderUsers(users) {
         var isMe     = u.id === _currentUserId;
         var roleCell = isMe
           ? '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color)">' + _roleLabel(u.role) + '</span>'
-          : '<select class="role-select-inline" onchange="_changeRole(' + u.id + ',this.value)">' +
+          : '<select class="role-select-inline" data-onchange="_changeRole(' + u.id + ',this.value)">' +
               ['admin', 'member', 'viewer'].map(function(r) {
                 return '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + _roleLabel(r) + '</option>';
               }).join('') +
@@ -79,7 +79,7 @@ function _renderUsers(users) {
         var actionCell = isMe
           ? '<span></span>'
           : '<span style="display:flex;gap:0.35rem">' +
-            '<button class="user-action-btn danger" onclick="_removeUser(' + u.id + ')">' + t('songs.remove') + '</button></span>';
+            '<button class="user-action-btn danger" data-onclick="_removeUser(' + u.id + ')">' + t('songs.remove') + '</button></span>';
         return '<div class="user-row">' +
           '<span class="user-email">' + escHtml(u.email) +
             (isMe ? '<span class="you-badge">' + t('settings.youBadge') + '</span>' : '') +
@@ -99,8 +99,8 @@ function _renderUsers(users) {
       '<span class="status-badge status-pending">' + t('settings.statusInviteSent') + '</span>' +
       '<span style="font-size:0.72rem;color:var(--third-color)">' + escHtml(sentDate) + '</span>' +
       '<span style="display:flex;gap:0.35rem">' +
-        '<button class="user-action-btn" onclick="_resendInvite(' + u.id + ')">' + t('settings.resendBtn') + '</button>' +
-        '<button class="user-action-btn danger" onclick="_revokeInvite(' + u.id + ')">' + t('settings.revokeBtn') + '</button>' +
+        '<button class="user-action-btn" data-onclick="_resendInvite(' + u.id + ')">' + t('settings.resendBtn') + '</button>' +
+        '<button class="user-action-btn danger" data-onclick="_revokeInvite(' + u.id + ')">' + t('settings.revokeBtn') + '</button>' +
       '</span>' +
     '</div>';
   });
@@ -110,7 +110,7 @@ function _renderUsers(users) {
       '<span class="user-email">' + escHtml(u.email) + '</span>' +
       '<span class="status-badge" style="background:#f3ede4;color:var(--third-color)">' + t('settings.statusExpired') + '</span>' +
       '<span style="font-size:0.72rem;color:var(--third-color)">' + _roleLabel(u.role) + '</span>' +
-      '<button class="user-action-btn danger" onclick="_revokeInvite(' + u.id + ')">' + t('songs.remove') + '</button>' +
+      '<button class="user-action-btn danger" data-onclick="_revokeInvite(' + u.id + ')">' + t('songs.remove') + '</button>' +
     '</div>';
   });
 
@@ -236,7 +236,7 @@ function renderArrMembers(members) {
     var chips = instruments.map(function(inst, j) {
       var on = (m.instruments || []).indexOf(inst.key) !== -1;
       return '<button type="button" class="member-inst-chip' + (on ? ' on' : '') + '" ' +
-        'onclick="arrToggleMemberInstrument(' + i + ',' + j + ')">' +
+        'data-onclick="arrToggleMemberInstrument(' + i + ',' + j + ')">' +
         escHtml(inst.label || inst.key) + '</button>';
     }).join('');
     var accountOpts = '<option value="">' + t('settings.noAccount') + '</option>' + _settingsUsers.map(function(u) {
@@ -245,16 +245,16 @@ function renderArrMembers(members) {
     }).join('');
     return '<div class="arr-member-card">' +
       '<div class="arr-member-row">' +
-        '<input class="arr-cfg-input" type="text" value="' + escHtml(m.name || '') + '" placeholder="' + t('settings.memberNamePlaceholder') + '" oninput="arrMemberChange(' + i + ',\'name\',this.value)">' +
-        '<input class="arr-cfg-input arr-cfg-abbr" type="text" value="' + escHtml(m.abbr || '') + '" placeholder="' + t('settings.memberAbbrPlaceholder') + '" maxlength="4" title="' + t('settings.memberAbbrTitle') + '" oninput="arrMemberChange(' + i + ',\'abbr\',this.value)">' +
-        '<button class="arr-cfg-remove" onclick="arrRemoveMember(' + i + ')" title="' + t('songs.remove') + '">&#215;</button>' +
+        '<input class="arr-cfg-input" type="text" value="' + escHtml(m.name || '') + '" placeholder="' + t('settings.memberNamePlaceholder') + '" data-oninput="arrMemberChange(' + i + ',\'name\',this.value)">' +
+        '<input class="arr-cfg-input arr-cfg-abbr" type="text" value="' + escHtml(m.abbr || '') + '" placeholder="' + t('settings.memberAbbrPlaceholder') + '" maxlength="4" title="' + t('settings.memberAbbrTitle') + '" data-oninput="arrMemberChange(' + i + ',\'abbr\',this.value)">' +
+        '<button class="arr-cfg-remove" data-onclick="arrRemoveMember(' + i + ')" title="' + t('songs.remove') + '">&#215;</button>' +
       '</div>' +
       '<div class="member-inst-row">' +
         (chips || '<span class="member-inst-empty">' + t('settings.noInstrumentsYet') + '</span>') +
       '</div>' +
       '<div class="member-account-row">' +
         '<label>' + t('settings.accountLabel') + '</label>' +
-        '<select class="member-account-select" onchange="arrMemberChange(' + i + ',\'userEmail\',this.value || undefined)">' + accountOpts + '</select>' +
+        '<select class="member-account-select" data-onchange="arrMemberAccountChange(' + i + ',this.value)">' + accountOpts + '</select>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -281,16 +281,16 @@ function renderArrInstruments(instruments) {
   list.innerHTML = instruments.map(function(inst, i) {
     var chips = (inst.techniques || []).map(function(_tech, ti) {
       return '<span class="arr-tech-chip">' + escHtml(_tech) +
-        '<button onclick="arrRemoveTechnique(' + i + ',' + ti + ')" title="' + t('songs.remove') + '">&#215;</button></span>';
+        '<button data-onclick="arrRemoveTechnique(' + i + ',' + ti + ')" title="' + t('songs.remove') + '">&#215;</button></span>';
     }).join('');
     return '<div class="arr-instrument-card">' +
       '<div class="arr-instrument-hdr">' +
-        '<input class="arr-instrument-key" type="text" value="' + escHtml(inst.key || '') + '" placeholder="' + t('settings.instKeyPlaceholder') + '" oninput="arrInstChange(' + i + ',\'key\',this.value)">' +
-        '<input class="arr-instrument-label" type="text" value="' + escHtml(inst.label || '') + '" placeholder="' + t('settings.instLabelPlaceholder') + '" oninput="arrInstChange(' + i + ',\'label\',this.value)">' +
-        '<button class="arr-cfg-remove" onclick="arrRemoveInstrument(' + i + ')" title="' + t('songs.remove') + '">&#215;</button>' +
+        '<input class="arr-instrument-key" type="text" value="' + escHtml(inst.key || '') + '" placeholder="' + t('settings.instKeyPlaceholder') + '" data-oninput="arrInstChange(' + i + ',\'key\',this.value)">' +
+        '<input class="arr-instrument-label" type="text" value="' + escHtml(inst.label || '') + '" placeholder="' + t('settings.instLabelPlaceholder') + '" data-oninput="arrInstChange(' + i + ',\'label\',this.value)">' +
+        '<button class="arr-cfg-remove" data-onclick="arrRemoveInstrument(' + i + ')" title="' + t('songs.remove') + '">&#215;</button>' +
       '</div>' +
       '<div class="arr-techniques">' + chips +
-        '<input class="arr-tech-add" placeholder="' + t('settings.addTechniquePlaceholder') + '" onkeydown="arrTechKeydown(event,' + i + ')">' +
+        '<input class="arr-tech-add" placeholder="' + t('settings.addTechniquePlaceholder') + '" data-onkeydown="arrTechKeydown(event,' + i + ')">' +
       '</div>' +
     '</div>';
   }).join('');
@@ -302,6 +302,9 @@ function arrMemberChange(i, field, value) {
   if (!_profileCfg.config) _profileCfg.config = {};
   _profileCfg.config.arrangementConfig = cfg;
 }
+
+// An empty choice unlinks the member from an account.
+function arrMemberAccountChange(i, value) { arrMemberChange(i, 'userEmail', value || undefined); }
 
 function arrInstChange(i, field, value) {
   var cfg = _arrCfg();
@@ -668,7 +671,7 @@ function openDisplayFieldsEditor() {
       '<input type="text" value="' + escHtml(f.field) + '" placeholder="extra.field" style="width:120px;" readonly>' +
       '<input class="lbl-input" type="text" value="' + escHtml(f.label) + '" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;" data-field="' + escHtml(f.field) + '">' +
       _typeSelect(f.type || 'text') +
-      '<button class="config-remove-btn" data-field="' + escHtml(f.field) + '" onclick="removeCustomDisplayField(this.dataset.field)">×</button>' +
+      '<button class="config-remove-btn" data-field="' + escHtml(f.field) + '" data-onclick="removeCustomDisplayField(this.dataset.field)">×</button>' +
       '</div>';
   }).join('');
 
@@ -683,11 +686,11 @@ function openDisplayFieldsEditor() {
       '<input type="text" id="df-new-field" placeholder="extra.myfield" style="width:130px;">' +
       '<input type="text" id="df-new-label" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;">' +
       _typeSelect('text', 'df-new-type') +
-      '<button class="btn" onclick="addCustomDisplayField()">' + t('songs.add') + '</button>' +
+      '<button class="btn" data-onclick="addCustomDisplayField()">' + t('songs.add') + '</button>' +
     '</div>' +
     '<div class="config-editor-actions">' +
-      '<button class="btn active" onclick="saveDisplayFields(this)">' + t('songs.save') + '</button>' +
-      '<button class="btn" onclick="closeDisplayFieldsEditor()">' + t('songs.cancel') + '</button>' +
+      '<button class="btn active" data-onclick="saveDisplayFields(this)">' + t('songs.save') + '</button>' +
+      '<button class="btn" data-onclick="closeDisplayFieldsEditor()">' + t('songs.cancel') + '</button>' +
     '</div>' +
     '<div class="save-msg" id="df-msg"></div>';
 }
@@ -729,7 +732,7 @@ function addCustomDisplayField() {
     '<input type="text" value="' + escHtml(field) + '" style="width:120px;" readonly>' +
     '<input class="lbl-input" type="text" value="' + escHtml(label || field) + '" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;" data-field="' + escHtml(field) + '">' +
     _typeSelect(type) +
-    '<button class="config-remove-btn" data-field="' + escHtml(field) + '" onclick="removeCustomDisplayField(this.dataset.field)">×</button>';
+    '<button class="config-remove-btn" data-field="' + escHtml(field) + '" data-onclick="removeCustomDisplayField(this.dataset.field)">×</button>';
   list.appendChild(div);
   fieldInp.value = '';
   labelInp.value = '';
@@ -796,8 +799,8 @@ function openFilterFieldsEditor() {
   document.getElementById('filter-fields-editor').innerHTML =
     rows +
     '<div class="config-editor-actions">' +
-      '<button class="btn active" onclick="saveFilterFields(this)">' + t('songs.save') + '</button>' +
-      '<button class="btn" onclick="closeFilterFieldsEditor()">' + t('songs.cancel') + '</button>' +
+      '<button class="btn active" data-onclick="saveFilterFields(this)">' + t('songs.save') + '</button>' +
+      '<button class="btn" data-onclick="closeFilterFieldsEditor()">' + t('songs.cancel') + '</button>' +
     '</div>' +
     '<div class="save-msg" id="ff-msg"></div>';
 }

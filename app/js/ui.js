@@ -7,7 +7,7 @@ function heartButtonHtml(on, onclick, title, readOnly) {
   if (readOnly) return on ? '<span class="' + cls + '">&#9829;</span>' : '<span class="heart-btn"></span>';
   return '<button type="button" class="' + cls + '" aria-pressed="' + on + '"' +
     ' title="' + escHtml(title) + '" aria-label="' + escHtml(title) + '"' +
-    ' onclick="event.stopPropagation();' + onclick + '">' +
+    ' data-onclick="event.stopPropagation();' + onclick + '">' +
     (on ? '&#9829;' : '&#9825;') + '</button>';
 }
 
@@ -548,8 +548,8 @@ function _ensureHardDeleteModal() {
     '<div id="hd-cascade-opts"></div>' +
     '<div class="status-msg error" id="hd-status"></div>' +
     '<div class="modal-actions">' +
-    '<button class="btn active" type="button" id="hd-confirm-btn" style="background:#e55;" onclick="confirmHardDelete()">' + t('common.deletePermanently') + '</button>' +
-    '<button class="btn" type="button" onclick="closeModal(\'hard-delete-modal\')">' + t('common.cancel') + '</button>' +
+    '<button class="btn active" type="button" id="hd-confirm-btn" style="background:#e55;" data-onclick="confirmHardDelete()">' + t('common.deletePermanently') + '</button>' +
+    '<button class="btn" type="button" data-onclick="closeModal(\'hard-delete-modal\')">' + t('common.cancel') + '</button>' +
     '</div></div>';
   document.body.appendChild(el);
 }

@@ -110,7 +110,7 @@ function updateAuthIndicator() {
       ? '<img class="nav-auth-avatar-img" src="' + escHtml(_photoUrl) + '" alt="">'
       : '<span class="nav-auth-avatar-mono">' + escHtml(_initials || '&#10004;') + '</span>';
     var _emailHtml = _email ? '<span class="nav-auth-email">' + escHtml(_email) + '</span>' : '';
-    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="' + t('nav.accountMenu') + '">' +
+    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" data-onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="' + t('nav.accountMenu') + '">' +
       _avatarHtml + _emailHtml +
     '</button>';
   } else {
@@ -134,6 +134,12 @@ function updateAuthIndicator() {
 // reads as "still signed in" — and on a private workspace keeps data visible
 // that the session no longer entitles anyone to. The cached config goes too, so
 // the next person does not inherit the previous band's name and logo.
+function _navFromAuthMenu(href) {
+  navigate(href);
+  var menu = document.getElementById('nav-auth-menu');
+  if (menu) menu.remove();
+}
+
 function doLogout() {
   var _menu = document.getElementById('nav-auth-menu');
   if (_menu) _menu.remove();
@@ -172,13 +178,13 @@ function _openAuthMenu(btn) {
   menu.id = 'nav-auth-menu';
   menu.className = 'nav-auth-menu';
   menu.innerHTML =
-    '<div class="nav-auth-menu-item" onclick="navigate(\'' + _profilePath + '\');document.getElementById(\'nav-auth-menu\')&&document.getElementById(\'nav-auth-menu\').remove()">' +
+    '<div class="nav-auth-menu-item" data-onclick="_navFromAuthMenu(\'' + _profilePath + '\')">' +
       t('nav.profile') +
     '</div>' +
     (_showSwitch
-      ? '<div class="nav-auth-menu-item" onclick="switchWorkspace()">' + t('nav.switchWorkspace') + '</div>'
+      ? '<div class="nav-auth-menu-item" data-onclick="switchWorkspace()">' + t('nav.switchWorkspace') + '</div>'
       : '') +
-    '<div class="nav-auth-menu-item" onclick="doLogout()">' +
+    '<div class="nav-auth-menu-item" data-onclick="doLogout()">' +
       t('nav.logout') +
     '</div>';
   var rect = btn.getBoundingClientRect();
@@ -581,7 +587,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
       ' &mdash; ' + t('demo.bannerLiveWorkspace') +
       (genres.length ? ' · <span style="color:#666">' + escHtml(sub) + '</span>' : '') +
       '</span></span>' +
-      '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:#555;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0;" aria-label="' + t('demo.bannerDismiss') + '">&times;</button>';
+      '<button data-onclick="removeParent(this)" style="background:none;border:none;color:#555;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0;" aria-label="' + t('demo.bannerDismiss') + '">&times;</button>';
     var header = document.querySelector('.app-header');
     if (header) header.insertAdjacentElement('afterend', bar);
   });

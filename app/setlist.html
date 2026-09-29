@@ -82,8 +82,8 @@
 <main>
     <section class="app-page setlist-page-wrap">
         <div id="setlist-tabs" class="page-tabs" style="display:none">
-            <button class="setlist-tab setlist-tab--active" data-tab="generator" onclick="switchTab('generator')" data-i18n="setlist.tabBuild">Build setlist</button>
-            <button class="setlist-tab" data-tab="history" onclick="switchTab('history')" data-i18n="setlist.tabSaved">Saved setlists</button>
+            <button class="setlist-tab setlist-tab--active" data-tab="generator" data-onclick="switchTab('generator')" data-i18n="setlist.tabBuild">Build setlist</button>
+            <button class="setlist-tab" data-tab="history" data-onclick="switchTab('history')" data-i18n="setlist.tabSaved">Saved setlists</button>
         </div>
         <div class="app-wrap">
             <h1 id="setlist-page-title" data-i18n="setlist.pageTitle">Build a setlist</h1>
@@ -110,7 +110,7 @@
             <div class="status-msg" id="auth-error"></div>
             <div class="modal-actions">
                 <button class="btn" id="signin-btn" data-i18n="setlist.signInBtn">Sign in</button>
-                <button class="btn" onclick="_closeAcceptModal()" data-i18n="setlist.cancelBtn">Cancel</button>
+                <button class="btn" data-onclick="_closeAcceptModal()" data-i18n="setlist.cancelBtn">Cancel</button>
             </div>
         </div>
 
@@ -148,20 +148,20 @@
             <div class="status-msg" id="save-error"></div>
             <div class="modal-actions">
                 <button class="btn active auth-action" id="save-btn" data-i18n="setlist.saveBtn">Save</button>
-                <button class="btn" onclick="_closeAcceptModal()" data-i18n="setlist.cancelBtn">Cancel</button>
+                <button class="btn" data-onclick="_closeAcceptModal()" data-i18n="setlist.cancelBtn">Cancel</button>
             </div>
         </div>
     </div>
 </div>
 
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=3"></script>
-<script src="/app/js/session.js?v=3"></script>
-<script src="/app/js/ui.js?v=3"></script>
-<script src="/app/js/shell.js?v=3"></script>
+<script src="/app/js/core.js?v=4"></script>
+<script src="/app/js/session.js?v=4"></script>
+<script src="/app/js/ui.js?v=4"></script>
+<script src="/app/js/shell.js?v=4"></script>
 <script src="/app/js/list-view.js?v=2"></script>
-<script src="/app/js/setlist-generator.js?v=1"></script>
-<script src="/app/js/setlist-history-tab.js?v=1"></script>
+<script src="/app/js/setlist-generator.js?v=2"></script>
+<script src="/app/js/setlist-history-tab.js?v=2"></script>
 <script src="/app/js/setlist.js?v=13"></script>
 </body>
 </html>

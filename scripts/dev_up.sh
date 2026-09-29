@@ -92,7 +92,8 @@ print_env() {
 # stops a server started by an earlier session whose pid file is gone.
 stop_server() {
   if [ -f "$STATE/server.pid" ]; then kill "$(cat "$STATE/server.pid")" 2>/dev/null || true; rm -f "$STATE/server.pid"; fi
-  local pids; pids=$(ps -eo pid=,args= | awk '/[t]ests\/harness\/server\.js/ {print $1}')
+  # Only node processes: a shell whose command line mentions the path is not the server.
+  local pids; pids=$(ps -eo pid=,comm=,args= | awk '$2 == "node" && /[t]ests\/harness\/server\.js/ {print $1}')
   [ -n "$pids" ] && kill $pids 2>/dev/null || true
   for _ in $(seq 25); do healthy || return 0; sleep 0.2; done
 }

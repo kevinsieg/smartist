@@ -146,7 +146,7 @@ function _ensureSongsFooter() {
   footer.style.cssText = 'display:none;text-align:center;margin-top:1.5rem;';
   footer.innerHTML =
     '<p id="songs-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>' +
-    '<button id="songs-load-more-btn" class="btn" onclick="loadMoreSongs()">' + t('songs.loadMore') + '</button>';
+    '<button id="songs-load-more-btn" class="btn" data-onclick="loadMoreSongs()">' + t('songs.loadMore') + '</button>';
   var container = document.getElementById('page-content');
   if (container) container.appendChild(footer);
 }
@@ -429,7 +429,7 @@ function _renderSongsListView() {
     onOpen:    _openSongPanelContent,
     emptyHtml: '<div style="text-align:center;padding:2.5rem 1rem;color:var(--third-color);">' +
       '<p style="margin-bottom:1rem;">' + t('songs.noSongs') + '</p>' +
-      (getToken() && !isViewMode() ? '<button class="btn active" onclick="_openNewSongPanel()">' + t('songs.addFirstSong') + '</button>' : '') +
+      (getToken() && !isViewMode() ? '<button class="btn active" data-onclick="_openNewSongPanel()">' + t('songs.addFirstSong') + '</button>' : '') +
       '</div>',
   });
 
@@ -489,10 +489,10 @@ function renderListRowHtml(s) {
   var heartBtn = heartButtonHtml(!!s.heart, 'toggleFavourite(' + Number(s.id) + ')', t('songs.colTitleHeart'), _viewMode);
 
   var icons = '';
-  if (hasListen) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
-  if (hasLyrics) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '">&#182;</button>';
+  if (hasListen) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
+  if (hasLyrics) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '">&#182;</button>';
   var hasArrangement = !_viewMode && !!s.has_arrangement;
-  if (hasArrangement) icons += '<button class="song-card-icon-btn" onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
+  if (hasArrangement) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
     heartBtn +
@@ -602,7 +602,7 @@ function _songsShareMenu(btn) {
   menu.id = 'share-menu-popup';
   menu.className = 'share-menu';
   menu.innerHTML =
-    '<div class="share-menu-item" onclick="exportCsv();var m=document.getElementById(\'share-menu-popup\');if(m)m.remove()">' +
+    '<div class="share-menu-item" data-onclick="exportCsv();closeShareMenu()">' +
       '<span class="share-menu-icon">&#10515;</span><span class="share-menu-label">' + t('songs.exportCsv') + '</span>' +
     '</div>';
 
@@ -657,7 +657,7 @@ function renderLogs(logs) {
                 : log.action === 'delete' ? t('songs.logDeleted')
                 : t('songs.logUpdated');
     const restore = (log.action === 'delete' && token)
-      ? `<button class="log-restore-btn" onclick="restoreSong(${log.song_id})">${t('songs.restore')}</button>`
+      ? `<button class="log-restore-btn" data-onclick="restoreSong(${log.song_id})">${t('songs.restore')}</button>`
       : '';
     return `<div class="log-row">
       <span class="log-badge ${badge}">${label}</span>

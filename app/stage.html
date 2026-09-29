@@ -436,7 +436,7 @@
         </div>
     </div>
 
-    <div class="stage-modal-overlay" id="stage-share-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="stage-modal-overlay" id="stage-share-modal" style="display:none" data-onclick="hideOnBackdrop(event, this)">
         <div class="stage-modal">
             <h3>Share via email</h3>
             <div class="stage-modal-field" id="stage-modal-pw-field">
@@ -448,15 +448,15 @@
             </div>
             <div class="stage-modal-status" id="stage-share-status"></div>
             <div class="stage-modal-actions">
-                <button class="stage-modal-action-btn" onclick="document.getElementById('stage-share-modal').style.display='none'">Cancel</button>
-                <button class="stage-modal-action-btn primary" id="stage-share-send" onclick="stageSendEmail()">Send PDF</button>
+                <button class="stage-modal-action-btn" data-onclick="hideById('stage-share-modal')">Cancel</button>
+                <button class="stage-modal-action-btn primary" id="stage-share-send" data-onclick="stageSendEmail()">Send PDF</button>
             </div>
         </div>
     </div>
 
-    <script src="/app/js/core.js?v=3"></script>
+    <script src="/app/js/core.js?v=4"></script>
     <script src="/app/js/share-utils.js?v=3"></script>
-    <script src="/app/js/arrangement.js?v=3"></script>
-    <script src="/app/js/stage.js?v=3"></script>
+    <script src="/app/js/arrangement.js?v=4"></script>
+    <script src="/app/js/stage.js?v=4"></script>
 </body>
 </html>

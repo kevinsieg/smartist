@@ -21,7 +21,7 @@ function _openSongPanelContent(item, panelEl) {
   var sidEsc      = escHtml(sid);
   var audioRe     = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
 
-  var _spd = '<div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
+  var _spd = '<div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
   var audioHtml = '';
   if (listenUrl  && audioRe.test(listenUrl))
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(listenUrl)) + '"></audio>' + _spd + '</div>';
@@ -29,7 +29,7 @@ function _openSongPanelContent(item, panelEl) {
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(playbackUrl)) + '"></audio>' + _spd + '</div>';
 
   var actions = '';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" onclick="_openSongEditForm(\'' + sidEsc + '\', document.getElementById(\'view-side-panel-inner\'))">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(\'' + sidEsc + '\')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
     '</svg></button>';
@@ -37,14 +37,14 @@ function _openSongPanelContent(item, panelEl) {
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>' +
     '</svg></a>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" onclick="openLyrics(\'' + sidEsc + '\')">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" data-onclick="openLyrics(\'' + sidEsc + '\')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/>' +
     '</svg></button>';
-  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" onclick="openPlayer(\'' + sidEsc + '\')">&#9654; ' + t('songs.listen') + '</button>';
-  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" onclick="openPlayback(\'' + sidEsc + '\')">&#9655; ' + t('songs.playback') + '</button>';
-  if (sheetUrl)   actions += '<button class="btn" onclick="openSheet(\'' + sidEsc + '\')">&#8801; ' + t('songs.sheet') + '</button>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" onclick="_openSongArrangement(' + Number(sid) + ')">' +
+  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" data-onclick="openPlayer(\'' + sidEsc + '\')">&#9654; ' + t('songs.listen') + '</button>';
+  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" data-onclick="openPlayback(\'' + sidEsc + '\')">&#9655; ' + t('songs.playback') + '</button>';
+  if (sheetUrl)   actions += '<button class="btn" data-onclick="openSheet(\'' + sidEsc + '\')">&#8801; ' + t('songs.sheet') + '</button>';
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" data-onclick="_openSongArrangement(' + Number(sid) + ')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>' +
     '</svg></button>';
@@ -118,7 +118,7 @@ function _openSongPanelContent(item, panelEl) {
       '<div class="vsp-header-text">' +
         '<h3 class="vsp-title">' + title + '</h3>' + activeDot +
       '</div>' +
-      '<button class="vsp-close" onclick="_songsView && _songsView.deselect()" aria-label="' + t('songs.close') + '">&#215;</button>' +
+      '<button class="vsp-close" data-onclick="_songsDeselect()" aria-label="' + t('songs.close') + '">&#215;</button>' +
     '</div>' +
     (audioHtml || actions ? audioHtml + '<div class="vsp-actions">' + actions + '</div>' : '') +
     perfHtml + aboutHtml + statsHtml + rightsHtml +
@@ -172,13 +172,19 @@ function _openSongPanelContent(item, panelEl) {
       if (!linkEl) return;
       if (!ids || !ids.length) { linkEl.textContent = t('songs.notInAnySetlist'); return; }
       var songTitle = song.title || '';
-      linkEl.innerHTML = '<a href="#" onclick="event.preventDefault();openAppearances(' + Number(sid) + ')" style="color:var(--secondary-ink)">&#8594; ' + t('songs.setlistCount', { count: ids.length }) + '</a>';
+      linkEl.innerHTML = '<a href="#" data-onclick="event.preventDefault();openAppearances(' + Number(sid) + ')" style="color:var(--secondary-ink)">&#8594; ' + t('songs.setlistCount', { count: ids.length }) + '</a>';
     })
     .catch(function() {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (linkEl) linkEl.textContent = '';
     });
 }
+
+function _songPanelEl() { return document.getElementById('view-side-panel-inner'); }
+function _openSongEditInPanel(sid) { _openSongEditForm(sid, _songPanelEl()); }
+function _openSongPanelById(id) { _openSongPanelContent({ id: id }, _songPanelEl()); }
+function _songsDeselect() { if (_songsView) _songsView.deselect(); }
+function _songsSelect(sid) { if (_songsView) _songsView.select(sid); }
 
 function _openSongEditForm(sid, panelEl) {
   var isNew = sid === null;
@@ -216,24 +222,24 @@ function _openSongEditForm(sid, panelEl) {
 
   var inp = function(key, val, type) {
     type = type || 'text';
-    return '<input type="' + type + '" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" oninput="markPanelEditDirty()">';
+    return '<input type="' + type + '" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" data-oninput="markPanelEditDirty()">';
   };
   var num = function(key, val) {
-    return '<input type="number" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" min="0" step="1" inputmode="numeric" oninput="markPanelEditDirty()">';
+    return '<input type="number" class="edit-input" data-id="' + id + '" data-key="' + key + '" value="' + val + '" min="0" step="1" inputmode="numeric" data-oninput="markPanelEditDirty()">';
   };
   var chk = function(key, checked) {
-    return '<input type="checkbox" data-id="' + id + '" data-key="' + key + '"' + checked + ' onchange="markPanelEditDirty()">';
+    return '<input type="checkbox" data-id="' + id + '" data-key="' + key + '"' + checked + ' data-onchange="markPanelEditDirty()">';
   };
   // Media row: URL field + ↑ upload. Existing songs upload immediately; new
   // songs stage the file and upload on save (no song id exists yet).
   var mediaRow = function(label, key, fileId, accept, type, urlVal) {
     var onchange = isNew
-      ? '_panelStageFile(this,\'' + type + '\',\'' + id + '\')'
-      : '_panelUploadHandler(this,\'' + id + '\',\'' + type + '\')';
+      ? ' data-onchange="_panelStageFile(this,\'' + type + '\',\'' + id + '\')"'
+      : ' data-onchange="_panelUploadHandler(this,\'' + id + '\',\'' + type + '\')"';
     return _editField(label,
       '<div class="panel-file-row">' + inp(key, urlVal) +
-        '<button type="button" class="btn panel-upload-btn" onclick="_panelUploadFile(\'' + fileId + '\')">&#8593;</button>' +
-        '<input type="file" id="' + fileId + '" style="display:none" accept="' + accept + '" onchange="' + onchange + '">' +
+        '<button type="button" class="btn panel-upload-btn" data-onclick="_panelUploadFile(\'' + fileId + '\')">&#8593;</button>' +
+        '<input type="file" id="' + fileId + '" style="display:none" accept="' + accept + '"' + onchange + '>' +
       '</div>' +
       '<div class="panel-file-staged" id="staged-' + type + '-' + id + '" style="display:none;font-size:0.72rem;color:var(--third-color);margin-top:0.2rem"></div>');
   };
@@ -245,18 +251,18 @@ function _openSongEditForm(sid, panelEl) {
   panelEl.innerHTML =
     '<div class="vsp-header">' +
       '<div class="vsp-header-text"><h3 class="vsp-title">' + (isNew ? t('songs.newSong') : escHtml(song.title || t('songs.editSong'))) + '</h3></div>' +
-      (!isNew ? '<button class="vsp-close" onclick="_openSongPanelContent({id:' + sid + '}, document.getElementById(\'view-side-panel-inner\'))" aria-label="' + t('songs.cancel') + '">&#215;</button>' : '') +
+      (!isNew ? '<button class="vsp-close" data-onclick="_openSongPanelById(' + sid + ')" aria-label="' + t('songs.cancel') + '">&#215;</button>' : '') +
     '</div>' +
     '<div style="padding:0 0.5rem;" data-sid="' + id + '">' +
       '<details class="edit-section" open><summary class="edit-section-summary">' + t('songs.sectionBasics') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField(t('songs.fieldTitle'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" oninput="markPanelEditDirty()" placeholder="' + t('songs.songTitlePlaceholder') + '">') +
-          _editField(t('songs.fieldKey'), '<select class="edit-input" data-id="' + id + '" data-key="key" onchange="markPanelEditDirty()">' + _keyOptions(getVal(song, 'key')) + '</select>') +
+          _editField(t('songs.fieldTitle'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="title" value="' + title + '" data-oninput="markPanelEditDirty()" placeholder="' + t('songs.songTitlePlaceholder') + '">') +
+          _editField(t('songs.fieldKey'), '<select class="edit-input" data-id="' + id + '" data-key="key" data-onchange="markPanelEditDirty()">' + _keyOptions(getVal(song, 'key')) + '</select>') +
           (_isSongFieldHidden('extra.gitCapo') ? '' : _editField(t('songs.fieldGitCapo'), num('extra.gitCapo', gitCapo))) +
           (_isSongFieldHidden('extra.banjoCapo') ? '' : _editField(t('songs.fieldBanjoCapo'), num('extra.banjoCapo', bjCapo))) +
           _editField(t('songs.fieldBpm'), num('bpm', bpm)) +
-          _editField(t('songs.fieldTimeSig'), '<select class="edit-input" data-id="' + id + '" data-key="time_signature" onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
-          _editField(t('songs.fieldLengthMmss'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" oninput="markPanelEditDirty()">') +
+          _editField(t('songs.fieldTimeSig'), '<select class="edit-input" data-id="' + id + '" data-key="time_signature" data-onchange="markPanelEditDirty()"><option value="">—</option>' + TIME_SIGNATURES.map(function(v){return '<option value="'+v+'"'+(timeSig===v?' selected':'')+'>'+v+'</option>';}).join('') + '</select>') +
+          _editField(t('songs.fieldLengthMmss'), '<input type="text" class="edit-input" data-id="' + id + '" data-key="length_min" data-type="time" value="' + length + '" placeholder="MM:SS" data-oninput="markPanelEditDirty()">') +
         '</div>' +
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionRecordings') + '</summary>' +
@@ -269,17 +275,17 @@ function _openSongEditForm(sid, panelEl) {
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.lyricsTitle') + '</summary>' +
         '<div class="edit-section-body">' +
-          '<button type="button" class="btn" onclick="_openLyricsFromPanel(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')">' + t('songs.openLyricsEditor') + '</button>' +
+          '<button type="button" class="btn" data-onclick="_openLyricsFromPanel(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')">' + t('songs.openLyricsEditor') + '</button>' +
           (isNew ? '<input type="hidden" data-id="' + id + '" data-key="lyrics" value="">' : '') +
         '</div>' +
       '</details>' +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionSongInfo') + '</summary>' +
         '<div class="edit-section-body">' +
-          _editField('', '<div class="edit-toggle-row"><span>' + t('songs.active') + '</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
+          _editField('', '<div class="edit-toggle-row"><span>' + t('songs.active') + '</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' data-onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
           _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; ' + t('songs.favouriteHint') + '</span></div>') +
           _editField(t('songs.fieldGenre'), inp('genre', genre)) +
           _editField(t('songs.fieldEnergy'), energyInputHtml(id, 'energy', energy, 'markPanelEditDirty()')) +
-          _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="language" onchange="markPanelEditDirty()">' + langOpts + '</select>') +
+          _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="language" data-onchange="markPanelEditDirty()">' + langOpts + '</select>') +
           (_isSongFieldHidden('extra.lead') ? '' : _editField(t('songs.fieldLead'), inp('extra.lead', lead))) +
           (_isSongFieldHidden('extra.git2') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>')) +
           (_isSongFieldHidden('extra.harp') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>' + t('songs.fieldHarmonica') + '</span></div>')) +
@@ -300,14 +306,14 @@ function _openSongEditForm(sid, panelEl) {
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.colTitleArrangement') + '</summary>' +
         '<div class="edit-section-body">' +
           (!isNew ? '<div id="edit-arr-preview"></div>' : '') +
-          '<button class="btn" style="margin-top:0.4rem" onclick="_openArrFromPanel(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')">' + t('songs.openArrEditor') + '</button>' +
+          '<button class="btn" style="margin-top:0.4rem" data-onclick="_openArrFromPanel(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')">' + t('songs.openArrEditor') + '</button>' +
           (isNew ? '<div class="panel-file-staged" id="staged-arr-' + id + '" style="display:none;font-size:0.72rem;color:var(--third-color);margin-top:0.4rem"></div>' : '') +
         '</div>' +
       '</details>' +
       '<div class="status-msg" id="song-panel-edit-error"></div>' +
       '<div class="modal-actions">' +
-        '<button class="btn active auth-action" id="song-panel-save-btn" onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? t('songs.add') : t('songs.save')) + '</button>' +
-        (!isNew ? '<button class="btn" onclick="_songsView && _songsView.select(\'' + sid + '\')">' + t('songs.cancel') + '</button>' : '') +
+        '<button class="btn active auth-action" id="song-panel-save-btn" data-onclick="_savePanelSong(\'' + id + '\',' + (isNew ? 'true' : 'false') + ',' + (isNew ? 'null' : sid) + ')" disabled>' + (isNew ? t('songs.add') : t('songs.save')) + '</button>' +
+        (!isNew ? '<button class="btn" data-onclick="_songsSelect(\'' + sid + '\')">' + t('songs.cancel') + '</button>' : '') +
       '</div>' +
     '</div>';
 
