@@ -129,6 +129,31 @@ async function run(r) {
     assertEq(batchRows(calls)[0].active, false, 'stored active=false must survive');
   });
 
+  await testAsync('tags not sent keep the stored tags', async () => {
+    const stored = { id: 5, artist_id: 1, title: 'Song', active: true, heart: false, extra: {}, tags: ['Liebe'] };
+    const { handler, calls } = loadHandler(routeFor(stored));
+    await patch(handler, [{ id: 5, heart: true }]);
+    assertEq(JSON.stringify(batchRows(calls)[0].tags), '["Liebe"]');
+  });
+
+  await testAsync('tags are normalised against the band\'s tags', async () => {
+    const stored = { id: 5, artist_id: 1, title: 'Song', active: true, heart: false, extra: {}, tags: [] };
+    const { handler, calls } = loadHandler((text, values) =>
+      text.includes('unnest(tags)') ? [{ tag: 'Liebe' }] : routeFor(stored)(text, values));
+    await patch(handler, [{ id: 5, tags: ['liebe', ' Arbeit '] }]);
+    assertEq(JSON.stringify(batchRows(calls)[0].tags), '["Liebe","Arbeit"]');
+    const q = calls.find(c => c.text.includes('unnest(tags)'));
+    assert(q && q.values.includes(1), 'known tags are scoped to the band');
+  });
+
+  await testAsync('invalid tags reject the row', async () => {
+    const stored = { id: 5, artist_id: 1, title: 'Song', active: true, heart: false, extra: {}, tags: [] };
+    const { handler } = loadHandler(routeFor(stored));
+    const res = await patch(handler, [{ id: 5, tags: 'Liebe' }]);
+    assertEq(res.body?.count, 0);
+    assertEq(res.body?.rejected[0].error, 'tags must be an array');
+  });
+
   await testAsync('the whole batch and its audit entries are one statement', async () => {
     const stored = [5, 6, 7].map(id => ({ id, artist_id: 1, title: 'S' + id, active: true, heart: false, extra: {} }));
     const { handler, calls } = loadHandler(routeFor(stored));

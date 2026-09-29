@@ -135,6 +135,8 @@ Tables: `artists`, `songs`, `song_lyrics`, `gigs`, `schema_migrations`, `setlist
 
 Songs use a `deleted` flag (soft-delete; lyrics and arrangements stay, so a restore brings them back). `songs.language` is a column. `songs.extra` JSONB holds arbitrary per-song data (`isrc`, `listenUrl`, `sheetUrl`, `playbackUrl`, `capo`, …).
 
+`songs.tags` (text[]) holds free-form theme tags, several per song. `cleanTags` (`api/_song_values.js`) normalises them on `POST`/`PATCH /songs`: trimmed, deduped case-insensitively, max 10 of max 50 chars, and a tag in a new casing takes the band's existing spelling; an update that omits `tags` keeps them. Client helpers in `core.js`: `songTags`, `bandTags`, `orderByFirstTag`, `tagGroupStarts`. The songs page filters by tags with a multi-select chips filter (`FILTER_TYPES.CHIPS` with `multi: true` in `list-view.js`); the setlist generator filters by tag and can group a generated set by each song's first tag, with headings in the result and the print — headings are not saved with the setlist.
+
 **Lyrics live in `song_lyrics` (one row per song), never in a song list.** Lists carry `has_lyrics`; the text comes with one song's details (`GET /api/:artist/songs/:id` → `lyrics`), or for the CSV export with `GET /api/:artist/songs?lyrics=1`. The client loads it through `loadSongLyrics(slug, song)` in `session.js`. Shared song queries and the lyrics write are in `api/_domain/songs.js`; the API still accepts `extra.lyrics` / `extra.language` from older clients and moves them to the columns.
 
 `venues` carry CRM contact data: `phone`, `contact_name`, `generic_email`, plus `lat`/`lng` for the map.

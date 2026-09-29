@@ -880,6 +880,7 @@ var _HIDEABLE_SONG_FIELDS = [
   { field: 'extra.banjoCapo', label: 'songs.fieldBanjoCapo' },
   { field: 'extra.git2',      label: 'songs.fieldGuitar2' },
   { field: 'extra.harp',      label: 'songs.fieldHarmonica' },
+  { field: 'tags',            label: 'songs.fieldTags' },
 ];
 
 function _renderHiddenSongFields(cfg) {

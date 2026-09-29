@@ -86,6 +86,7 @@ Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist histor
 | `heart` | boolean NOT NULL DEFAULT false | Favourite; always included in auto-generation |
 | `key` | text | Musical key, e.g. `G`, `Am` |
 | `genre` | text | Genre or style grouping |
+| `tags` | text[] | Theme tags, free-form per band (default `'{}'`) |
 | `energy` | smallint, 0–10 | 0 calm … 10 intense; shown as Low/Middle/High |
 | `time_signature` | text | e.g. `4/4`, `6/8` |
 | `bpm` | integer | Beats per minute |

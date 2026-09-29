@@ -54,7 +54,9 @@ function exportTableCsv(rows, columns, filename) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 100);
 }
 
-function printSetlistSongs(songs, title, cfg) {
+// opts.headings: Set of indexes that get a tag heading before them (group by tag).
+function printSetlistSongs(songs, title, cfg, opts) {
+  var headings = opts && opts.headings;
   var area = document.getElementById('print-area');
   if (!area) return;
 
@@ -101,7 +103,10 @@ function printSetlistSongs(songs, title, cfg) {
     ].filter(Boolean).join('');
     var printLabels = song.genre ? '<span>' + escHtml(song.genre) + '</span>' : '';
 
-    return '<li class="song-item">' +
+    var heading = headings && headings.has(i)
+      ? '<li class="tag-heading">' + escHtml(songTags(song)[0] || t('setlist.untagged')) + '</li>'
+      : '';
+    return heading + '<li class="song-item">' +
       '<span class="song-num">' + (i + 1) + '.</span>' +
       '<div class="song-main">' +
         '<div class="song-top">' +
@@ -118,7 +123,7 @@ function printSetlistSongs(songs, title, cfg) {
     (title ? '<h2 class="print-setlist-title">' + escHtml(title) + '</h2>' : '') +
     '<ul class="song-list">' + items + '</ul>';
 
-  var size = calcPrintFontSize(songs.length);
+  var size = calcPrintFontSize(songs.length + (headings ? headings.size : 0));
   document.documentElement.style.setProperty('--print-song-size', size + 'pt');
 
   var _printCleanup = function() {

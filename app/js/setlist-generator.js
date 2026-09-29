@@ -95,6 +95,8 @@ function getFilteredSongs() {
     if (activeOnly && !song.active) return false;
     if (song.heart) return true;  // heart songs bypass all filters
     if (!_matchesOrigin(song)) return false;
+    const tagSet = activeFilters.get('tags');
+    if (tagSet && tagSet.size && !songTags(song).some(tag => tagSet.has(tag))) return false;
     for (const [field, values] of activeFilters) {
       if (values.size === 0) continue;
       const v = getFieldValue(song, field);
@@ -221,7 +223,6 @@ function _buildFillPool(inSet, activeOnly) {
 function onGenerate() {
   const filtered  = getFilteredSongs();
   const targetMin = parseFloat(document.getElementById('target-min')?.value) || 0;
-  const split     = document.getElementById('split-sets')?.checked;
   currentSet = generateSet(filtered, targetMin);
 
   // If the preferred energy pool falls short, fill with adjacent tiers (closest first)
@@ -238,21 +239,38 @@ function onGenerate() {
     }
   }
 
-  if (split && currentSet.length >= 2) {
-    const mid  = computeSplitIndex(currentSet);
-    const set1 = applyCapoOpts(currentSet.slice(0, mid));
-    const set2 = applyCapoOpts(currentSet.slice(mid));
-    currentSet = [...set1, ...set2];
-  } else {
-    currentSet = applyCapoOpts(currentSet);
-  }
+  _applyFinalOrder(currentSet);
   renderResult(currentSet);
+}
+
+function _groupByTagOn() {
+  return !!document.getElementById('group-by-tag')?.checked;
+}
+
+// Break index chosen when the set was ordered; null = compute from the list.
+// Reordering a set (capo, tags) can shift where half the time falls, so the
+// render must keep this one instead of recomputing it.
+var _splitAt = null;
+
+// Capo order, then tag groups — per set when split. Returns the order and the break.
+function _finalizeOrder(set, split, group) {
+  const finish = songs => { const s = applyCapoOpts(songs); return group ? orderByFirstTag(s) : s; };
+  if (!split || set.length < 2) return { songs: finish(set), splitAt: null };
+  const mid = computeSplitIndex(set);
+  return { songs: [...finish(set.slice(0, mid)), ...finish(set.slice(mid))], splitAt: mid };
+}
+
+function _applyFinalOrder(set) {
+  const out = _finalizeOrder(set, !!document.getElementById('split-sets')?.checked, _groupByTagOn());
+  currentSet = out.songs;
+  _splitAt = out.splitAt;
 }
 
 function moveSong(index, dir) {
   const newIndex = index + dir;
   if (newIndex < 0 || newIndex >= currentSet.length) return;
   [currentSet[index], currentSet[newIndex]] = [currentSet[newIndex], currentSet[index]];
+  _splitAt = null;
   renderResult(currentSet);
 }
 
@@ -267,6 +285,7 @@ var EXCLUDED_FILTER_FIELDS = new Set(['energy', 'interpret', 'reference_interpre
 
 function refreshFilterOptions() {
   const base = getBaseSongs();
+  _refreshTagOptions(base);
   const fields = (bandConfig.filterFields ?? []).filter(f => !EXCLUDED_FILTER_FIELDS.has(f.field));
   for (const f of fields) {
     const container = document.querySelector(`.filter-buttons[data-field="${f.field}"]`);
@@ -295,6 +314,17 @@ function refreshFilterOptions() {
   }
 }
 
+function _refreshTagOptions(base) {
+  const container = document.querySelector('.filter-buttons[data-field="tags"]');
+  const filterSet = activeFilters.get('tags');
+  if (!container || !filterSet) return;
+  const tags = bandTags(base);
+  for (const v of [...filterSet]) { if (tags.indexOf(v) === -1) filterSet.delete(v); }
+  container.innerHTML = tags.map(v =>
+    `<button class="filter-btn${filterSet.has(v) ? ' active' : ''}" data-field="tags" data-value="${escHtml(v)}" data-onclick="toggleFilter(this)">${escHtml(v)}</button>`
+  ).join('');
+}
+
 function renderControls() {
   if (!allSongs.length) {
     document.getElementById('setlist-content').innerHTML =
@@ -306,6 +336,8 @@ function renderControls() {
   }
   const fields = (bandConfig.filterFields ?? []).filter(f => !EXCLUDED_FILTER_FIELDS.has(f.field));
   for (const f of fields) activeFilters.set(f.field, new Set());
+  const hasTags = bandTags(allSongs).length > 0;
+  if (hasTags) activeFilters.set('tags', new Set());
 
   const sliderHtml = `<div class="tempo-slider-wrap">
         <span class="tempo-label">🧘 ${t('setlist.calm')}</span>
@@ -318,7 +350,12 @@ function renderControls() {
       <div class="filter-buttons" data-field="${escHtml(f.field)}"></div>
       ${f.field === 'tempo' ? sliderHtml : ''}
     </div>`
-  ).join('');
+  ).join('') + (hasTags
+    ? `<div class="filter-row">
+      <span class="filter-label">${t('setlist.tags')}</span>
+      <div class="filter-buttons" data-field="tags"></div>
+    </div>`
+    : '');
 
   document.getElementById('setlist-content').innerHTML = `
     <div class="setlist-controls">
@@ -349,6 +386,10 @@ function renderControls() {
           <input type="checkbox" id="split-sets">
           ${t('setlist.splitSets')}
         </label>
+        ${hasTags ? `<label class="active-toggle">
+          <input type="checkbox" id="group-by-tag">
+          ${t('setlist.groupByTag')}
+        </label>` : ''}
         <span class="active-toggle"${songFieldHidden(bandConfig, 'extra.banjoCapo') && songFieldHidden(bandConfig, 'extra.gitCapo') ? ' hidden' : ''}>
           ${t('setlist.minimizeCapo')}
           ${songFieldHidden(bandConfig, 'extra.banjoCapo') ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>`}
@@ -381,11 +422,12 @@ function renderResult(songs) {
   }
 
   const split   = document.getElementById('split-sets')?.checked;
-  const splitAt = split && songs.length >= 2 ? computeSplitIndex(songs) : null;
+  const splitAt = split && songs.length >= 2 ? (_splitAt ?? computeSplitIndex(songs)) : null;
 
   let totalMin = 0;
   let set1Min  = 0;
 
+  const tagStarts = _groupByTagOn() ? tagGroupStarts(songs) : null;
   const itemHtmls = songs.map((song, i) => {
     const dur = song.length_min || 4;
     totalMin += dur;
@@ -425,7 +467,10 @@ function renderResult(songs) {
 
     const displayNum = splitAt && i >= splitAt ? (i - splitAt + 1) : (i + 1);
     const isFirst = i === 0, isLast = i === songs.length - 1;
-    return `<li class="song-item" draggable="true" data-index="${i}">
+    const heading = tagStarts && tagStarts.has(i)
+      ? `<li class="tag-heading">${escHtml(songTags(song)[0] || t('setlist.untagged'))}</li>`
+      : '';
+    return `${heading}<li class="song-item" draggable="true" data-index="${i}">
       <span class="drag-handle" aria-hidden="true">⠿</span>
       <span class="song-num">${displayNum}.</span>
       <div class="song-main">
@@ -497,6 +542,7 @@ function renderResult(songs) {
 
 function removeFromSet(index) {
   currentSet.splice(index, 1);
+  _splitAt = null;
   renderResult(currentSet);
 }
 
@@ -506,6 +552,7 @@ function addSongToSet(select) {
   const song = allSongs.find(s => s.id === songId);
   if (!song) return;
   currentSet.push(song);
+  _splitAt = null;
   renderResult(currentSet);
 }
 
@@ -513,8 +560,7 @@ function addSongToSet(select) {
 
 function onOptimize() {
   if (currentSet.length < 2) return;
-  currentSet = optimizeSetlist([...currentSet]);
-  currentSet = applyCapoOpts(currentSet);
+  _applyFinalOrder(optimizeSetlist([...currentSet]));
   renderResult(currentSet);
 }
 
@@ -619,6 +665,7 @@ function initDragAndDrop() {
     if (dragSrcIndex === destIndex) return;
     const [moved] = currentSet.splice(dragSrcIndex, 1);
     currentSet.splice(destIndex, 0, moved);
+    _splitAt = null;
     renderResult(currentSet);
   });
 }
@@ -753,5 +800,5 @@ document.getElementById('accept-modal').addEventListener('click', e => {
 
 async function printSetlist() {
   var cfg = await loadConfig();
-  printSetlistSongs(currentSet, '', cfg);
+  printSetlistSongs(currentSet, '', cfg, { headings: _groupByTagOn() ? tagGroupStarts(currentSet) : null });
 }

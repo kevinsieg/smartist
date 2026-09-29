@@ -73,6 +73,9 @@ function _openSongPanelContent(item, panelEl) {
   var perfHtml = perfCells ? _vspSection(t('songs.sectionPerformance'), perfCells) : '';
 
   var genre   = getVal(song, 'genre');
+  var tagChips = _isSongFieldHidden('tags') ? '' : songTags(song).map(function(tag) {
+    return '<span class="tag-chip">' + escHtml(tag) + '</span>';
+  }).join('');
   var interp  = getVal(song, 'interpret');
   var refInt  = getVal(song, 'reference_interpret');
   var author  = getVal(song, 'extra.author');
@@ -81,6 +84,7 @@ function _openSongPanelContent(item, panelEl) {
   var infoUrl = getVal(song, 'extra.songinfoUrl');
   var aboutCells =
     (genre   ? _vspCell(t('songs.fieldGenre'),         escHtml(String(genre)))  : '') +
+    (tagChips ? _vspCell(t('songs.fieldTags'),         tagChips)                : '') +
     (interp  ? _vspCell(t('songs.fieldInterpret'),     escHtml(String(interp))) : '') +
     (refInt  ? _vspCell(t('songs.fieldRefInterpret'),  escHtml(String(refInt))) : '') +
     (author  ? _vspCell(t('songs.fieldAuthor'),        escHtml(String(author))) : '') +
@@ -197,6 +201,7 @@ function _openSongEditForm(sid, panelEl) {
   var active   = song.active ? ' checked' : '';
   var heart    = song.heart  ? ' checked' : '';
   var genre    = escHtml(getVal(song, 'genre') || '');
+  var tagsVal  = escHtml(songTags(song).join(', '));
   var energy   = getVal(song, 'energy');
   var timeSig  = escHtml(getVal(song, 'time_signature') || '');
   var bpm      = escHtml(String(getVal(song, 'bpm') || ''));
@@ -284,6 +289,12 @@ function _openSongEditForm(sid, panelEl) {
           _editField('', '<div class="edit-toggle-row"><span>' + t('songs.active') + '</span><div class="toggle-switch"><input type="checkbox" data-id="' + id + '" data-key="active"' + active + ' data-onchange="markPanelEditDirty()"><span class="toggle-track"><span class="toggle-thumb"></span></span></div></div>') +
           _editField('', '<div class="edit-check-row">' + chk('heart', heart) + '<span>&#9829; ' + t('songs.favouriteHint') + '</span></div>') +
           _editField(t('songs.fieldGenre'), inp('genre', genre)) +
+          (_isSongFieldHidden('tags') ? '' : _editField(t('songs.fieldTags'),
+            '<input type="text" class="edit-input" data-id="' + id + '" data-key="tags" value="' + tagsVal + '"' +
+            ' list="song-tags-list" placeholder="' + escHtml(t('songs.tagsPlaceholder')) + '" data-oninput="markPanelEditDirty()">' +
+            '<datalist id="song-tags-list">' + bandTags(songs).map(function(tag) {
+              return '<option value="' + escHtml(tag) + '">';
+            }).join('') + '</datalist>')) +
           _editField(t('songs.fieldEnergy'), energyInputHtml(id, 'energy', energy, 'markPanelEditDirty()')) +
           _editField(t('songs.fieldLanguage'), '<select class="edit-select edit-input" data-id="' + id + '" data-key="language" data-onchange="markPanelEditDirty()">' + langOpts + '</select>') +
           (_isSongFieldHidden('extra.lead') ? '' : _editField(t('songs.fieldLead'), inp('extra.lead', lead))) +

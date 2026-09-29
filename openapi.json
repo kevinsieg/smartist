@@ -99,6 +99,11 @@
             "type": "string",
             "nullable": true
           },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Theme tags"
+          },
           "energy": {
             "type": "integer",
             "nullable": true,
@@ -197,6 +202,13 @@
             "type": "string",
             "nullable": true,
             "maxLength": 100
+          },
+          "tags": {
+            "type": "array",
+            "nullable": true,
+            "items": { "type": "string", "maxLength": 50 },
+            "maxItems": 10,
+            "description": "Theme tags; trimmed, deduplicated case-insensitively, matched to the band's existing spelling. Omit to keep the stored tags, null or [] clears them."
           },
           "energy": {
             "type": "string",
