@@ -177,13 +177,23 @@ async function run(r) {
     assertEq(f.get('next'), '/workspaces');
   });
 
+  // "Continue with Google" on the login page, with an address that has no
+  // account yet: it used to end on "Sign-in failed". The provider has shown
+  // the visitor owns the address, so there is nothing to hide from them.
+  await testAsync('a new address from the login page goes on to set up a workspace', async () => {
+    const res = await callback({ user: null });
+    assert(String(res._url).startsWith('https://app.smartist.studio/onboarding#token='),
+      `expected onboarding, got ${res._url}`);
+    assert(!fragment(res._url).get('session'), 'a session for an account that does not exist');
+    assert(logged.some(l => l.event === 'oauth_signup_started'), 'signup start not logged');
+  });
+
   console.log(B('\nOAuth callback — what the visitor is told, and what the log is told'));
 
   // Telling "no account for that address" apart from "your link expired" would
   // answer, to anyone who asks, whether an address has an account here. Both
   // answer identically; only the log distinguishes them.
   const failures = [
-    ['no account for this address', { user: null }, undefined, 'email_not_authorised'],
     ['an expired or forged state',  {},             () => ({ code: 'c', state: 'nonsense' }), 'invalid_or_expired_state'],
     ['a provider-side refusal',     {},             (s) => ({ error: 'access_denied', state: s }), 'provider_error:access_denied'],
     ['no code at all',              {},             (s) => ({ state: s }), 'missing_code_or_state'],
