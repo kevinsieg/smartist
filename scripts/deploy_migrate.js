@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-// Vercel's build step (vercel.json "buildCommand"): brings this deployment's
-// own database up to scripts/schema.sql before the new code goes live. Each
+// Runs in every Vercel deployment, after npm install (vercel.json
+// "installCommand" — not "buildCommand": with a build command Vercel expects a
+// public/ output directory, and this app serves from the root). Brings this
+// deployment's own database up to scripts/schema.sql before the new code goes
+// live. Each
 // Vercel project builds with its own DATABASE_URL, so every deployment
 // migrates its own database and no production connection string ever leaves
 // Vercel.

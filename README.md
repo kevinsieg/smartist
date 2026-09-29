@@ -111,7 +111,7 @@ work on dev  →  git push origin dev  →  verify on preview URL
 →  open PR: dev → main  →  review + merge  →  Vercel deploys to production
 ```
 
-A schema change needs no manual step: every deployment's build runs `scripts/deploy_migrate.js`, which applies pending migrations to that Vercel project's own `DATABASE_URL` (nothing pending → nothing runs; a failure fails the build and the previous deployment stays live). Check the deployments afterwards:
+A schema change needs no manual step: every deployment runs `scripts/deploy_migrate.js` while it builds (after `npm install`, from `installCommand` in `vercel.json`), which applies pending migrations to that Vercel project's own `DATABASE_URL` (nothing pending → nothing runs; a failure fails the build and the previous deployment stays live). Check the deployments afterwards:
 
 ```bash
 curl https://<deployment>/api/config?action=health              # "schema":"current"
@@ -402,7 +402,7 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | ----------------------------- | ------------------------------------------------------------------------ |
 | `scripts/setup.js`            | Interactive wizard: schema + band + its admin user + field config        |
 | `scripts/apply_schema.js`     | Apply `schema.sql` to the database in `DATABASE_URL` (idempotent)        |
-| `scripts/deploy_migrate.js`   | Vercel build step: apply pending migrations to the deployment's database |
+| `scripts/deploy_migrate.js`   | Runs on every deployment: apply pending migrations to its own database   |
 | `scripts/seed.js`             | Populate the dev database with test data (wipe + reseed with `--force`)  |
 | `scripts/create_user.js`      | First login for a band, or set an account's password from the CLI        |
 | `scripts/plans.js`            | List bands with plan and usage; grant a plan; recount storage            |
