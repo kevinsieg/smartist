@@ -278,7 +278,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 | Table               | Purpose                                                                     |
 | ------------------- | --------------------------------------------------------------------------- |
-| `artists`           | Slug, name, UI config (JSONB); `password_hash` is unused (retired band password) |
+| `artists`           | Slug, name, UI config (JSONB) |
 | `songs`             | Catalogue — standard fields + `extra` JSONB; soft-delete via `deleted` flag |
 | `venues`            | CRM venue directory — soft-delete, linked to gigs via FK                    |
 | `organizers`        | CRM organizer/promoter directory — soft-delete, linked to gigs via FK       |
