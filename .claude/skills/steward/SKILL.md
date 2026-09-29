@@ -8,8 +8,9 @@ description: Conventions for driving a smartist pull request to green — commit
 - **Commit as the owner, no attribution:**
   `git -c user.name="Käv" -c user.email="35451482+kevinsieg@users.noreply.github.com" commit …`
   No `Co-Authored-By:` / `Claude-Session:` trailers, no "Generated with Claude
-  Code" line in PR bodies, comments or review replies. If a tool appends a
-  footer, edit it out.
+  Code" line in PR bodies, comments or review replies. The GitHub tools append
+  that footer to everything they create or edit: after every create or update,
+  read it back and edit the footer out before doing anything else.
 - **Branches:** work on the assigned branch; `dev` takes direct pushes; `main`
   only through a PR (see the `release` skill). Merge `origin/dev` into a
   feature branch rather than rebasing someone else's history.
