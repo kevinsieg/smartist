@@ -52,7 +52,7 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
   };
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true,
-    exports: {
+    exports: { refuseDemo: (req, res) => { if (req.user && req.user.id === null) { res.status(403).json({ error: 'demo' }); return true; } return false; },
       requireAuth: async (req, res) => {
         if (authFails) { res.status(401).json({ error: 'Unauthorized' }); return null; }
         req.user = { id: 1, role: 'member' };

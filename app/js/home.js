@@ -1,6 +1,17 @@
 var artistSlug = '';
 var _loginNext = '';
 
+// Where to go after signing in: a path on this site, nothing else. A plain
+// "starts with / but not //" check let `/\evil.example` through — browsers
+// read the backslash as a slash and leave the site.
+function _safeNext(next) {
+  if (!next) return '';
+  try {
+    var u = new URL(next, window.location.origin);
+    return u.origin === window.location.origin ? u.pathname + u.search + u.hash : '';
+  } catch (e) { return ''; }
+}
+
 async function init() {
   // Ensure the i18n dictionary is loaded before rendering via t().
   if (window.i18n && window.i18n.ready) { try { await window.i18n.ready; } catch (e) {} }
@@ -16,7 +27,7 @@ async function init() {
   const reset        = qp('reset');
   const oauthError   = qp('oauth_error');
   const path         = window.location.pathname.replace(/\/+$/, '') || '/';
-  const next         = qp('next') || '';
+  const next         = _safeNext(qp('next'));
   const slugFromNext = next.split('/').filter(Boolean)[0] || '';
   _loginNext = next; // survives the URL strip below
 
@@ -137,8 +148,8 @@ async function verifySession(token) {
 // ── Logged-in state ───────────────────────────────────────────────────────────
 
 function renderLoggedIn(cfg, artists) {
-  const next = _loginNext || new URLSearchParams(window.location.search).get('next');
-  if (next && next.startsWith('/') && !next.startsWith('//')) {
+  const next = _loginNext || _safeNext(new URLSearchParams(window.location.search).get('next'));
+  if (next) {
     window.location.href = next;
     return;
   }

@@ -25,6 +25,9 @@ async function toggleHeart(item, persist, refresh) {
 function exportTableCsv(rows, columns, filename) {
   function cell(val) {
     var s = (val === null || val === undefined) ? '' : String(val);
+    // A text cell starting with = + - @ runs as a formula in Excel/Sheets; the
+    // leading quote keeps it text (same rule as the server export, api/_export.js).
+    if (typeof val === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
     if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
       return '"' + s.replace(/"/g, '""') + '"';
     }

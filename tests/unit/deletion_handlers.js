@@ -157,7 +157,7 @@ function load(rows, opts) {
   const rateKeys = [];
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: {
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {},
       checkRateLimit: async (key) => { rateKeys.push(key); return !!(opts && opts.rateLimited); },
       clientIp: () => '127.0.0.1',
     },
@@ -231,7 +231,7 @@ async function run(r) {
   // update that row, or the token is never stored while the handler still
   // mails a link that can never work.
   await testAsync('a mixed-case stored address still gets a deletion token it can use', async () => {
-    const mixed = [{ id: 7, artist_id: 1, slug: 'mine', name: 'Mine', email: 'Kevin.Sieg@Gmx.de', role: 'admin' }];
+    const mixed = [{ id: 7, artist_id: 1, slug: 'mine', name: 'Mine', email: 'Some.One@Example.COM', role: 'admin' }];
     const { handlers, token, sent, db } = load(mixed);
     const sessionToken = token.generateUserToken(7, 'admin', 60_000);
     const res = mockRes();

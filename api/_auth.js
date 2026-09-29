@@ -74,6 +74,17 @@ async function requireAuth(req, res, slug, minRole = null) {
   return artist;
 }
 
+// The public demo gate hands anybody a member session (id null). It may edit
+// the demo band, but nothing that reaches outside it: no email to arbitrary
+// addresses, no files in the bucket. Writes the 403 and returns true when refused.
+function refuseDemo(req, res) {
+  if (req.user && req.user.id === null) {
+    res.status(403).json({ error: 'Not available in the demo', code: 'demo_readonly' });
+    return true;
+  }
+  return false;
+}
+
 function requireRole(req, res, minRole) {
   const userRole = req.user?.role || 'viewer';
   if (ROLE_ORDER.indexOf(userRole) < ROLE_ORDER.indexOf(minRole)) {
@@ -115,4 +126,4 @@ function canOpenStage(artist) {
   return !!(artist && artist.config && artist.config.publicStage === true);
 }
 
-module.exports = { requireAuth, requireRole, getAccess, canBrowseCatalogue, canOpenStage };
+module.exports = { requireAuth, requireRole, refuseDemo, getAccess, canBrowseCatalogue, canOpenStage };

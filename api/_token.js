@@ -4,11 +4,39 @@ const crypto = require('crypto');
 // load took down every route of the function — including the health check
 // (GET /api/config?action=health) that reports the missing variable. Signing
 // still throws (→ 500), and verifying fails closed (→ 401).
+//
+// The signing key is bound to the database this deployment uses. Tokens name a
+// user by id, and ids are per database: with one APP_SECRET shared by several
+// deployments, user 5 of one database would otherwise be accepted as user 5 of
+// another (password-less accounts all carry the same password fingerprint).
+// Host and database name identify it; credentials do not, so rotating the
+// database password keeps everyone signed in.
+function databaseIdentity() {
+  try {
+    const u = new URL(process.env.DATABASE_URL);
+    return `${u.hostname}${u.pathname}`;
+  } catch { return ''; }
+}
+
+let _key = null, _keyFor = null;
 function secret() {
   if (!process.env.APP_SECRET) {
     throw new Error('APP_SECRET env var is required — set it in .env or Vercel project settings');
   }
-  return process.env.APP_SECRET;
+  const id = `${process.env.APP_SECRET}\n${databaseIdentity()}`;
+  if (_keyFor !== id) {
+    _key = crypto.createHmac('sha256', process.env.APP_SECRET)
+      .update(`smartist-signing-key:${databaseIdentity()}`).digest('hex');
+    _keyFor = id;
+  }
+  return _key;
+}
+
+// Signing seed for reset links of an account without a password (Google or
+// Facebook sign-up): an empty seed would make those links forgeable, and the
+// id binds it to one account.
+function passwordlessSeed(userId) {
+  return crypto.createHmac('sha256', secret()).update(`account:${userId}`).digest('hex');
 }
 
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -82,17 +110,16 @@ function verifyUserToken(token) {
   } catch { return null; }
 }
 
-// Does this claim still match the user row's current password? Tokens minted
-// before fingerprints existed carry none and are accepted until they expire.
+// Does this claim still match the user row's current password? Every token
+// carries a fingerprint; one without is not ours.
 function passwordMatches(claim, row) {
-  if (!claim || !row) return false;
-  if (claim.pwv === undefined) return true;
+  if (!claim || !row || typeof claim.pwv !== 'string') return false;
   const a = Buffer.from(String(claim.pwv));
   const b = Buffer.from(passwordFingerprint(row.password_hash));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 module.exports = {
-  generateMagicToken, verifyMagicToken, demoSeed, generateUserToken, verifyUserToken,
+  generateMagicToken, verifyMagicToken, demoSeed, passwordlessSeed, generateUserToken, verifyUserToken,
   passwordFingerprint, passwordMatches, TTL_8H, TTL_30D,
 };

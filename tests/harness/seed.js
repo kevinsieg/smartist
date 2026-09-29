@@ -3,7 +3,7 @@
 
 // Creates the band the CI integration job tests against: a Pro workspace
 // (venues and organizers are Pro features) with one admin login and two songs
-// for the setlist tests to reference.
+// for the setlist tests to reference, plus the demo band the demo gate opens.
 // Idempotent. Refuses anything but a database on this machine.
 //
 //   DATABASE_URL=postgres://…@localhost/… ARTIST_SLUG=ci ARTIST_EMAIL=… ARTIST_PASSWORD=… \
@@ -35,7 +35,17 @@ async function main() {
       INSERT INTO songs (artist_id, title, key)
       SELECT ${band.id}, t, k FROM (VALUES ('CI Song One', 'C'), ('CI Song Two', 'Am')) v(t, k)
       WHERE NOT EXISTS (SELECT 1 FROM songs WHERE artist_id = ${band.id} AND title = v.t AND NOT deleted)`;
-    console.log(`seeded ${ARTIST_SLUG} (pro, admin ${ARTIST_EMAIL})`);
+    // The public demo band: no users, reached only through the demo gate.
+    const demoSlug = process.env.DEMO_ARTIST_SLUG || 'demo';
+    await sql`
+      WITH d AS (
+        INSERT INTO artists (slug, name) VALUES (${demoSlug}, 'Demo Band')
+        ON CONFLICT (slug) DO UPDATE SET name = artists.name RETURNING id
+      )
+      INSERT INTO songs (artist_id, title)
+      SELECT id, 'Demo Song' FROM d
+      WHERE NOT EXISTS (SELECT 1 FROM songs s, d WHERE s.artist_id = d.id AND NOT s.deleted)`;
+    console.log(`seeded ${ARTIST_SLUG} (pro, admin ${ARTIST_EMAIL}) and ${demoSlug}`);
   } finally {
     await sql.end();
   }

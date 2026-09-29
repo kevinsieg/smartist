@@ -67,7 +67,7 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
   };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
