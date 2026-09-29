@@ -21,18 +21,23 @@ async function toggleHeart(item, persist, refresh) {
   catch { item.heart = !wanted; refresh(); }
 }
 
+// One CSV cell. A text starting with = + - @ tab or CR is run as a formula by
+// Excel/Sheets, so it gets a leading ' (same rule as api/_export.js); plain
+// numbers such as -3 stay numbers.
+function csvCell(val) {
+  var s = (val === null || val === undefined) ? '' : String(val);
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+([.,]\d+)?$/.test(s)) s = "'" + s;
+  if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
 // columns: Array<{ label: string, getValue: (row) => string }>
 function exportTableCsv(rows, columns, filename) {
-  function cell(val) {
-    var s = (val === null || val === undefined) ? '' : String(val);
-    if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
-      return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
-  }
-  var header = columns.map(function(c) { return cell(c.label); }).join(',');
+  var header = columns.map(function(c) { return csvCell(c.label); }).join(',');
   var body = rows.map(function(row) {
-    return columns.map(function(c) { return cell(c.getValue(row)); }).join(',');
+    return columns.map(function(c) { return csvCell(c.getValue(row)); }).join(',');
   }).join('\r\n');
   var csv = '﻿' + header + '\r\n' + body;
   var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
