@@ -211,6 +211,10 @@ function renderRow(song) {
         : '';
       return `<td class="${c.cls}${sticky} arr-cell">${btn}</td>`;
     }
+    if (c.type === 'tags') {
+      const chips = songTags(song).map(tag => `<span class="tag-chip">${escHtml(tag)}</span>`).join('');
+      return `<td class="${c.cls}${sticky}">${chips}</td>`;
+    }
     if (c.type === 'bool') {
       return `<td class="${c.cls}${sticky}">
         <input type="checkbox" data-id="${sid}" data-key="${c.key}"
@@ -332,6 +336,7 @@ function collectRow(sid) {
     else if (input.type === 'number')       val = input.value.trim() === '' ? null : parseFloat(input.value);
     else                                    val = input.value.trim() || null;
     if (key === 'title' && val) val = val.charAt(0).toUpperCase() + val.slice(1);
+    if (key === 'tags') val = (input.value || '').split(',').map(v => v.trim()).filter(Boolean);
     if (key.startsWith('extra.')) result.extra[key.slice(6)] = val;
     else                          result[key] = val;
   }

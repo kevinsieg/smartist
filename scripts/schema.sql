@@ -489,3 +489,8 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-01') ON CONFLICT DO NOTHING;
 -- nothing reads it.
 ALTER TABLE artists DROP COLUMN IF EXISTS social_links;
 INSERT INTO schema_migrations (id) VALUES ('2026-10-02') ON CONFLICT DO NOTHING;
+
+-- 2026-10-03: theme tags on songs (several per song, free-form per band).
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS songs_tags_idx ON songs USING GIN (tags);
+INSERT INTO schema_migrations (id) VALUES ('2026-10-03') ON CONFLICT DO NOTHING;
