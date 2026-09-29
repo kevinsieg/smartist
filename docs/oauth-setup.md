@@ -138,8 +138,9 @@ curl -s https://<your domain>/api/config | grep -o '"facebookLogin":[a-z]*'
 ```
 
 Both must be `true` for the providers you configured. Then, in a browser,
-`/signup` shows the buttons; a full sign-in lands on `/onboarding` for a new
-address, or on the workspace dashboard for an existing Google account.
+`/login` and `/signup` show the buttons; from either, a full sign-in lands on
+`/onboarding` for a new address, or on the workspace dashboard for an existing
+Google account.
 
 If a button appears but the flow fails, the reason is in the function logs
 (`oauth_callback_failed` with a `reason`), not in the browser:
