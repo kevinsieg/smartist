@@ -1,16 +1,17 @@
 // One footer for every app page, matching smartist.studio: languages left,
 // donation buttons centred; on the right the way back to smartist.studio,
-// Contact and the Impressum (legally required to be reachable everywhere).
+// Contact, the privacy policy and the Impressum (legally required to be reachable everywhere).
 // Loaded before the shared scripts; shell.js calls renderAppFooter() from injectShell();
 // standalone pages (signup, onboarding, workspaces, demo) put <footer data-app-footer></footer>
 // in their markup and this file fills it on load.
 
 // Provider-agnostic: add a provider by adding an entry. An entry with an empty
-// url is skipped. `img` shows the provider's own button (loaded as <img> — their
-// button scripts are blocked by the CSP).
+// url is skipped. Plain text links, never the providers' hosted button images:
+// this footer is on every page, and an <img> from their servers would hand every
+// visitor's IP address to them without a click. An optional `img` must be ours.
 var SUPPORT_LINKS = [
-  { id: 'liberapay',    label: 'Liberapay',       url: 'https://liberapay.com/kevkevkev/donate', img: 'https://liberapay.com/assets/widgets/donate.svg' },
-  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: 'https://www.buymeacoffee.com/kevkevkev', img: 'https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png' },
+  { id: 'liberapay',    label: 'Liberapay',       url: 'https://liberapay.com/kevkevkev/donate' },
+  { id: 'buymeacoffee', label: 'Buy Me a Coffee', url: 'https://www.buymeacoffee.com/kevkevkev' },
 ];
 
 var FOOTER_LOCALES = ['en', 'fr', 'de'];
@@ -54,6 +55,7 @@ function renderAppFooter(footer) {
     '<div class="af-legal">' +
       '<a href="https://smartist.studio">smartist.studio</a>' +
       '<a href="/contact" data-i18n="footer.contact">Contact</a>' +
+      '<a href="/privacy" data-i18n="footer.privacy">Privacy</a>' +
       '<a href="https://smartist.studio/impressum" data-i18n="footer.impressum">Impressum</a>' +
     '</div>';
   renderSupportLinks(footer.querySelector('[data-support-links]'));
