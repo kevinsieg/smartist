@@ -20,29 +20,12 @@
 
 'use strict';
 
-const postgres = require('postgres');
+const lib      = require('./_lib');
 const readline = require('readline');
 const fs       = require('fs');
 const path     = require('path');
 
-// ── Env ────────────────────────────────────────────────────────────────────
-
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
-}
-
-loadEnv(path.join(__dirname, '..', '.env'));
-loadEnv(path.join(__dirname, '..', '.env.local'));
+lib.loadEnv();
 
 const B = s => `\x1b[1m${s}\x1b[0m`;
 const G = s => `\x1b[32m${s}\x1b[0m`;
@@ -204,7 +187,7 @@ async function main() {
   if (process.env.CI) host = host.split('.')[0].replace(/^(.{4}).*(.{2})$/, '$1…$2');
   console.log(`\n  ${D('database:')} ${B(host)}`);
 
-  const sql = postgres(process.env.DATABASE_URL, { ssl: 'require', max: 1 });
+  const sql = lib.connect(process.env.DATABASE_URL);
   try {
     const [artist] = await sql`SELECT id, slug, name FROM artists WHERE slug = ${slug}`;
     if (!artist) { err(`Artist "${slug}" not found.`); process.exit(1); }

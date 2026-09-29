@@ -17,7 +17,7 @@ function _lyricsSetMode(mode) { // 'view' or 'edit'
 }
 
 // The song list carries has_lyrics only; the text is fetched with the song's
-// details the first time the modal opens (loadSongLyrics in common.js).
+// details the first time the modal opens (loadSongLyrics in session.js).
 async function _lyricsLoad(sid, song) {
   try {
     const text = await loadSongLyrics(artistSlug, song);

@@ -101,31 +101,26 @@ async function init() {
   renderLogin(null, cfg);
 }
 
+// A sign-in link names its account in `hint`; one without it cannot be redeemed.
 async function verifyToken(token, hint) {
+  if (!hint) return { ok: false, artists: [] };
   try {
-    const body = hint
-      ? { magic: token, hint }
-      : { password: token };
     const r = await fetch(`/api/${artistSlug}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ magic: token, hint }),
     });
     if (!r.ok) return { ok: false, artists: [] };
     const data = await r.json();
-    if (data.token) {
-      storeToken(data.token, false);
-      sessionStorage.setItem('smartist_admin_email', data.email || '');
-    } else if (data.adminEmail) {
-      sessionStorage.setItem('smartist_admin_email', data.adminEmail);
-    }
+    if (!data.token) return { ok: false, artists: [] };
+    storeToken(data.token, false);
+    sessionStorage.setItem('smartist_admin_email', data.email || '');
     return { ok: true, artists: data.artists || [] };
   } catch { return { ok: false, artists: [] }; }
 }
 
-// Validate a stored session token on page load. The token may be a named-user
-// JWT or a legacy bootstrap password; the Bearer-authenticated my-artists
-// endpoint accepts both and returns the user's workspaces. Posting it to the
+// Validate a stored session token on page load. The Bearer-authenticated
+// my-artists endpoint returns the user's workspaces. Posting it to the
 // password-login endpoint (as the magic flow does) would reject a valid JWT and
 // silently log the user out — defeating "Remember me".
 async function verifySession(token) {
@@ -148,12 +143,6 @@ function renderLoggedIn(cfg, artists) {
     return;
   }
   if (!artists || artists.length === 0) {
-    // Single-tenant installs (ARTIST_SLUG set) use legacy bootstrap auth with
-    // no users rows — the workspace is fixed by the deployment, never onboarding.
-    if (cfg?.singleTenant && cfg.slug) {
-      window.location.href = '/' + cfg.slug + '/dashboard';
-      return;
-    }
     window.location.href = '/onboarding';
     return;
   }
@@ -346,16 +335,16 @@ async function doLogin() {
   const email   = document.getElementById('email-input')?.value.trim() || '';
   const pw      = document.getElementById('pw-input').value.trim();
   const remember = document.getElementById('remember-me')?.checked || false;
+  const err = document.getElementById('auth-error');
+  // Every login is a named user: the shared band password is retired.
+  if (!email) { err.textContent = t('home.emailRequired'); document.getElementById('email-input')?.focus(); return; }
   if (!pw) return;
   const btn = document.getElementById('pw-btn');
-  const err = document.getElementById('auth-error');
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
     const cfg = await loadConfig();
     if (cfg.slug) artistSlug = cfg.slug;
-    const body = email
-      ? { email, password: pw, rememberMe: remember }
-      : { password: pw };
+    const body = { email, password: pw, rememberMe: remember };
     // Without a band, email is the only identity we have — /api/login resolves
     // it across workspaces. Never build `/api/${undefined}/auth`.
     const r = await fetch(artistSlug ? `/api/${artistSlug}/auth` : '/api/login', {
@@ -365,14 +354,8 @@ async function doLogin() {
     });
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); return; }
-    if (data.token) {
-      storeToken(data.token, remember);
-      sessionStorage.setItem('smartist_admin_email', data.email || '');
-    } else {
-      // Legacy bootstrap: server returns adminEmail (no token), store pw as bearer
-      sessionStorage.setItem(AUTH_TOKEN_KEY, pw);
-      if (data.adminEmail) sessionStorage.setItem('smartist_admin_email', data.adminEmail);
-    }
+    storeToken(data.token, remember);
+    sessionStorage.setItem('smartist_admin_email', data.email || '');
     applyNav(cfg.name, cfg.config);
     renderLoggedIn(cfg, data.artists || []);
   } catch {

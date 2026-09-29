@@ -12,35 +12,19 @@
  *   node scripts/setup.js
  *   DATABASE_URL=<url> node scripts/setup.js
  *
- * Reads DATABASE_URL from .env.local in the project root if not set.
+ * Reads DATABASE_URL from .env.local or .env in the project root if not set.
  */
 
 'use strict';
 
-const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
 const readline   = require('readline');
 const fs         = require('fs');
 const path       = require('path');
+const lib        = require('./_lib');
+const { applyStatements, connect: rawRunner } = require('./apply_schema');
 
-// ── Env ────────────────────────────────────────────────────────────────────
-
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
-}
-
-loadEnv(path.join(__dirname, '..', '.env.local'));
-loadEnv(path.join(__dirname, '.env.local'));
+lib.loadEnv();
 
 // ── Print helpers ──────────────────────────────────────────────────────────
 
@@ -74,16 +58,6 @@ async function confirm(prompt) {
   return /^y/i.test(answer);
 }
 
-async function confirmDb(url) {
-  let host;
-  try { host = new URL(url).hostname; } catch { host = '(unknown)'; }
-  console.log(`\n  ${D('database:')} ${B(host)}`);
-  if (!await confirm('Connect to this database?')) {
-    console.log(D('\n  Aborted.\n'));
-    process.exit(0);
-  }
-}
-
 // ── DB helpers ─────────────────────────────────────────────────────────────
 
 async function schemaApplied(sql) {
@@ -95,25 +69,12 @@ async function schemaApplied(sql) {
   }
 }
 
-async function applySchema(sql) {
-  const src = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-
-  // Strip comment lines, split on semicolons, drop empty fragments
-  const statements = src
-    .split('\n')
-    .filter(line => !line.trimStart().startsWith('--'))
-    .join('\n')
-    .split(';')
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  for (const stmt of statements) {
-    try {
-      await sql([stmt]); // neon HTTP: tagged template with raw string, no params
-    } catch (e) {
-      if (e.message.toLowerCase().includes('already exists')) continue;
-      throw e;
-    }
+async function applySchema() {
+  const run = rawRunner(process.env.DATABASE_URL);
+  try {
+    await applyStatements(run, fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+  } finally {
+    await run.end();
   }
 }
 
@@ -127,7 +88,7 @@ const STANDARD_FIELDS = [
   { field: 'title',               label: 'Song',           required: true },
   { field: 'key',                 label: 'Key' },
   { field: 'genre',            label: 'Genre' },
-  { field: 'tempo',               label: 'Tempo' },
+  { field: 'bpm',                 label: 'BPM' },
   { field: 'length_min',          label: 'Length' },
   { field: 'interpret',           label: 'Interpret' },
   { field: 'reference_interpret', label: 'Ref. interpret' },
@@ -146,19 +107,19 @@ async function stepSchema(sql) {
 
   warn('No schema found in the database.');
   if (!await confirm('Apply schema.sql now?')) {
-    console.log(Y('\n  Run manually:  psql $DATABASE_URL < scripts/schema.sql'));
+    console.log(Y('\n  Run manually:  node scripts/apply_schema.js'));
     console.log(Y('  Then re-run this wizard.\n'));
     process.exit(0);
   }
 
   process.stdout.write('  Applying schema.sql...');
   try {
-    await applySchema(sql);
+    await applySchema();
     console.log(` ${G('done')}`);
   } catch (e) {
     console.log(` ${R('failed')}\n`);
     console.error(`  ${R(e.message)}`);
-    console.log(Y('\n  Fallback: psql $DATABASE_URL < scripts/schema.sql\n'));
+    console.log(Y('\n  Fallback: node scripts/apply_schema.js\n'));
     process.exit(1);
   }
 }
@@ -205,16 +166,24 @@ async function stepArtist(sql) {
     const name = await ask('Artist name');
     if (!name) { console.log(R('\n  Artist name is required.')); process.exit(1); }
 
-    const password = await ask('Password');
-    if (password.length < 6) { console.log(R('\n  Password must be at least 6 characters.')); process.exit(1); }
+    // Every login is a named user; the first one is the band's admin.
+    const email = (await ask('Admin email')).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { console.log(R('\n  A valid email is required.')); process.exit(1); }
+    const password = await ask('Admin password');
+    if (password.length < 8) { console.log(R('\n  Password must be at least 8 characters.')); process.exit(1); }
     const confirm2 = await ask('Confirm password');
     if (password !== confirm2) { console.log(R('\n  Passwords do not match.')); process.exit(1); }
 
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     const [created] = await sql`
-      INSERT INTO artists (slug, name, password_hash, config)
-      VALUES (${slug}, ${name}, ${hash}, ${{}}::jsonb)
-      RETURNING id, slug, name, config
+      WITH a AS (
+        INSERT INTO artists (slug, name, config) VALUES (${slug}, ${name}, ${sql.json({})})
+        RETURNING id, slug, name, config
+      ), u AS (
+        INSERT INTO users (artist_id, email, password_hash, role)
+        SELECT id, ${email}, ${hash}, 'admin' FROM a
+      )
+      SELECT * FROM a
     `;
     artist = created;
     ok(`Artist ${B(name)} created`);
@@ -370,9 +339,12 @@ async function main() {
     process.exit(1);
   }
 
-  await confirmDb(process.env.DATABASE_URL);
+  // Asked on this script's own prompt: a second readline on stdin (lib.confirmDb
+  // opens one) would swallow the answers meant for the wizard.
+  console.log(`\n  ${D('database:')} ${B(lib.dbHost(process.env.DATABASE_URL))}`);
+  if (!await confirm('Connect to this database?')) { console.log(D('\n  Aborted.\n')); rl.close(); return; }
 
-  const sql = neon(process.env.DATABASE_URL);
+  const sql = lib.connect(process.env.DATABASE_URL);
 
   try {
     await stepSchema(sql);
@@ -386,6 +358,7 @@ async function main() {
     process.exit(1);
   } finally {
     rl.close();
+    await sql.end();
   }
 }
 

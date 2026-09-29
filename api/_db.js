@@ -11,7 +11,7 @@ const postgres = require('postgres');
 //   - the tagged-template interface is identical — no query changes needed
 //
 // To switch drivers, replace the connect line only:
-//   neon HTTP (no transactions): connect: url => require('@neondatabase/serverless').neon(url)
+//   neon HTTP (no transactions; npm install it first): connect: url => require('@neondatabase/serverless').neon(url)
 //   pg Pool:                     connect: url => { ... }  (see DATABASE.md)
 // prepare: false — Neon's pooler keeps named prepared statements on its server
 // connections, so after a column changes type every `SELECT *` on that table

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Client-side tests for doLogout() in common.js.
+// Client-side tests for doLogout() in shell.js (with session.js helpers).
 //
 // Logging out used to clear the tokens and hide the authed controls without
 // navigating, so the dashboard stayed on screen with every row still rendered.
@@ -14,7 +14,9 @@ const path = require('path');
 const vm   = require('vm');
 
 const REPO_ROOT = path.join(__dirname, '..');
-const COMMON = fs.readFileSync(path.join(REPO_ROOT, 'app/js/common.js'), 'utf8');
+// The shared scripts, in page load order.
+const COMMON = ['core', 'session', 'ui', 'shell']
+  .map(n => fs.readFileSync(path.join(REPO_ROOT, `app/js/${n}.js`), 'utf8')).join('\n');
 
 const G = s => `\x1b[32m${s}\x1b[0m`;
 const R = s => `\x1b[31m${s}\x1b[0m`;
@@ -32,10 +34,10 @@ function assertEq(a, b, msg) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(msg || `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
 }
 
-// Pull one top-level function, brace-matched, out of common.js.
+// Pull one top-level function, brace-matched, out of the shared scripts.
 function extractFunction(src, name) {
   const start = src.indexOf(`function ${name}(`);
-  if (start === -1) throw new Error(`${name}() not found in common.js`);
+  if (start === -1) throw new Error(`${name}() not found in the shared scripts`);
   let depth = 0, i = src.indexOf('{', start);
   for (let j = i; j < src.length; j++) {
     if (src[j] === '{') depth++;
@@ -77,7 +79,7 @@ function runLogout({ session = {}, local = {} } = {}) {
      extractFunction(COMMON, 'invalidateConfigCache'),
      extractFunction(COMMON, 'doLogout'),
      'doLogout();'].join('\n'),
-    context, { filename: 'app/js/common.js' }
+    context, { filename: 'app/js/shell.js' }
   );
   return { assigned, removedEls, header, ...context };
 }

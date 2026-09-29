@@ -4,7 +4,7 @@
 // Usage:
 //   npm test                                    # needs vercel dev running
 //   BASE_URL=https://yourapp.example.com npm test    # against production
-//   ARTIST_PASSWORD=xxx npm test                  # enables write tests
+//   ARTIST_EMAIL=… ARTIST_PASSWORD=… npm test     # enables reads and write tests
 
 const fs   = require('fs');
 const path = require('path');
@@ -36,14 +36,13 @@ const SLUG     = process.env.ARTIST_SLUG;
 // which need not be the one under test.
 const CONFIG_URL = `/api/config?slug=${encodeURIComponent(SLUG || '')}`;
 const PASSWORD = process.env.ARTIST_PASSWORD;
-// With ARTIST_EMAIL the suite logs in as that user and runs on the session token;
-// without it, the band password is the bearer (legacy bootstrap session).
+// The suite logs in as this user and runs on the session token.
 const EMAIL    = process.env.ARTIST_EMAIL;
 const R2_BASE  = process.env.R2_PUBLIC_URL;
 
-// Workspaces are private: every read below runs with a session. main() swaps in
-// the user session token when ARTIST_EMAIL is set.
-let TOKEN = PASSWORD || null;
+// Workspaces are private: every read below runs with a session. main() logs in
+// and sets it when ARTIST_EMAIL and ARTIST_PASSWORD are both given.
+let TOKEN = null;
 const AUTH = { get token() { return TOKEN; } };
 
 // Vercel Deployment Protection answers every request to a protected preview
@@ -159,14 +158,6 @@ async function testConfig() {
     assert('role' in json, 'role field missing');
     assert(json.role === null, `expected role null, got ${JSON.stringify(json.role)}`);
   });
-
-  if (PASSWORD && !EMAIL) {
-    await test('bootstrap-token config reports role null (no users row)', async () => {
-      const { res, json } = await GET(CONFIG_URL, { token: TOKEN });
-      assertStatus(res, json, 200);
-      assert(json.role === null, `expected bootstrap role null, got ${JSON.stringify(json.role)}`);
-    });
-  }
 
   return result;
 }
@@ -605,7 +596,20 @@ async function testAuth(slug) {
   console.log(B('\nAuth'));
 
   await test('POST /auth wrong password → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/auth`, { password: '__wrong__' });
+    const { res, json } = await POST(`/api/${slug}/auth`, { email: 'nobody@example.test', password: '__wrong__' });
+    assertStatus(res, json, 401);
+  });
+
+  // The shared band password is retired: a password alone is no login, and
+  // never a bearer token.
+  await test('POST /auth with a password and no email → 400 band_password_retired', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth`, { password: '__anything__' });
+    assertStatus(res, json, 400);
+    assert(json.code === 'band_password_retired', `expected band_password_retired, got ${json.code}`);
+  });
+
+  if (PASSWORD) await test('a password as the bearer token → 401', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs`, { token: PASSWORD });
     assertStatus(res, json, 401);
   });
 
@@ -819,13 +823,6 @@ async function testMultiUserAuth(slug, token) {
     const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
       { currentPassword: 'a'.repeat(8), newPassword: 'b'.repeat(8) });
     assertStatus(res, json, 401);
-  });
-
-  if (!EMAIL) await test('POST change-password with bootstrap token → 400', async () => {
-    // Valid fields, but bootstrap login has no users row — rejected by the bootstrap guard.
-    const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
-      { currentPassword: 'a'.repeat(8), newPassword: 'b'.repeat(8) }, { token });
-    assertStatus(res, json, 400);
   });
 
   await test('POST change-password short newPassword → 400', async () => {
@@ -1200,8 +1197,7 @@ async function testWrite(slug, token, firstSong, config) {
   // Verify password
   let authed = false;
   await test('POST /auth with correct password → 200', async () => {
-    const body = EMAIL ? { email: EMAIL, password: PASSWORD } : { password: token };
-    const { res, json } = await POST(`/api/${slug}/auth`, body);
+    const { res, json } = await POST(`/api/${slug}/auth`, { email: EMAIL, password: PASSWORD });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
     authed = true;
@@ -1543,7 +1539,7 @@ async function main() {
 
   if (!TOKEN) {
     console.log(B('\nAuthenticated reads and write ops'));
-    console.log(D('  Set ARTIST_PASSWORD=<password> to run them — workspaces are private'));
+    console.log(D('  Set ARTIST_EMAIL and ARTIST_PASSWORD to run them — workspaces are private'));
     printSummary();
     return;
   }

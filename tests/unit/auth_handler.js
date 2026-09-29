@@ -55,7 +55,6 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true,
     exports: {
-      checkCredentials: async () => false,
       requireAuth: async (req, res) => {
         // authFails mirrors the real helper: it writes 401 and returns null, so any branch
         // placed after the gate becomes unreachable without a session.

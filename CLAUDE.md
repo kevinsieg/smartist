@@ -42,7 +42,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 
 1. **`req.query.path` not populated** in catch-all files inside dynamic dirs. Handlers fall back to `req.url.split('?')[0].split('/segment/')[1]?.split('/')`.
 2. **Multi-segment POST to catch-alls fails silently** — vercel returns its own HTML 404 (not the handler). Example: `POST /api/:artist/setlists/:id/duplicate` was broken. Fix: move such endpoints to the plain `setlists.js` handler using body fields (`duplicate_id`, `share_id`). Same fallback for `req.query.artist`: `req.query.artist || req.url.split('?')[0].split('/')[2]`.
-3. **Detect early:** run `ARTIST_PASSWORD=… node tests/api.js` against local `vercel dev`. Routing bugs that only appear in dev (not on Vercel) will fail these tests.
+3. **Detect early:** run `ARTIST_EMAIL=… ARTIST_PASSWORD=… node tests/api.js` against local `vercel dev`. Routing bugs that only appear in dev (not on Vercel) will fail these tests.
 
 ---
 
@@ -52,7 +52,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 |-----|-----|
 | `/` | `app/js/home.js` |
 | `/dashboard` | `app/js/dashboard.js` |
-| `/setlist` | `app/js/setlist.js` |
+| `/setlist` | `setlist-generator.js` (generator, saving a set) + `setlist-history-tab.js` (History tab) + `setlist.js` (state, `init()`, tab switch — loaded last) |
 | `/setlist-history` | `app/js/setlist-history.js` — redirect to the setlist page's history tab |
 | `/songs` | `app/js/songs.js` (init, data, filters, list view) + `songs-table.js` (bulk edit), `songs-panel.js` (side panel), `songs-media.js` (audio/sheet/playback), `songs-lyrics.js` (lyrics + URL preview) — one global scope, loaded in that order with `songs.js` last because it calls `init()`; `tests/songs-split-client.js` executes them together |
 | `/pro-import` | `app/js/pro-import.js` |
@@ -62,15 +62,15 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `/hub` | `app/js/hub.js` |
 | `/profile` | inline script in `profile.html` — personal (email, change password) |
 | `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
-| `/stage?id=N` | `app/js/stage.js` — **no `common.js`; no nav** |
-| `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, no `common.js`, English-only |
+| `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav** |
+| `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, none of the shared scripts, English-only |
 | `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
 | `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
 | `/contact`, `/confirm-email`, `/demo` | `app/js/contact.js`; inline scripts in `confirm-email.html` and `demo.html` |
 
-`app/js/common.js` is loaded by every page except `stage.html`. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `common.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()` (which lives in `common.js`).
+Every app page loads the four shared scripts in this order, after `footer.js`: `core.js` (escaping, `safeUrl`, `formatDate`/`formatTime`, `formatLength`, `songFieldHidden` — no session, no DOM shell), `session.js` (slug, token, `apiFetch`, `loadConfig`), `ui.js` (lists, typeahead, modals, `withBusy`, hard delete) and `shell.js` (header/nav, auth menu, `initPage`, SPA `navigate()`; its IIFEs run at load, so it comes last). SPA navigation keeps these four loaded and re-runs only page scripts. `stage.html` loads `core.js` only. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `shell.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()`. Bump the `?v=` of all four together (`tests/unit/asset_versions.js`).
 
-**Key common.js exports:**
+**Key shared-script exports:**
 - `loadConfig()` — stale-while-revalidate; blocks on first call, cached in `sessionStorage` thereafter
 - `invalidateConfigCache()` — call after any `PATCH /api/config` that mutates `artists.config` so the next `loadConfig()` fetches fresh data
 - `createSortableList(options)` — reusable column-driven table with sort buttons and filter input. Column shape: `{ field, label, width, sortable, filterable, muted, type, render, actions }`. Multiple instances sharing one filter input register via `filterInputId` (uses `_slFilterRegistry` internally). Returns `{ setData(rows), refresh() }`.
@@ -116,7 +116,7 @@ vercel dev   # reads .env — NOT .env.local (CLI 52.x quirk; keep all vars in .
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
-| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint: changing a password revokes older sessions (`passwordMatches`). |
+| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint: changing a password revokes older sessions (`passwordMatches`). |
 | `_ownership.js` | `ownsSongs/ownsGig/ownsVenue/ownsOrganizer` — **every foreign id from a request body must pass one** (ids are one sequence across tenants); `isOwnMediaUrl` gates R2 deletes |
 
 ---
@@ -175,7 +175,7 @@ Tables: `artists`, `songs`, `song_lyrics`, `gigs`, `schema_migrations`, `setlist
 
 Songs use a `deleted` flag (soft-delete; lyrics and arrangements stay, so a restore brings them back). `songs.language` is a column. `songs.extra` JSONB holds arbitrary per-song data (`isrc`, `listenUrl`, `sheetUrl`, `playbackUrl`, `capo`, …).
 
-**Lyrics live in `song_lyrics` (one row per song), never in a song list.** Lists carry `has_lyrics`; the text comes with one song's details (`GET /api/:artist/songs/:id` → `lyrics`), or for the CSV export with `GET /api/:artist/songs?lyrics=1`. The client loads it through `loadSongLyrics(slug, song)` in `common.js`. Shared song queries and the lyrics write are in `api/_domain/songs.js`; the API still accepts `extra.lyrics` / `extra.language` from older clients and moves them to the columns.
+**Lyrics live in `song_lyrics` (one row per song), never in a song list.** Lists carry `has_lyrics`; the text comes with one song's details (`GET /api/:artist/songs/:id` → `lyrics`), or for the CSV export with `GET /api/:artist/songs?lyrics=1`. The client loads it through `loadSongLyrics(slug, song)` in `session.js`. Shared song queries and the lyrics write are in `api/_domain/songs.js`; the API still accepts `extra.lyrics` / `extra.language` from older clients and moves them to the columns.
 
 `venues` carry CRM contact data: `phone`, `contact_name`, `generic_email`, plus `lat`/`lng` for the map.
 
@@ -210,23 +210,23 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 - **Tiers:** Free = 30 MB storage + 100 songs, features `songs/setlists/gigs/hub`. Pro = unlimited + `venues/organizers/pro-import/booking`. Helpers: `hasFeature`, `storageLimitBytes`, `songLimit`, `wouldExceedStorage`, `planSummary`, `requireFeature(res, artist, key)`.
 - **Enforcement is server-side** (`402` + machine codes): `requireFeature` → `upgrade_required` (venues/organizers/`gema-import`); storage cap → `storage_limit` (at song-media upload-confirm, `confirmMedia` in `_media.js`, nets the replaced file); song cap → `song_limit` (song create). Client mirrors for UX only.
-- **Client gating:** `common.js` adds `.plan-locked` to nav items the plan lacks (`NAV_FEATURE` map) and routes clicks to `/settings#plan`. `loadConfig()` exposes `cfg.plan`/`cfg.usage`.
+- **Client gating:** `shell.js` adds `.plan-locked` to nav items the plan lacks (`NAV_FEATURE` map) and routes clicks to `/settings#plan`. `loadConfig()` exposes `cfg.plan`/`cfg.usage`.
 - **Self-serve upgrade seam:** `POST /api/config?action=upgrade` — today flips `config.plan=pro` + sets `upgradedAt`, returns `{mode:'self-serve'}`; later returns `{mode:'checkout', url}` and lets a webhook set the plan. `settings.js renderPlan` branches on `mode`. `POST ?action=downgrade` sets `plan=free` (keeps `upgradedAt`). `PATCH /api/config` strips `plan`/`upgradedAt` — plan state changes only through these actions or `admin-set-plan`. **This is the swap point for paid billing — no other code changes.**
 - **Super-admin:** `/admin` page + `?action=admin-overview`/`admin-set-plan`, gated by `SUPER_ADMIN_EMAILS` (allowlist via global user token, email from DB). Manual grants also via `scripts/plans.js`.
 - **Support/donations (live now):** `SUPPORT_LINKS` constant in `footer.js` (provider-agnostic; empty-url entries skipped; optional `img` for official brand buttons loaded as `<img>` — third-party `button.js` is **not** used, CSP blocks it). `renderSupportLinks(el)` renders them in the footer + the Settings donation panel shown after a self-serve upgrade. i18n: `settings.plan.donatePrompt`.
-- **One footer everywhere:** `app/js/footer.js` + `app/css/footer.css` (languages left, donations centred, right: smartist.studio · Contact · Impressum; two compact rows under 480px). `/impressum` redirects to smartist.studio/impressum (one legal notice). Pages without a workspace slug (login, root contact) and signup/onboarding show a "smartist studio" wordmark linking to the marketing site. Every page loads `footer.js` before `common.js`; `injectShell()` calls `renderAppFooter()`, standalone pages carry `<footer data-app-footer></footer>`. `footer.css` has variable fallbacks because `demo.html` does not load `app.css`.
+- **One footer everywhere:** `app/js/footer.js` + `app/css/footer.css` (languages left, donations centred, right: smartist.studio · Contact · Impressum; two compact rows under 480px). `/impressum` redirects to smartist.studio/impressum (one legal notice). Pages without a workspace slug (login, root contact) and signup/onboarding show a "smartist studio" wordmark linking to the marketing site. Every page loads `footer.js` before the shared scripts; `injectShell()` calls `renderAppFooter()`, standalone pages carry `<footer data-app-footer></footer>`. `footer.css` has variable fallbacks because `demo.html` does not load `app.css`.
 - **Docs:** `docs/architecture.md` (why things are built this way), `docs/deployment.md`, `docs/tenant-onboarding.md`, `docs/oauth-setup.md`, `docs/ci-cd.md`.
 
 ---
 
 ## Client-side rules
 
-- **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A workspace is private (see the two gates under Database) and answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/page_scripts.js` enforces this; `stage.js`/`arrangement.js` run without `common.js` and add the header themselves.
+- **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A workspace is private (see the two gates under Database) and answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/page_scripts.js` enforces this; `stage.js`/`arrangement.js` run without `session.js` and add the header themselves.
 - Venues list is **paged** (`limit`/`offset` + A–Z `letter`), not append-on-scroll; sorting is server-side so it covers all rows. Bulk edit (`venues_bulk_edit` in localStorage, desktop only) reloads the table on every sort, page, filter or letter change, so it asks before discarding unsaved rows (`_confirmDiscardBulk`). `PATCH` writes the whole batch in one `unnest` statement inside `sql.begin` and returns `{count, rejected:[{id,error}]}`; rejected rows are marked in the table.
 
-- `loadConfig()` in `common.js` — stale-while-revalidate via `sessionStorage` key `artist_config_cache`. First call blocks on network; subsequent calls in the same tab return immediately.
+- `loadConfig()` in `session.js` — stale-while-revalidate via `sessionStorage` key `artist_config_cache`. First call blocks on network; subsequent calls in the same tab return immediately.
 - After any `PATCH /api/config` that changes `artists.config`, call `invalidateConfigCache()` so the next `loadConfig()` fetches fresh data.
-- Auth token: `smartist_token` (`AUTH_TOKEN_KEY` in `common.js`) — in `sessionStorage`, or `localStorage` with "remember me"; `apiFetch()` sends it as `Authorization: Bearer <token>`. `clearToken()` removes both copies and the legacy `setlist_token`. Change-password returns a replacement token (the old one stops verifying) — store it where the old one was.
+- Auth token: `smartist_token` (`AUTH_TOKEN_KEY` in `session.js`) — in `sessionStorage`, or `localStorage` with "remember me"; `apiFetch()` sends it as `Authorization: Bearer <token>`. `clearToken()` removes both copies and the legacy `setlist_token`. Change-password returns a replacement token (the old one stops verifying) — store it where the old one was.
 - **Do not call `loadLogs()` inside `renderTable()`** — `renderTable()` is also called by `discardAll()`. Logs only need refreshing after a real data change.
 - Songs table: toolbar is `position:sticky`; `table-wrap` has JS-computed `maxHeight` for independent scroll. `thead th` uses `box-shadow` instead of `border-bottom` to avoid the sticky/border-collapse disappearing-border bug.
 - OAuth login: Google/Facebook buttons appear on the login and signup pages only when `cfg.googleLogin`/`cfg.facebookLogin` are true (both variables of a provider set). On success the server redirects to `/login#session=<token>&hint=…&next=…` — a finished session in the fragment, never a query string. `state` is bound to an `oauth_nonce` cookie; Facebook signs into existing accounts only with `FACEBOOK_TRUST_EMAIL=true`. Setup: `docs/oauth-setup.md`.
@@ -235,7 +235,7 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 ## Dates and numbers
 
-`formatDate(value, style)` and `formatTime(value)` in `common.js` are the only date formatters — no page calls `toLocaleDateString` itself (`tests/unit/page_scripts.js` enforces it). Styles: default `22.01.2026` (de) / `22/01/26` (en, fr), `'short'` without the year, `'long'` with the month spelled out. Values are read with UTC accessors because date columns arrive as UTC midnight. `stage.html` loads no `common.js` and keeps a documented copy (`_stageDate`). ISO strings stay raw in `<input type="date">` values and in the .ics export.
+`formatDate(value, style)` and `formatTime(value)` in `core.js` are the only date formatters — no page calls `toLocaleDateString` itself (`tests/unit/page_scripts.js` enforces it). Styles: default `22.01.2026` (de) / `22/01/26` (en, fr), `'short'` without the year, `'long'` with the month spelled out. Values are read with UTC accessors because date columns arrive as UTC midnight. `stage.html` loads `core.js` and uses the same functions (without `i18n.js` the page's `lang` attribute picks the style). ISO strings stay raw in `<input type="date">` values and in the .ics export.
 
 ---
 
@@ -249,7 +249,7 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 The app ships in **English (default), French, German**. `stage.html` and `api-docs.html` are intentionally English-only.
 
-- **`app/js/i18n.js`** — loaded in the `<head>` of every translated page, before any other script (so `window.i18n`/`window.t` exist before `common.js` and page scripts run). UMD-style: pure functions are `module.exports`-ed for Node tests; browser glue runs only when `typeof document !== 'undefined'`. `common.js` *consumes* it — `initPage()` and `home.init()` `await window.i18n.ready` before rendering.
+- **`app/js/i18n.js`** — loaded in the `<head>` of every translated page, before any other script (so `window.i18n`/`window.t` exist before the shared and page scripts run). UMD-style: pure functions are `module.exports`-ed for Node tests; browser glue runs only when `typeof document !== 'undefined'`. The shared scripts *consume* it — `initPage()` (`shell.js`) and `home.init()` `await window.i18n.ready` before rendering.
 - **Locale files** `app/i18n/{en,fr,de}.json` — flat `key → string`. **English is the source of truth.** All three files must hold an **identical key set** (enforced by `tests/unit/i18n.js` — run `node tests/unit.js`).
 - **Conventions:**
   - Static HTML: `data-i18n="key"` (keep English inline as default); attributes: `data-i18n-attr="placeholder:key;aria-label:key2"`. **Never** put `data-i18n` on an element that has child elements — `applyTranslations` sets `textContent` and would delete them; split into child `<span data-i18n>` siblings.
@@ -265,12 +265,12 @@ The app ships in **English (default), French, German**. `stage.html` and `api-do
 
 ## Scripts
 
-All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values. New scripts use `scripts/_lib.js` (`loadEnv`, `confirmDb`, `connect` — postgres.js, like the API).
+All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values. Every script uses `scripts/_lib.js` (`loadEnv`, `confirmDb`, `connect` — postgres.js, like the API; SSL off only for localhost). postgres.js cannot send a JS boolean array: pass `'true'`/`'false'` as `::text[]::bool[]`.
 
 **Schema changes:** append a dated block to `scripts/schema.sql` that ends with `INSERT INTO schema_migrations (id) VALUES ('<date>') ON CONFLICT DO NOTHING;`, and set `SCHEMA_VERSION` in `api/_env.js` to that date (a unit test checks they match). No `DO $$` blocks — `apply_schema.js` splits on `;`.
 
 ```bash
-node scripts/setup.js                                      # first-time: schema + artist row
+node scripts/setup.js                                      # first-time: schema + band + its admin user
 node scripts/apply_schema.js [--check] [--yes]             # apply schema.sql; --check lists pending migrations
 node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
 node scripts/import_songs.js --artist <slug> songs.json
@@ -297,10 +297,10 @@ node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nig
 
 ```bash
 npm run test:unit                         # unit + page-script suites (stubbed SQL, no DB); runs in CI
-cd tests && ARTIST_PASSWORD=… npm test      # full integration suite against vercel dev (port 3000)
+cd tests && ARTIST_EMAIL=… ARTIST_PASSWORD=… npm test   # full integration suite against vercel dev (port 3000)
 npm run test:dev                          # against Vercel Preview URL
 ```
 
-CI also runs the integration suite against a throwaway `postgres:16`: schema applied twice, `tests/harness/seed.js`, handlers served by `tests/harness/server.js` (a `vercel.json` router, no Vercel login). Steps in `docs/ci-cd.md`. Node 22 everywhere (`engines` in `package.json`).
+CI also runs the integration suite against a throwaway `postgres:16`: schema applied twice, `tests/harness/seed.js`, handlers served by `tests/harness/server.js` (a `vercel.json` router, no Vercel login), then `tests/smoke.js` — Playwright signs in through the form, opens every workspace page, follows the nav (SPA) and a stage link, and fails on any uncaught error, console error or API 5xx. Steps in `docs/ci-cd.md`. Node 22 everywhere (`engines` in `package.json`).
 
-Workspaces are private, so every read and write test runs with a session (`ARTIST_PASSWORD` as bearer); without it only the anonymous checks run. Write tests create `[TEST]` rows and delete them again; an interrupted run can leave some behind (see `docs/ci-cd.md`). CI previews sit behind Vercel Deployment Protection — the suite sends `VERCEL_AUTOMATION_BYPASS_SECRET` as `x-vercel-protection-bypass`.
+Workspaces are private, so every read and write test runs with a session: the suite logs in as `ARTIST_EMAIL` / `ARTIST_PASSWORD`; without them only the anonymous checks run. Write tests create `[TEST]` rows and delete them again; an interrupted run can leave some behind (see `docs/ci-cd.md`). CI previews sit behind Vercel Deployment Protection — the suite sends `VERCEL_AUTOMATION_BYPASS_SECRET` as `x-vercel-protection-bypass`.

@@ -12,30 +12,10 @@
 
 'use strict';
 
-const { neon }              = require('@neondatabase/serverless');
-const readline              = require('readline');
-const fs                    = require('fs');
-const path                  = require('path');
+const lib                   = require('./_lib');
 const { storageLimitBytes } = require('../api/_plans');
 
-// ── Env ────────────────────────────────────────────────────────────────────
-
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
-}
-
-loadEnv(path.join(__dirname, '..', '.env'));
-loadEnv(path.join(__dirname, '..', '.env.local'));
+lib.loadEnv();
 
 // ── Print helpers ──────────────────────────────────────────────────────────
 
@@ -64,24 +44,7 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const sql = neon(DATABASE_URL);
-
-function confirmDb(url) {
-  let host;
-  try { host = new URL(url).hostname; } catch { host = '(unknown)'; }
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  console.log(`\n  ${D('database:')} ${B(host)}`);
-  return new Promise(resolve =>
-    rl.question(`  Continue? (y/n): `, answer => {
-      rl.close();
-      if (!/^y/i.test(answer.trim())) {
-        console.log(D('  Aborted.'));
-        process.exit(0);
-      }
-      resolve();
-    })
-  );
-}
+const sql = lib.connect(DATABASE_URL);
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -140,9 +103,7 @@ async function setPlan(slug, plan) {
     process.exit(1);
   }
 
-  // The neon HTTP driver resolves to rows, never a row count, so an UPDATE
-  // without RETURNING always looks like "0 rows matched".
-  const updated = await sql`UPDATE artists SET config = config || ${{ plan }} WHERE slug = ${slug} RETURNING slug`;
+  const updated = await sql`UPDATE artists SET config = config || ${sql.json({ plan })} WHERE slug = ${slug} RETURNING slug`;
   if (updated.length > 0) {
     ok(`Artist "${slug}" plan set to "${plan}".`);
   } else {
@@ -218,7 +179,7 @@ async function recount() {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  await confirmDb(DATABASE_URL);
+  await lib.confirmDb(DATABASE_URL);
 
   if (RECOUNT) {
     console.log(`\n  ${B('Recounting storage from R2...')}\n`);
@@ -235,4 +196,6 @@ async function main() {
   }
 }
 
-main().catch(e => { err(e.message); process.exit(1); });
+main()
+  .catch(e => { err(e.message); process.exitCode = 1; })
+  .finally(() => sql.end());

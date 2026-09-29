@@ -85,10 +85,12 @@ work on dev  →  git push origin dev  →  verify on preview URL
 →  open PR: dev → main  →  review + merge  →  Vercel deploys to production
 ```
 
-If the PR includes a schema change, apply it to the production database after merging:
+If the PR includes a schema change, apply it to **every** production database before merging, then check the deployments:
 
 ```bash
-psql $PROD_DATABASE_URL < scripts/schema.sql
+DATABASE_URL=<prod-url> node scripts/apply_schema.js           # idempotent, asks before it connects
+DATABASE_URL=<prod-url> node scripts/apply_schema.js --check   # "up to date"
+curl https://<deployment>/api/config?action=health              # "schema":"current"
 ```
 
 
@@ -131,7 +133,6 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 | `DATABASE_URL`         | Production Neon connection string                            | Dev Neon connection string                     |
 | `APP_ORIGIN`           | `https://yourdomain.com`                                     | Preview URL (`<project>-git-dev-*.vercel.app`) |
 |                        | *Set it:* links in password-reset, invite and sign-up emails are built from it (fallback: the request's `Host`) | |
-| `ARTIST_ADMIN_EMAIL`   | `you@yourdomain.com`                                         | `you+dev@yourdomain.com`                       |
 | `R2_BUCKET_NAME`       | Production bucket name                                       | Dev bucket name                                |
 | `R2_ACCESS_KEY_ID`     | Prod R2 Access Key ID                                        | Dev R2 Access Key ID                           |
 | `R2_SECRET_ACCESS_KEY` | Prod R2 Secret Access Key                                    | Dev R2 Secret Access Key                       |
@@ -163,7 +164,7 @@ Link it to this GitHub repo. Framework: **Other** (no build step). Set the produ
 - **Production:** use an existing Neon project or create one
 - **Development:** create a second Neon project; copy the pooler connection string
 
-Run the setup wizard once per database to create the schema and band row:
+Run the setup wizard once per database to create the schema, the band and its admin login (email + password):
 
 ```bash
 DATABASE_URL=<connection-string> node scripts/setup.js
@@ -272,7 +273,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 | Table               | Purpose                                                                     |
 | ------------------- | --------------------------------------------------------------------------- |
-| `artists`           | Slug, name, optional legacy band password hash, UI config (JSONB)           |
+| `artists`           | Slug, name, UI config (JSONB); `password_hash` is unused (retired band password) |
 | `songs`             | Catalogue — standard fields + `extra` JSONB; soft-delete via `deleted` flag |
 | `venues`            | CRM venue directory — soft-delete, linked to gigs via FK                    |
 | `organizers`        | CRM organizer/promoter directory — soft-delete, linked to gigs via FK       |
@@ -294,7 +295,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 ## API
 
-All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (or, on older single-band installs, the band password). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
+All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
 
 A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *stage* = also open without a session when the band turned on *public catalogue* / *public stage links* in Settings (both off by default); — = no session needed.
 
@@ -346,7 +347,7 @@ See [scripts/README.md](scripts/README.md) for usage details.
 
 | Script                        | Purpose                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------ |
-| `scripts/setup.js`            | Interactive wizard: schema + artist creation + field config              |
+| `scripts/setup.js`            | Interactive wizard: schema + band + its admin user + field config        |
 | `scripts/apply_schema.js`     | Apply `schema.sql` to the database in `DATABASE_URL` (idempotent)        |
 | `scripts/seed.js`             | Populate the dev database with test data (wipe + reseed with `--force`)  |
 | `scripts/create_user.js`      | First login for a band, or set an account's password from the CLI        |
@@ -356,7 +357,7 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | `scripts/import_gema.js`      | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/delete_artist.js`    | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
 | `scripts/demo_reset.js`       | Snapshot / restore the public demo band (`scripts/demo_seed.json`)       |
-| `scripts/schema.sql`          | Raw schema — apply directly with `psql` if preferred                     |
+| `scripts/schema.sql`          | The schema, idempotent — apply with `apply_schema.js`                    |
 
 ---
 

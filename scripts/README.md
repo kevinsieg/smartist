@@ -15,15 +15,11 @@ node scripts/setup.js
 Four interactive steps:
 
 1. **Schema** — checks whether tables exist; offers to apply `schema.sql` if not.
-2. **Band** — create a new band (slug, name, password) or select an existing one to reconfigure.
+2. **Band** — create a new band (slug, name, and its admin's email and password) or select an existing one to reconfigure.
 3. **Fields** — choose which song fields appear in the songs table and setlist generator; add custom `extra.*` fields.
 4. **Review** — confirm and save to the database.
 
-To apply the schema directly without the wizard:
-
-```bash
-psql $DATABASE_URL < scripts/schema.sql
-```
+To apply the schema without the wizard, use `apply_schema.js` (below).
 
 ---
 
@@ -36,14 +32,16 @@ Run it against **every** production database after a schema change.
 ```bash
 node scripts/apply_schema.js                          # database from .env
 DATABASE_URL=<url> node scripts/apply_schema.js       # any other
+node scripts/apply_schema.js --check                  # list pending migrations, change nothing
 ```
 
 ---
 
 ## create_user.js — first login for a band, or set a password
 
-Signup creates a *new* band, and invites need an admin who is already signed in. A band made
-with `setup.js` has no `users` row, so this writes the first one. The password is read without
+Signup creates a *new* band, and invites need an admin who is already signed in. A band that
+has no `users` row (created before accounts existed, or by hand) cannot be signed into — the
+shared band password is retired — so this writes the first one. The password is read without
 echo and stored as a bcrypt hash.
 
 ```bash

@@ -10,10 +10,9 @@
  *
  * Why this exists: signup (api/_domain/registration.js) creates a *new* band,
  * and invite (api/[artist]/auth.js) needs an already-authenticated admin. A band
- * created before multi-user auth — or by scripts/setup.js — has no `users` rows
- * at all and logs in through the legacy band password, which issues no user
- * token. Such a workspace can never reach /admin, and nobody can be invited into
- * it. This script writes that first row so the normal flows take over.
+ * created before multi-user auth has no `users` rows at all, and since the shared
+ * band password was retired nobody can sign in to it. This script writes that
+ * first row so the normal flows take over.
  *
  * The password is read from the terminal without echoing and stored as a bcrypt
  * hash, the same way the invite-acceptance path does it.
@@ -21,30 +20,11 @@
 
 'use strict';
 
-const postgres = require('postgres');
+const lib      = require('./_lib');
 const bcrypt   = require('bcryptjs');
 const readline = require('readline');
-const fs       = require('fs');
-const path     = require('path');
 
-// ── Env ────────────────────────────────────────────────────────────────────
-
-function loadEnv(filePath) {
-  try {
-    fs.readFileSync(filePath, 'utf8').split('\n').forEach(line => {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)/);
-      if (m && process.env[m[1]] === undefined) {
-        let v = m[2].trim();
-        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-          v = v.slice(1, -1);
-        process.env[m[1]] = v;
-      }
-    });
-  } catch {}
-}
-
-loadEnv(path.join(__dirname, '..', '.env'));
-loadEnv(path.join(__dirname, '..', '.env.local'));
+lib.loadEnv();
 
 // ── Print helpers ──────────────────────────────────────────────────────────
 
@@ -122,7 +102,7 @@ async function main() {
   try { host = new URL(DATABASE_URL).hostname; } catch { host = '(unknown)'; }
   console.log(`\n  ${D('database:')} ${B(host)}`);
 
-  const sql = postgres(DATABASE_URL, { ssl: 'require', max: 1 });
+  const sql = lib.connect(DATABASE_URL);
   try {
     const [artist] = await sql`SELECT id, slug, name FROM artists WHERE slug = ${slug}`;
     if (!artist) { err(`Artist "${slug}" not found in this database.`); process.exit(1); }

@@ -1,4 +1,4 @@
-// Shared assets (app.css, common.js, i18n.js) are cache-busted by ?v= query.
+// Shared assets (app.css, the four shared scripts, i18n.js) are cache-busted by ?v= query.
 // app.css is served immutable for a year (vercel.json), so a page referencing
 // an older ?v= keeps serving stale CSS forever. Every page must use the same
 // version, and i18n.js?v= must match I18N_VERSION (the localStorage dict key).
@@ -7,7 +7,7 @@ const path = require('path');
 const { I18N_VERSION } = require(path.join(__dirname, '../../app/js/i18n'));
 
 const APP_DIR = path.join(__dirname, '../../app');
-const SHARED = ['app.css', 'common.js', 'i18n.js'];
+const SHARED = ['app.css', 'core.js', 'session.js', 'ui.js', 'shell.js', 'i18n.js'];
 
 function collectVersions() {
   const versions = {};
@@ -15,7 +15,7 @@ function collectVersions() {
   for (const f of fs.readdirSync(APP_DIR).filter(f => f.endsWith('.html'))) {
     const html = fs.readFileSync(path.join(APP_DIR, f), 'utf8');
     for (const asset of SHARED) {
-      const m = html.match(new RegExp(asset.replace('.', '\\.') + '\\?v=(\\d+)'));
+      const m = html.match(new RegExp('/' + asset.replace('.', '\\.') + '\\?v=(\\d+)'));
       if (m) versions[asset][f] = Number(m[1]);
     }
   }

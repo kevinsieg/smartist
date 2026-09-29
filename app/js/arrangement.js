@@ -1,11 +1,11 @@
 
 // arrangement.js — per-song arrangement editor, read-only table, and stage popup.
 // Loaded by songs.html (editor + panel) and stage.html (popup only).
-// Requires: escHtml (global), apiFetch + setStatus (common.js, songs page only).
+// Requires: escHtml (core.js), apiFetch + setStatus (session.js / ui.js, songs page only).
 // Caller must set window._arrSlug before calling openArrangementEditor.
 
-// stage.html loads this file without common.js; there apiFetch does not exist, so the
-// token is read straight from storage (same keys common.js uses).
+// stage.html loads this file with core.js only; there apiFetch does not exist, so the
+// token is read straight from storage (same keys session.js uses).
 function _arrAuthHeaders() {
   var t = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
   return t ? { Authorization: 'Bearer ' + t } : {};
@@ -171,7 +171,7 @@ async function _arrLoadVersions() {
     '<div style="padding:1rem;color:var(--third-color)">' + _arrT('arr.loading', 'Loading…') + '</div>';
 
   try {
-    // stage.html loads this file without common.js, so apiFetch may not exist —
+    // stage.html loads this file without session.js, so apiFetch may not exist —
     // fall back to a plain request with the token added by hand.
     var _arrUrl = '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements';
     var r = typeof apiFetch === 'function'

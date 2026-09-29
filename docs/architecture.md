@@ -9,13 +9,14 @@ the schema is in `DATABASE.md`.
 ## Layers
 
 - **`api/`**: thin HTTP handlers. They parse, call domain code, respond.
-- **`api/_domain/`**: business logic, no DOM. Most of `api/config.js` is a
-  router into these modules. Two shapes live here: the older account modules
-  (login, signup, reset, oauth, subscribe, admin, deletion handlers) still take
-  `req`/`res`; the newer ones (songs, gema, records, setlists) take `sql` and
-  plain values and return data or `{ status, body }`, so scripts can call them
-  too (`scripts/import_gema.js` runs the same import as the page). New code
-  follows the second shape.
+- **`api/_domain/`**: business logic, no DOM, no request or response objects.
+  Modules take plain values and return data or a result: the account modules
+  (login, signup, reset, oauth, subscribe, admin, deletion) take
+  `{ body, query, headers, ip, origin }` and return `{ status, body }` (or
+  `{ status, redirect, headers }`), and `api/_domain/http.js` (`toInput`,
+  `send`, `handle`) is the only code that turns a request into input and a
+  result into a reply. Most of `api/config.js` is a router into these modules.
+  Scripts call the same code (`scripts/import_gema.js` runs the page's import).
 - **Round-trips, not parallelism**: with `prepare: false` on one connection,
   `Promise.all` does not overlap queries. Fewer statements is what saves time
   (see `api/_db.js`).
@@ -55,6 +56,10 @@ rewrites.
 
   They are enforced in the API with `requireRole`. The client only hides what
   the role cannot use (`.admin-only`, `.auth-only`).
+- **Every session is a named user.** The shared band password is retired: it
+  was a bearer token checked with bcrypt on every request and kept in the
+  browser in plain text. A band without a `users` row gets its first login
+  from `scripts/create_user.js`. The only other session is the demo gate's.
 - **Sessions end when the password changes.** A session token carries a
   fingerprint of the password hash it was issued against; changing or resetting
   the password makes every earlier session stop verifying.
@@ -148,13 +153,14 @@ the browser before upload.
 
 ## Client
 
-- **No build step.** Pages are plain HTML with one script per page. `common.js`
-  builds the header, `footer.js` builds the footer (the same one on every
+- **No build step.** Pages are plain HTML with plain scripts. Four shared
+  scripts load first on every page — `core.js` (pure helpers, also on the stage
+  view), `session.js`, `ui.js`, `shell.js` — and `shell.js` builds the header, `footer.js` builds the footer (the same one on every
   page), and in-app navigation swaps page content without a full reload
   (`navigate()`). Page scripts therefore share one global scope: use `var` and
   private names (enforced by `tests/unit/page_scripts.js`).
 - **Two list factories exist:**
-  - `createSortableList` in `common.js`, used by gigs, venues and organizers.
+  - `createSortableList` in `ui.js`, used by gigs, venues and organizers.
   - `createListView` in `list-view.js`, used by songs and setlist history.
 
   `createListView` can do more. Gigs has not moved to it because it renders two

@@ -13,7 +13,6 @@ The same code serves both; one environment variable decides which:
 | | `ARTIST_SLUG` set | `ARTIST_SLUG` absent |
 |---|---|---|
 | Config reports | `singleTenant: true` | `singleTenant: false` |
-| Login with no `users` rows | legacy band password | n/a · real accounts only |
 | After login, no workspaces | straight to `/<slug>/dashboard` | `/onboarding` (create a band) |
 | Visitor can sign up | no | yes |
 
@@ -51,8 +50,9 @@ left alone. It needs the repository secret `DEMO_DATABASE_URL`, pointing at the
 
 Visitors enter through the `/demo` gate, which gives them a **member** session
 on that band (`DEMO_ARTIST_SLUG`, default `demo`): they can edit songs, gigs and
-setlists, but not settings, members or uploads, and the gate sends no email. A
-password login to the demo band is still a full admin session.
+setlists, but not settings, members or uploads, and the gate sends no email. Its
+token is signed with a key derived from `APP_SECRET`, so the demo band needs no
+password; the band's own users sign in with their accounts as usual.
 
 It lives in production rather than on the development branch because the test
 suite writes `[TEST]` rows to development, and schema changes land there first.

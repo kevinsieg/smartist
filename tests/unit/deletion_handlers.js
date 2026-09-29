@@ -117,6 +117,11 @@ function mockRes() {
   return r;
 }
 
+function asHttp(mod) {
+  const { handle } = require(path.join(__dirname, '../../api/_domain/http'));
+  return Object.fromEntries(Object.entries(mod).map(([k, fn]) => [k, handle(fn)]));
+}
+
 // Fresh module graph per fixture, mirroring tests/unit/oauth_callback.js's
 // load(): _db/_ratelimit/_email/_r2/_logger stubbed, _domain files and _token
 // evicted so nothing from an earlier test file's stub survives. Deletion is
@@ -167,7 +172,9 @@ function load(rows, opts) {
   };
 
   return {
-    handlers: require(path.join(__dirname, '../../api/_domain/deletion_handlers')),
+    // The handlers take plain input and return { status, body }; these tests
+    // drive them the way api/config.js does, through the http adapter.
+    handlers: asHttp(require(path.join(__dirname, '../../api/_domain/deletion_handlers'))),
     token: require(tokenPath),   // the real one, loaded after the eviction above
     db, sent, deletedFiles, rateKeys,
   };

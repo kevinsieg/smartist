@@ -12,21 +12,13 @@ var _shareSlug      = null;
 var _shareSetlistId = null;
 
 // Members of private workspaces must authenticate to read config/setlists/songs.
-// stage.html deliberately loads no common.js, so the date format lives here too.
-// Keep in step with formatDate() in common.js.
-function _stageDate(value) {
-  if (!value) return null;
-  var d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  var day = String(d.getUTCDate()).padStart(2, '0');
-  var month = String(d.getUTCMonth() + 1).padStart(2, '0');
-  var year = String(d.getUTCFullYear());
-  var lang = (document.documentElement.lang || 'en').slice(0, 2);
-  return lang === 'de' ? day + '.' + month + '.' + year : day + '/' + month + '/' + year.slice(2);
+// The session token, wherever "remember me" put it (stage has no session.js).
+function _stageToken() {
+  return sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
 }
 
 function _stageAuthHeaders() {
-  var t = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
+  var t = _stageToken();
   return t ? { Authorization: 'Bearer ' + t } : {};
 }
 
@@ -69,20 +61,9 @@ function stageFitLyrics() {
 var _SUN_ICON  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
 var _MOON_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-// Stored links are free text; only http(s) may reach an href/src, so a
-// `javascript:` value cannot run here. Mirrors safeUrl() in common.js, which
-// the stage page does not load.
-function _stageSafeUrl(url) {
-  return /^https?:\/\//i.test(url || '') ? url : '#';
-}
-
-function formatLength(min) {
+// Stage totals: blank for none and no zero-padded minutes ("7:30"), unlike
+// formatLength in core.js, which the song lists use.
+function _stageLength(min) {
   if (!min) return '';
   const m = Math.floor(min);
   const s = Math.round((min - m) * 60);
@@ -174,12 +155,6 @@ async function init() {
   }
 }
 
-// Copy of songFieldHidden in common.js — stage loads no common.js.
-function _stageHidden(cfg, key) {
-  var hidden = cfg && cfg.config && cfg.config.hiddenSongFields;
-  return Array.isArray(hidden) && hidden.indexOf(key) !== -1;
-}
-
 async function initSetlist(params, el, cfg) {
   const setlistId = Number(params.get('id'));
   if (!setlistId) {
@@ -195,7 +170,7 @@ async function initSetlist(params, el, cfg) {
   try { sessionStorage.setItem('stage_sl_' + setlistId, JSON.stringify(data)); } catch {}
 
   const songs = data.songs ?? [];
-  const gigParts = [data.gig_name, _stageDate(data.gig_date), data.gig_venue]
+  const gigParts = [data.gig_name, formatDate(data.gig_date), data.gig_venue]
     .filter(Boolean);
   const gigLine   = gigParts.join(' — ');
   const setTitle  = data.title ? `"${escHtml(data.title)}"` : '';
@@ -206,8 +181,8 @@ async function initSetlist(params, el, cfg) {
   let totalMin = 0;
   const items = songs.map((song, i) => {
     totalMin += song.length_min || 0;
-    const gitCapo = song.extra && song.extra.gitCapo != null && !_stageHidden(cfg, 'extra.gitCapo') ? song.extra.gitCapo : null;
-    const bjCapo  = song.extra && song.extra.banjoCapo != null && !_stageHidden(cfg, 'extra.banjoCapo') ? song.extra.banjoCapo : null;
+    const gitCapo = song.extra && song.extra.gitCapo != null && !songFieldHidden(cfg.config, 'extra.gitCapo') ? song.extra.gitCapo : null;
+    const bjCapo  = song.extra && song.extra.banjoCapo != null && !songFieldHidden(cfg.config, 'extra.banjoCapo') ? song.extra.banjoCapo : null;
     return `<li class="stage-song">
       <span class="stage-num">${i + 1}.</span>
       <a class="stage-song-title stage-song-link" href="/${cfg.slug}/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
@@ -226,7 +201,7 @@ async function initSetlist(params, el, cfg) {
       ${_shareHtml()}
     </div>
     <ul class="stage-list">${items}</ul>
-    ${totalMin ? `<p class="stage-total">${songs.length} song${songs.length !== 1 ? 's' : ''} &middot; ${formatLength(totalMin)}</p>` : ''}`;
+    ${totalMin ? `<p class="stage-total">${songs.length} song${songs.length !== 1 ? 's' : ''} &middot; ${_stageLength(totalMin)}</p>` : ''}`;
 
   if (params.get('print') === '1') setTimeout(function() { window.print(); }, 400);
 }
@@ -278,8 +253,8 @@ async function initSong(params, el, cfg) {
   const extra   = song.extra || {};
   // Lyrics come with the song's details (GET /songs/:id), not inside extra.
   const lyrics  = song.lyrics || '';
-  const gitCapo = extra.gitCapo   != null && !_stageHidden(cfg, 'extra.gitCapo')   ? extra.gitCapo   : null;
-  const bjCapo  = extra.banjoCapo != null && !_stageHidden(cfg, 'extra.banjoCapo') ? extra.banjoCapo : null;
+  const gitCapo = extra.gitCapo   != null && !songFieldHidden(cfg.config, 'extra.gitCapo')   ? extra.gitCapo   : null;
+  const bjCapo  = extra.banjoCapo != null && !songFieldHidden(cfg.config, 'extra.banjoCapo') ? extra.banjoCapo : null;
   const audioRe = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
 
   // Subtitle: interpret · genre
@@ -291,31 +266,31 @@ async function initSong(params, el, cfg) {
     song.key         ? `<span class="stage-key">${escHtml(song.key)}</span>`          : '',
     gitCapo !== null ? `<span class="stage-capo">Git: ${escHtml(String(gitCapo))}</span>` : '',
     bjCapo  !== null ? `<span class="stage-capo">Bj: ${escHtml(String(bjCapo))}</span>`  : '',
-    extra.lead && !_stageHidden(cfg, 'extra.lead') ? `<span class="stage-capo">${escHtml(extra.lead)}</span>`        : '',
+    extra.lead && !songFieldHidden(cfg.config, 'extra.lead') ? `<span class="stage-capo">${escHtml(extra.lead)}</span>`        : '',
     song.tempo       ? `<span class="stage-capo">${escHtml(song.tempo)}</span>`        : '',
     song.bpm         ? `<span class="stage-capo">${song.bpm} bpm</span>`               : '',
-    song.length_min  ? `<span class="stage-capo">${formatLength(song.length_min)}</span>` : '',
+    song.length_min  ? `<span class="stage-capo">${_stageLength(song.length_min)}</span>` : '',
   ].filter(Boolean).join('');
 
   // Recordings
   let recItems = [];
   if (extra.listenUrl) {
     recItems.push(audioRe.test(extra.listenUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(_stageSafeUrl(extra.listenUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
-      : `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.listenUrl))}" target="_blank" rel="noopener">&#9654; Listen</a>`);
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.listenUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.listenUrl))}" target="_blank" rel="noopener">&#9654; Listen</a>`);
   }
   if (extra.playbackUrl) {
     recItems.push(audioRe.test(extra.playbackUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(_stageSafeUrl(extra.playbackUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
-      : `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.playbackUrl))}" target="_blank" rel="noopener">&#9655; Playback</a>`);
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.playbackUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.playbackUrl))}" target="_blank" rel="noopener">&#9655; Playback</a>`);
   }
   const recHtml = recItems.length ? `<div class="song-stage-section">${recItems.join('')}</div>` : '';
 
   // Links
   const linkItems = [
-    extra.sheetUrl     ? `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.sheetUrl))}"      target="_blank" rel="noopener">&#8801; Sheet music</a>` : '',
-    extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.referenceUrl))}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
-    extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(_stageSafeUrl(extra.songinfoUrl))}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
+    extra.sheetUrl     ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.sheetUrl))}"      target="_blank" rel="noopener">&#8801; Sheet music</a>` : '',
+    extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.referenceUrl))}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
+    extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.songinfoUrl))}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
     activeArr
       ? `<button class="stage-chart-btn" onclick="openArrStagePopup(window._stageActiveArr,window._stageArrConfig)" title="Show arrangement chart">` +
         `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>` +
@@ -428,15 +403,17 @@ function stageShareCopyLink() {
 function stageShareEmail() {
   document.getElementById('stage-share-menu').style.display = 'none';
   document.removeEventListener('click', _closeStageMenu);
-  var hasToken = !!sessionStorage.getItem('smartist_token');
+  var hasToken = !!_stageToken();
   var pwField = document.getElementById('stage-modal-pw-field');
   if (pwField) pwField.style.display = hasToken ? 'none' : '';
+  var signin = document.getElementById('stage-share-signin');
+  if (signin) signin.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
   document.getElementById('stage-share-status').textContent = '';
   document.getElementById('stage-share-email').value = '';
   var sendBtn = document.getElementById('stage-share-send');
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send PDF'; }
   document.getElementById('stage-share-modal').style.display = 'flex';
-  var focusId = hasToken ? 'stage-share-email' : 'stage-share-pw';
+  var focusId = hasToken ? 'stage-share-email' : 'stage-share-signin';
   setTimeout(function() {
     var el = document.getElementById(focusId);
     if (el) el.focus();
@@ -454,13 +431,9 @@ async function stageSendEmail() {
     return;
   }
 
-  var token = sessionStorage.getItem('smartist_token');
-  var pwEl  = document.getElementById('stage-share-pw');
-  if (pwEl && pwEl.value.trim()) token = pwEl.value.trim();
-
+  var token = _stageToken();
   if (!token) {
-    status.textContent = 'Password required.';
-    if (pwEl) pwEl.focus();
+    status.textContent = 'Sign in to send the setlist.';
     return;
   }
 

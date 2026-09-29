@@ -1,5 +1,5 @@
 'use strict';
-// SPA navigation (navigate() in common.js) re-inserts a page's <body> scripts and
+// SPA navigation (navigate() in shell.js) re-inserts a page's <body> scripts and
 // runs them again in the SAME document. Top-level const/let live in the shared
 // global lexical scope, so a second execution throws "Identifier ... has already
 // been declared" and the whole file aborts before init() runs — the page silently
@@ -8,6 +8,10 @@ const fs   = require('fs');
 const path = require('path');
 
 const APP = path.join(__dirname, '../../app');
+
+// The shared scripts every app page loads (core, session, ui, shell); stage.html
+// loads core only. SPA navigation keeps them and re-runs everything else.
+const SHARED = ['core', 'session', 'ui', 'shell'];
 
 function bodyScriptNames(html) {
   const bodyStart = html.indexOf('<body');
@@ -24,13 +28,13 @@ function run(r) {
 
   console.log(B('\nSPA page scripts'));
 
-  // Only pages that load common.js are SPA-navigated; standalone pages
+  // Only pages that load shell.js are SPA-navigated; standalone pages
   // (stage, admin) always arrive in a fresh document.
   const spaScripts = new Set();
   fs.readdirSync(APP).filter(f => f.endsWith('.html')).forEach(function(page) {
     const names = bodyScriptNames(fs.readFileSync(path.join(APP, page), 'utf8'));
-    if (!names.includes('common')) return;
-    names.filter(n => n !== 'common').forEach(n => spaScripts.add(n));
+    if (!names.includes('shell')) return;
+    names.filter(n => !SHARED.includes(n)).forEach(n => spaScripts.add(n));
   });
 
   test('finds the SPA page scripts', () => {
@@ -58,7 +62,7 @@ function run(r) {
         const call = src.slice(m.index, end + 1);
         if (!/\/api\//.test(call)) continue;
         if (PUBLIC.test(call)) continue;
-        // stage.js and arrangement.js run without common.js and add the header themselves
+        // stage.js and arrangement.js run without session.js and add the header themselves
         if (/Authorization|_authHeaders|_stageAuthHeaders|_arrAuthHeaders/.test(call)) continue;
         offenders.push(`${file}:${src.slice(0, m.index).split('\n').length}  ${call.replace(/\s+/g, ' ').slice(0, 70)}`);
       }
@@ -71,10 +75,10 @@ function run(r) {
   // session copy), so reading sessionStorage directly finds nothing and the action fails
   // silently — this is what made bulk save do nothing at all.
   test('page scripts read the token through getToken()', () => {
-    // login/bootstrap pages read both stores on purpose; stage.js loads no common.js.
-    // Scripts on pages that load no common.js: getToken() does not exist there,
+    // login/bootstrap pages read both stores on purpose; stage.js loads no session.js.
+    // Scripts on pages that load no session.js: getToken() does not exist there,
     // so they read both stores themselves. See the standalone-pages test below.
-    const ALLOWED = new Set(['common.js', 'home.js', 'onboarding.js', 'stage.js', 'share-utils.js', 'arrangement.js', 'workspaces.js']);
+    const ALLOWED = new Set(['session.js', 'shell.js', 'home.js', 'onboarding.js', 'stage.js', 'share-utils.js', 'arrangement.js', 'workspaces.js']);
     const offenders = [];
     fs.readdirSync(path.join(APP, 'js')).filter(f => f.endsWith('.js') && !ALLOWED.has(f)).forEach(function(file) {
       fs.readFileSync(path.join(APP, 'js', file), 'utf8').split('\n').forEach(function(line, i) {
@@ -87,10 +91,10 @@ function run(r) {
       'use getToken()/clearToken() — remember-me keeps the token in localStorage:\n      ' + offenders.join('\n      '));
   });
 
-  // Dates must look the same in every corner of the app: common.js formatDate/formatTime
-  // own the formatting (stage.js keeps a documented copy — it loads no common.js).
+  // Dates must look the same in every corner of the app: core.js formatDate/formatTime
+  // own the formatting, stage included (it loads core.js).
   test('no page script formats dates on its own', () => {
-    const ALLOWED = new Set(['common.js', 'stage.js']);
+    const ALLOWED = new Set(['core.js']);
     const offenders = [];
     fs.readdirSync(path.join(APP, 'js')).filter(f => f.endsWith('.js') && !ALLOWED.has(f)).forEach(function(file) {
       fs.readFileSync(path.join(APP, 'js', file), 'utf8').split('\n').forEach(function(line, i) {
@@ -100,11 +104,11 @@ function run(r) {
       });
     });
     assert(offenders.length === 0,
-      'use formatDate()/formatTime() from common.js:\n      ' + offenders.join('\n      '));
+      'use formatDate()/formatTime() from core.js:\n      ' + offenders.join('\n      '));
   });
 
 
-  // A page that does not load common.js cannot call common.js functions. When
+  // A page that does not load the shared scripts cannot call their functions. When
   // the auth-token sweep moved 16 sessionStorage reads onto getToken(), it also
   // moved workspaces.js — which runs standalone, because there is no band yet to
   // build a nav from. The call threw ReferenceError and the page rendered
@@ -113,7 +117,7 @@ function run(r) {
   //
   // A page is judged as a whole: the function may come from any script it
   // loads (stage.js defines its own escHtml, which arrangement.js then uses).
-  test('standalone pages do not call common.js functions', () => {
+  test('standalone pages do not call shared-script functions they do not load', () => {
     const stripComments = src => src
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
@@ -126,7 +130,8 @@ function run(r) {
       return names;
     };
 
-    const commonFns = definedIn(stripComments(fs.readFileSync(path.join(APP, 'js', 'common.js'), 'utf8')));
+    const commonFns = new Set(SHARED.flatMap(n =>
+      [...definedIn(stripComments(fs.readFileSync(path.join(APP, 'js', n + '.js'), 'utf8')))]));
 
     const scriptsOf = html => {
       const out = [];
@@ -139,7 +144,7 @@ function run(r) {
     const offenders = [];
     fs.readdirSync(APP).filter(f => f.endsWith('.html')).forEach(htmlName => {
       const scripts = scriptsOf(fs.readFileSync(path.join(APP, htmlName), 'utf8'));
-      if (scripts.includes('common')) return;
+      if (SHARED.every(n => scripts.includes(n))) return;
 
       const sources = scripts
         .map(n => ({ name: n, file: path.join(APP, 'js', n + '.js') }))
@@ -149,8 +154,8 @@ function run(r) {
       const available = new Set();
       sources.forEach(x => definedIn(x.src).forEach(n => available.add(n)));
 
-      // arrangement.js is shared between the songs page (which has common.js)
-      // and stage (which does not). Its editing paths — the only callers of
+      // arrangement.js is shared between the songs page (which has all the
+      // shared scripts) and stage (core.js only). Its editing paths — the only callers of
       // apiFetch/setStatus — are unreachable on the read-only stage view, as its
       // own header states. Anything else it reaches for is a real bug.
       const KNOWN_UNREACHABLE = { 'arrangement': new Set(['apiFetch', 'setStatus']) };
@@ -166,11 +171,11 @@ function run(r) {
       });
     });
     assert(offenders.length === 0,
-      'these pages load no common.js, so the call throws at runtime:\n      ' +
+      'these pages do not load the script that defines it, so the call throws:\n      ' +
       [...new Set(offenders)].join('\n      '));
   });
 
-  // Pages that load common.js get their i18n wait for free: initPage() awaits
+  // Pages that load shell.js get their i18n wait for free: initPage() awaits
   // window.i18n.ready before rendering. Pages without it must do that themselves.
   //
   // Skipping it only shows up on a COLD visit. i18n.js primes its dictionary
@@ -181,13 +186,13 @@ function run(r) {
   // does not repair it: that only touches elements carrying data-i18n, and
   // strings baked into generated HTML by t() carry nothing to re-translate.
   // A reload hides it. This hit the whole signup funnel.
-  test('pages without common.js await i18n.ready before calling t()', () => {
+  test('pages without shell.js await i18n.ready before calling t()', () => {
     const standalone = new Set();
     fs.readdirSync(APP).filter(f => f.endsWith('.html')).forEach(function(page) {
       const html  = fs.readFileSync(path.join(APP, page), 'utf8');
       if (!/js\/i18n\.js/.test(html)) return;          // English-only page
       const names = bodyScriptNames(html);
-      if (names.includes('common')) return;            // initPage() handles it
+      if (names.includes('shell')) return;             // initPage() handles it
       names.forEach(n => standalone.add(n));
     });
 
