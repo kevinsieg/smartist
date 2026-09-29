@@ -46,6 +46,7 @@ const suites = [
   require('./unit/env'),
   require('./unit/logger'),
   require('./unit/http_adapter'),
+  require('./unit/csp'),
 ];
 
 (async () => {

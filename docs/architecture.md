@@ -63,6 +63,16 @@ rewrites.
 - **Sessions end when the password changes.** A session token carries a
   fingerprint of the password hash it was issued against; changing or resetting
   the password makes every earlier session stop verifying.
+- **One address, one password.** The same person has a `users` row per band.
+  Every way of setting a password (reset, change, accepting an invite) writes
+  all of them, so an old password never keeps working through another band.
+- **Tokens are bound to the database.** The signing key is derived from
+  `APP_SECRET` and the database host and name. User ids are per database, so a
+  secret shared by two deployments must not let user 5 of one in as user 5 of
+  the other. Rotating database credentials keeps sessions; moving the database
+  signs everyone out.
+- **Guessing is limited per address as well as per IP.** Ten failed sign-ins
+  within fifteen minutes lock that address, from whatever IPs they come.
 - **Email links are single-purpose.** Magic tokens are signed for `login`,
   `reset` or `demo`, and one cannot be redeemed as another. The public demo
   gate hands out a `demo` token, which is a *member* session: no settings,
