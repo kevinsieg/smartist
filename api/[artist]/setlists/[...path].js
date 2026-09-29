@@ -21,7 +21,7 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const sql = getDb();
-    const [songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs] = await Promise.all([
+    const [songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs, account, members] = await Promise.all([
       // Lyrics live in their own table; in the CSV they stay a column of songs.
       sql`
         SELECT s.*, l.lyrics FROM songs s
@@ -50,12 +50,27 @@ module.exports = wrap(async function handler(req, res) {
         ORDER BY r.gema_work_id, r.id
       `,
       sql`SELECT * FROM song_logs WHERE artist_id = ${band.id} ORDER BY id`,
+      // The person's own account (Art. 15/20 GDPR): every workspace their address
+      // belongs to, never hashes or tokens. The demo session has no user row.
+      req.user.id === null ? [] : sql`
+        SELECT a.slug AS workspace, a.name AS workspace_name, u.email, u.role,
+               u.pending_email, u.created_at, (u.password_hash IS NOT NULL) AS has_password
+        FROM users me
+        JOIN users u   ON lower(u.email) = lower(me.email)
+        JOIN artists a ON a.id = u.artist_id
+        WHERE me.id = ${req.user.id}
+        ORDER BY a.name
+      `,
+      // Who else is in the band: admins only, as on the members page.
+      req.user.role === 'admin'
+        ? sql`SELECT email, role, created_at FROM users WHERE artist_id = ${band.id} ORDER BY id`
+        : [],
     ]);
     const date = new Date().toISOString().slice(0, 10);
     const safeSlug = String(slug ?? 'artist').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'artist';
     // config carries the band's own settings (displayFields, platforms, logo) —
     // destroyed with the artists row, and not reconstructible from any other table.
-    const tables = { artist: [{ slug: band.slug, name: band.name, config: band.config }], songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs };
+    const tables = { artist: [{ slug: band.slug, name: band.name, config: band.config }], account, members, songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs };
     const files = {};
     for (const [name, all] of Object.entries(tables)) {
       // The CSVs drop the `deleted` column, so soft-deleted rows would read as live.

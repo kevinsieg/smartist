@@ -32,7 +32,7 @@
     if (_leafletCallbacks) { _leafletCallbacks.push(cb); return; }
     _leafletCallbacks = [cb];
     var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+    s.src = '/app/vendor/leaflet-1.9.4/leaflet.js';
     s.integrity = 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';
     s.crossOrigin = 'anonymous';
     s.onload = function() {
@@ -49,7 +49,7 @@
   window.loadMarkerCluster = function (cb) {
     if (!window.L || L.markerClusterGroup) { cb(); return; }
     var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+    s.src = '/app/vendor/leaflet.markercluster-1.5.3/leaflet.markercluster.js';
     s.integrity = 'sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr';
     s.crossOrigin = 'anonymous';
     s.onload  = cb;
