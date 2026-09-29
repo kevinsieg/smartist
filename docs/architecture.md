@@ -56,6 +56,10 @@ rewrites.
 
   They are enforced in the API with `requireRole`. The client only hides what
   the role cannot use (`.admin-only`, `.auth-only`).
+- **Every session is a named user.** The shared band password is retired: it
+  was a bearer token checked with bcrypt on every request and kept in the
+  browser in plain text. A band without a `users` row gets its first login
+  from `scripts/create_user.js`. The only other session is the demo gate's.
 - **Sessions end when the password changes.** A session token carries a
   fingerprint of the password hash it was issued against; changing or resetting
   the password makes every earlier session stop verifying.

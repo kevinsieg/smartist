@@ -85,10 +85,12 @@ work on dev  →  git push origin dev  →  verify on preview URL
 →  open PR: dev → main  →  review + merge  →  Vercel deploys to production
 ```
 
-If the PR includes a schema change, apply it to the production database after merging:
+If the PR includes a schema change, apply it to **every** production database before merging, then check the deployments:
 
 ```bash
-psql $PROD_DATABASE_URL < scripts/schema.sql
+DATABASE_URL=<prod-url> node scripts/apply_schema.js           # idempotent, asks before it connects
+DATABASE_URL=<prod-url> node scripts/apply_schema.js --check   # "up to date"
+curl https://<deployment>/api/config?action=health              # "schema":"current"
 ```
 
 
@@ -162,7 +164,7 @@ Link it to this GitHub repo. Framework: **Other** (no build step). Set the produ
 - **Production:** use an existing Neon project or create one
 - **Development:** create a second Neon project; copy the pooler connection string
 
-Run the setup wizard once per database to create the schema and band row:
+Run the setup wizard once per database to create the schema, the band and its admin login (email + password):
 
 ```bash
 DATABASE_URL=<connection-string> node scripts/setup.js
@@ -345,7 +347,7 @@ See [scripts/README.md](scripts/README.md) for usage details.
 
 | Script                        | Purpose                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------ |
-| `scripts/setup.js`            | Interactive wizard: schema + artist creation + field config              |
+| `scripts/setup.js`            | Interactive wizard: schema + band + its admin user + field config        |
 | `scripts/apply_schema.js`     | Apply `schema.sql` to the database in `DATABASE_URL` (idempotent)        |
 | `scripts/seed.js`             | Populate the dev database with test data (wipe + reseed with `--force`)  |
 | `scripts/create_user.js`      | First login for a band, or set an account's password from the CLI        |
@@ -355,7 +357,7 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | `scripts/import_gema.js`      | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/delete_artist.js`    | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
 | `scripts/demo_reset.js`       | Snapshot / restore the public demo band (`scripts/demo_seed.json`)       |
-| `scripts/schema.sql`          | Raw schema — apply directly with `psql` if preferred                     |
+| `scripts/schema.sql`          | The schema, idempotent — apply with `apply_schema.js`                    |
 
 ---
 
