@@ -38,7 +38,6 @@ artists
 ┌────────────────────────────┐
 │           artists           │
 │ id  slug  name  config JSONB│
-│ social_links                │
 └────┬───────────────────────┘
      │ 1 : n (artist_id FK, CASCADE DELETE on all child tables)
      │
@@ -71,7 +70,6 @@ One row per artist (a workspace). The API is keyed by `slug`, taken from the URL
 | `name` | text NOT NULL | Display name |
 | `storage_used_bytes` | bigint DEFAULT 0 | Song-media bytes counted against the plan's storage cap |
 | `config` | jsonb DEFAULT `{}` | UI config — see [Artist config](#artist-config) |
-| `social_links` | jsonb DEFAULT `{}` | Legacy social links field (platforms now in `config.platforms`) |
 
 ---
 

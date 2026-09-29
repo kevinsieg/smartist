@@ -20,7 +20,6 @@
     try {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_TOKEN_KEY);
-      sessionStorage.removeItem('setlist_token');
     } catch {}
   }
 
