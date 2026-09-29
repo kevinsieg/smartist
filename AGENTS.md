@@ -1,0 +1,106 @@
+# AGENTS.md
+
+Rules for anyone changing this code — people and coding agents alike. Artist
+management app: Vercel serverless functions (no build step), Neon PostgreSQL,
+plain HTML/JS pages. Setup and env vars: `README.md`. Where everything lives:
+`docs/reference.md`. Why it is built this way: `docs/architecture.md`. Tables
+and columns: `DATABASE.md`.
+
+## The repository is public
+
+- No tenant names, personal data, emails or private infrastructure details in
+  code, docs, commits or PR text.
+- `docs/` holds published documentation only (an allowlist in `.gitignore`).
+  Plans, specs, reviews and notes go to `docs/plans/`, which stays local.
+
+## Commits and pull requests
+
+- **No AI attribution, anywhere:** no `Co-Authored-By:` / `Claude-Session:`
+  trailers, no "Generated with …" line or session link in PR bodies, comments
+  or review replies. Remove any footer a tool appends.
+- Commit as the owner:
+  `git -c user.name="Käv" -c user.email="35451482+kevinsieg@users.noreply.github.com" commit …`
+- `dev` (Preview, Neon dev) takes direct pushes. `main` (Production) changes
+  only through a PR from `dev`; merge-commit titles never name a `claude/…` branch.
+
+## Several deployments, one codebase
+
+Several Vercel projects run this code, each with its own env vars and its own
+production database.
+- A new required env var goes into `api/_env.js` (a unit test checks every
+  `process.env` read) **and** onto every Vercel project.
+- A schema change is a dated block appended to `scripts/schema.sql` ending in
+  `INSERT INTO schema_migrations …`, with `SCHEMA_VERSION` in `api/_env.js` set
+  to it. Idempotent (`IF NOT EXISTS`), no `DO $$` blocks. It is applied to every
+  production database *before* the release merges — a human step.
+- After a deploy, `GET /api/config?action=health` on each domain must say
+  `"schema":"current"` with nothing missing.
+
+## Run and test
+
+```bash
+npm run test:unit    # always, before every push (no database needed)
+npm run test:all     # unit + API + browser smoke test on a local stack
+npm run dev:up       # the local stack alone: own Postgres, seeded band, :3000
+```
+
+The local stack never touches a remote database. CI runs the same suites, plus
+the API suite against the Vercel preview. Test data is written as `[TEST]` rows
+and cleaned up.
+
+## API rules
+
+- **Twelve functions at most** (Vercel Hobby); eleven are used. Do not add a
+  file under `api/` that is not prefixed `_` — route through an existing
+  handler, a `vercel.json` rewrite or a body field instead.
+- Every handler is wrapped in `wrap()` (`api/_handler.js`).
+- **Every workspace is private.** Reads and writes go through `requireAuth` /
+  `getAccess`; anonymous access exists only where the band opted in
+  (`publicCatalogue`, `publicStage`, compared with `=== true`).
+- **Every foreign id from a request body passes an `owns*` check**
+  (`api/_ownership.js`) — ids are one sequence across tenants.
+- Validation helpers return `null` (missing), the value, or `false` (invalid);
+  resources use the field specs in `api/_validate.js` / `api/_domain/records.js`.
+- Business logic lives in `api/_domain/`: plain input in, data or
+  `{ status, body }` out; `api/_domain/http.js` is the only adapter to req/res.
+- **Database round-trips cost the most.** With `prepare: false` every query
+  with parameters is two round-trips and `Promise.all` does not overlap them:
+  write one CTE, not three statements.
+- JSONB: never `JSON.stringify` into a parameter; merge with `||`
+  (`config || ${patch}`), never overwrite `artists.config` or `songs.extra`.
+  Batch rows as `jsonb_to_recordset(${sql.json(rows)})`. postgres.js cannot
+  send a JS boolean array — pass text and cast (`::text[]::bool[]`).
+- Lyrics never travel in a song list: lists carry `has_lyrics`; the text comes
+  with one song's details.
+- Plans: `api/_plans.js` is the only place features and limits are decided.
+
+## vercel dev bugs (52.x)
+
+Routing that works on Vercel can fail under `vercel dev`:
+1. `req.query.path` is not populated in catch-alls inside dynamic dirs — fall
+   back to parsing `req.url`; same for `req.query.artist`
+   (`req.query.artist || req.url.split('?')[0].split('/')[2]`).
+2. Multi-segment POSTs to catch-alls return vercel's own 404 — use a body field
+   on the plain handler (`duplicate_id`, `share_id` on `POST /setlists`).
+
+## Client rules
+
+- Every app page loads, after `footer.js`: `core.js`, `session.js`, `ui.js`,
+  `shell.js` — in that order, and bumps their `?v=` together. `stage.html`
+  loads `core.js` only. No `<header>`/`<footer>` in page HTML; `shell.js` builds them.
+- Page scripts run again on SPA navigation: **no top-level `const`/`let`**, use
+  `var` and private names (`tests/unit/page_scripts.js`).
+- Workspace endpoints go through `apiFetch()`, never bare `fetch()`.
+- Dates only through `formatDate` / `formatTime` (`core.js`).
+- Bump `?v=` on every page when a shared asset changes (`app.css`, the shared
+  scripts, `i18n.js` together with `I18N_VERSION`).
+- i18n: English is the source; `en`, `fr`, `de` hold the same keys; every key
+  used in HTML or `t('…')` must exist. Never put `data-i18n` on an element with
+  child elements. Scripts `stage.html` loads may not call bare `t()`.
+
+## Scripts and data
+
+Every script asks before it connects and shows the database host. Scripts that
+change data (`seed`, `import_*`, `create_user`, `plans --plan`, `demo_reset`,
+`delete_artist`) are run by a person, never against production on an agent's
+own initiative.
