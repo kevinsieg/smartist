@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS artists (
   id            SERIAL PRIMARY KEY,
   slug          TEXT UNIQUE NOT NULL,             -- URL-safe identifier, e.g. "myband"
   name          TEXT NOT NULL,                    -- display name, e.g. "My Band"
-  password_hash TEXT,                             -- bcrypt hash, NULL for OAuth/signup-created artists
   config        JSONB NOT NULL DEFAULT '{}',
   social_links  JSONB NOT NULL DEFAULT '{}'
 );
@@ -357,9 +356,6 @@ ALTER TABLE venues ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 ALTER TABLE gigs ADD COLUMN IF NOT EXISTS poster_url TEXT;
 ALTER TABLE gigs ADD COLUMN IF NOT EXISTS thumb_url  TEXT;
 
--- 2026-06-08: multi-tenant signup — password_hash no longer required on artists
-ALTER TABLE artists ALTER COLUMN password_hash DROP NOT NULL;
-
 -- 2026-06-27: storage usage tracking per artist
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS storage_used_bytes BIGINT NOT NULL DEFAULT 0;
 
@@ -483,3 +479,9 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO schema_migrations (id) VALUES ('2026-09-30') ON CONFLICT DO NOTHING;
+
+-- 2026-10-01: the shared band password is retired, every login is a users row.
+-- The 2026-06-08 block that relaxed this column was removed with it: it fails
+-- once the column is gone.
+ALTER TABLE artists DROP COLUMN IF EXISTS password_hash;
+INSERT INTO schema_migrations (id) VALUES ('2026-10-01') ON CONFLICT DO NOTHING;
