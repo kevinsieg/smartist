@@ -6,7 +6,7 @@ Two test layers — unit tests (no infrastructure) and integration tests (need a
 
 ## Unit tests
 
-Test pure helper functions with no server, database, or network required. Run anywhere Node 20+ is available.
+Test pure helper functions with no server, database, or network required. Run anywhere Node 22 is available.
 
 ```bash
 npm run test:unit           # from repo root — unit.js plus the client-script suites (*-client.js)
@@ -34,7 +34,7 @@ node tests/history-client.js
 | `tests/unit/r2.js` | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 | `tests/unit/lyrics.js` | `api/_lyrics.js` | `LYRICS_SOURCES`, `plainFromSynced` |
 | `tests/unit/ratelimit.js` | `api/_ratelimit.js` | `clientIp`, `isMissingRateLimitTable` |
-| `tests/unit/gema.js` | `api/[artist]/songs/[...path].js` | CSV parsers, GEMA normalizers (gema import is merged into the songs catch-all) |
+| `tests/unit/gema.js` | `api/_domain/gema.js` | CSV parsers, GEMA normalizers |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
 | `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
@@ -48,33 +48,41 @@ Unit tests run automatically on every push via GitHub Actions (`.github/workflow
 
 ## Integration tests
 
-Full API coverage against a live server. Requires `vercel dev` running locally, or a deployed URL.
+Full API coverage against a running server, and a browser smoke test.
 
-### Setup
+### Local stack (recommended)
 
-Integration tests load `.env.local` then `.env` from the **repo root** (paths are fixed relative to `tests/api.js`, so `npm test` from `tests/` still works). Each key is applied only if not already set, so a variable present in both files keeps the `.env.local` value. Values already exported in the shell win over both files. Quote-wrapped lines (from `vercel env pull`) are stripped when parsed.
+`scripts/dev_up.sh` starts what CI runs: a throwaway Postgres, the schema, a
+seeded Pro band with one admin, and the API + pages on `:3000`
+(`tests/harness/server.js`). It never touches a remote database.
 
-Workspaces are private, so every read and write test runs with a session. Add your band password (it works as a bearer token):
+```bash
+npm run test:api     # starts the stack if needed, then tests/api.js
+npm run test:smoke   # browser: sign in, every page, SPA nav, stage (needs playwright)
+npm run test:all     # unit + api + smoke
+npm run dev:up       # just start it and print the env; npm run dev:down stops it
+```
+
+Needs Postgres binaries (`initdb`, `pg_ctl`) and, for the smoke test,
+`npm i -g playwright && npx playwright install chromium`. Claude Code on the web
+sessions start with the stack already up (`.claude/hooks/session-start.sh`).
+
+### Against vercel dev or a deployment
+
+The suite loads `.env.local` then `.env` from the **repo root**; each key is applied only if not already set, and values exported in the shell win. Quote-wrapped lines (from `vercel env pull`) are stripped.
+
+Workspaces are private, so every read and write test runs with a session: the suite signs in as a user of the band.
 
 ```
+ARTIST_SLUG=yourband
+ARTIST_EMAIL=you@example.com
 ARTIST_PASSWORD=yourpassword
 ```
 
-### Running
-
 ```bash
-# Local (needs vercel dev running on port 3000)
-cd tests && npm test
-ARTIST_PASSWORD=xxx npm test
-
-# Against the dev Preview deployment
-npm run test:dev
-ARTIST_PASSWORD=xxx npm run test:dev
-
-# Against production (anonymous checks only, unless ARTIST_PASSWORD is set)
-npm run test:prod
-
-# Override URL explicitly
+cd tests && npm test                       # vercel dev on port 3000
+npm run test:dev                           # the dev Preview deployment
+npm run test:prod                          # production (anonymous checks unless signed in)
 BASE_URL=https://your-preview.vercel.app node tests/api.js
 ```
 
@@ -86,9 +94,9 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 |------|--------|
 | `GET /api/config` | slug and name; songs only for a public catalogue; `gemaIpNameNumber`/`upgradedAt` hidden |
 | Privacy | songs, song logs, gigs (+ .ics), setlists, venues and GEMA answer 401 without a token — except what the band opted into (`publicCatalogue`, `publicStage`) |
-| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; PUT /setlists/:id → 401 |
+| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; a password without an email → 400 `band_password_retired`; PUT /setlists/:id → 401 |
 
-**Signed in (requires `ARTIST_PASSWORD`)**
+**Signed in (requires `ARTIST_EMAIL` and `ARTIST_PASSWORD`)**
 
 | Area | Checks |
 |------|--------|
@@ -99,7 +107,7 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | `GET /api/:artist/gigs` | array; single gig by id |
 | `GET /api/:artist/setlists` | array with song_count; single setlist with ordered songs |
 | Validation | id=0 → 400, non-integer id → 400, missing required fields → 400, unknown id → 404 |
-| `POST /api/:artist/auth` | correct password → 200 |
+| `POST /api/:artist/auth` | email + correct password → 200 |
 | Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
 | `POST /api/:artist/songs` | missing title → 400 |
 | Lyrics suggest | rejects songs without an artist before calling external providers |
