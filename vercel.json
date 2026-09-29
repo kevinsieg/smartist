@@ -1,6 +1,6 @@
 {
   "regions": ["fra1"],
-  "buildCommand": "node scripts/deploy_migrate.js",
+  "installCommand": "npm install && node scripts/deploy_migrate.js",
   "redirects": [
     { "source": "/impressum", "destination": "https://smartist.studio/impressum", "permanent": false },
     {
