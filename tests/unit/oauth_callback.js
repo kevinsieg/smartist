@@ -28,7 +28,7 @@ const EMAIL = 'player@example.com';
 
 const logged = [];
 
-function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name: 'Band' }] } = {}) {
+function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name: 'Band' }], provider = 'google' } = {}) {
   logged.length = 0;
   const logPath = require.resolve(path.join(__dirname, '../../api/_logger'));
   require.cache[logPath] = {
@@ -93,7 +93,7 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
     // Driven the way api/config.js drives it: plain input through the adapter.
     oauth: { oauthCallback: require(path.join(__dirname, '../../api/_domain/http'))
       .handle(require(path.join(__dirname, '../../api/_domain/oauth')).oauthCallback) },
-    state: realIdentity.generateState('google', 'login', NONCE),
+    state: realIdentity.generateState(provider, 'login', NONCE),
     token: require(tokenPath),   // the real one, loaded after the eviction above
   };
 }
@@ -186,6 +186,28 @@ async function run(r) {
       `expected onboarding, got ${res._url}`);
     assert(!fragment(res._url).get('session'), 'a session for an account that does not exist');
     assert(logged.some(l => l.event === 'oauth_signup_started'), 'signup start not logged');
+  });
+
+  // Facebook does not say whether an address is verified. A workspace set up
+  // under an address someone merely typed into Facebook would later reach every
+  // band that invites the real owner, since memberships join on email.
+  await testAsync('a new Facebook address is sent to the emailed signup instead', async () => {
+    const saved = process.env.FACEBOOK_TRUST_EMAIL;
+    delete process.env.FACEBOOK_TRUST_EMAIL;
+    try {
+      const res = await callback({ user: null, provider: 'facebook' });
+      assertEq(res._url, 'https://app.smartist.studio/signup?error=verify_email');
+      assert(!logged.some(l => l.event === 'oauth_signup_started'), 'a signup token was issued');
+    } finally { if (saved !== undefined) process.env.FACEBOOK_TRUST_EMAIL = saved; }
+  });
+
+  await testAsync('with FACEBOOK_TRUST_EMAIL a new Facebook address sets up a workspace', async () => {
+    const saved = process.env.FACEBOOK_TRUST_EMAIL;
+    process.env.FACEBOOK_TRUST_EMAIL = 'true';
+    try {
+      const res = await callback({ user: null, provider: 'facebook' });
+      assert(String(res._url).startsWith('https://app.smartist.studio/onboarding#token='), `got ${res._url}`);
+    } finally { if (saved === undefined) delete process.env.FACEBOOK_TRUST_EMAIL; else process.env.FACEBOOK_TRUST_EMAIL = saved; }
   });
 
   console.log(B('\nOAuth callback — what the visitor is told, and what the log is told'));

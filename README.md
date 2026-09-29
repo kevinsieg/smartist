@@ -122,7 +122,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 | `DEMO_ARTIST_SLUG`                           | Band the public `/demo` gate opens (default `demo`); demo visitors get a **member** session |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`  | Enables "Sign in with Google" — see `docs/oauth-setup.md` |
 | `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`    | Enables Facebook sign-in (new accounts only) |
-| `FACEBOOK_TRUST_EMAIL=true`                  | Also let Facebook sign into *existing* accounts by email. Facebook does not say whether an address is verified — read `docs/oauth-setup.md` first |
+| `FACEBOOK_TRUST_EMAIL=true`                  | Let Facebook sign into existing accounts and set up new ones by email. Facebook does not say whether an address is verified — read `docs/oauth-setup.md` first |
 
 
 **Per-environment** — add two entries for each (one scoped to Production, one to Preview + Development):
