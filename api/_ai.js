@@ -77,9 +77,10 @@ async function suggestLyricsWithAI(title, artist, { language, genre } = {}) {
   let res;
   try {
     if (AI.format === 'gemini') {
-      res = await fetch(`${AI.baseUrl}/models/${AI.model}:generateContent?key=${apiKey}`, {
+      // Key in a header, not the URL: URLs end up in proxy and access logs.
+      res = await fetch(`${AI.baseUrl}/models/${AI.model}:generateContent`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           contents:         [{ parts: [{ text: prompt }] }],
           tools:            [{ google_search: {} }],

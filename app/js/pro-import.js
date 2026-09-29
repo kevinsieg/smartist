@@ -194,8 +194,8 @@ function infoTableHtml(rows, type) {
     const status  = r.isNew ? `<span class="gema-badge gema-badge-new">${t('pro.statusNew')}</span>` : `<span class="gema-badge">${t('pro.statusUpdate')}</span>`;
     const errCell = r.error ? `<td colspan="2" style="color:var(--danger-color)">${escHtml(r.error)}</td>` : '';
     const extra   = isIds
-      ? `<td>${r.iswc || '—'}</td><td>${r.isrc || '—'}</td>`
-      : `<td>${r.language || '—'}</td><td>${fmtDuration(r.durationSec)}</td>`;
+      ? `<td>${escHtml(r.iswc || '—')}</td><td>${escHtml(r.isrc || '—')}</td>`
+      : `<td>${escHtml(r.language || '—')}</td><td>${escHtml(fmtDuration(r.durationSec))}</td>`;
 
     const rowClass = !r.matchedSong && r.isOwnWork === true  ? ' class="gema-row-own"'
                    : !r.matchedSong && r.isOwnWork === false ? ' class="gema-row-other"'
@@ -219,7 +219,7 @@ function beteiligteTableHtml(rows) {
   const ths = `<th>${t('pro.colWorkNr')}</th><th>${t('pro.colTitle')}</th><th>${t('pro.colInDb')}</th><th>${t('pro.colNewRightholders')}</th><th>${t('pro.colReplacing')}</th><th>${t('pro.colNames')}</th>`;
   const trs = rows.map(r => {
     const inDb    = r.found ? '✓' : `<span style="color:var(--danger-color)">✗ ${t('pro.missing')}</span>`;
-    const names   = r.rightholders.map(rh => `${escHtml(rh.name)} (${rh.role ?? '?'})`).join(', ');
+    const names   = r.rightholders.map(rh => `${escHtml(rh.name)} (${escHtml(rh.role ?? '?')})`).join(', ');
     const errCell = r.error ? `<td colspan="3" style="color:var(--danger-color)">${escHtml(r.error)}</td>` : '';
     return `<tr${!r.found ? ' class="gema-row-warn"' : ''}${r.error ? ' class="gema-row-err"' : ''}>
       <td class="gema-mono">${escHtml(r.gema_work_number)}</td>
