@@ -276,7 +276,7 @@ async function _loadAndRenderHistSongs(sid) {
 
   var total = 0;
   var rows = loaded.map(function(song, i) {
-    total += song.length_min || 0;
+    total += song.length_min || 4;
     return '<div class="hist-song-row" data-song-id="' + song.id + '" data-onclick="_openSongPanel(\'' + escHtml(sid) + '\',' + Number(song.id) + ')">' +
       '<span class="hist-song-pos">' + (i + 1) + '.</span>' +
       '<span class="hist-song-name">' + escHtml(song.title || '') + '</span>' +
