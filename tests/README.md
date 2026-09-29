@@ -6,7 +6,7 @@ Two test layers — unit tests (no infrastructure) and integration tests (need a
 
 ## Unit tests
 
-Test pure helper functions with no server, database, or network required. Run anywhere Node 22 is available.
+Test pure helper functions with no server, database, or network required. Run anywhere Node 24 is available.
 
 ```bash
 npm run test:unit           # from repo root — unit.js plus the client-script suites (*-client.js)

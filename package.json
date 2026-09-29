@@ -3,9 +3,10 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "scripts": {
+    "postinstall": "node scripts/deploy_migrate.js",
     "test:unit": "node tests/unit.js && node tests/history-client.js && node tests/home-client.js && node tests/viewmode-client.js && node tests/gigs-client.js && node tests/songs-client.js && node tests/songs-split-client.js && node tests/map-client.js && node tests/workspaces-client.js && node tests/logout-client.js",
     "dev:up": "bash scripts/dev_up.sh up",
     "dev:restart": "bash scripts/dev_up.sh restart",

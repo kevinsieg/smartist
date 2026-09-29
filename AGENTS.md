@@ -38,7 +38,7 @@ production database.
   `INSERT INTO schema_migrations …`, with `SCHEMA_VERSION` in `api/_env.js` set
   to it. Idempotent (`IF NOT EXISTS`), no `DO $$` blocks. **Each deployment
   applies it to its own database while it builds** (`scripts/deploy_migrate.js`,
-  run by `installCommand` in `vercel.json`), a minute or two before the new
+  run as `postinstall` by the build's npm install), a minute or two before the new
   code goes live.
 - So the live code must survive the new schema: add freely, but drop or rename
   a column only a release after the code stopped using it. CI's *Live code on
