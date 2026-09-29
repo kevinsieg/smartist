@@ -111,7 +111,7 @@ work on dev  →  git push origin dev  →  verify on preview URL
 →  open PR: dev → main  →  review + merge  →  Vercel deploys to production
 ```
 
-A schema change needs no manual step: every deployment runs `scripts/deploy_migrate.js` while it builds (after `npm install`, from `installCommand` in `vercel.json`), which applies pending migrations to that Vercel project's own `DATABASE_URL` (nothing pending → nothing runs; a failure fails the build and the previous deployment stays live). Check the deployments afterwards:
+A schema change needs no manual step: every deployment runs `scripts/deploy_migrate.js` while it builds (the `postinstall` script in `package.json`, run by the npm install of every Vercel build), which applies pending migrations to that Vercel project's own `DATABASE_URL` (nothing pending → nothing runs; a failure fails the build and the previous deployment stays live). Check the deployments afterwards:
 
 ```bash
 curl https://<deployment>/api/config?action=health              # "schema":"current"
