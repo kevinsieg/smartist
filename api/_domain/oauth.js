@@ -103,7 +103,6 @@ async function oauthCallback({ query, headers, ip, origin }) {
   if (!cookieNonce || stateResult.nonce !== cookieNonce) return failed('state_not_from_this_browser');
   cookie = { 'Set-Cookie': CLEAR_NONCE };
   provider   = stateResult.provider;
-  const mode = stateResult.mode || 'login';
 
   if (await checkRateLimit(`oauth:${ip}`, 10, 60)) return failed('rate_limited');
 
@@ -122,10 +121,13 @@ async function oauthCallback({ query, headers, ip, origin }) {
     SELECT u.id, u.role, u.password_hash FROM users u WHERE u.email = ${email.toLowerCase()} ORDER BY u.id LIMIT 1
   `;
 
-  // Signup mode only creates a new workspace for genuinely new emails —
-  // existing accounts fall through to the login flow below instead of
-  // accidentally setting up a second workspace.
-  if (mode === 'signup' && !firstUser) {
+  // A new address goes on to set up a workspace, whichever button started the
+  // flow: "Continue with Google" on the login page used to answer a new
+  // Google account with "Sign-in failed". This says nothing about which
+  // addresses have accounts — the provider has already shown this visitor
+  // owns the address. Existing accounts always fall through to the login
+  // below, so signup mode never sets up a second workspace.
+  if (!firstUser) {
     if (await checkRateLimit(`signup-link:${email.toLowerCase()}`, 3, 3600))
       return redirect(`${o}/signup?error=rate_limited`);
     const rawToken = await createSignupToken(email, sql);
@@ -136,26 +138,21 @@ async function oauthCallback({ query, headers, ip, origin }) {
   // Facebook has no verified-email flag (see identity.js). Matching its address
   // to an existing account is therefore opt-in per deployment: without it, an
   // address someone merely typed into Facebook would open that account here.
-  if (firstUser && provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true')
+  if (provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true')
     return failed('facebook_email_not_trusted');
 
-  if (firstUser) {
-    const artists = await getArtistsForUser(firstUser.id, sql);
-    const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash);
-    const hint = Buffer.from(email.toLowerCase()).toString('base64url');
-    await logger.info('oauth_login', { provider, email });
-    // This is a finished session, not a link to be redeemed. It used to travel
-    // as `magic=`, which sent home.js to the password-based magic endpoint —
-    // and that looks the user up WITH password_hash IS NOT NULL and checks the
-    // token against that hash. An account created through Google has no
-    // password and a user token is keyed on APP_SECRET, so it always came back
-    // "Invalid or expired login link". `session=` is verified as what it is.
-    const next = artists.length > 1 ? '/workspaces' : `/${artists[0]?.slug || ''}/dashboard`;
-    return redirect(`${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
-  }
-
-  await logger.warn('oauth_email_mismatch', { provider, email });
-  return failed('email_not_authorised');
+  const artists = await getArtistsForUser(firstUser.id, sql);
+  const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash);
+  const hint = Buffer.from(email.toLowerCase()).toString('base64url');
+  await logger.info('oauth_login', { provider, email });
+  // This is a finished session, not a link to be redeemed. It used to travel
+  // as `magic=`, which sent home.js to the password-based magic endpoint —
+  // and that looks the user up WITH password_hash IS NOT NULL and checks the
+  // token against that hash. An account created through Google has no
+  // password and a user token is keyed on APP_SECRET, so it always came back
+  // "Invalid or expired login link". `session=` is verified as what it is.
+  const next = artists.length > 1 ? '/workspaces' : `/${artists[0]?.slug || ''}/dashboard`;
+  return redirect(`${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
 }
 
 module.exports = { googleUrl, facebookUrl, oauthCallback };
