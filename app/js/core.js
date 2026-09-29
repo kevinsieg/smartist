@@ -21,7 +21,7 @@ function getInitials(name) {
 function escHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // Instrument fields a band hid in Settings (config.hiddenSongFields, e.g. 'extra.lead').

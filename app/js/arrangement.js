@@ -256,7 +256,7 @@ function _arrRenderColToggles() {
     instruments.map(function(inst) {
       var checked = !hidden.has(inst.key) ? ' checked' : '';
       return '<label class="arr-col-toggle">' +
-        '<input type="checkbox"' + checked + ' onchange="arrToggleColumn(\'' + escHtml(inst.key) + '\',this.checked)"> ' +
+        '<input type="checkbox"' + checked + ' data-key="' + escHtml(inst.key) + '" onchange="arrToggleColumn(this.dataset.key,this.checked)"> ' +
         escHtml(inst.label || inst.key) +
       '</label>';
     }).join('');
