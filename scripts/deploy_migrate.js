@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Runs in every Vercel deployment, after npm install (vercel.json
-// "installCommand" — not "buildCommand": with a build command Vercel expects a
-// public/ output directory, and this app serves from the root). Brings this
-// deployment's own database up to scripts/schema.sql before the new code goes
-// live. Each
+// Runs in every Vercel deployment as package.json's "postinstall": Vercel's
+// build installs dependencies itself and ignores vercel.json "installCommand"
+// for an app without a framework or build step (the build log showed only
+// "Installing dependencies..."), and a "buildCommand" makes it expect a
+// public/ output directory. npm runs "postinstall" on every install, even
+// "up to date". Brings this deployment's own database up to
+// scripts/schema.sql before the new code goes live. Each
 // Vercel project builds with its own DATABASE_URL, so every deployment
 // migrates its own database and no production connection string ever leaves
 // Vercel.
@@ -16,7 +18,8 @@
 // not — stop using it in one release, drop it in a later one
 // (tests/unit/schema_drops.js).
 //
-// Only runs inside a Vercel build: locally use apply_schema.js, which asks.
+// Only runs inside a Vercel build: anywhere else (a local or CI npm install,
+// vercel dev) it does nothing. Locally use apply_schema.js, which asks.
 
 const fs = require('fs');
 const path = require('path');
@@ -24,10 +27,7 @@ const lib = require('./_lib');
 const { migrationIds, applyStatements, connect } = require('./apply_schema');
 
 async function main() {
-  if (process.env.VERCEL !== '1') {
-    console.error('deploy_migrate.js runs in Vercel builds only; use scripts/apply_schema.js');
-    process.exit(1);
-  }
+  if (process.env.VERCEL !== '1' || process.env.VERCEL_ENV === 'development') return;
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.error('DATABASE_URL is not set for this Vercel environment: the build cannot migrate.');
