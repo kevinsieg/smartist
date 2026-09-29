@@ -38,7 +38,7 @@ artists
 ┌────────────────────────────┐
 │           artists           │
 │ id  slug  name  config JSONB│
-│ password_hash  social_links │
+│ social_links                │
 └────┬───────────────────────┘
      │ 1 : n (artist_id FK, CASCADE DELETE on all child tables)
      │
@@ -69,7 +69,6 @@ One row per artist (a workspace). The API is keyed by `slug`, taken from the URL
 | `id` | serial PK | |
 | `slug` | text UNIQUE NOT NULL | URL-safe identifier used in all API routes |
 | `name` | text NOT NULL | Display name |
-| `password_hash` | text | Unused: the shared band password is retired, every login is a `users` row. Kept until every deployment has moved; drop later |
 | `storage_used_bytes` | bigint DEFAULT 0 | Song-media bytes counted against the plan's storage cap |
 | `config` | jsonb DEFAULT `{}` | UI config — see [Artist config](#artist-config) |
 | `social_links` | jsonb DEFAULT `{}` | Legacy social links field (platforms now in `config.platforms`) |
