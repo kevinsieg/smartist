@@ -25,8 +25,8 @@ function _renderBulkEditTable() {
       <button class="btn" id="add-btn">${t('songs.addSong')}</button>
       <span class="status" id="status"></span>
       <span class="filter-count" id="filter-count">${visible.length} / ${songs.length}</span>
-      <button class="btn" onclick="toggleBulkEdit()">← ${t('songs.list')}</button>
-      <button class="btn icon-btn auth-action" title="${t('songs.share')}" onclick="_songsShareMenu(this)">${SHARE_ICON}</button>
+      <button class="btn" data-onclick="toggleBulkEdit()">← ${t('songs.list')}</button>
+      <button class="btn icon-btn auth-action" title="${t('songs.share')}" data-onclick="_songsShareMenu(this)">${SHARE_ICON}</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -144,10 +144,10 @@ function renderRow(song) {
       let clickable = false, attrs = '';
       if (c.key === 'play_count' && song.id) {
         clickable = true;
-        attrs = ` onclick="openAppearances(${song.id})"`;
+        attrs = ` data-onclick="openAppearances(${song.id})"`;
       } else if (c.key === 'gema_work_number' && val && val !== '—' && song.id) {
         clickable = true;
-        attrs = ` onclick="openGema(${song.id})"`;
+        attrs = ` data-onclick="openGema(${song.id})"`;
       }
       return `<td class="${c.cls}${sticky}">
         <span class="stat-cell${clickable ? ' clickable' : ''}"${attrs}>${escHtml(display)}</span>
@@ -156,48 +156,48 @@ function renderRow(song) {
     if (c.type === 'listen') {
       const hasUrl = !!val;
       const actionBtn = hasUrl
-        ? `<button class="listen-play-btn" onclick="openPlayer('${sid}')" title="${t('songs.play')}">▶</button>`
-        : `<button class="listen-upload-btn" onclick="triggerAudioUpload('${sid}')" title="${t('songs.uploadAudio')}">↑</button>`;
+        ? `<button class="listen-play-btn" data-onclick="openPlayer('${sid}')" title="${t('songs.play')}">▶</button>`
+        : `<button class="listen-upload-btn" data-onclick="triggerAudioUpload('${sid}')" title="${t('songs.uploadAudio')}">↑</button>`;
       return `<td class="${c.cls}${sticky} listen-cell">
         <input type="text" data-id="${sid}" data-key="${c.key}"
           value="${escHtml(String(val))}" style="display:none">
         ${actionBtn}
         <input type="file" class="listen-file-input" accept="audio/*" style="display:none"
-          onchange="handleAudioFile(this, '${sid}')">
+          data-onchange="handleAudioFile(this, '${sid}')">
       </td>`;
     }
     if (c.type === 'sheet') {
       const hasUrl = !!val;
       const actionBtn = hasUrl
-        ? `<button class="sheet-open-btn" onclick="openSheet('${sid}')" title="${t('songs.openSheet')}">≡</button>`
-        : `<button class="sheet-upload-btn" onclick="triggerSheetUpload('${sid}')" title="${t('songs.uploadPdf')}">↑</button>`;
+        ? `<button class="sheet-open-btn" data-onclick="openSheet('${sid}')" title="${t('songs.openSheet')}">≡</button>`
+        : `<button class="sheet-upload-btn" data-onclick="triggerSheetUpload('${sid}')" title="${t('songs.uploadPdf')}">↑</button>`;
       return `<td class="${c.cls}${sticky} sheet-cell">
         <input type="text" data-id="${sid}" data-key="${c.key}"
           value="${escHtml(String(val))}" style="display:none">
         ${actionBtn}
         <input type="file" class="sheet-file-input" accept=".pdf,application/pdf" style="display:none"
-          onchange="handleSheetFile(this, '${sid}')">
+          data-onchange="handleSheetFile(this, '${sid}')">
       </td>`;
     }
     if (c.type === 'playback') {
       const hasUrl = !!val;
       const actionBtn = hasUrl
-        ? `<button class="playback-open-btn" onclick="openPlayback('${sid}')" title="${t('songs.playPlayback')}">▷</button>`
-        : `<button class="playback-upload-btn" onclick="triggerPlaybackUpload('${sid}')" title="${t('songs.uploadPlayback')}">↑</button>`;
+        ? `<button class="playback-open-btn" data-onclick="openPlayback('${sid}')" title="${t('songs.playPlayback')}">▷</button>`
+        : `<button class="playback-upload-btn" data-onclick="triggerPlaybackUpload('${sid}')" title="${t('songs.uploadPlayback')}">↑</button>`;
       return `<td class="${c.cls}${sticky} playback-cell">
         <input type="text" data-id="${sid}" data-key="${c.key}"
           value="${escHtml(String(val))}" style="display:none">
         ${actionBtn}
         <input type="file" class="playback-file-input" accept="audio/*" style="display:none"
-          onchange="handlePlaybackFile(this, '${sid}')">
+          data-onchange="handlePlaybackFile(this, '${sid}')">
       </td>`;
     }
     if (c.type === 'lyrics') {
       // The list carries has_lyrics; the text is loaded when the modal opens.
       const hasLyrics = !!(song.has_lyrics || song.lyrics);
       const actionBtn = hasLyrics
-        ? `<button class="lyrics-open-btn" onclick="openLyrics('${sid}')" title="${t('songs.viewLyrics')}">¶</button>`
-        : (_viewMode ? '' : `<button class="lyrics-add-btn"  onclick="openLyricsEdit('${sid}')" title="${t('songs.addLyrics')}">+</button>`);
+        ? `<button class="lyrics-open-btn" data-onclick="openLyrics('${sid}')" title="${t('songs.viewLyrics')}">¶</button>`
+        : (_viewMode ? '' : `<button class="lyrics-add-btn"  data-onclick="openLyricsEdit('${sid}')" title="${t('songs.addLyrics')}">+</button>`);
       return `<td class="${c.cls}${sticky} lyrics-cell">
         ${actionBtn}
       </td>`;
@@ -206,7 +206,7 @@ function renderRow(song) {
       const hasArr = !!val;
       const btn = (hasArr || !_viewMode)
         ? `<button class="arr-col-btn${hasArr ? '' : ' arr-col-btn--empty'}"
-             onclick="_openSongArrangement(${Number(song.id)})"
+             data-onclick="_openSongArrangement(${Number(song.id)})"
              title="${hasArr ? t('songs.openArrangement') : t('songs.noArrangement')}">&#8862;</button>`
         : '';
       return `<td class="${c.cls}${sticky} arr-cell">${btn}</td>`;
@@ -215,14 +215,14 @@ function renderRow(song) {
       return `<td class="${c.cls}${sticky}">
         <input type="checkbox" data-id="${sid}" data-key="${c.key}"
           ${val === true || val === 'true' || val === 1 ? 'checked' : ''}
-          onchange="markDirty('${sid}')">
+          data-onchange="markDirty('${sid}')">
       </td>`;
     }
     if (c.type === 'time') {
       return `<td class="${c.cls}${sticky}">
         <input type="text" data-id="${sid}" data-key="${c.key}" data-type="time"
           value="${escHtml(minsToTime(val ?? 4))}" placeholder="MM:SS"
-          oninput="markDirty('${sid}')">
+          data-oninput="markDirty('${sid}')">
       </td>`;
     }
     if (c.type === 'energy') {
@@ -232,7 +232,7 @@ function renderRow(song) {
       return `<td class="${c.cls}${sticky}">
         <input type="number" data-id="${sid}" data-key="${c.key}"
           value="${escHtml(String(val))}" min="0" step="1" inputmode="numeric"
-          oninput="markDirty('${sid}')">
+          data-oninput="markDirty('${sid}')">
       </td>`;
     }
     if (c.type === 'select') {
@@ -250,7 +250,7 @@ function renderRow(song) {
         `<option value="${escHtml(o)}"${o === cur ? ' selected' : ''}>${escHtml(o)}</option>`
       ).join('');
       return `<td class="${c.cls}${sticky}">
-        <select data-id="${sid}" data-key="${dataKey}" onchange="markDirty('${sid}')">${opts}</select>
+        <select data-id="${sid}" data-key="${dataKey}" data-onchange="markDirty('${sid}')">${opts}</select>
       </td>`;
     }
     if (c.type === 'url') {
@@ -259,19 +259,19 @@ function renderRow(song) {
       const btnLbl = hasUrl ? '✓ Link' : '+ Add';
       return `<td class="${c.cls}${sticky} url-cell">
         <input type="text" data-id="${sid}" data-key="${c.key}" value="${escHtml(String(val))}" style="display:none">
-        <button class="${btnCls}" onclick="openUrlPreview(this.previousElementSibling.value,this.previousElementSibling)">${btnLbl}</button>
+        <button class="${btnCls}" data-onclick="openUrlPreview(this.previousElementSibling.value,this.previousElementSibling)">${btnLbl}</button>
       </td>`;
     }
     return `<td class="${c.cls}${sticky}">
       <input type="text" data-id="${sid}" data-key="${c.key}"
         value="${escHtml(String(val))}"
-        oninput="markDirty('${sid}')">
+        data-oninput="markDirty('${sid}')">
     </td>`;
   }).join('');
 
   return `<tr id="row-${sid}" data-id="${sid}">${cells}
     <td class="col-del">
-      <button class="del-btn" onclick="deleteRow('${sid}')" title="${t('songs.delete')}">&#215;</button>
+      <button class="del-btn" data-onclick="deleteRow('${sid}')" title="${t('songs.delete')}">&#215;</button>
     </td>
   </tr>`;
 }
@@ -305,12 +305,14 @@ function energyInputHtml(sid, key, val, onDirty) {
     `<input type="text" data-id="${sid}" data-key="${key}" value="${has ? n : ''}" style="display:none">` +
     `<span class="energy-end">${escHtml(t('songs.energyLow'))}</span>` +
     `<input type="range" min="0" max="10" step="1" value="${n}" class="energy-range${has ? '' : ' energy-range--unset'}"` +
-      ` title="${has ? n : ''}" aria-label="${escHtml(t('songs.fieldEnergy'))}" oninput="_energySet(this, this.value);${onDirty}">` +
+      ` title="${has ? n : ''}" aria-label="${escHtml(t('songs.fieldEnergy'))}" data-oninput="_energySet(this, this.value);${onDirty}">` +
     `<span class="energy-end">${escHtml(t('songs.energyHigh'))}</span>` +
     `<button type="button" class="energy-clear" title="${escHtml(t('songs.energyClear'))}"` +
-      ` onclick="_energySet(this.parentNode.querySelector('.energy-range'), '');${onDirty}">×</button>` +
+      ` data-onclick="_energyClear(this);${onDirty}">×</button>` +
   `</span>`;
 }
+
+function _energyClear(btn) { _energySet(btn.parentNode.querySelector('.energy-range'), ''); }
 
 function _energySet(range, value) {
   const wrap = range.parentNode;

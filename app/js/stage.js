@@ -13,6 +13,8 @@ var _shareSetlistId = null;
 
 // Members of private workspaces must authenticate to read config/setlists/songs.
 // The session token, wherever "remember me" put it (stage has no session.js).
+function _openActiveArrPopup() { openArrStagePopup(window._stageActiveArr, window._stageArrConfig); }
+
 function _stageToken() {
   return sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
 }
@@ -74,12 +76,12 @@ function _shareHtml(navHtml) {
   var light = document.body.classList.contains('stage-light');
   return `<div class="stage-header-btns">
     ${navHtml || ''}
-    <button class="stage-invert-btn" id="stage-invert-btn" onclick="toggleStageInvert()" title="${light ? 'Switch to dark mode' : 'Switch to light mode'}">${light ? _MOON_ICON : _SUN_ICON}</button>
-    <button class="stage-share-btn" id="stage-share-btn" onclick="toggleStageShareMenu(event)" title="Share"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+    <button class="stage-invert-btn" id="stage-invert-btn" data-onclick="toggleStageInvert()" title="${light ? 'Switch to dark mode' : 'Switch to light mode'}">${light ? _MOON_ICON : _SUN_ICON}</button>
+    <button class="stage-share-btn" id="stage-share-btn" data-onclick="toggleStageShareMenu(event)" title="Share"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
     <div class="stage-share-menu" id="stage-share-menu" style="display:none">
-      <button class="stage-share-item" onclick="stageSharePrint()"><span class="stage-share-icon">⎙</span>Print / Export PDF</button>
-      <button class="stage-share-item" onclick="stageShareCopyLink()"><span class="stage-share-icon">⧉</span><span id="stage-copy-label">Copy link</span></button>
-      <button class="stage-share-item" onclick="stageShareEmail()"><span class="stage-share-icon">✉</span>Share via email</button>
+      <button class="stage-share-item" data-onclick="stageSharePrint()"><span class="stage-share-icon">⎙</span>Print / Export PDF</button>
+      <button class="stage-share-item" data-onclick="stageShareCopyLink()"><span class="stage-share-icon">⧉</span><span id="stage-copy-label">Copy link</span></button>
+      <button class="stage-share-item" data-onclick="stageShareEmail()"><span class="stage-share-icon">✉</span>Share via email</button>
     </div>
   </div>`;
 }
@@ -276,12 +278,12 @@ async function initSong(params, el, cfg) {
   let recItems = [];
   if (extra.listenUrl) {
     recItems.push(audioRe.test(extra.listenUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.listenUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.listenUrl))}"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
       : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.listenUrl))}" target="_blank" rel="noopener">&#9654; Listen</a>`);
   }
   if (extra.playbackUrl) {
     recItems.push(audioRe.test(extra.playbackUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.playbackUrl))}"></audio><div class="audio-speed-btns"><button onclick="_setAudioSpeed(this,0.7)">0.7×</button><button onclick="_setAudioSpeed(this,0.8)">0.8×</button><button onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.playbackUrl))}"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
       : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.playbackUrl))}" target="_blank" rel="noopener">&#9655; Playback</a>`);
   }
   const recHtml = recItems.length ? `<div class="song-stage-section">${recItems.join('')}</div>` : '';
@@ -292,7 +294,7 @@ async function initSong(params, el, cfg) {
     extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.referenceUrl))}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
     extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.songinfoUrl))}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
     activeArr
-      ? `<button class="stage-chart-btn" onclick="openArrStagePopup(window._stageActiveArr,window._stageArrConfig)" title="Show arrangement chart">` +
+      ? `<button class="stage-chart-btn" data-onclick="_openActiveArrPopup()" title="Show arrangement chart">` +
         `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>` +
         `<span style="font-size:11px">ARRANGEMENT</span></button>`
       : '',
@@ -303,9 +305,9 @@ async function initSong(params, el, cfg) {
   const lyricsHtml = lyrics
     ? `<div class="song-stage-lyrics" id="_stage_lyrics"></div>
        <div class="lyrics-size-bar">
-         <button class="stage-share-btn" onclick="stageFontDown()" title="Smaller text"><span style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
-         <button class="stage-share-btn" onclick="stageFitLyrics()" title="Fit to screen">${_FIT_ICON}</button>
-         <button class="stage-share-btn" onclick="stageFontUp()" title="Larger text"><span style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
+         <button class="stage-share-btn" data-onclick="stageFontDown()" title="Smaller text"><span style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
+         <button class="stage-share-btn" data-onclick="stageFitLyrics()" title="Fit to screen">${_FIT_ICON}</button>
+         <button class="stage-share-btn" data-onclick="stageFontUp()" title="Larger text"><span style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
        </div>`
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 

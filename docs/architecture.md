@@ -169,6 +169,13 @@ the browser before upload.
   page), and in-app navigation swaps page content without a full reload
   (`navigate()`). Page scripts therefore share one global scope: use `var` and
   private names (enforced by `tests/unit/page_scripts.js`).
+- **No inline script.** The Content-Security-Policy allows scripts only from
+  files: an injected `<script>` or `onclick=` does not run. Handlers in markup
+  are `data-onclick="fn(args)"` attributes that `core.js` parses (never
+  evaluates) and runs on their element, so `event.stopPropagation()` keeps its
+  usual meaning. Only the app's own top-level functions can be called, which
+  keeps an injected attribute away from `fetch`, `location` and other
+  built-ins. Inline styles are still allowed.
 - **Two list factories exist:**
   - `createSortableList` in `ui.js`, used by gigs, venues and organizers.
   - `createListView` in `list-view.js`, used by songs and setlist history.

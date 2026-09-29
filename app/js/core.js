@@ -118,3 +118,135 @@ function skeletonHtml(lines) {
   }
   return html + '</div>';
 }
+
+// ── Event handlers in markup, without inline script ──────────────────────
+// The CSP has no 'unsafe-inline', so inline onclick attributes never run.
+// Markup carries data-onclick="fn(args)" instead (data-onchange, data-oninput,
+// …). The attribute is parsed, never evaluated: a sequence of calls to the
+// app's own global functions, with literals, `this`, `event` and their
+// properties as arguments. That keeps an injected attribute from calling
+// fetch, location or anything else built in.
+//
+//   fn(1, 'a', this, this.value, this.files[0], this.dataset.id, event, null)
+//   window.fn(x)                      same as fn(x)
+//   event.stopPropagation(); fn(x)    ancestors' handlers do not run
+//   event.preventDefault()  /  return false
+var _ON_EVENTS = ['click', 'dblclick', 'change', 'input', 'keydown', 'dragover', 'drop'];
+var _onCache = {};
+
+function _onTokens(src) {
+  var re = /\s*(?:([A-Za-z_$][\w$]*)|(-?\d+(?:\.\d+)?)|'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|([(),.;\[\]]))/y;
+  var out = [], m;
+  re.lastIndex = 0;
+  while (re.lastIndex < src.length) {
+    if (/^\s*$/.test(src.slice(re.lastIndex))) break;
+    var at = re.lastIndex;
+    m = re.exec(src);
+    if (!m || re.lastIndex === at) throw new Error('unexpected "' + src.slice(at, at + 12) + '"');
+    if (m[1] !== undefined) out.push({ id: m[1] });
+    else if (m[2] !== undefined) out.push({ lit: Number(m[2]) });
+    else if (m[3] !== undefined || m[4] !== undefined)
+      out.push({ lit: (m[3] !== undefined ? m[3] : m[4]).replace(/\\(.)/g, '$1') });
+    else out.push({ p: m[5] });
+  }
+  return out;
+}
+
+var _ON_WORDS = { 'null': null, 'true': true, 'false': false, 'undefined': undefined };
+
+// Parses a handler into steps: { call: [names], args: [...] } or { ret: false }.
+function _onParse(src) {
+  var tk = _onTokens(src), i = 0, steps = [];
+  function peek(p) { return tk[i] && tk[i].p === p; }
+  function expect(p) { if (!peek(p)) throw new Error('expected "' + p + '"'); i++; }
+  function path() {
+    if (!tk[i] || !tk[i].id) throw new Error('expected a name');
+    var names = [tk[i++].id];
+    for (;;) {
+      if (peek('.')) { i++; if (!tk[i] || !tk[i].id) throw new Error('expected a name'); names.push(tk[i++].id); }
+      else if (peek('[') && tk[i + 1] && typeof tk[i + 1].lit === 'number') { names.push(tk[i + 1].lit); i += 2; expect(']'); }
+      else return names;
+    }
+  }
+  function arg() {
+    var tok = tk[i];
+    if (!tok) throw new Error('missing argument');
+    if ('lit' in tok) { i++; return { lit: tok.lit }; }
+    if (tok.id && tok.id in _ON_WORDS) { i++; return { lit: _ON_WORDS[tok.id] }; }
+    var names = path();
+    if (names[0] !== 'this' && names[0] !== 'event') throw new Error('argument "' + names.join('.') + '"');
+    return { ref: names };
+  }
+  while (i < tk.length) {
+    if (peek(';')) { i++; continue; }
+    if (tk[i].id === 'return' && tk[i + 1] && tk[i + 1].id === 'false') { i += 2; steps.push({ ret: false }); continue; }
+    var names = path();
+    if (names[0] === 'window') names = names.slice(1);
+    var ev = names[0] === 'event' && names.length === 2 && (names[1] === 'stopPropagation' || names[1] === 'preventDefault');
+    if (!ev && names.length !== 1) throw new Error('call "' + names.join('.') + '"');
+    expect('(');
+    var args = [];
+    if (!peek(')')) { args.push(arg()); while (peek(',')) { i++; args.push(arg()); } }
+    expect(')');
+    steps.push({ call: names, args: args });
+  }
+  return steps;
+}
+
+function _onRef(names, el, e) {
+  var v = names[0] === 'this' ? el : e;
+  for (var k = 1; k < names.length && v != null; k++) v = v[names[k]];
+  return v;
+}
+
+function _onRun(src, el, e) {
+  var steps = _onCache[src] || (_onCache[src] = _onParse(src));
+  for (var s = 0; s < steps.length; s++) {
+    var step = steps[s];
+    if (step.ret === false) { e.preventDefault(); continue; }
+    if (step.call[0] === 'event') { e[step.call[1]](); continue; }
+    var fn = window[step.call[0]];
+    // Only the app's own functions: a built-in (fetch, open, alert…) is never
+    // reachable from markup.
+    if (typeof fn !== 'function' || /\[native code\]\s*\}\s*$/.test(Function.prototype.toString.call(fn)))
+      throw new Error('no handler "' + step.call[0] + '"');
+    fn.apply(el, step.args.map(function (a) { return 'ref' in a ? _onRef(a.ref, el, e) : a.lit; }));
+  }
+}
+
+// Each handler runs on its own element, as an inline one did: on the way down
+// (capture, on document) every element in the path that carries the attribute
+// gets a one-shot listener, which the event then reaches on the way back up.
+// So event.stopPropagation() in a button still keeps its row's listeners from
+// firing, and a child's listener still runs before its parent's handler.
+// Registering the same function twice is a no-op, so a listener left behind by
+// an event that stopped short is simply reused.
+var _onRunners = {};
+_ON_EVENTS.forEach(function (type) {
+  var attr = 'data-on' + type;
+  _onRunners[type] = function (e) {
+    var el = e.currentTarget, src = el.getAttribute(attr);
+    if (src === null) return;
+    try { _onRun(src, el, e); } catch (err) { console.error(attr + '="' + src + '": ' + err.message); }
+  };
+});
+
+if (typeof document !== 'undefined' && !window._onDispatch) {
+  window._onDispatch = true;
+  _ON_EVENTS.forEach(function (type) {
+    var attr = 'data-on' + type;
+    document.addEventListener(type, function (e) {
+      var el = e.target && e.target.nodeType === 1 ? e.target : e.target && e.target.parentElement;
+      for (; el && el !== document.documentElement; el = el.parentElement)
+        if (el.hasAttribute(attr)) el.addEventListener(type, _onRunners[type], { once: true });
+    }, true);
+  });
+}
+
+// Small actions markup needs that are not a call to one app function.
+function clickById(id) { var el = document.getElementById(id); if (el) el.click(); }
+function hideById(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
+function removeParent(el) { if (el && el.parentElement) el.parentElement.remove(); }
+// A click on the backdrop itself, not on the dialog inside it.
+function hideOnBackdrop(e, el) { if (e.target === el) el.style.display = 'none'; }
+function closeShareMenu() { var m = document.getElementById('share-menu-popup'); if (m) m.remove(); }

@@ -160,8 +160,8 @@
 </head>
 <body>
 <div id="venues-tabs" class="page-tabs" style="display:none">
-  <button class="setlist-tab setlist-tab--active" data-tab="list" onclick="switchVenueTab('list')" data-i18n="venues.tabList">List</button>
-  <button class="setlist-tab" data-tab="map" onclick="switchVenueTab('map')" data-i18n="venues.tabMap">Map</button>
+  <button class="setlist-tab setlist-tab--active" data-tab="list" data-onclick="switchVenueTab('list')" data-i18n="venues.tabList">List</button>
+  <button class="setlist-tab" data-tab="map" data-onclick="switchVenueTab('map')" data-i18n="venues.tabMap">Map</button>
 </div>
 <div id="venues-list-view" class="app-wrap venues-wrap">
   <h1 data-i18n="venues.pageTitle">Venues</h1>
@@ -179,8 +179,8 @@
       </select>
       <label class="filter-check"><input type="checkbox" id="filter-favourite"> <span data-i18n="venues.favouritesOnly">Favourites only</span></label>
     </div>
-    <button class="btn auth-action venue-filter-desktop" disabled id="venue-bulk-btn" onclick="toggleVenueBulkEdit()" data-i18n="venues.bulkEdit">Bulk edit</button>
-    <button class="btn active auth-action" disabled id="venue-add-btn" onclick="openAddModal()" data-i18n="venues.addVenueBtn">+ Add venue</button>
+    <button class="btn auth-action venue-filter-desktop" disabled id="venue-bulk-btn" data-onclick="toggleVenueBulkEdit()" data-i18n="venues.bulkEdit">Bulk edit</button>
+    <button class="btn active auth-action" disabled id="venue-add-btn" data-onclick="openAddModal()" data-i18n="venues.addVenueBtn">+ Add venue</button>
   </div>
   <div id="venues-letters" class="letter-bar"></div>
   <div id="venues-bulk" style="display:none;"></div>
@@ -215,7 +215,7 @@
 <div id="map-search-bar">
   <input type="text" id="map-search-top" placeholder="Search name, city, postcode…"
     data-i18n-attr="placeholder:venues.mapSearchPlaceholder"
-    oninput="window._mapFilterText(this.value)">
+    data-oninput="window._mapFilterText(this.value)">
 </div>
 <div id="map-view" style="display:none;">
   <div id="map-sidebar"></div>
@@ -228,7 +228,7 @@
     <h2 id="venue-modal-title" data-i18n="venues.addVenue">Add venue</h2>
     <div class="modal-field">
       <label data-i18n="venues.fieldName">Name *</label>
-      <input type="text" id="vm-name" placeholder="Venue name" data-i18n-attr="placeholder:venues.fieldNamePlaceholder" oninput="checkVenueDuplicate()">
+      <input type="text" id="vm-name" placeholder="Venue name" data-i18n-attr="placeholder:venues.fieldNamePlaceholder" data-oninput="checkVenueDuplicate()">
       <div id="vm-dup-warning" style="display:none;font-size:0.8rem;color:#c80;margin-top:0.3rem;"></div>
     </div>
     <div class="modal-field" style="display:flex;gap:0.6rem;">
@@ -286,8 +286,8 @@
     <div id="vm-geocode-preview" style="display:none">
       <div id="vm-geocode-map"></div>
       <div class="vm-geocode-actions">
-        <button type="button" class="btn" onclick="reGeocodeVenue()" data-i18n="venues.reGeocodeBtn">Re-geocode</button>
-        <button type="button" class="btn" onclick="discardGeocode()" data-i18n="venues.discardGeocodeBtn">Don't use these coordinates</button>
+        <button type="button" class="btn" data-onclick="reGeocodeVenue()" data-i18n="venues.reGeocodeBtn">Re-geocode</button>
+        <button type="button" class="btn" data-onclick="discardGeocode()" data-i18n="venues.discardGeocodeBtn">Don't use these coordinates</button>
       </div>
     </div>
     <div class="modal-field">
@@ -300,9 +300,9 @@
       </div>
     <div class="status-msg" id="vm-status-msg"></div>
     <div class="modal-actions">
-      <button class="btn active" type="button" id="vm-save-btn" onclick="saveVenue()" data-i18n="venues.saveBtn">Save</button>
-      <button class="btn" type="button" onclick="closeVenueModal()" data-i18n="venues.cancelBtn">Cancel</button>
-      <button class="btn" type="button" id="vm-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteVenueFromPopup()" data-i18n="venues.deleteBtn">Delete</button>
+      <button class="btn active" type="button" id="vm-save-btn" data-onclick="saveVenue()" data-i18n="venues.saveBtn">Save</button>
+      <button class="btn" type="button" data-onclick="closeVenueModal()" data-i18n="venues.cancelBtn">Cancel</button>
+      <button class="btn" type="button" id="vm-delete-btn" style="margin-left:auto;color:#e55;" data-onclick="deleteVenueFromPopup()" data-i18n="venues.deleteBtn">Delete</button>
     </div>
   </div>
 </div>
@@ -313,18 +313,18 @@
     <h2 id="vgm-title" data-i18n="venues.gigsAtVenueTitle">Gigs at this venue</h2>
     <div id="vgm-body" style="margin:0.75rem 0 0.5rem;max-height:60vh;overflow-y:auto;"></div>
     <div class="modal-actions">
-      <button class="btn" type="button" onclick="closeModal('venue-gigs-modal')" data-i18n="venues.closeBtn">Close</button>
+      <button class="btn" type="button" data-onclick="closeModal('venue-gigs-modal')" data-i18n="venues.closeBtn">Close</button>
     </div>
   </div>
 </div>
 
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=3"></script>
-<script src="/app/js/session.js?v=3"></script>
-<script src="/app/js/ui.js?v=3"></script>
-<script src="/app/js/shell.js?v=3"></script>
+<script src="/app/js/core.js?v=4"></script>
+<script src="/app/js/session.js?v=4"></script>
+<script src="/app/js/ui.js?v=4"></script>
+<script src="/app/js/shell.js?v=4"></script>
 <script src="/app/js/geo.js?v=2"></script>
-<script src="/app/js/venues.js?v=7"></script>
-<script src="/app/js/map.js?v=2"></script>
+<script src="/app/js/venues.js?v=8"></script>
+<script src="/app/js/map.js?v=3"></script>
 </body>
 </html>

@@ -96,6 +96,11 @@ Routing that works on Vercel can fail under `vercel dev`:
   loads `core.js` only. No `<header>`/`<footer>` in page HTML; `shell.js` builds them.
 - Page scripts run again on SPA navigation: **no top-level `const`/`let`**, use
   `var` and private names (`tests/unit/page_scripts.js`).
+- **No inline script** (the CSP forbids it): no `onclick=` or other `on…=`
+  attribute, no `<script>` without `src`. Markup uses
+  `data-onclick="fn(args)"` (`data-onchange`, `data-oninput`, …), run by
+  `core.js`: calls to top-level app functions only, with literals, `this`,
+  `event` and their properties as arguments (`tests/unit/inline_handlers.js`).
 - Workspace endpoints go through `apiFetch()`, never bare `fetch()`.
 - Dates only through `formatDate` / `formatTime` (`core.js`).
 - Bump `?v=` on every page when a shared asset changes (`app.css`, the shared

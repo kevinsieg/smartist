@@ -65,7 +65,7 @@ function renderCustom(conn) {
     .sort(([, a], [, b]) => (a.label || '').localeCompare(b.label || ''));
 
   var addTile =
-    `<div class="platform-card pc-add" onclick="openAddModal()">
+    `<div class="platform-card pc-add" data-onclick="openAddModal()">
        <div class="pc-top">
          <span class="pc-icon pc-icon-add">+</span>
          <div class="pc-info">
@@ -81,7 +81,7 @@ function platformCard(p, conn) {
   const on = conn?.url;
   const initials = p.label.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const urlDisplay = on ? conn.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
-  var clickAttr = on ? `onclick="openEditModal('${p.id}')"` : `onclick="openConnectModal('${p.id}')"`;
+  var clickAttr = on ? `data-onclick="openEditModal('${p.id}')"` : `data-onclick="openConnectModal('${p.id}')"`;
   return `
     <div class="platform-card${on ? ' pc-on' : ''}" ${clickAttr}>
       <div class="pc-top">
@@ -92,7 +92,7 @@ function platformCard(p, conn) {
         </div>
       </div>
       ${on ? `<div class="pc-url">${escHtml(urlDisplay)}</div>
-              <div class="pc-links" onclick="event.stopPropagation()">
+              <div class="pc-links" data-onclick="event.stopPropagation()">
                 <a class="btn pc-visit" href="${escHtml(safeUrl(conn.url))}" target="_blank" rel="noopener noreferrer">${t('hub.visitLink')}</a>
               </div>` : ''}
     </div>`;
@@ -103,7 +103,7 @@ function customCard(id, conn) {
   const initials = label.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const urlDisplay = conn.url ? conn.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
   return `
-    <div class="platform-card pc-on" data-id="${escHtml(id)}" onclick="openEditModal(this.dataset.id)">
+    <div class="platform-card pc-on" data-id="${escHtml(id)}" data-onclick="openEditModal(this.dataset.id)">
       <div class="pc-top">
         <span class="pc-icon">${escHtml(initials)}</span>
         <div class="pc-info">
@@ -112,7 +112,7 @@ function customCard(id, conn) {
         </div>
       </div>
       ${conn.url ? `<div class="pc-url">${escHtml(urlDisplay)}</div>
-                    <div class="pc-links" onclick="event.stopPropagation()">
+                    <div class="pc-links" data-onclick="event.stopPropagation()">
                       <a class="btn pc-visit" href="${escHtml(safeUrl(conn.url))}" target="_blank" rel="noopener noreferrer">${t('hub.visitLink')}</a>
                     </div>` : ''}
     </div>`;

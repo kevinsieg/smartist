@@ -146,8 +146,8 @@ function _ensureArrModal() {
       '<div class="arr-modal-header">' +
         '<span class="arr-modal-title" id="arr-modal-title"></span>' +
         '<div class="arr-modal-header-actions">' +
-          '<button class="btn active" id="arr-save-btn" onclick="arrSave()">' + _arrT('arr.save', 'Save') + '</button>' +
-          '<button class="btn" onclick="closeArrangementEditor()">&#215;</button>' +
+          '<button class="btn active" id="arr-save-btn" data-onclick="arrSave()">' + _arrT('arr.save', 'Save') + '</button>' +
+          '<button class="btn" data-onclick="closeArrangementEditor()">&#215;</button>' +
         '</div>' +
       '</div>' +
       '<div class="arr-version-bar" id="arr-version-bar"></div>' +
@@ -221,25 +221,25 @@ function _arrRenderVersionBar() {
     var isCurrent = i === _arrEditorActive;
     var tabCls    = 'arr-tab' + (isCurrent ? ' arr-tab--current' : '');
     var dot       = v.is_active ? '<span class="arr-active-dot" title="' + _arrT('arr.activeOnStage', 'Active on stage') + '">●</span>' : '';
-    var closeBtn  = '<span class="arr-tab-close" onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="' + _arrT('arr.deleteVersion', 'Delete version') + '">×</span>';
-    return '<button class="' + tabCls + '" onclick="arrSwitchVersion(' + i + ')">' +
+    var closeBtn  = '<span class="arr-tab-close" data-onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="' + _arrT('arr.deleteVersion', 'Delete version') + '">×</span>';
+    return '<button class="' + tabCls + '" data-onclick="arrSwitchVersion(' + i + ')">' +
       dot +
-      '<span class="arr-tab-name" ondblclick="event.stopPropagation();arrRenameVersion(' + i + ')">' +
+      '<span class="arr-tab-name" data-ondblclick="event.stopPropagation();arrRenameVersion(' + i + ')">' +
         escHtml(v.name) +
       '</span>' +
       closeBtn +
     '</button>';
   }).join('');
 
-  html += '<button class="arr-tab arr-tab--add" onclick="arrNewVersion()" title="' + _arrT('arr.newVersion', 'New version') + '">+</button>';
+  html += '<button class="arr-tab arr-tab--add" data-onclick="arrNewVersion()" title="' + _arrT('arr.newVersion', 'New version') + '">+</button>';
 
   var cur = _arrEditorVersions[_arrEditorActive];
   if (cur && !cur.is_active) {
-    html += '<button class="btn arr-set-active-btn" onclick="arrSetActive()">' + _arrT('arr.setActive', 'Set active') + '</button>';
+    html += '<button class="btn arr-set-active-btn" data-onclick="arrSetActive()">' + _arrT('arr.setActive', 'Set active') + '</button>';
   }
 
   var delLabel = _arrEditorVersions.length === 1 ? _arrT('arr.deleteArrangement', 'Delete arrangement') : _arrT('arr.deleteVersion', 'Delete version');
-  html += '<button class="btn arr-delete-btn" onclick="arrDeleteVersion(' + _arrEditorActive + ')" title="' + delLabel + '">' + delLabel + '</button>';
+  html += '<button class="btn arr-delete-btn" data-onclick="arrDeleteVersion(' + _arrEditorActive + ')" title="' + delLabel + '">' + delLabel + '</button>';
 
   bar.innerHTML = html;
 }
@@ -256,7 +256,7 @@ function _arrRenderColToggles() {
     instruments.map(function(inst) {
       var checked = !hidden.has(inst.key) ? ' checked' : '';
       return '<label class="arr-col-toggle">' +
-        '<input type="checkbox"' + checked + ' data-key="' + escHtml(inst.key) + '" onchange="arrToggleColumn(this.dataset.key,this.checked)"> ' +
+        '<input type="checkbox"' + checked + ' data-key="' + escHtml(inst.key) + '" data-onchange="arrToggleColumn(this.dataset.key,this.checked)"> ' +
         escHtml(inst.label || inst.key) +
       '</label>';
     }).join('');
@@ -305,7 +305,7 @@ function _arrRenderGrid() {
 
   bodyHtml +=
     '<tr><td colspan="' + (6 + visible.length + 1) + '" class="arr-add-row-cell">' +
-      '<button class="arr-add-row-btn" onclick="arrAddRow()">' + _arrT('arr.addRow', '+ Add row') + '</button>' +
+      '<button class="arr-add-row-btn" data-onclick="arrAddRow()">' + _arrT('arr.addRow', '+ Add row') + '</button>' +
     '</td></tr>';
 
   wrap.innerHTML =
@@ -332,7 +332,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
     return '<option value="instrument:' + escHtml(inst.key) + '"' + sel + '>' + escHtml(inst.key) + '</option>';
   }).join('');
   var leadSel =
-    '<select class="arr-sel arr-lead-sel" data-ri="' + ri + '" onchange="arrLeadChange(this)" ' + leadColor + '>' +
+    '<select class="arr-sel arr-lead-sel" data-ri="' + ri + '" data-onchange="arrLeadChange(this)" ' + leadColor + '>' +
       '<option value="">—</option>' +
       '<optgroup label="' + _arrT('arr.people', 'People') + '">'      + membersOpts + '</optgroup>' +
       '<optgroup label="' + _arrT('arr.instruments', 'Instruments') + '">' + instOpts    + '</optgroup>' +
@@ -341,7 +341,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
   // HARM chip display + clickable cell
   var harmStr = _arrHarmDisplay(row.harmony, members);
   var harmEl =
-    '<div class="arr-harm-cell" data-ri="' + ri + '" onclick="arrOpenHarmPicker(this,' + ri + ')">' +
+    '<div class="arr-harm-cell" data-ri="' + ri + '" data-onclick="arrOpenHarmPicker(this,' + ri + ')">' +
       (harmStr
         ? '<span class="arr-harm-value">' + escHtml(harmStr) + '</span>'
         : '<span class="arr-harm-placeholder">—</span>') +
@@ -353,7 +353,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
     return '<option value="' + escHtml(inst.key) + '"' + sel + '>' + escHtml(inst.key) + '</option>';
   }).join('');
   var licksSel =
-    '<select class="arr-sel" data-ri="' + ri + '" data-field="licks" onchange="arrCellChange(this)">' +
+    '<select class="arr-sel" data-ri="' + ri + '" data-field="licks" data-onchange="arrCellChange(this)">' +
       '<option value="">—</option>' + licksOpts +
     '</select>';
 
@@ -370,7 +370,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
       return '<option value="' + escHtml(t) + '"' + sel + '>' + escHtml(t) + '</option>';
     }).join('');
     return '<td class="arr-td arr-td--inst">' +
-      '<select class="arr-sel" data-ri="' + ri + '" data-field="parts.' + escHtml(v.key) + '" onchange="arrCellChange(this)">' +
+      '<select class="arr-sel" data-ri="' + ri + '" data-field="parts.' + escHtml(v.key) + '" data-onchange="arrCellChange(this)">' +
         '<option value="">—</option>' + techOpts +
       '</select>' +
     '</td>';
@@ -378,15 +378,15 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
 
   return '<tr class="arr-tr" draggable="true" data-ri="' + ri + '">' +
     '<td class="arr-td arr-td--drag" title="' + _arrT('arr.dragToReorder', 'Drag to reorder') + '">&#10021;</td>' +
-    '<td class="arr-td"><input class="arr-inp" data-ri="' + ri + '" data-field="structure" value="' + escHtml(row.structure || '') + '" onchange="arrCellChange(this)" onkeydown="arrKeydown(event,' + ri + ')"></td>' +
-    '<td class="arr-td"><input class="arr-inp arr-inp--sm" data-ri="' + ri + '" data-field="part" value="' + escHtml(row.part || '') + '" onchange="arrCellChange(this)" onkeydown="arrKeydown(event,' + ri + ')"></td>' +
+    '<td class="arr-td"><input class="arr-inp" data-ri="' + ri + '" data-field="structure" value="' + escHtml(row.structure || '') + '" data-onchange="arrCellChange(this)" data-onkeydown="arrKeydown(event,' + ri + ')"></td>' +
+    '<td class="arr-td"><input class="arr-inp arr-inp--sm" data-ri="' + ri + '" data-field="part" value="' + escHtml(row.part || '') + '" data-onchange="arrCellChange(this)" data-onkeydown="arrKeydown(event,' + ri + ')"></td>' +
     '<td class="arr-td">' + leadSel + '</td>' +
     '<td class="arr-td">' + harmEl  + '</td>' +
     '<td class="arr-td">' + licksSel + '</td>' +
     instCells +
     '<td class="arr-td arr-td--actions">' +
-      '<button class="arr-row-btn" onclick="arrDuplicateRow(' + ri + ')" title="' + _arrT('arr.duplicate', 'Duplicate') + '">&#10066;</button>' +
-      '<button class="arr-row-btn arr-row-btn--del" onclick="arrDeleteRow(' + ri + ')" title="' + _arrT('arr.deleteRow', 'Delete') + '">&#215;</button>' +
+      '<button class="arr-row-btn" data-onclick="arrDuplicateRow(' + ri + ')" title="' + _arrT('arr.duplicate', 'Duplicate') + '">&#10066;</button>' +
+      '<button class="arr-row-btn arr-row-btn--del" data-onclick="arrDeleteRow(' + ri + ')" title="' + _arrT('arr.deleteRow', 'Delete') + '">&#215;</button>' +
     '</td>' +
   '</tr>';
 }
@@ -760,7 +760,7 @@ function _ensureArrStageModal() {
     '<div class="arr-stage-modal">' +
       '<div class="arr-stage-modal-header">' +
         '<span>' + _arrT('arr.stageTitle', 'Arrangement') + '</span>' +
-        '<button onclick="closeArrStagePopup()" style="background:none;border:none;color:#888;cursor:pointer;font-size:1.1rem;line-height:1">&#215;</button>' +
+        '<button data-onclick="closeArrStagePopup()" style="background:none;border:none;color:#888;cursor:pointer;font-size:1.1rem;line-height:1">&#215;</button>' +
       '</div>' +
       '<div class="arr-stage-body" id="arr-stage-body"></div>' +
     '</div>';

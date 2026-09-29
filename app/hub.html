@@ -71,10 +71,10 @@
 </head>
 <body>
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=3"></script>
-<script src="/app/js/session.js?v=3"></script>
-<script src="/app/js/ui.js?v=3"></script>
-<script src="/app/js/shell.js?v=3"></script>
+<script src="/app/js/core.js?v=4"></script>
+<script src="/app/js/session.js?v=4"></script>
+<script src="/app/js/ui.js?v=4"></script>
+<script src="/app/js/shell.js?v=4"></script>
 
 <div class="app-wrap hub-wrap">
   <h1 data-i18n="hub.title">Artist Hub</h1>
@@ -149,13 +149,13 @@
     </div>
     <div class="status-msg" id="pm-status"></div>
     <div class="modal-actions">
-      <button class="btn active auth-action" disabled onclick="savePlatform(this)" data-i18n="hub.saveBtn">Save</button>
-      <button class="btn" onclick="closePlatformModal()" data-i18n="hub.cancelBtn">Cancel</button>
-      <button class="btn auth-action" disabled id="pm-disconnect" style="margin-left:auto;color:#e55;" onclick="disconnectPlatform(this)" data-i18n="hub.disconnectBtn">Disconnect</button>
+      <button class="btn active auth-action" disabled data-onclick="savePlatform(this)" data-i18n="hub.saveBtn">Save</button>
+      <button class="btn" data-onclick="closePlatformModal()" data-i18n="hub.cancelBtn">Cancel</button>
+      <button class="btn auth-action" disabled id="pm-disconnect" style="margin-left:auto;color:#e55;" data-onclick="disconnectPlatform(this)" data-i18n="hub.disconnectBtn">Disconnect</button>
     </div>
   </div>
 </div>
 
-<script src="/app/js/hub.js?v=4"></script>
+<script src="/app/js/hub.js?v=5"></script>
 </body>
 </html>
