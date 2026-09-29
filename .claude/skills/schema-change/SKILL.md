@@ -1,0 +1,32 @@
+---
+name: schema-change
+description: Checklist for any database schema change in smartist — adding a table, column, index or constraint to scripts/schema.sql, bumping SCHEMA_VERSION, applying it locally and on dev, and what production needs. Use whenever a change touches scripts/schema.sql or needs a new column.
+---
+
+# Schema change
+
+`scripts/schema.sql` is the whole schema and must stay idempotent: it is
+applied again and again to every database (CI applies it twice).
+
+1. **Append** a dated block at the end of `scripts/schema.sql` — never edit an
+   earlier block that production already ran:
+   ```sql
+   -- YYYY-MM-DD: why this change exists
+   ALTER TABLE songs ADD COLUMN IF NOT EXISTS foo TEXT;
+   CREATE INDEX IF NOT EXISTS songs_foo_idx ON songs(artist_id, foo);
+   INSERT INTO schema_migrations (id) VALUES ('YYYY-MM-DD') ON CONFLICT DO NOTHING;
+   ```
+   - `IF NOT EXISTS` / `IF EXISTS` everywhere. No `DO $$` blocks: `apply_schema.js`
+     splits on `;`. Constraints that cannot say `IF NOT EXISTS` are fine —
+     "already exists" errors are skipped.
+   - Two changes on one day: suffix the id (`2026-10-01b`).
+2. **Set `SCHEMA_VERSION`** in `api/_env.js` to the new id (`tests/unit/env.js`
+   fails otherwise).
+3. **Update the code and docs together:** handlers, `api/_domain/*`, the
+   export in `api/[artist]/setlists/[...path].js` if the table holds band data,
+   `DATABASE.md` (column tables), `openapi.json` for API-visible fields.
+4. **Verify locally:** `npm run dev:up` applies it to the local database;
+   `node scripts/apply_schema.js --check` there; then `npm run test:all`.
+5. **Production** is the user's step, before the release PR merges: every
+   production database, `apply_schema.js` then `--check`. Until then the
+   health check reports `"schema":"behind"`. Say this in your summary.

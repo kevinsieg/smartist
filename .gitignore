@@ -6,7 +6,11 @@
 node_modules/
 .vercel
 logs/
-.claude/
+.claude/*
+# Shared agent setup is committed; personal settings stay local.
+!.claude/settings.json
+!.claude/hooks/
+!.claude/skills/
 data/
 .superpowers/
 docs/superpowers/
