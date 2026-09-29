@@ -7,3 +7,7 @@ tests/
 CLAUDE.md
 DATABASE.md
 README.md
+# Documentation and agent setup are for the repository, not the web.
+docs/
+.claude/
+AGENTS.md

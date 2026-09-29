@@ -1,5 +1,5 @@
 const { getDb, getSlug, parsePage } = require('../_db');
-const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
+const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
 const { clientIp } = require('../_ratelimit');
@@ -160,6 +160,7 @@ module.exports = wrap(async function handler(req, res) {
       || req.body?.media_delete_id != null || req.body?.upload_presign_id != null)) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
+    if (refuseDemo(req, res)) return;
     const b = req.body;
     const songId = bodyId(b.media_confirm_id ?? b.media_delete_id ?? b.upload_presign_id);
     if (!songId) return res.status(400).json({ error: 'Invalid song id' });

@@ -88,9 +88,9 @@ async function run(r) {
   // no-op (see the "not found" tests below).
   await testAsync('a mixed-case stored address is still matched', async () => {
     const sql = fakeSql([
-      { artist_id: 1, slug: 'mine', name: 'Mine', email: 'Jane@EXAMPLE.com', role: 'admin' },
+      { artist_id: 1, slug: 'mine', name: 'Mine', email: 'Someone@Example.COM', role: 'admin' },
     ]);
-    const p = await planDeletion('jane@example.com', sql);
+    const p = await planDeletion('someone@example.com', sql);
     assertEq(p.destroy.map(a => a.slug).join(','), 'mine');
   });
 

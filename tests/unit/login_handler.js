@@ -41,7 +41,7 @@ function makeHandler(rows, { rateLimited = false, artists = [{ slug: 'a', name: 
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { checkRateLimit: async () => rateLimited, clientIp: () => '127.0.0.1' },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => rateLimited, clientIp: () => '127.0.0.1' },
   };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,

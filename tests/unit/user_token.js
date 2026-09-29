@@ -57,6 +57,23 @@ function run(r) {
     delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];
   });
 
+  // Several deployments may share APP_SECRET; ids are per database, so a token
+  // must not open the same user id in another deployment's database.
+  test('a token minted for one database does not verify against another', () => {
+    const saved = process.env.DATABASE_URL;
+    try {
+      process.env.DATABASE_URL = 'postgres://u:p@db-one.example/app';
+      const tok = generateUserToken(5, 'admin', 60_000, null);
+      assert(verifyUserToken(tok), 'verifies on its own database');
+      process.env.DATABASE_URL = 'postgres://other:creds@db-one.example/app';
+      assert(verifyUserToken(tok), 'rotated credentials keep sessions');
+      process.env.DATABASE_URL = 'postgres://u:p@db-two.example/app';
+      assertEq(verifyUserToken(tok), null, 'another database rejects it');
+    } finally {
+      if (saved === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = saved;
+    }
+  });
+
   // The module loads without APP_SECRET (so the health check can report it);
   // signing throws, verifying fails closed.
   test('missing APP_SECRET: signing throws, verifying returns null', () => {

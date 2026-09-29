@@ -45,7 +45,7 @@ function loadHandler(route) {
   };
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true,
-    exports: {
+    exports: { refuseDemo: (req, res) => { if (req.user && req.user.id === null) { res.status(403).json({ error: 'demo' }); return true; } return false; },
       requireAuth: async req => { req.user = { id: 1, role: 'member' }; return ARTIST; },
       getAccess: async () => ({ artist: ARTIST, user: { id: 1, role: 'member' } }),
       // Handlers ask these directly now; a stub that omits them throws.

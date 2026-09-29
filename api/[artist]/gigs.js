@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { getDb, getSlug, parsePage } = require('../_db');
-const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
+const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
 const { wrap } = require('../_handler');
 const { parseFields } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
@@ -29,6 +29,8 @@ async function checkRefs(sql, artistId, body, res) {
 
 // One gig: /api/:artist/gigs/:id is rewritten to /api/:artist/gigs?id=:id so both live in
 // a single serverless function (Hobby plan allows 12, and all 12 are in use).
+const POSTER_MAX_BYTES = 5 * 1024 * 1024;
+
 async function handleOneGig(req, res, { slug, sql, gigId }) {
   if (req.method === 'GET') {
       const { artist, user } = await getAccess(req, slug);
@@ -64,13 +66,17 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       if (!row) return res.status(404).json({ error: 'Gig not found' });
       const { venue_city, organizer_city, ...fields } = row;
       let gig = fields;
-      // Public visitors never see the private gig comment.
-      if (!user) { const { comment: _, ...rest } = gig; gig = rest; }
+      // Public visitors never see the private gig comment, nor who booked the
+      // gig: organizers are private CRM data like venues' contacts.
+      if (!user) {
+        const { comment: _c, organizer_id: _o, organizer_name: _n, ...rest } = gig;
+        gig = rest;
+      }
       if (req.query.refs) {
         // Venue and organizer come from the gig's own joins (both scoped).
         const venue = row.venue_name != null
           ? { id: row.venue_id, name: row.venue_name, city: venue_city } : null;
-        const organizer = row.organizer_name != null
+        const organizer = user && row.organizer_name != null
           ? { id: row.organizer_id, name: row.organizer_name, city: organizer_city } : null;
         return res.json({ gig, refs: { setlists, setlistSongs, venue, organizer } });
       }
@@ -92,16 +98,22 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     // ── POST ?action=poster-url — get presigned upload URLs ──────────────────
     if (req.method === 'POST' && req.query.action === 'poster-url') {
-      const { contentType } = req.body ?? {};
+      if (refuseDemo(req, res)) return;
+      const { contentType, posterSize, thumbSize } = req.body ?? {};
       const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
       if (!allowed.has(contentType))
         return res.status(400).json({ error: 'Only JPEG, PNG, or WebP images are supported' });
+      // The sizes are signed into the upload URLs, so nothing larger can be
+      // parked in the bucket through them (posters do not count towards the cap).
+      const okSize = n => Number.isInteger(n) && n > 0 && n <= POSTER_MAX_BYTES;
+      if (!okSize(posterSize) || !okSize(thumbSize))
+        return res.status(400).json({ error: `posterSize and thumbSize required, max ${POSTER_MAX_BYTES / 1024 / 1024} MB` });
       const uuid      = crypto.randomUUID();
       const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
       const thumbKey  = `gigs/${artist.slug}/${gigId}-${uuid}-thumb.jpg`;
       const [poster, thumb] = await Promise.all([
-        createPresignedUrl(posterKey, 'image/jpeg'),
-        createPresignedUrl(thumbKey,  'image/jpeg'),
+        createPresignedUrl(posterKey, 'image/jpeg', posterSize),
+        createPresignedUrl(thumbKey,  'image/jpeg', thumbSize),
       ]);
       return res.json({
         posterUploadUrl: poster.uploadUrl,
@@ -263,7 +275,8 @@ module.exports = wrap(async function handler(req, res) {
         ...events, 'END:VCALENDAR'].join('\r\n');
       res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${slug}-gigs.ics"`);
-      res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+      // A signed-in request may cover a private band: never let a shared cache keep it.
+      res.setHeader('Cache-Control', user ? 'private, no-store' : 'public, s-maxage=300, stale-while-revalidate=600');
       return res.end(ics);
     }
 
@@ -282,11 +295,13 @@ module.exports = wrap(async function handler(req, res) {
       LIMIT ${limit} OFFSET ${offset}
     `;
     const total = Number(rows[0]?.total ?? 0);
-    // Public visitors never see gig comments (private notes: fees, contacts).
+    // Public visitors never see gig comments (private notes: fees, contacts)
+    // or the organizer (private CRM data).
     // Only the public variant may be CDN-cached.
     if (!user) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json({
-      rows: rows.map(({ total: _, comment, ...r }) => (user ? { comment, ...r } : r)),
+      rows: rows.map(({ total: _, comment, organizer_id, organizer_name, ...r }) =>
+        (user ? { comment, organizer_id, organizer_name, ...r } : r)),
       total, limit, offset,
     });
   }

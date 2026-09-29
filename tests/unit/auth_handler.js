@@ -54,7 +54,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true,
-    exports: {
+    exports: { refuseDemo: (req, res) => { if (req.user && req.user.id === null) { res.status(403).json({ error: 'demo' }); return true; } return false; },
       requireAuth: async (req, res) => {
         // authFails mirrors the real helper: it writes 401 and returns null, so any branch
         // placed after the gate becomes unreachable without a session.
@@ -76,6 +76,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
       verifyMagicToken: () => false,
       generateUserToken: (userId, role, ttl) => `session:${userId}:${role}:${ttl}`,
       verifyUserToken: () => null,
+      passwordlessSeed: (id) => `passwordless-seed-for-${id}`,
       TTL_8H: 28800000,
       TTL_30D: 2592000000,
     }, tokens),
@@ -86,7 +87,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
   };
   require.cache[bcryptPath] = {
     id: bcryptPath, filename: bcryptPath, loaded: true,

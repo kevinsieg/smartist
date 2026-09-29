@@ -49,7 +49,7 @@ function makeStorage() {
 
 function makeContext(fetchImpl) {
   const context = {
-    atob, Date, URLSearchParams, console,
+    atob, Date, URLSearchParams, URL, console,
     fetch: fetchImpl,
     sessionStorage: makeStorage(),
     localStorage: makeStorage(),
@@ -111,16 +111,22 @@ function makeContext(fetchImpl) {
     assertEq(rendered.msg, 'home.oauthErrorMsg');
   });
 
-  await test('login `next` only leads to a path on this origin', async () => {
-    const ctx = makeContext(async () => ({ ok: false, json: async () => ({}) }));
-    ctx.URL = URL;
-    ctx.window = { location: { origin: 'https://app.example.test' } };
-    const s = n => vm.runInContext('sameOriginPath(' + JSON.stringify(n) + ')', ctx);
-    assertEq(s('/band/songs?open=3#x'), '/band/songs?open=3#x');
-    assertEq(s('/workspaces'), '/workspaces');
-    for (const bad of ['//evil.test', '/\\evil.test', '/\\/evil.test', 'https://evil.test/', 'javascript:alert(1)', '', null])
-      assertEq(s(bad), null, 'must reject ' + JSON.stringify(bad));
-  });
+  console.log(B('\nafter sign-in: next= stays on this site'));
+  for (const [next, want] of [
+    ['/band/dashboard', '/band/dashboard'],
+    ['/workspaces?x=1', '/workspaces?x=1'],
+    ['/\\evil.example', ''],
+    ['//evil.example', ''],
+    ['/\t/evil.example', ''],
+    ['https://evil.example/x', ''],
+    ['javascript:alert(1)', ''],
+  ]) {
+    await test(`next=${JSON.stringify(next)} → ${JSON.stringify(want)}`, async () => {
+      const ctx = makeContext(async () => ({ ok: false }));
+      ctx.window = { location: { origin: 'https://app.example' } };
+      assertEq(vm.runInContext(`_safeNext(${JSON.stringify(next)})`, ctx), want);
+    });
+  }
 
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);

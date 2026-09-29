@@ -62,7 +62,7 @@ function loadHandler(relPath, { role = 'admin', rows } = {}) {
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
   };
   require.cache[emailPath] = {
     id: emailPath, filename: emailPath, loaded: true,

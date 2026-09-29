@@ -99,6 +99,10 @@
 
   // Render the form immediately — the OAuth URLs come from two serverless
   // calls (slow on cold start) and slot in once they arrive.
-  _render('form');
+  // Sent back here by the OAuth callback: a Facebook address it could not trust,
+  // or too many sign-up attempts for one address.
+  var arrival = new URLSearchParams(window.location.search).get('error');
+  var ARRIVAL_MSG = { verify_email: 'signup.errVerifyEmail', rate_limited: 'signup.errRateLimited' };
+  _render(ARRIVAL_MSG[arrival] ? { type: 'error', msg: t(ARRIVAL_MSG[arrival]) } : 'form');
   _loadOAuthUrls().then(_fillOAuthSlot);
 })();
