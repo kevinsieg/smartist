@@ -20,18 +20,25 @@ footer {
 .af-lang strong { color: var(--black, #1a1a1a); font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; }
 .af-lang button:hover, .af-legal a:hover { color: var(--secondary-ink, #9e5e20); text-decoration: underline; }
 .af-support { display: flex; align-items: center; gap: 0.4rem; }
-.af-support .support-link { margin: 0; text-decoration: none; line-height: 0; }
+.af-support .support-link {
+    margin: 0; text-decoration: none; white-space: nowrap; font-weight: 600;
+    display: inline-flex; align-items: center; min-height: 26px;
+    padding: 0 0.7rem; border-radius: 13px; background: #ffdd00; color: #1a1a1a;
+}
+.af-support .support-link:hover { filter: brightness(0.95); }
 .af-support .support-link img { height: 22px; }
+.af-support .support-link:has(img) { padding: 0; background: none; line-height: 0; }
 .af-legal { justify-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: 0.75rem; white-space: nowrap; }
 @media (min-width: 640px) {
     footer { padding: 0.6rem 2.5rem; }
     .af-support { gap: 0.75rem; }
 }
-/* Phones: three links, three languages and two buttons do not fit one row at
-   tappable sizes, so languages and links share the first row and the buttons
-   sit centred beneath. */
+/* Phones: four links, three languages and two buttons do not fit one row at
+   tappable sizes, so languages and buttons share the first row and the links
+   sit centred beneath (wrapping on the narrowest screens). */
 @media (max-width: 479px) {
     footer { grid-template-columns: auto 1fr; row-gap: 0; }
-    .af-support { grid-column: 1 / -1; grid-row: 2; justify-content: center; padding-bottom: 0.4rem; }
-    .af-legal { flex-wrap: nowrap; column-gap: 0.6rem; }
+    .af-lang { grid-row: 1; grid-column: 1; }
+    .af-support { grid-row: 1; grid-column: 2; justify-content: flex-end; }
+    .af-legal { grid-column: 1 / -1; grid-row: 2; justify-self: center; justify-content: center; column-gap: 0.6rem; }
 }

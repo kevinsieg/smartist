@@ -359,14 +359,14 @@ Sliding-window rate limiting: login, failed band-password bearers, password rese
 
 ### `subscribers`
 
-Landing page email sign-ups and demo access leads. Not artist-scoped.
+Landing page email sign-ups, demo access leads and pending sign-up links. Not artist-scoped. Rows older than 24 months are deleted by an occasional sweep in `api/_domain/subscribe.js` (the retention `/privacy` promises).
 
 | Column | Notes |
 |--------|-------|
 | `id` serial PK | |
 | `email` text UNIQUE NOT NULL | |
-| `source` text DEFAULT `'landing'` | `landing` or `demo` |
-| `meta` jsonb | Demo: `{ name, genres, perform_country, geo_country, geo_region, geo_city, ua, ref }`. Sign-up: `{ signup_token_hash, signup_token_expires }` while a link is pending |
+| `source` text DEFAULT `'landing'` | `landing`, `demo` or `signup` |
+| `meta` jsonb | Demo: `{ name, genres, perform_country, geo_country }`. Sign-up: `{ signup_token_hash, signup_token_expires }` while a link is pending |
 | `created_at` timestamptz DEFAULT NOW() | |
 
 ---
@@ -479,7 +479,7 @@ Full `artists.config` shape:
 
 ### Export all data for one artist
 
-`GET /api/:artist/export` (requires auth; rewritten to `/setlists/export`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `songs` (with a `lyrics` and a `language` column), `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
+`GET /api/:artist/export` (requires auth; rewritten to `/setlists/export`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `account` (the caller's own memberships across workspaces, no hashes or tokens), `members` (admins only: email, role, joined), `songs` (with a `lyrics` and a `language` column), `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
 
 Built by `api/_export.js`. Soft-deleted rows are left out. Columns empty in every row are dropped, as are `artist_id` and `deleted`; `id`s stay so the files still join. `songs.extra` is flattened into its own columns (a key clashing with a real column becomes `extra_<key>`); other JSON columns are a JSON string in the cell. UTF-8 with BOM, CRLF, and cells starting with `= + - @` are prefixed with `'` so spreadsheets don't run them.
 
