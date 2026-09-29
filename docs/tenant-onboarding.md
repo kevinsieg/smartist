@@ -429,6 +429,7 @@ change) need the tenant's sending domain verified in Resend first.
 **Verification**
 - [ ] At least one successful production deploy — Vercel shows green
 - [ ] `curl https://<domain>/api/config?action=health` answers 200 with `"ok": true` — a 503 lists the missing variables (names only) or says the database is unreachable or behind
+- [ ] Better Stack uptime monitor on the health URL and a "no logs in 30 minutes" alert on the log source ([Monitoring](deployment.md#monitoring))
 - [ ] Login works at the custom domain with the account from `create_user.js`
 - [ ] `curl …/api/config` returns 200 (see Step 6)
 - [ ] Settings → public catalogue / public stage links set as the band wants (both off by default)
