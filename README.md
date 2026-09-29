@@ -238,7 +238,7 @@ Vercel will deploy the Preview environment. Copy the stable preview URL (`smarti
 
 ### 6. Run locally
 
-Needs Node 22 and the Vercel CLI (`npm i -g vercel`).
+Needs Node 24 and the Vercel CLI (`npm i -g vercel`).
 
 ```bash
 npm ci                       # API dependencies (the only install; tests/ has none of its own)
