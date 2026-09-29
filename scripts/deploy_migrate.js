@@ -29,8 +29,14 @@ const { migrationIds, applyStatements, connect } = require('./apply_schema');
 async function main() {
   if (process.env.VERCEL !== '1' || process.env.VERCEL_ENV === 'development') return;
   const url = process.env.DATABASE_URL;
+  // A preview with no database of its own (a tenant project that only runs
+  // production) has nothing to migrate; production without one is an error.
   if (!url) {
-    console.error('DATABASE_URL is not set for this Vercel environment: the build cannot migrate.');
+    if (process.env.VERCEL_ENV !== 'production') {
+      console.log(`schema: no DATABASE_URL for ${process.env.VERCEL_ENV || 'this'} environment, nothing to migrate`);
+      return;
+    }
+    console.error('DATABASE_URL is not set for production: the build cannot migrate.');
     process.exit(1);
   }
 
