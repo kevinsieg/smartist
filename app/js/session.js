@@ -34,7 +34,6 @@ function loginPageUrl() {
 function goToLogin(e) {
   if (e && e.preventDefault) e.preventDefault();
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
-  sessionStorage.removeItem('setlist_token');
   localStorage.removeItem(AUTH_TOKEN_KEY);
   var url = loginPageUrl();
   window.location.assign(url);
@@ -120,7 +119,6 @@ function getToken() {
 function clearToken() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
-  sessionStorage.removeItem('setlist_token');
 }
 
 function getAuthRole() {
@@ -155,7 +153,6 @@ async function _sessionAlive(token) {
 
 function _endDeadSession() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
-  sessionStorage.removeItem('setlist_token');
   localStorage.removeItem(AUTH_TOKEN_KEY);
   invalidateConfigCache();
   window.location.replace('/login');
