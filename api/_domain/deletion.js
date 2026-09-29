@@ -11,7 +11,7 @@
 //
 // Matched case-insensitively: what's stored is whatever a provider or the
 // signup form sent (oauth.js, registration.js insert the raw address), so a
-// literal `=` here would silently find nothing for `Jane@EXAMPLE.com`.
+// literal `=` here would silently find nothing for `Someone@Example.com`.
 async function planDeletion(email, sql) {
   const addr = String(email).toLowerCase();
 

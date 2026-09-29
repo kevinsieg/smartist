@@ -1152,5 +1152,7 @@
   "home.emailRequired": "Enter your email address.",
   "setlist.signInToSave": "Sign in to save this setlist.",
   "setlist.signInBtn": "Sign in",
-  "share.signInAgain": "Your session has ended — sign in again."
+  "share.signInAgain": "Your session has ended — sign in again.",
+  "signup.errVerifyEmail": "Facebook did not confirm this email address. Enter it below and we'll send you a sign-up link.",
+  "signup.errRateLimited": "Too many sign-up attempts for this address — try again in an hour."
 }

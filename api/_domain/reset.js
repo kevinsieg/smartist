@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
 const { checkRateLimit } = require('../_ratelimit');
-const { generateMagicToken, verifyMagicToken, generateUserToken, TTL_8H } = require('../_token');
+const { generateMagicToken, verifyMagicToken, generateUserToken, passwordlessSeed, TTL_8H } = require('../_token');
 const { sendEmail } = require('../_email');
 const { getArtistsForUser } = require('./artist');
 const { ok, fail } = require('./http');
@@ -37,10 +37,9 @@ async function _rowsFor(addr, sql) {
 }
 
 // A password-less account (created through Google or Facebook) has no hash to
-// sign with. An empty key would make every one of those tokens forgeable, so it
-// borrows APP_SECRET, bound to the row id so one cannot be replayed at another.
+// sign with; passwordlessSeed (api/_token.js) stands in for it.
 function _seed(row) {
-  return row.password_hash || `${process.env.APP_SECRET}:${row.id}`;
+  return row.password_hash || passwordlessSeed(row.id);
 }
 
 // POST ?action=request-reset

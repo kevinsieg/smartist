@@ -899,6 +899,57 @@ async function testMultiUserAuth(slug, token) {
 
 // ── File endpoint tests ───────────────────────────────────────────────────────
 
+// The public demo gate hands anybody a member session on the demo band. It
+// may edit songs, but nothing that reaches outside the band: no email to an
+// arbitrary address, no files in the bucket.
+async function testDemoGate() {
+  console.log(B('\nDemo gate'));
+  const { json: gate } = await POST('/api/config', { email: `demo-${Date.now()}@example.test`, source: 'demo' });
+  if (!gate?.token) return skip('demo gate', 'no demo band on this deployment');
+  const demo = gate.slug, token = gate.token;
+  const { json: songs } = await GET(`/api/${demo}/songs`, { token });
+  const songId = Array.isArray(songs) ? songs[0]?.id : songs?.rows?.[0]?.id;
+  await test('demo session can read the demo band', async () => {
+    assert(songId, 'no song visible to the demo session');
+  });
+  await test('demo session cannot email a setlist → 403 demo_readonly', async () => {
+    const { res, json } = await POST(`/api/${demo}/setlists`, { share_id: 1, email: 'someone@example.test' }, { token });
+    assertStatus(res, json, 403);
+    assert(json.code === 'demo_readonly', `expected demo_readonly, got ${json.code}`);
+  });
+  await test('demo session cannot get an upload URL → 403 demo_readonly', async () => {
+    const { res, json } = await POST(`/api/${demo}/songs`,
+      { upload_presign_id: songId, upload_type: 'sheet', filename: 'x.pdf', size: 1000 }, { token });
+    assertStatus(res, json, 403);
+  });
+  await test('demo session is not an admin: settings stay closed → 403', async () => {
+    const { res, json } = await PATCH(`/api/config?slug=${encodeURIComponent(demo)}`, { name: 'Hijacked' }, { token });
+    assertStatus(res, json, 403);
+  });
+}
+
+// Band logo and favicon: the band comes from ?slug= (a multi-tenant deployment
+// has no ARTIST_SLUG), and the size is required because it is signed into the
+// upload URL — these images do not count towards the storage cap.
+async function testImageUploadUrls(slug) {
+  console.log(B('\nImage upload URLs'));
+  if (!R2_BASE) return skip('photo/favicon upload URLs', 'R2_PUBLIC_URL not set');
+  const url = (action, q) => `/api/config?action=${action}&slug=${encodeURIComponent(slug)}${q}`;
+  await test('photo-url without size → 400', async () => {
+    const { res, json } = await GET(url('photo-url', '&type=image/png'), AUTH);
+    assertStatus(res, json, 400);
+  });
+  await test('photo-url over 5 MB → 400', async () => {
+    const { res, json } = await GET(url('photo-url', `&type=image/png&size=${6 * 1024 * 1024}`), AUTH);
+    assertStatus(res, json, 400);
+  });
+  await test('favicon-url with type and size → 200 with an upload URL', async () => {
+    const { res, json } = await GET(url('favicon-url', '&type=image/png&size=2048'), AUTH);
+    assertStatus(res, json, 200);
+    assert(json.uploadUrl && json.publicUrl, 'expected uploadUrl and publicUrl');
+  });
+}
+
 async function testFileIdValidation(slug) {
   console.log(B('\nFile endpoint ID validation'));
 
@@ -1553,6 +1604,8 @@ async function main() {
     testGigs(slug),
     testVenues(slug, authed),
     testSetlists(slug),
+    testImageUploadUrls(slug),
+    testDemoGate(),
   ]);
 
   await testArrangements(slug, firstSong);

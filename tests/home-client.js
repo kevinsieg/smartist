@@ -49,7 +49,7 @@ function makeStorage() {
 
 function makeContext(fetchImpl) {
   const context = {
-    atob, Date, URLSearchParams, console,
+    atob, Date, URLSearchParams, URL, console,
     fetch: fetchImpl,
     sessionStorage: makeStorage(),
     localStorage: makeStorage(),
@@ -110,6 +110,23 @@ function makeContext(fetchImpl) {
     assert(rendered, 'nothing rendered');
     assertEq(rendered.msg, 'home.oauthErrorMsg');
   });
+
+  console.log(B('\nafter sign-in: next= stays on this site'));
+  for (const [next, want] of [
+    ['/band/dashboard', '/band/dashboard'],
+    ['/workspaces?x=1', '/workspaces?x=1'],
+    ['/\\evil.example', ''],
+    ['//evil.example', ''],
+    ['/\t/evil.example', ''],
+    ['https://evil.example/x', ''],
+    ['javascript:alert(1)', ''],
+  ]) {
+    await test(`next=${JSON.stringify(next)} → ${JSON.stringify(want)}`, async () => {
+      const ctx = makeContext(async () => ({ ok: false }));
+      ctx.window = { location: { origin: 'https://app.example' } };
+      assertEq(vm.runInContext(`_safeNext(${JSON.stringify(next)})`, ctx), want);
+    });
+  }
 
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);

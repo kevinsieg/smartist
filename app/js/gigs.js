@@ -85,7 +85,7 @@ async function uploadPoster(gigId, file) {
     ]);
     setStatus('gm-poster-status', t('gigs.uploading'));
     var r1 = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&action=poster-url', 'POST', {
-      contentType: 'image/jpeg',
+      contentType: 'image/jpeg', posterSize: posterBlob.size, thumbSize: thumbBlob.size,
     });
     if (!r1.ok) {
       var e1 = await r1.json();

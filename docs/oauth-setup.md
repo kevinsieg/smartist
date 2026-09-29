@@ -61,14 +61,16 @@ with Google first.
    can sign in. Meta may require a *verified business portfolio* before a new
    app with this use case can go Live.
 
-**Existing accounts are opt-in.** Facebook has no equivalent of Google's
+**Facebook addresses are opt-in.** Facebook has no equivalent of Google's
 `verified_email`: its Graph API returns "the User's primary email address …
 This field will not be returned if no valid email address is available" —
 *valid*, not *confirmed*. Meta does document matching that address to an
 existing account as a supported pattern, but it is not a guarantee. So by
-default a Facebook sign-in may only **create a new account**; signing into an
-account that already exists for that address is refused. Set
-`FACEBOOK_TRUST_EMAIL=true` on a deployment to allow it.
+default a Facebook sign-in neither signs into an existing account nor sets up
+a new one: a new address is sent to the signup page, which emails a link to
+prove it. (Memberships join on email, so a workspace set up under someone
+else's address would later reach every band that invites them.) Set
+`FACEBOOK_TRUST_EMAIL=true` on a deployment to allow both.
 
 What the code already does, following Meta's security guidance:
 
@@ -138,8 +140,9 @@ curl -s https://<your domain>/api/config | grep -o '"facebookLogin":[a-z]*'
 ```
 
 Both must be `true` for the providers you configured. Then, in a browser,
-`/signup` shows the buttons; a full sign-in lands on `/onboarding` for a new
-address, or on the workspace dashboard for an existing Google account.
+`/login` and `/signup` show the buttons; from either, a full sign-in lands on
+`/onboarding` for a new address, or on the workspace dashboard for an existing
+Google account.
 
 If a button appears but the flow fails, the reason is in the function logs
 (`oauth_callback_failed` with a `reason`), not in the browser:

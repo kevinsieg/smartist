@@ -6,6 +6,7 @@
 #   bash scripts/dev_up.sh up          # start (idempotent), print the env
 #   bash scripts/dev_up.sh run <cmd>   # start if needed, then run <cmd> with the env
 #   bash scripts/dev_up.sh env         # print export lines for the stack
+#   bash scripts/dev_up.sh restart     # restart the API server (after code changes)
 #   bash scripts/dev_up.sh down        # stop the server and Postgres
 #
 # npm run test:api / test:smoke / test:all wrap `run`. Needs Postgres binaries
@@ -87,14 +88,24 @@ print_env() {
   done
 }
 
-down() {
+# The server holds its modules in memory: code changes need a restart. Also
+# stops a server started by an earlier session whose pid file is gone.
+stop_server() {
   if [ -f "$STATE/server.pid" ]; then kill "$(cat "$STATE/server.pid")" 2>/dev/null || true; rm -f "$STATE/server.pid"; fi
+  local pids; pids=$(ps -eo pid=,args= | awk '/[t]ests\/harness\/server\.js/ {print $1}')
+  [ -n "$pids" ] && kill $pids 2>/dev/null || true
+  for _ in $(seq 25); do healthy || return 0; sleep 0.2; done
+}
+
+down() {
+  stop_server
   [ -f "$PGDATA/PG_VERSION" ] && as_pg "'$(pgbin)/pg_ctl' -D '$PGDATA' stop -m fast >/dev/null 2>&1" || true
   log "stopped"
 }
 
 case "${1:-up}" in
   up)   up; print_env ;;
+  restart) stop_server; up; print_env ;;
   env)  print_env ;;
   run)  shift; up; cd "$ROOT"
         # tests/smoke.js needs playwright, which is not a dependency (it downloads
@@ -102,5 +113,5 @@ case "${1:-up}" in
         export NODE_PATH="${NODE_PATH:+$NODE_PATH:}$(npm root -g)"
         exec "$@" ;;
   down) down ;;
-  *)    echo "usage: $0 up|run <cmd>|env|down" >&2; exit 2 ;;
+  *)    echo "usage: $0 up|restart|run <cmd>|env|down" >&2; exit 2 ;;
 esac

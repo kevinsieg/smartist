@@ -197,13 +197,20 @@ async function myArtists(req, res) {
 const PHOTO_TYPES   = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const FAVICON_TYPES = new Set(['image/png', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/jpeg', 'image/webp', 'image/gif']);
 
+// The size is signed into the upload URL: these images do not count towards the
+// storage cap, so without it one URL could park any amount in the bucket.
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
 async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) {
   const band = await requireAuth(req, res, slugParam, 'admin');
   if (!band) return;
   const contentType = String(req.query.type || defaultType);
   if (!allowed.has(contentType)) return res.status(400).json({ error: 'Unsupported image type' });
+  const size = Number(req.query.size);
+  if (!Number.isInteger(size) || size <= 0 || size > IMAGE_MAX_BYTES)
+    return res.status(400).json({ error: `size required, max ${IMAGE_MAX_BYTES / 1024 / 1024} MB` });
   const key = `bands/${band.slug}/${kind}`;
-  const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType);
+  const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType, size);
   return res.json({ uploadUrl, publicUrl });
 }
 

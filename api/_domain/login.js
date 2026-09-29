@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit } = require('../_ratelimit');
+const { checkRateLimit, loginLocked, countLoginFailure } = require('../_ratelimit');
 const { ok, fail } = require('./http');
 const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
@@ -32,7 +32,7 @@ async function passwordLogin({ body, ip }) {
   if (!clean || !password) return fail(400, 'Email and password required');
   if (String(password).length > 1000) return fail(400, 'Invalid');
 
-  if (await checkRateLimit(`auth:${ip}`, 10, 60))
+  if (await checkRateLimit(`auth:${ip}`, 10, 60) || await loginLocked(clean))
     return fail(429, 'Too many attempts — try again later');
 
   const sql = getDb();
@@ -52,6 +52,7 @@ async function passwordLogin({ body, ip }) {
   // One message for an unknown address and a wrong password alike — otherwise
   // this endpoint tells anyone which emails have accounts.
   if (!user) {
+    await countLoginFailure(clean);
     await logger.info('login_failed', { email: clean });
     return fail(401, 'Invalid email or password');
   }

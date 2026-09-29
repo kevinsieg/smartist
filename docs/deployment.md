@@ -50,7 +50,8 @@ left alone. It needs the repository secret `DEMO_DATABASE_URL`, pointing at the
 
 Visitors enter through the `/demo` gate, which gives them a **member** session
 on that band (`DEMO_ARTIST_SLUG`, default `demo`): they can edit songs, gigs and
-setlists, but not settings, members or uploads, and the gate sends no email. Its
+setlists, but not settings, members or uploads, and cannot email setlists
+(403 `demo_readonly`): the gate hands a session to anyone. Its
 token is signed with a key derived from `APP_SECRET`, so the demo band needs no
 password; the band's own users sign in with their accounts as usual.
 
@@ -110,3 +111,13 @@ Then:
 
 Preview and Development entries created by the Neon–Vercel integration may
 update on their own; check them afterwards rather than assuming either way.
+
+## Unconfirmed uploads
+
+Song media is uploaded straight to the bucket with a presigned URL (size signed
+in, at most 50 MB) and counted once the app confirms it. An upload that is
+never confirmed stays in the bucket, uncounted. Do **not** add a bucket
+lifecycle rule for this: confirmed files live under the same prefixes
+(`audio/`, `sheets/`, `playback/`) and would be deleted too.
+`node scripts/plans.js --recount` recomputes each band's usage from the files
+its songs reference.

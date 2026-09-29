@@ -52,7 +52,7 @@ function loadHandler(route) {
   };
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true,
-    exports: {
+    exports: { refuseDemo: (req, res) => { if (req.user && req.user.id === null) { res.status(403).json({ error: 'demo' }); return true; } return false; },
       requireAuth: async req => { req.user = { id: 1, role: 'member' }; return ARTIST; },
       getAccess: async () => ({ artist: ARTIST, user: { id: 1, role: 'member' } }),
       // Handlers ask these directly now; a stub that omits them throws.
@@ -143,9 +143,20 @@ async function run(r) {
   await testAsync('poster upload URL is still reachable on the merged route', async () => {
     const { handler } = loadHandler(text => (text.startsWith('SELECT * FROM gigs') ? [GIG] : []));
     const res = await call(handler, 'POST', '/api/test/gigs?id=7&action=poster-url',
-      { query: { id: '7', action: 'poster-url' }, body: { contentType: 'image/jpeg' } });
+      { query: { id: '7', action: 'poster-url' }, body: { contentType: 'image/jpeg', posterSize: 200000, thumbSize: 20000 } });
     assertEq(res.statusCode, 200);
     assert(res.body?.posterUploadUrl || res.body?.uploadUrl, 'no upload url returned');
+  });
+
+  // The sizes are signed into the URLs; without them one URL could park any
+  // amount in the bucket (posters do not count towards the storage cap).
+  await testAsync('poster upload URL needs both sizes, at most 5 MB', async () => {
+    const { handler } = loadHandler(text => (text.startsWith('SELECT * FROM gigs') ? [GIG] : []));
+    for (const body of [{ contentType: 'image/jpeg' }, { contentType: 'image/jpeg', posterSize: 6 * 1024 * 1024, thumbSize: 10 }]) {
+      const res = await call(handler, 'POST', '/api/test/gigs?id=7&action=poster-url',
+        { query: { id: '7', action: 'poster-url' }, body });
+      assertEq(res.statusCode, 400);
+    }
   });
 }
 
