@@ -200,12 +200,12 @@ async function saveLyrics() {
         existing.className = 'lyrics-open-btn';
         existing.textContent = '¶';
         existing.title = t('songs.viewLyrics');
-        existing.setAttribute('onclick', `openLyrics('${sid}')`);
+        existing.setAttribute('data-onclick', `openLyrics('${sid}')`);
       } else if (!trimmed && existing?.classList.contains('lyrics-open-btn')) {
         existing.className = 'lyrics-add-btn';
         existing.textContent = '+';
         existing.title = t('songs.addLyrics');
-        existing.setAttribute('onclick', `openLyricsEdit('${sid}')`);
+        existing.setAttribute('data-onclick', `openLyricsEdit('${sid}')`);
       }
     }
 
@@ -260,7 +260,7 @@ async function confirmDeleteLyrics() {
         btn.className = 'lyrics-add-btn';
         btn.textContent = '+';
         btn.title = t('songs.addLyrics');
-        btn.setAttribute('onclick', `openLyricsEdit('${sid}')`);
+        btn.setAttribute('data-onclick', `openLyricsEdit('${sid}')`);
       }
     }
     _setBulkStatus('saved', t('songs.lyricsDeleted'));
@@ -302,6 +302,8 @@ function openUrlPreview(url, sourceInput) {
   document.getElementById('url-preview-modal').classList.add('open');
   document.getElementById('url-preview-input').focus();
 }
+
+function reloadUrlPreviewOnEnter(e) { if (e.key === 'Enter') reloadUrlPreview(); }
 
 function reloadUrlPreview() {
   const url = document.getElementById('url-preview-input').value.trim();

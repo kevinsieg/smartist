@@ -290,7 +290,7 @@ function refreshFilterOptions() {
       const label = f.field === 'length_min' ? formatLength(Number(v))
         : f.field === 'key' ? formatKey(v)
         : v;
-      return `<button class="filter-btn${currentActive.has(v) ? ' active' : ''}" data-field="${escHtml(f.field)}" data-value="${escHtml(v)}" onclick="toggleFilter(this)">${escHtml(label)}</button>`;
+      return `<button class="filter-btn${currentActive.has(v) ? ' active' : ''}" data-field="${escHtml(f.field)}" data-value="${escHtml(v)}" data-onclick="toggleFilter(this)">${escHtml(label)}</button>`;
     }).join('');
   }
 }
@@ -323,18 +323,18 @@ function renderControls() {
   document.getElementById('setlist-content').innerHTML = `
     <div class="setlist-controls">
       <div class="gen-sentence">
-        <button class="btn generate-btn" onclick="onGenerate()">${t('setlist.generateBtn')}</button>
+        <button class="btn generate-btn" data-onclick="onGenerate()">${t('setlist.generateBtn')}</button>
         <span class="gen-prose">${t('setlist.genProseOf')}</span>
         <input type="number" id="target-min" min="0" max="300" value="45" class="gen-duration-input">
         <span class="gen-prose">${t('setlist.genProseMin')}${filterRows ? ' ' + t('setlist.genProseWith') : ''}</span>
-        ${filterRows ? `<button class="controls-toggle" id="controls-toggle" onclick="toggleControls()" aria-expanded="false"><span class="toggle-arrow">▼</span> ${t('setlist.filtersBtn')}</button>` : ''}
+        ${filterRows ? `<button class="controls-toggle" id="controls-toggle" data-onclick="toggleControls()" aria-expanded="false"><span class="toggle-arrow">▼</span> ${t('setlist.filtersBtn')}</button>` : ''}
       </div>
       <div id="controls-body" style="display:none">
         ${filterRows}
       </div>
       <div class="gen-options">
         <label class="active-toggle">
-          <input type="checkbox" id="active-only" checked onchange="refreshFilterOptions()">
+          <input type="checkbox" id="active-only" checked data-onchange="refreshFilterOptions()">
           ${t('setlist.activeOnly')}
         </label>
         <label class="active-toggle">
@@ -437,9 +437,9 @@ function renderResult(songs) {
         ${metaSpans ? `<div class="song-meta">${metaSpans}</div>` : ''}
       </div>
       <div class="song-actions">
-        <button class="move-btn" onclick="moveSong(${i},-1)" ${isFirst ? 'disabled' : ''} aria-label="${t('setlist.moveUp')}">↑</button>
-        <button class="move-btn" onclick="moveSong(${i},1)"  ${isLast  ? 'disabled' : ''} aria-label="${t('setlist.moveDown')}">↓</button>
-        <button class="song-remove-btn" onclick="removeFromSet(${i})" title="${t('setlist.removeTitle')}">&#215;</button>
+        <button class="move-btn" data-onclick="moveSong(${i},-1)" ${isFirst ? 'disabled' : ''} aria-label="${t('setlist.moveUp')}">↑</button>
+        <button class="move-btn" data-onclick="moveSong(${i},1)"  ${isLast  ? 'disabled' : ''} aria-label="${t('setlist.moveDown')}">↓</button>
+        <button class="song-remove-btn" data-onclick="removeFromSet(${i})" title="${t('setlist.removeTitle')}">&#215;</button>
       </div>
     </li>`;
   });
@@ -478,17 +478,17 @@ function renderResult(songs) {
       <h2>${headerText}${feelBadge}</h2>
       <ul class="song-list">${items}</ul>
       <div class="add-song-row">
-        <select id="add-song-select" onchange="addSongToSet(this)">
+        <select id="add-song-select" data-onchange="addSongToSet(this)">
           <option value="">${t('setlist.addSongPlaceholder')}</option>
           ${options}
         </select>
       </div>
       <p class="total-time">${t('setlist.total', { duration: formatLength(totalMin) })}</p>
       <div class="result-actions">
-        <button class="btn" onclick="onGenerate()" title="${t('setlist.regenTitle')}">${t('setlist.regenBtn')}</button>
-        <button class="btn" onclick="onOptimize()" title="${t('setlist.optimizeTitle')}">${t('setlist.optimizeBtn')}</button>
-        <button class="btn" onclick="printSetlist()">${t('setlist.exportPdfBtn')}</button>
-        ${artistSlug ? `<button class="btn active" onclick="openAcceptModal()">${t('setlist.acceptBtn')}</button>` : ''}
+        <button class="btn" data-onclick="onGenerate()" title="${t('setlist.regenTitle')}">${t('setlist.regenBtn')}</button>
+        <button class="btn" data-onclick="onOptimize()" title="${t('setlist.optimizeTitle')}">${t('setlist.optimizeBtn')}</button>
+        <button class="btn" data-onclick="printSetlist()">${t('setlist.exportPdfBtn')}</button>
+        ${artistSlug ? `<button class="btn active" data-onclick="openAcceptModal()">${t('setlist.acceptBtn')}</button>` : ''}
       </div>
     </div>`;
 

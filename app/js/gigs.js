@@ -142,13 +142,13 @@ function renderPosterRow(g) {
       '<div class="gig-poster-row">' +
         '<img class="gig-poster-thumb" src="' + escHtml(g.thumb_url) + '">' +
         '<div class="gig-poster-actions">' +
-          '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">' + t('gigs.replaceBtn') + '</button>' +
-          '<button class="btn" type="button" id="gm-poster-remove-btn" onclick="confirmRemovePoster()">' + t('gigs.removeBtn') + '</button>' +
+          '<button class="btn" type="button" data-onclick="clickById(\'gm-poster-input\')">' + t('gigs.replaceBtn') + '</button>' +
+          '<button class="btn" type="button" id="gm-poster-remove-btn" data-onclick="confirmRemovePoster()">' + t('gigs.removeBtn') + '</button>' +
         '</div>' +
       '</div>';
   } else {
     row.innerHTML =
-      '<button class="btn" type="button" onclick="document.getElementById(\'gm-poster-input\').click()">' + t('gigs.uploadPosterBtn') + '</button>';
+      '<button class="btn" type="button" data-onclick="clickById(\'gm-poster-input\')">' + t('gigs.uploadPosterBtn') + '</button>';
   }
 }
 
@@ -182,10 +182,10 @@ var GIG_COLUMNS = [
   { field: 'thumb_url', label: '', width: '44px', sortable: false,
     render: function(g) {
       if (g.thumb_url) {
-        return '<div class="gig-thumb-wrap" data-poster="' + escHtml(g.poster_url) + '" onclick="event.stopPropagation();openLightbox(this.dataset.poster)">' +
+        return '<div class="gig-thumb-wrap" data-poster="' + escHtml(g.poster_url) + '" data-onclick="event.stopPropagation();openLightbox(this.dataset.poster)">' +
                '<img class="gig-thumb" src="' + escHtml(g.thumb_url) + '" loading="lazy"></div>';
       }
-      return '<div class="gig-thumb-placeholder gig-thumb-add" onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="' + t('gigs.uploadPosterBtn') + '"></div>';
+      return '<div class="gig-thumb-placeholder gig-thumb-add" data-onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="' + t('gigs.uploadPosterBtn') + '"></div>';
     }
   },
   { field: 'date', get label() { return t('gigs.colDate'); }, width: '75px', sortable: true, type: 'date',
@@ -199,14 +199,14 @@ var GIG_COLUMNS = [
     // every mutation 401s. Omit write buttons so they can't trigger silent fails.
     var vm = isViewMode();
     if (g.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>' +
-      (vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.permanentlyDeleteTitle') + '" style="color:#e55;" onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">' + t('gigs.eraseBtn') + '</button>');
+      (vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.permanentlyDeleteTitle') + '" style="color:#e55;" data-onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">' + t('gigs.eraseBtn') + '</button>');
     var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
-    var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="' + t('gigs.viewSetlistsTitle') + '" onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
+    var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="' + t('gigs.viewSetlistsTitle') + '" data-onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
       '<line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>' +
       '</svg></button>' : '';
-    var editBtn = vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.editTitle') + '" onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
+    var editBtn = vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.editTitle') + '" data-onclick="event.stopPropagation();openEditModal(' + g.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
     return editBtn + setsBtn;
@@ -433,7 +433,7 @@ if (f.setlist) {
       ctaDiv.id = 'gigs-empty-cta';
       ctaDiv.style.cssText = 'text-align:center;padding:1.5rem 1rem;color:var(--third-color);';
       ctaDiv.innerHTML = '<p style="margin-bottom:1rem;">' + t('gigs.noGigsYet') + '</p>' +
-        (getToken() ? '<button class="btn active" onclick="openAddModal()">' + t('gigs.addFirstGigBtn') + '</button>' : '');
+        (getToken() ? '<button class="btn active" data-onclick="openAddModal()">' + t('gigs.addFirstGigBtn') + '</button>' : '');
       upList.appendChild(ctaDiv);
     }
   }
@@ -713,7 +713,7 @@ function expandGig(g) {
   if (g.organizer_name) rows.push([t('gigs.expandOrganizer'), escHtml(g.organizer_name)]);
   if (g.type)            rows.push([t('gigs.expandType'),      _gigTypeLabel(g.type)]);
   if (g.time_start)      rows.push([t('gigs.expandTime'),      escHtml(g.time_start.slice(0, 5)) + (g.time_end ? ' – ' + escHtml(g.time_end.slice(0, 5)) : '')]);
-  if (g.additional_link) rows.push([t('gigs.expandLink'),      '<a href="' + escHtml(safeUrl(g.additional_link)) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
+  if (g.additional_link) rows.push([t('gigs.expandLink'),      '<a href="' + escHtml(safeUrl(g.additional_link)) + '" target="_blank" rel="noopener noreferrer" data-onclick="event.stopPropagation()">' + escHtml(g.additional_link) + '</a>']);
   if (g.comment) rows.push([t('gigs.expandNotes'), escHtml(g.comment)]);
   if (g.additional_text) rows.push([t('gigs.expandInfo'),      escHtml(g.additional_text)]);
   var html = rows.map(function(r) {
@@ -722,7 +722,7 @@ function expandGig(g) {
   if (!html) html = '<span style="color:var(--third-color);font-size:0.82rem;">' + t('gigs.noDetails') + '</span>';
   if (_gigIsUpcoming(g.date)) html += '<div style="margin-top:0.6rem">' +
     '<button class="btn" style="font-size:0.78rem;padding:0.2rem 0.65rem;min-height:0" ' +
-    'onclick="event.stopPropagation();_downloadGigIcs(' + g.id + ')" title="' + t('gigs.downloadIcsTitle') + '">' +
+    'data-onclick="event.stopPropagation();_downloadGigIcs(' + g.id + ')" title="' + t('gigs.downloadIcsTitle') + '">' +
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
     t('gigs.addToCalendar') + '</button></div>';
   return html;

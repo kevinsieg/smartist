@@ -30,7 +30,7 @@ var ORGANIZER_COLUMNS = [
   { width: 'auto', actions: true, render: function(o) {
     if (o.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>';
     if (isViewMode()) return '';  // read-only: every mutation 401s
-    return '<button class="btn sl-edit-btn" title="' + t('organizers.editBtnTitle') + '" onclick="event.stopPropagation();openEditModal(' + o.id + ')">' +
+    return '<button class="btn sl-edit-btn" title="' + t('organizers.editBtnTitle') + '" data-onclick="event.stopPropagation();openEditModal(' + o.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
@@ -180,7 +180,7 @@ async function expandOrganizer(o) {
       (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) + venue + '</div>';
   }).join('');
-  var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?organizer=' +
+  var link = '<a class="expansion-more-link" href="#" data-onclick="event.preventDefault();navigate(\'/gigs?organizer=' +
     encodeURIComponent(o.name).replace(/'/g, '%27') + '\')">' + t(n !== 1 ? 'organizers.allGigsLink_other' : 'organizers.allGigsLink_one', { n: n }) + '</a>';
   return '<div class="expansion-label">' + t('organizers.gigsOrganised') + '</div>' + rows + link;
 }
@@ -243,7 +243,7 @@ async function renderOrganizerGigs(orgId, orgName) {
     '</div>';
   }).join('') +
   '<a class="related-link" href="#" style="display:block;margin-top:0.5rem;font-size:0.82rem" ' +
-    'onclick="event.preventDefault();closeOrgModal();navigate(\'/gigs?organizer=' + encodeURIComponent(orgName).replace(/'/g, '%27') + '\')">' +
+    'data-onclick="event.preventDefault();closeOrgModal();navigate(\'/gigs?organizer=' + encodeURIComponent(orgName).replace(/'/g, '%27') + '\')">' +
     t(n !== 1 ? 'organizers.allGigsLink_other' : 'organizers.allGigsLink_one', { n: n }) +
   '</a>';
 }

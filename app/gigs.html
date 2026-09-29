@@ -95,7 +95,7 @@
       </a>
       <button id="gig-cal-copy" class="gig-cal-copy-btn" data-i18n="gigs.copyLink">Copy link</button>
     </div>
-    <button class="btn active auth-action" disabled id="gig-add-btn" onclick="openAddModal()" data-i18n="gigs.addGigBtn">+ Add gig</button>
+    <button class="btn active auth-action" disabled id="gig-add-btn" data-onclick="openAddModal()" data-i18n="gigs.addGigBtn">+ Add gig</button>
   </div>
 
   <button id="gig-filter-toggle" aria-expanded="false" aria-controls="gig-filter-panel">
@@ -134,7 +134,7 @@
   <div id="past-list"><p class="empty-hint" data-i18n="gigs.loading">Loading…</p></div>
   <div id="gigs-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="gigs-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="gigs-load-more-btn" class="btn auth-action" disabled onclick="loadMoreGigs()" data-i18n="gigs.loadMore">Load more</button>
+    <button id="gigs-load-more-btn" class="btn auth-action" disabled data-onclick="loadMoreGigs()" data-i18n="gigs.loadMore">Load more</button>
   </div>
 </main>
 
@@ -173,8 +173,8 @@
           <input type="text" id="gm-venue-qc-city" placeholder="City" data-i18n-attr="placeholder:gigs.cityPlaceholder">
         </div>
         <div class="qc-actions">
-          <button class="btn active" type="button" onclick="quickCreateVenue(this)" data-i18n="gigs.addVenueBtn">Add venue</button>
-          <button class="btn" type="button" onclick="closeVenueQc()" data-i18n="gigs.cancelBtn">Cancel</button>
+          <button class="btn active" type="button" data-onclick="quickCreateVenue(this)" data-i18n="gigs.addVenueBtn">Add venue</button>
+          <button class="btn" type="button" data-onclick="closeVenueQc()" data-i18n="gigs.cancelBtn">Cancel</button>
         </div>
         <div class="status-msg" id="gm-venue-qc-status"></div>
       </div>
@@ -195,8 +195,8 @@
           <input type="text" id="gm-organizer-qc-city" placeholder="City" data-i18n-attr="placeholder:gigs.cityPlaceholder">
         </div>
         <div class="qc-actions">
-          <button class="btn active" type="button" onclick="quickCreateOrganizer(this)" data-i18n="gigs.addOrganizerBtn">Add organizer</button>
-          <button class="btn" type="button" onclick="closeOrganizerQc()" data-i18n="gigs.cancelBtn">Cancel</button>
+          <button class="btn active" type="button" data-onclick="quickCreateOrganizer(this)" data-i18n="gigs.addOrganizerBtn">Add organizer</button>
+          <button class="btn" type="button" data-onclick="closeOrganizerQc()" data-i18n="gigs.cancelBtn">Cancel</button>
         </div>
         <div class="status-msg" id="gm-organizer-qc-status"></div>
       </div>
@@ -218,7 +218,7 @@
       <textarea id="gm-comment" rows="2" placeholder="Notes…" data-i18n-attr="placeholder:gigs.commentPlaceholder"></textarea>
     </div>
     <input type="file" id="gm-poster-input" accept="image/jpeg,image/png,image/webp"
-           style="display:none" onchange="handlePosterSelect(this.files[0])">
+           style="display:none" data-onchange="handlePosterSelect(this.files[0])">
     <div id="gm-poster-section" style="display:none">
       <hr style="border:none;border-top:1px solid var(--border-color);margin:0.9rem 0 0.75rem">
       <label style="display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color);margin-bottom:0.5rem;" data-i18n="gigs.posterLabel">Poster / Flyer</label>
@@ -231,9 +231,9 @@
     </div>
     <div class="status-msg" id="gm-status"></div>
     <div class="modal-actions">
-      <button class="btn active" type="button" id="gm-save-btn" onclick="saveGig()" data-i18n="gigs.saveBtn">Save</button>
-      <button class="btn" type="button" onclick="closeGigModal()" data-i18n="gigs.cancelBtn">Cancel</button>
-      <button class="btn" type="button" id="gm-soft-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteGigFromPopup()" data-i18n="gigs.deleteBtn">Delete</button>
+      <button class="btn active" type="button" id="gm-save-btn" data-onclick="saveGig()" data-i18n="gigs.saveBtn">Save</button>
+      <button class="btn" type="button" data-onclick="closeGigModal()" data-i18n="gigs.cancelBtn">Cancel</button>
+      <button class="btn" type="button" id="gm-soft-delete-btn" style="margin-left:auto;color:#e55;" data-onclick="deleteGigFromPopup()" data-i18n="gigs.deleteBtn">Delete</button>
     </div>
   </div>
 </div>
@@ -244,16 +244,16 @@
     <h2 id="sd-title" data-i18n="gigs.setlistModalTitle">Setlist</h2>
     <div id="sd-body" style="margin:0.75rem 0 0.5rem;"></div>
     <div class="modal-actions">
-      <button class="btn" type="button" onclick="closeModal('setlist-detail-modal')" data-i18n="gigs.closeBtn">Close</button>
+      <button class="btn" type="button" data-onclick="closeModal('setlist-detail-modal')" data-i18n="gigs.closeBtn">Close</button>
     </div>
   </div>
 </div>
 
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=4"></script>
-<script src="/app/js/session.js?v=4"></script>
-<script src="/app/js/ui.js?v=4"></script>
-<script src="/app/js/shell.js?v=4"></script>
-<script src="/app/js/gigs.js?v=11"></script>
+<script src="/app/js/core.js?v=5"></script>
+<script src="/app/js/session.js?v=5"></script>
+<script src="/app/js/ui.js?v=5"></script>
+<script src="/app/js/shell.js?v=5"></script>
+<script src="/app/js/gigs.js?v=12"></script>
 </body>
 </html>

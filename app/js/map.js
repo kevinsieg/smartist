@@ -127,7 +127,7 @@
     return '<div style="min-width:140px"><strong>' + _escHtml(v.name) + '</strong>' +
       (loc ? '<div style="color:#555;font-size:0.82rem;margin:2px 0">' + loc + '</div>' : '') +
       status + cat + size +
-      '<div style="margin-top:6px"><a href="#" onclick="event.preventDefault();openVenueFromMap(' + v.id + ')" style="font-size:0.8rem">' + t('map.popupView') + '</a></div>' +
+      '<div style="margin-top:6px"><a href="#" data-onclick="event.preventDefault();openVenueFromMap(' + v.id + ')" style="font-size:0.8rem">' + t('map.popupView') + '</a></div>' +
       '</div>';
   }
 
@@ -172,7 +172,7 @@
     window.VENUE_STATUSES.forEach(function(s) {
       _statusFilter[s.value] = true;
       statusHtml += '<label class="map-filter-row">' +
-        '<input type="checkbox" checked onchange="window._mapFilterStatus(\'' + s.value + '\',this.checked)">' +
+        '<input type="checkbox" checked data-onchange="window._mapFilterStatus(\'' + s.value + '\',this.checked)">' +
         '<span class="map-legend-dot" style="background:' + (STATUS_COLORS[s.value] || STATUS_COLORS['']) + '"></span>' +
         _escHtml(s.label) + '</label>';
     });
@@ -182,22 +182,22 @@
     window.VENUE_CATEGORIES.forEach(function(c) {
       _categoryFilter[c.value] = true;
       catHtml += '<label class="map-filter-row">' +
-        '<input type="checkbox" checked onchange="window._mapFilterCategory(\'' + c.value + '\',this.checked)">' +
+        '<input type="checkbox" checked data-onchange="window._mapFilterCategory(\'' + c.value + '\',this.checked)">' +
         _escHtml(c.label) + '</label>';
     });
     _categoryFilter[''] = true;
 
     var sizeHtml = '<div class="map-filter-label">' + t('map.filterSize') + '</div>' +
       '<div class="map-size-btns">' +
-      '<button class="map-size-btn active" data-size="any"    onclick="window._mapFilterSize(\'any\')">' + t('map.sizeAny') + '</button>' +
-      '<button class="map-size-btn"        data-size="small"  onclick="window._mapFilterSize(\'small\')">&lt;100</button>' +
-      '<button class="map-size-btn"        data-size="medium" onclick="window._mapFilterSize(\'medium\')" style="font-size:0.73rem">100–500</button>' +
-      '<button class="map-size-btn"        data-size="large"  onclick="window._mapFilterSize(\'large\')">&gt;500</button>' +
+      '<button class="map-size-btn active" data-size="any"    data-onclick="window._mapFilterSize(\'any\')">' + t('map.sizeAny') + '</button>' +
+      '<button class="map-size-btn"        data-size="small"  data-onclick="window._mapFilterSize(\'small\')">&lt;100</button>' +
+      '<button class="map-size-btn"        data-size="medium" data-onclick="window._mapFilterSize(\'medium\')" style="font-size:0.73rem">100–500</button>' +
+      '<button class="map-size-btn"        data-size="large"  data-onclick="window._mapFilterSize(\'large\')">&gt;500</button>' +
       '</div>';
 
     var geocodeHtml =
       '<div id="map-geocode-section" style="display:none;margin-top:0.75rem">' +
-      '<button id="map-geocode-btn" class="btn active" onclick="window.runBulkGeocode()">' + t('map.geocodeBtn') + '</button>' +
+      '<button id="map-geocode-btn" class="btn active" data-onclick="window.runBulkGeocode()">' + t('map.geocodeBtn') + '</button>' +
       '<div id="map-geocode-progress" style="display:none;font-size:0.75rem;color:var(--third-color);margin-top:0.3rem"></div>' +
       '<div id="map-unmapped-msg" style="font-size:0.75rem;color:var(--third-color);margin-top:0.3rem"></div>' +
       '</div>';
@@ -206,11 +206,11 @@
       '<div class="map-filter-label" style="margin-top:0">Show</div>' +
       '<div style="display:flex;flex-direction:column;gap:0.2rem;margin-bottom:0.5rem">' +
         '<label class="map-filter-row" style="cursor:pointer">' +
-          '<input type="radio" name="map-scope" value="confirmed" ' + (_confirmedOnly ? 'checked' : '') + ' onchange="window._mapScopeChange(this.value)"> ' + t('map.scopeConfirmed') + '</label>' +
+          '<input type="radio" name="map-scope" value="confirmed" ' + (_confirmedOnly ? 'checked' : '') + ' data-onchange="window._mapScopeChange(this.value)"> ' + t('map.scopeConfirmed') + '</label>' +
         '<label class="map-filter-row" style="cursor:pointer">' +
-          '<input type="radio" name="map-scope" value="all" ' + (!_confirmedOnly ? 'checked' : '') + ' onchange="window._mapScopeChange(this.value)"> ' + t('map.scopeAll') + '</label>' +
+          '<input type="radio" name="map-scope" value="all" ' + (!_confirmedOnly ? 'checked' : '') + ' data-onchange="window._mapScopeChange(this.value)"> ' + t('map.scopeAll') + '</label>' +
       '</div>' +
-      '<button id="map-load-btn" class="btn active" onclick="window._mapLoad()" style="width:100%;margin-bottom:0.75rem;font-size:0.78rem;padding:0.35rem 0.5rem">' + t('map.loadBtn') + '</button>';
+      '<button id="map-load-btn" class="btn active" data-onclick="window._mapLoad()" style="width:100%;margin-bottom:0.75rem;font-size:0.78rem;padding:0.35rem 0.5rem">' + t('map.loadBtn') + '</button>';
 
     sb.innerHTML = scopeHtml + statusHtml + catHtml + sizeHtml + geocodeHtml;
   }

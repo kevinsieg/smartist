@@ -48,6 +48,7 @@ const suites = [
   require('./unit/logger'),
   require('./unit/http_adapter'),
   require('./unit/csp'),
+  require('./unit/inline_handlers'),
 ];
 
 (async () => {

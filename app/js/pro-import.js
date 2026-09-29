@@ -1,5 +1,20 @@
 'use strict';
 
+function selectPro(id) {
+  const cards   = document.querySelector('.pro-cards');
+  const section = document.getElementById('gema-section');
+  const active  = document.getElementById('pro-card-gema');
+  if (id === 'gema') {
+    cards.style.display   = 'none';
+    section.style.display = '';
+    active.classList.add('pro-card--selected');
+  } else {
+    cards.style.display   = '';
+    section.style.display = 'none';
+    active.classList.remove('pro-card--selected');
+  }
+}
+
 var _csvText = null;
 var _csvType = null;
 var _validationResult = null;
@@ -13,6 +28,8 @@ initPage(async function(cfg) {
 });
 
 // ── File handling ─────────────────────────────────────────────────────────────
+
+function setCsvType(value) { _csvType = value; }
 
 function handleDrop(e) {
   e.preventDefault();

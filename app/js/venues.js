@@ -171,7 +171,7 @@ function checkVenueDuplicate() {
     if (match) {
       msgEl.innerHTML = t('venues.possibleDuplicate') + ' <strong>' + escHtml(match.name) + '</strong>'
         + (match.city ? ' (' + escHtml(match.city) + ')' : '')
-        + ' — <a href="#" onclick="event.preventDefault();closeVenueModal();openEditModal(' + match.id + ')">' + t('venues.openLink') + '</a>';
+        + ' — <a href="#" data-onclick="event.preventDefault();closeVenueModal();openEditModal(' + match.id + ')">' + t('venues.openLink') + '</a>';
       msgEl.style.display = '';
     } else {
       msgEl.style.display = 'none';
@@ -344,7 +344,7 @@ var VENUE_COLUMNS = [
     if (v.deleted)                    return '<span class="sl-deleted-badge">' + t('venues.deletedBadge') + '</span>';
     if (v.category === 'placeholder') return '';
     if (isViewMode())                 return '';  // read-only: every mutation 401s
-    return '<button class="btn sl-edit-btn" title="' + t('venues.editTitle') + '" onclick="event.stopPropagation();openEditModal(' + v.id + ')">' +
+    return '<button class="btn sl-edit-btn" title="' + t('venues.editTitle') + '" data-onclick="event.stopPropagation();openEditModal(' + v.id + ')">' +
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/></svg></button>';
   }},
@@ -889,7 +889,7 @@ async function expandVenue(v) {
       escHtml(g.title) + '</div>';
   }).join('');
   var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
-  var link = '<a class="expansion-more-link" href="#" onclick="event.preventDefault();navigate(\'/gigs?venue=' +
+  var link = '<a class="expansion-more-link" href="#" data-onclick="event.preventDefault();navigate(\'/gigs?venue=' +
     encodeURIComponent(v.name).replace(/'/g, '%27') + '\')">&#8594; ' + escHtml(allGigsLabel) + '</a>';
   return '<div class="expansion-label">' + t('venues.gigsAtVenueTitle') + '</div>' + rows + link;
 }
@@ -986,7 +986,7 @@ async function renderVenueGigs(venueId, venueName) {
     '</div>';
   }).join('') +
   '<a class="related-link" href="#" style="display:block;margin-top:0.5rem;font-size:0.82rem" ' +
-    'onclick="event.preventDefault();closeVenueModal();navigate(\'/gigs?venue=' + encodeURIComponent(venueName).replace(/'/g, '%27') + '\')">' +
+    'data-onclick="event.preventDefault();closeVenueModal();navigate(\'/gigs?venue=' + encodeURIComponent(venueName).replace(/'/g, '%27') + '\')">' +
     '→ ' + escHtml(allGigsLabel) +
   '</a>';
 }

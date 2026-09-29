@@ -25,22 +25,22 @@
 </head>
 <body>
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=4"></script>
-<script src="/app/js/session.js?v=4"></script>
-<script src="/app/js/ui.js?v=4"></script>
-<script src="/app/js/shell.js?v=4"></script>
+<script src="/app/js/core.js?v=5"></script>
+<script src="/app/js/session.js?v=5"></script>
+<script src="/app/js/ui.js?v=5"></script>
+<script src="/app/js/shell.js?v=5"></script>
 <div class="app-wrap organizers-wrap">
   <h1 data-i18n="organizers.pageTitle">Organizers</h1>
   <div class="toolbar">
     <input type="text" id="filter-input" data-i18n-attr="placeholder:organizers.searchPlaceholder" placeholder="Search name, city, country, email…">
     <label class="filter-check"><input type="checkbox" id="filter-favourite"> <span data-i18n="venues.favouritesOnly">Favourites only</span></label>
-    <button class="btn active auth-action" disabled id="organizer-add-btn" onclick="openAddModal()" data-i18n="organizers.addBtn">+ Add organizer</button>
+    <button class="btn active auth-action" disabled id="organizer-add-btn" data-onclick="openAddModal()" data-i18n="organizers.addBtn">+ Add organizer</button>
   </div>
   <div id="sort-bar" class="sort-bar"></div>
   <div id="organizers-list"><p class="empty-hint" data-i18n="venues.loading">Loading…</p></div>
   <div id="organizers-footer" style="display:none;text-align:center;margin-top:1.5rem;">
     <p id="organizers-counter" style="color:var(--third-color);font-size:0.85rem;margin:0 0 0.5rem;"></p>
-    <button id="organizers-load-more-btn" class="btn auth-action" disabled onclick="loadMoreOrganizers()" data-i18n="venues.loadMore">Load more</button>
+    <button id="organizers-load-more-btn" class="btn auth-action" disabled data-onclick="loadMoreOrganizers()" data-i18n="venues.loadMore">Load more</button>
   </div>
 </div>
 
@@ -93,14 +93,14 @@
     </div>
     <div class="status-msg" id="om-status-msg"></div>
     <div class="modal-actions">
-      <button class="btn active" type="button" id="om-save-btn" onclick="saveOrganizer()" data-i18n="venues.saveBtn">Save</button>
-      <button class="btn" type="button" onclick="closeOrgModal()" data-i18n="venues.cancelBtn">Cancel</button>
-      <button class="btn" type="button" id="om-delete-btn" style="margin-left:auto;color:#e55;" onclick="deleteOrgFromPopup()" data-i18n="venues.deleteBtn">Delete</button>
+      <button class="btn active" type="button" id="om-save-btn" data-onclick="saveOrganizer()" data-i18n="venues.saveBtn">Save</button>
+      <button class="btn" type="button" data-onclick="closeOrgModal()" data-i18n="venues.cancelBtn">Cancel</button>
+      <button class="btn" type="button" id="om-delete-btn" style="margin-left:auto;color:#e55;" data-onclick="deleteOrgFromPopup()" data-i18n="venues.deleteBtn">Delete</button>
     </div>
   </div>
 </div>
 
 <script src="/app/js/geo.js?v=2"></script>
-<script src="/app/js/organizers.js?v=4"></script>
+<script src="/app/js/organizers.js?v=5"></script>
 </body>
 </html>

@@ -48,6 +48,10 @@ function run(r) {
   const { scripts, styles } = externalAssets();
 
   test('vercel.json sets a Content-Security-Policy', () => assert(policy, 'no CSP header'));
+  test("script-src allows no inline script and no eval", () => {
+    const bad = policy['script-src'].filter(s => /^'unsafe-/.test(s));
+    assert(bad.length === 0, `script-src has ${bad.join(', ')}`);
+  });
   test('no script source is a whole host', () => {
     const bare = policy['script-src'].filter(s => /^https:\/\/[^/]+\/?$/.test(s));
     assert(bare.length === 0, `bare hosts in script-src: ${bare.join(', ')}`);

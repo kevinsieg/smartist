@@ -237,15 +237,15 @@
     <div id="player-content"></div>
     <div id="player-history" class="player-history"></div>
     <div class="modal-actions">
-      <button class="btn auth-only" id="player-replace-btn" onclick="triggerReplaceAudio()" data-i18n="songs.replace">Replace</button>
-      <input type="file" id="player-file-input" accept="audio/*" style="display:none" onchange="handleReplaceFile(this)">
-      <button class="btn auth-only" id="player-delete-btn" onclick="showDeleteConfirm()" data-i18n="songs.removeFile">Remove file</button>
+      <button class="btn auth-only" id="player-replace-btn" data-onclick="triggerReplaceAudio()" data-i18n="songs.replace">Replace</button>
+      <input type="file" id="player-file-input" accept="audio/*" style="display:none" data-onchange="handleReplaceFile(this)">
+      <button class="btn auth-only" id="player-delete-btn" data-onclick="showDeleteConfirm()" data-i18n="songs.removeFile">Remove file</button>
       <div id="player-delete-confirm" class="player-delete-confirm" style="display:none">
         <span data-i18n="songs.removeAudioPermanently">This removes the audio file permanently.</span>
-        <button class="btn btn-danger" onclick="confirmDeleteAudio()" data-i18n="songs.delete">Delete</button>
-        <button class="btn" onclick="cancelDeleteAudio()" data-i18n="songs.keepIt">Keep it</button>
+        <button class="btn btn-danger" data-onclick="confirmDeleteAudio()" data-i18n="songs.delete">Delete</button>
+        <button class="btn" data-onclick="cancelDeleteAudio()" data-i18n="songs.keepIt">Keep it</button>
       </div>
-      <button class="btn" onclick="closePlayer()" data-i18n="songs.close">Close</button>
+      <button class="btn" data-onclick="closePlayer()" data-i18n="songs.close">Close</button>
     </div>
   </div>
 </div>
@@ -257,15 +257,15 @@
     <div id="sheet-history" class="player-history"></div>
     <div class="modal-actions">
       <a id="sheet-open-link" href="#" target="_blank" rel="noopener" class="btn" data-i18n="songs.openLink">Open ↗</a>
-      <button class="btn auth-only" id="sheet-replace-btn" onclick="triggerReplaceSheet()" data-i18n="songs.replace">Replace</button>
-      <input type="file" id="sheet-file-input" accept=".pdf,application/pdf" style="display:none" onchange="handleReplaceSheet(this)">
-      <button class="btn auth-only" id="sheet-delete-btn" onclick="showSheetDeleteConfirm()" data-i18n="songs.remove">Remove</button>
+      <button class="btn auth-only" id="sheet-replace-btn" data-onclick="triggerReplaceSheet()" data-i18n="songs.replace">Replace</button>
+      <input type="file" id="sheet-file-input" accept=".pdf,application/pdf" style="display:none" data-onchange="handleReplaceSheet(this)">
+      <button class="btn auth-only" id="sheet-delete-btn" data-onclick="showSheetDeleteConfirm()" data-i18n="songs.remove">Remove</button>
       <div id="sheet-delete-confirm" class="player-delete-confirm" style="display:none">
         <span data-i18n="songs.removeSheetPermanently">This removes the sheet file permanently.</span>
-        <button class="btn btn-danger" onclick="confirmDeleteSheet()" data-i18n="songs.delete">Delete</button>
-        <button class="btn" onclick="cancelDeleteSheet()" data-i18n="songs.keepIt">Keep it</button>
+        <button class="btn btn-danger" data-onclick="confirmDeleteSheet()" data-i18n="songs.delete">Delete</button>
+        <button class="btn" data-onclick="cancelDeleteSheet()" data-i18n="songs.keepIt">Keep it</button>
       </div>
-      <button class="btn" onclick="closeSheet()" data-i18n="songs.close">Close</button>
+      <button class="btn" data-onclick="closeSheet()" data-i18n="songs.close">Close</button>
     </div>
   </div>
 </div>
@@ -276,15 +276,15 @@
     <div id="playback-content"></div>
     <div id="playback-history" class="player-history"></div>
     <div class="modal-actions">
-      <button class="btn auth-only" id="playback-replace-btn" onclick="triggerReplacePlayback()" data-i18n="songs.replace">Replace</button>
-      <input type="file" id="playback-file-input" accept="audio/*" style="display:none" onchange="handleReplacePlayback(this)">
-      <button class="btn auth-only" id="playback-delete-btn" onclick="showPlaybackDeleteConfirm()" data-i18n="songs.remove">Remove</button>
+      <button class="btn auth-only" id="playback-replace-btn" data-onclick="triggerReplacePlayback()" data-i18n="songs.replace">Replace</button>
+      <input type="file" id="playback-file-input" accept="audio/*" style="display:none" data-onchange="handleReplacePlayback(this)">
+      <button class="btn auth-only" id="playback-delete-btn" data-onclick="showPlaybackDeleteConfirm()" data-i18n="songs.remove">Remove</button>
       <div id="playback-delete-confirm" class="player-delete-confirm" style="display:none">
         <span data-i18n="songs.removePlaybackPermanently">This removes the playback file permanently.</span>
-        <button class="btn btn-danger" onclick="confirmDeletePlayback()" data-i18n="songs.delete">Delete</button>
-        <button class="btn" onclick="cancelDeletePlayback()" data-i18n="songs.keepIt">Keep it</button>
+        <button class="btn btn-danger" data-onclick="confirmDeletePlayback()" data-i18n="songs.delete">Delete</button>
+        <button class="btn" data-onclick="cancelDeletePlayback()" data-i18n="songs.keepIt">Keep it</button>
       </div>
-      <button class="btn" onclick="closePlayback()" data-i18n="songs.close">Close</button>
+      <button class="btn" data-onclick="closePlayback()" data-i18n="songs.close">Close</button>
     </div>
   </div>
 </div>
@@ -298,25 +298,25 @@
       <p id="lyrics-suggest-header" class="lyrics-suggest-header"></p>
       <pre id="lyrics-suggest-text" class="lyrics-view lyrics-suggest-text"></pre>
       <div class="modal-actions" id="lyrics-suggest-actions" style="display:none">
-        <button class="btn" onclick="_lyricsAcceptSuggestion()" data-i18n="songs.useThis">Use this</button>
-        <button class="btn" onclick="_lyricsDiscardSuggestion()" data-i18n="songs.discard">Discard</button>
+        <button class="btn" data-onclick="_lyricsAcceptSuggestion()" data-i18n="songs.useThis">Use this</button>
+        <button class="btn" data-onclick="_lyricsDiscardSuggestion()" data-i18n="songs.discard">Discard</button>
       </div>
     </div>
     <div class="modal-actions" id="lyrics-actions-view">
-      <button class="btn auth-only" onclick="startEditLyrics()" data-i18n="songs.edit">Edit</button>
-      <button class="btn auth-only" id="lyrics-delete-btn" onclick="showLyricsDeleteConfirm()" data-i18n="songs.delete">Delete</button>
+      <button class="btn auth-only" data-onclick="startEditLyrics()" data-i18n="songs.edit">Edit</button>
+      <button class="btn auth-only" id="lyrics-delete-btn" data-onclick="showLyricsDeleteConfirm()" data-i18n="songs.delete">Delete</button>
       <div id="lyrics-delete-confirm" class="player-delete-confirm" style="display:none">
         <span data-i18n="songs.deleteLyricsPermanently">This deletes the saved lyrics permanently.</span>
-        <button class="btn btn-danger" onclick="confirmDeleteLyrics()" data-i18n="songs.delete">Delete</button>
-        <button class="btn" onclick="cancelDeleteLyrics()" data-i18n="songs.keepIt">Keep it</button>
+        <button class="btn btn-danger" data-onclick="confirmDeleteLyrics()" data-i18n="songs.delete">Delete</button>
+        <button class="btn" data-onclick="cancelDeleteLyrics()" data-i18n="songs.keepIt">Keep it</button>
       </div>
-      <button class="btn" onclick="closeLyrics()" data-i18n="songs.close">Close</button>
+      <button class="btn" data-onclick="closeLyrics()" data-i18n="songs.close">Close</button>
     </div>
     <p id="lyrics-save-status" style="display:none;font-size:0.8rem;margin-top:0.5rem;color:var(--third-color)"></p>
     <div class="modal-actions auth-only" id="lyrics-actions-edit" style="display:none">
-      <button class="btn" id="lyrics-save-btn" onclick="saveLyrics()" data-i18n="songs.save">Save</button>
-      <button class="btn" id="lyrics-suggest-btn" onclick="suggestLyrics()" data-i18n-attr="title:songs.aiSearchTitle" title="Search for lyrics online using AI">AI ✦</button>
-      <button class="btn" onclick="cancelEditLyrics()" data-i18n="songs.cancel">Cancel</button>
+      <button class="btn" id="lyrics-save-btn" data-onclick="saveLyrics()" data-i18n="songs.save">Save</button>
+      <button class="btn" id="lyrics-suggest-btn" data-onclick="suggestLyrics()" data-i18n-attr="title:songs.aiSearchTitle" title="Search for lyrics online using AI">AI ✦</button>
+      <button class="btn" data-onclick="cancelEditLyrics()" data-i18n="songs.cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -326,7 +326,7 @@
     <h2 id="appearances-title" data-i18n="songs.appearancesTitle">Appearances</h2>
     <div id="appearances-list"></div>
     <div class="modal-actions">
-      <button class="btn" onclick="closeAppearances()" data-i18n="songs.close">Close</button>
+      <button class="btn" data-onclick="closeAppearances()" data-i18n="songs.close">Close</button>
     </div>
   </div>
 </div>
@@ -336,7 +336,7 @@
     <h2 id="gema-title">GEMA</h2>
     <div id="gema-content"></div>
     <div class="modal-actions">
-      <button class="btn" onclick="closeGema()" data-i18n="songs.close">Close</button>
+      <button class="btn" data-onclick="closeGema()" data-i18n="songs.close">Close</button>
     </div>
   </div>
 </div>
@@ -344,10 +344,10 @@
 <div class="modal-overlay" id="url-preview-modal">
   <div class="modal url-preview-modal">
     <div class="url-preview-header">
-      <input type="text" id="url-preview-input" data-i18n-attr="placeholder:songs.urlPlaceholder" placeholder="https://…" class="url-preview-input" onkeydown="if(event.key==='Enter')reloadUrlPreview()">
-      <button class="btn" onclick="reloadUrlPreview()" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px" data-i18n="songs.save">Save</button>
+      <input type="text" id="url-preview-input" data-i18n-attr="placeholder:songs.urlPlaceholder" placeholder="https://…" class="url-preview-input" data-onkeydown="reloadUrlPreviewOnEnter(event)">
+      <button class="btn" data-onclick="reloadUrlPreview()" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px" data-i18n="songs.save">Save</button>
       <a id="url-preview-link" href="#" target="_blank" rel="noopener" class="btn" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px">↗</a>
-      <button class="btn" onclick="closeUrlPreview()" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px" data-i18n="songs.close">Close</button>
+      <button class="btn" data-onclick="closeUrlPreview()" style="font-size:0.8rem;padding:0.3rem 0.8rem;min-height:32px" data-i18n="songs.close">Close</button>
     </div>
     <div id="url-preview-loading" class="url-preview-loading" style="display:none" data-i18n="songs.loading">Loading…</div>
     <iframe id="url-preview-iframe" src="" title="URL preview" sandbox="allow-scripts allow-forms allow-popups" allow="fullscreen"></iframe>
@@ -361,17 +361,17 @@
 </div>
 
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=4"></script>
-<script src="/app/js/session.js?v=4"></script>
-<script src="/app/js/ui.js?v=4"></script>
-<script src="/app/js/shell.js?v=4"></script>
+<script src="/app/js/core.js?v=5"></script>
+<script src="/app/js/session.js?v=5"></script>
+<script src="/app/js/ui.js?v=5"></script>
+<script src="/app/js/shell.js?v=5"></script>
 <script src="/app/js/list-view.js?v=5"></script>
-<script src="/app/js/arrangement.js?v=3"></script>
+<script src="/app/js/arrangement.js?v=4"></script>
 <!-- songs.js runs init() at the end, so it loads last; the others only define. -->
-<script src="/app/js/songs-media.js?v=1"></script>
-<script src="/app/js/songs-lyrics.js?v=2"></script>
-<script src="/app/js/songs-table.js?v=6"></script>
-<script src="/app/js/songs-panel.js?v=5"></script>
-<script src="/app/js/songs.js?v=19"></script>
+<script src="/app/js/songs-media.js?v=2"></script>
+<script src="/app/js/songs-lyrics.js?v=3"></script>
+<script src="/app/js/songs-table.js?v=7"></script>
+<script src="/app/js/songs-panel.js?v=6"></script>
+<script src="/app/js/songs.js?v=20"></script>
 </body>
 </html>

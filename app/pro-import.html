@@ -24,7 +24,7 @@
             <p class="pro-desc" data-i18n="pro.desc">Integrate your song data from your performing rights organization.</p>
 
             <div class="pro-cards">
-                <button class="pro-card pro-card--active" id="pro-card-gema" onclick="selectPro('gema')">
+                <button class="pro-card pro-card--active" id="pro-card-gema" data-onclick="selectPro('gema')">
                     <div class="pro-card-acronym">GEMA</div>
                     <div class="pro-card-fullname">Gesellschaft für musikalische Aufführungs- und mechanische Vervielfältigungsrechte</div>
                     <div class="pro-card-region" data-i18n="pro.regionGermany">Germany</div>
@@ -39,7 +39,7 @@
             </div>
 
             <div class="pro-section" id="gema-section" style="display:none">
-                <button class="pro-back-btn" onclick="selectPro(null)" data-i18n="pro.backBtn">← PRO</button>
+                <button class="pro-back-btn" data-onclick="selectPro(null)" data-i18n="pro.backBtn">← PRO</button>
                 <h2 class="pro-section-title" data-i18n="pro.gemaImportTitle">GEMA — Import</h2>
                 <div id="import-area" style="display:none">
                     <p style="color:var(--third-color);margin-bottom:1.5rem;font-size:0.9rem;">
@@ -52,15 +52,15 @@
                         <input type="text" id="owner-ip" class="gema-login-input" data-i18n-attr="placeholder:pro.ownerIpPlaceholder" placeholder="e.g. 123456789" autocomplete="off" inputmode="numeric">
                     </div>
 
-                    <div id="drop-zone" class="gema-drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
-                        <input type="file" id="csv-input" accept=".csv,text/csv" style="display:none" onchange="handleFileSelect(this.files[0])">
+                    <div id="drop-zone" class="gema-drop-zone" data-onclick="clickById('csv-input')" data-ondragover="event.preventDefault()" data-ondrop="handleDrop(event)">
+                        <input type="file" id="csv-input" accept=".csv,text/csv" style="display:none" data-onchange="handleFileSelect(this.files[0])">
                         <div id="drop-label" class="gema-drop-label" data-i18n="pro.dropLabel">Drop CSV here or click to select</div>
                         <div id="file-info" class="gema-file-info" style="display:none"></div>
                     </div>
 
                     <div id="type-row" class="gema-type-row" style="display:none">
                         <span style="color:var(--third-color);font-size:0.85rem;" data-i18n="pro.typeLabel">Type:</span>
-                        <select id="type-select" class="gema-type-select" onchange="_csvType = this.value">
+                        <select id="type-select" class="gema-type-select" data-onchange="setCsvType(this.value)">
                             <option value="info" data-i18n="pro.typeInfo">Werkinformationen (language, duration, genre)</option>
                             <option value="ids" data-i18n="pro.typeIds">Identifikatoren (ISWC, ISRC)</option>
                             <option value="beteiligte" data-i18n="pro.typeBeteiligte">Beteiligte (rightholders)</option>
@@ -68,15 +68,15 @@
                     </div>
 
                     <div class="gema-actions" id="step1-actions" style="display:none">
-                        <button class="btn auth-action" id="validate-btn" onclick="runValidate()" data-i18n="pro.validateBtn">Validate</button>
+                        <button class="btn auth-action" id="validate-btn" data-onclick="runValidate()" data-i18n="pro.validateBtn">Validate</button>
                     </div>
 
                     <div id="preview-area" style="display:none">
                         <div id="preview-summary" class="gema-summary"></div>
                         <div id="preview-table-wrap" class="gema-table-wrap"></div>
                         <div class="gema-actions">
-                            <button class="btn auth-action" id="import-btn" onclick="runImport()" data-i18n="pro.importBtn">Import</button>
-                            <button class="btn auth-action" onclick="resetImport()" data-i18n="pro.resetBtn">Reset</button>
+                            <button class="btn auth-action" id="import-btn" data-onclick="runImport()" data-i18n="pro.importBtn">Import</button>
+                            <button class="btn auth-action" data-onclick="resetImport()" data-i18n="pro.resetBtn">Reset</button>
                         </div>
                     </div>
 
@@ -84,7 +84,7 @@
                         <div id="result-summary" class="gema-summary"></div>
                         <div id="result-table-wrap" class="gema-table-wrap"></div>
                         <div class="gema-actions">
-                            <button class="btn auth-action" onclick="resetImport()" data-i18n="pro.importAnotherBtn">Import another file</button>
+                            <button class="btn auth-action" data-onclick="resetImport()" data-i18n="pro.importAnotherBtn">Import another file</button>
                         </div>
                     </div>
 
@@ -95,27 +95,11 @@
     </section>
 </main>
 
-<script>
-function selectPro(id) {
-  const cards   = document.querySelector('.pro-cards');
-  const section = document.getElementById('gema-section');
-  const active  = document.getElementById('pro-card-gema');
-  if (id === 'gema') {
-    cards.style.display   = 'none';
-    section.style.display = '';
-    active.classList.add('pro-card--selected');
-  } else {
-    cards.style.display   = '';
-    section.style.display = 'none';
-    active.classList.remove('pro-card--selected');
-  }
-}
-</script>
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=4"></script>
-<script src="/app/js/session.js?v=4"></script>
-<script src="/app/js/ui.js?v=4"></script>
-<script src="/app/js/shell.js?v=4"></script>
-<script src="/app/js/pro-import.js?v=3"></script>
+<script src="/app/js/core.js?v=5"></script>
+<script src="/app/js/session.js?v=5"></script>
+<script src="/app/js/ui.js?v=5"></script>
+<script src="/app/js/shell.js?v=5"></script>
+<script src="/app/js/pro-import.js?v=4"></script>
 </body>
 </html>

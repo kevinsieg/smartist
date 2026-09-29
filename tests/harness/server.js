@@ -9,6 +9,9 @@ const path = require('path');
 const ROOT = path.join(__dirname, '../..');
 const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
 const rewrites = vercel.rewrites;
+// The production Content-Security-Policy, so the browser tests run under it
+// and an inline script or handler shows up as a console error there too.
+const CSP = vercel.headers.flatMap(h => h.headers).find(h => h.key === 'Content-Security-Policy').value;
 
 function matchRewrite(p) {
   for (const r of rewrites) {
@@ -50,6 +53,7 @@ http.createServer(async (req, res) => {
       const ext = path.extname(file);
       const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
       res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
+      if (ext === '.html') res.setHeader('Content-Security-Policy', CSP);
       return res.end(fs.readFileSync(file));
     }
     res.statusCode = 404; return res.end('not found');

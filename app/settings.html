@@ -239,10 +239,10 @@
 </head>
 <body>
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/core.js?v=4"></script>
-<script src="/app/js/session.js?v=4"></script>
-<script src="/app/js/ui.js?v=4"></script>
-<script src="/app/js/shell.js?v=4"></script>
+<script src="/app/js/core.js?v=5"></script>
+<script src="/app/js/session.js?v=5"></script>
+<script src="/app/js/ui.js?v=5"></script>
+<script src="/app/js/shell.js?v=5"></script>
 
 <div class="app-wrap settings-wrap">
   <h1 data-i18n="nav.settings">Settings</h1>
@@ -327,7 +327,7 @@
       <div class="profile-section" id="display-fields-section" style="display:none;">
         <div class="config-section-header">
           <label data-i18n="settings.songTableColumnsLabel">Song table columns</label>
-          <button class="config-edit-btn auth-action" disabled onclick="openDisplayFieldsEditor()" data-i18n="songs.edit">Edit</button>
+          <button class="config-edit-btn auth-action" disabled data-onclick="openDisplayFieldsEditor()" data-i18n="songs.edit">Edit</button>
         </div>
         <div class="config-tags" id="display-fields-tags"></div>
         <div id="display-fields-editor" style="display:none;"></div>
@@ -338,7 +338,7 @@
       <div class="profile-section" id="filter-fields-section" style="display:none;">
         <div class="config-section-header">
           <label data-i18n="settings.setlistFilterBtnsLabel">Setlist filter buttons</label>
-          <button class="config-edit-btn auth-action" disabled onclick="openFilterFieldsEditor()" data-i18n="songs.edit">Edit</button>
+          <button class="config-edit-btn auth-action" disabled data-onclick="openFilterFieldsEditor()" data-i18n="songs.edit">Edit</button>
         </div>
         <div class="config-tags" id="filter-fields-tags"></div>
         <div id="filter-fields-editor" style="display:none;"></div>
@@ -361,7 +361,7 @@
             <option value="admin" data-i18n="settings.roleAdmin">admin</option>
           </select>
         </div>
-        <button class="btn active" id="invite-btn" onclick="sendInvite()" data-i18n="settings.sendInviteBtn">Send invite</button>
+        <button class="btn active" id="invite-btn" data-onclick="sendInvite()" data-i18n="settings.sendInviteBtn">Send invite</button>
       </div>
       <div id="users-status" class="users-status"></div>
       <div class="user-section-label" data-i18n="settings.activeLabel">Active</div>
@@ -390,14 +390,14 @@
       <div class="profile-section" id="arrangement-section">
         <label data-i18n="settings.instrumentsAndTechniquesLabel">Instruments &amp; Techniques</label>
         <div id="arr-instruments-list" class="arr-cfg-list"></div>
-        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddInstrument()" data-i18n="settings.addInstrumentBtn">+ Add instrument</button>
+        <button class="btn arr-cfg-add-btn auth-action" disabled data-onclick="arrAddInstrument()" data-i18n="settings.addInstrumentBtn">+ Add instrument</button>
 
         <label style="margin-top:1.25rem;" data-i18n="settings.bandMembersLabel">Band members</label>
         <div id="arr-members-list" class="arr-cfg-list"></div>
-        <button class="btn arr-cfg-add-btn auth-action" disabled onclick="arrAddMember()" data-i18n="settings.addMemberBtn">+ Add member</button>
+        <button class="btn arr-cfg-add-btn auth-action" disabled data-onclick="arrAddMember()" data-i18n="settings.addMemberBtn">+ Add member</button>
 
         <div class="arr-save-row">
-          <button class="btn active auth-action" disabled onclick="saveArrangementConfig(this)" data-i18n="settings.saveArrConfigBtn">Save arrangement config</button>
+          <button class="btn active auth-action" disabled data-onclick="saveArrangementConfig(this)" data-i18n="settings.saveArrConfigBtn">Save arrangement config</button>
           <span class="arr-save-msg" id="arr-save-msg"></span>
         </div>
       </div>
@@ -405,6 +405,6 @@
 
   </div>
 </div>
-<script src="/app/js/settings.js?v=7"></script>
+<script src="/app/js/settings.js?v=8"></script>
 </body>
 </html>
