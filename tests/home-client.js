@@ -111,6 +111,17 @@ function makeContext(fetchImpl) {
     assertEq(rendered.msg, 'home.oauthErrorMsg');
   });
 
+  await test('login `next` only leads to a path on this origin', async () => {
+    const ctx = makeContext(async () => ({ ok: false, json: async () => ({}) }));
+    ctx.URL = URL;
+    ctx.window = { location: { origin: 'https://app.example.test' } };
+    const s = n => vm.runInContext('sameOriginPath(' + JSON.stringify(n) + ')', ctx);
+    assertEq(s('/band/songs?open=3#x'), '/band/songs?open=3#x');
+    assertEq(s('/workspaces'), '/workspaces');
+    for (const bad of ['//evil.test', '/\\evil.test', '/\\/evil.test', 'https://evil.test/', 'javascript:alert(1)', '', null])
+      assertEq(s(bad), null, 'must reject ' + JSON.stringify(bad));
+  });
+
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);
   if (failures.length) {

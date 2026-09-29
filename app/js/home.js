@@ -136,9 +136,18 @@ async function verifySession(token) {
 
 // ── Logged-in state ───────────────────────────────────────────────────────────
 
+// `next` comes from the URL, so it may only lead to a path on this origin.
+// Browsers read `/\host` like `//host`, so resolving it is the only safe check.
+function sameOriginPath(next) {
+  if (typeof next !== 'string' || next.charAt(0) !== '/') return null;
+  let u;
+  try { u = new URL(next, window.location.origin); } catch { return null; }
+  return u.origin === window.location.origin ? u.pathname + u.search + u.hash : null;
+}
+
 function renderLoggedIn(cfg, artists) {
-  const next = _loginNext || new URLSearchParams(window.location.search).get('next');
-  if (next && next.startsWith('/') && !next.startsWith('//')) {
+  const next = sameOriginPath(_loginNext || new URLSearchParams(window.location.search).get('next'));
+  if (next) {
     window.location.href = next;
     return;
   }
