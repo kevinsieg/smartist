@@ -121,6 +121,14 @@ async function oauthCallback({ query, headers, ip, origin }) {
     SELECT u.id, u.role, u.password_hash FROM users u WHERE u.email = ${email.toLowerCase()} ORDER BY u.id LIMIT 1
   `;
 
+  // Facebook has no verified-email flag (see identity.js), so its address proves
+  // nothing — for a new account either. A workspace set up under an address
+  // someone merely typed into Facebook would later reach every band that
+  // invites the address's real owner (memberships join on email). Unless the
+  // deployment opts in, a new Facebook address goes through the emailed
+  // signup link instead.
+  const untrustedFacebook = provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true';
+
   // A new address goes on to set up a workspace, whichever button started the
   // flow: "Continue with Google" on the login page used to answer a new
   // Google account with "Sign-in failed". This says nothing about which
@@ -128,6 +136,10 @@ async function oauthCallback({ query, headers, ip, origin }) {
   // owns the address. Existing accounts always fall through to the login
   // below, so signup mode never sets up a second workspace.
   if (!firstUser) {
+    if (untrustedFacebook) {
+      await logger.warn('oauth_callback_failed', { reason: 'facebook_email_not_trusted', provider });
+      return redirect(`${o}/signup?error=verify_email`);
+    }
     if (await checkRateLimit(`signup-link:${email.toLowerCase()}`, 3, 3600))
       return redirect(`${o}/signup?error=rate_limited`);
     const rawToken = await createSignupToken(email, sql);
@@ -138,8 +150,7 @@ async function oauthCallback({ query, headers, ip, origin }) {
   // Facebook has no verified-email flag (see identity.js). Matching its address
   // to an existing account is therefore opt-in per deployment: without it, an
   // address someone merely typed into Facebook would open that account here.
-  if (provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true')
-    return failed('facebook_email_not_trusted');
+  if (untrustedFacebook) return failed('facebook_email_not_trusted');
 
   const artists = await getArtistsForUser(firstUser.id, sql);
   const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash);
