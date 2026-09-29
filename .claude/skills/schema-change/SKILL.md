@@ -27,6 +27,9 @@ applied again and again to every database (CI applies it twice).
    `DATABASE.md` (column tables), `openapi.json` for API-visible fields.
 4. **Verify locally:** `npm run dev:up` applies it to the local database;
    `node scripts/apply_schema.js --check` there; then `npm run test:all`.
-5. **Production** is the user's step, before the release PR merges: every
-   production database, `apply_schema.js` then `--check`. Until then the
-   health check reports `"schema":"behind"`. Say this in your summary.
+5. **Deployments migrate themselves:** each build runs `scripts/deploy_migrate.js`
+   against its own database, a minute or two before the new code goes live.
+   So the code on `main` must keep working on the new schema: add freely;
+   drop or rename a column only in a release after the code stopped using it.
+   CI's *Live code on the new schema* job runs `main`'s API suite on it.
+   After the deploy, the health check must say `"schema":"current"`.

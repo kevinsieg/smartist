@@ -227,7 +227,7 @@ The app ships in **English (default), French, German**. `stage.html` and `api-do
 
 All scripts: show DB hostname, require `y` confirmation before connecting. `loadEnv` strips surrounding quotes from values. Every script uses `scripts/_lib.js` (`loadEnv`, `confirmDb`, `connect` — postgres.js, like the API; SSL off only for localhost). postgres.js cannot send a JS boolean array: pass `'true'`/`'false'` as `::text[]::bool[]`.
 
-**Schema changes:** append a dated block to `scripts/schema.sql` that ends with `INSERT INTO schema_migrations (id) VALUES ('<date>') ON CONFLICT DO NOTHING;`, and set `SCHEMA_VERSION` in `api/_env.js` to that date (a unit test checks they match). No `DO $$` blocks — `apply_schema.js` splits on `;`.
+**Schema changes:** append a dated block to `scripts/schema.sql` that ends with `INSERT INTO schema_migrations (id) VALUES ('<date>') ON CONFLICT DO NOTHING;`, and set `SCHEMA_VERSION` in `api/_env.js` to that date (a unit test checks they match). No `DO $$` blocks — `apply_schema.js` splits on `;`. Deployments apply it themselves: `vercel.json`'s `buildCommand` runs `scripts/deploy_migrate.js` (pending migrations only, against that project's `DATABASE_URL`; a failure fails the build). `.vercelignore` keeps `scripts/` out of deployments except the four files it needs.
 
 ```bash
 node scripts/setup.js                                      # first-time: schema + band + its admin user
