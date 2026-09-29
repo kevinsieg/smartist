@@ -668,7 +668,7 @@ function openDisplayFieldsEditor() {
       '<input type="text" value="' + escHtml(f.field) + '" placeholder="extra.field" style="width:120px;" readonly>' +
       '<input class="lbl-input" type="text" value="' + escHtml(f.label) + '" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;" data-field="' + escHtml(f.field) + '">' +
       _typeSelect(f.type || 'text') +
-      '<button class="config-remove-btn" onclick="removeCustomDisplayField(\'' + escHtml(f.field) + '\')">×</button>' +
+      '<button class="config-remove-btn" data-field="' + escHtml(f.field) + '" onclick="removeCustomDisplayField(this.dataset.field)">×</button>' +
       '</div>';
   }).join('');
 
@@ -729,7 +729,7 @@ function addCustomDisplayField() {
     '<input type="text" value="' + escHtml(field) + '" style="width:120px;" readonly>' +
     '<input class="lbl-input" type="text" value="' + escHtml(label || field) + '" placeholder="' + t('settings.labelPlaceholder') + '" style="width:80px;" data-field="' + escHtml(field) + '">' +
     _typeSelect(type) +
-    '<button class="config-remove-btn" onclick="removeCustomDisplayField(\'' + escHtml(field) + '\')">×</button>';
+    '<button class="config-remove-btn" data-field="' + escHtml(field) + '" onclick="removeCustomDisplayField(this.dataset.field)">×</button>';
   list.appendChild(div);
   fieldInp.value = '';
   labelInp.value = '';
@@ -786,8 +786,8 @@ function openFilterFieldsEditor() {
   var rows = available.map(function (f) {
     var checked = (f.field in currentMap) ? 'checked' : '';
     return '<div class="config-check-row">' +
-      '<input type="checkbox" id="ff-' + f.field.replace('.', '-') + '" value="' + f.field + '" data-label="' + escHtml(f.label) + '" ' + checked + '>' +
-      '<label for="ff-' + f.field.replace('.', '-') + '">' + escHtml(f.label) + '</label>' +
+      '<input type="checkbox" id="' + escHtml('ff-' + f.field.replace('.', '-')) + '" value="' + escHtml(f.field) + '" data-label="' + escHtml(f.label) + '" ' + checked + '>' +
+      '<label for="' + escHtml('ff-' + f.field.replace('.', '-')) + '">' + escHtml(f.label) + '</label>' +
       '</div>';
   }).join('');
 
