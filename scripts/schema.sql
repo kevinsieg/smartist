@@ -20,15 +20,14 @@
 --   displayFields: which song columns appear in the songs table
 --   filterFields:  which fields produce filter buttons in the setlist generator
 --   logoUrl:       path or URL to the band logo
--- `social_links` / `platforms` in config: streaming and social URLs managed via /hub.
+-- `platforms` in config: streaming and social URLs managed via /hub.
 -- See DATABASE.md §Band config for the full shape.
 
 CREATE TABLE IF NOT EXISTS artists (
   id            SERIAL PRIMARY KEY,
   slug          TEXT UNIQUE NOT NULL,             -- URL-safe identifier, e.g. "myband"
   name          TEXT NOT NULL,                    -- display name, e.g. "My Band"
-  config        JSONB NOT NULL DEFAULT '{}',
-  social_links  JSONB NOT NULL DEFAULT '{}'
+  config        JSONB NOT NULL DEFAULT '{}'
 );
 
 -- ── venues ─────────────────────────────────────────────────────────────────
@@ -485,3 +484,8 @@ INSERT INTO schema_migrations (id) VALUES ('2026-09-30') ON CONFLICT DO NOTHING;
 -- once the column is gone.
 ALTER TABLE artists DROP COLUMN IF EXISTS password_hash;
 INSERT INTO schema_migrations (id) VALUES ('2026-10-01') ON CONFLICT DO NOTHING;
+
+-- 2026-10-02: artists.social_links is superseded by config.platforms and
+-- nothing reads it.
+ALTER TABLE artists DROP COLUMN IF EXISTS social_links;
+INSERT INTO schema_migrations (id) VALUES ('2026-10-02') ON CONFLICT DO NOTHING;
