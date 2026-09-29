@@ -269,7 +269,6 @@ async function run(r) {
     require.cache[artistDomainPath] = {
       id: artistDomainPath, filename: artistDomainPath, loaded: true,
       exports: {
-        resolveArtist:     async () => FAKE_ARTIST,
         isSlugAvailable:   async () => true,
         getArtistsForUser: async () => FAKE_ARTISTS,
       },

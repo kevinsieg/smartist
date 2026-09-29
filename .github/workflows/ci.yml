@@ -24,11 +24,12 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-  # The API suite against a throwaway Postgres: the schema applied twice (it
-  # must stay idempotent), a seeded Pro band, and the handlers served by
-  # tests/harness/server.js. Needs no secrets, so it also runs on forks.
+  # The API suite and the browser smoke test against a throwaway Postgres: the
+  # schema applied twice (it must stay idempotent), a seeded Pro band, and the
+  # app served by tests/harness/server.js. Needs no secrets, so it also runs
+  # on forks.
   local-integration:
-    name: Integration tests (local Postgres)
+    name: Integration + browser tests (local Postgres)
     runs-on: ubuntu-latest
     needs: unit-tests
     services:
@@ -75,6 +76,14 @@ jobs:
           cat server.log; exit 1
       - name: Run the API suite
         run: cd tests && node api.js
+      # Not a dependency: the playwright package downloads browsers on install,
+      # which the Vercel deployments must not do.
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Browser smoke test (sign in, every page, SPA nav, stage)
+        run: node tests/smoke.js
       - name: Server log
         if: failure()
         run: cat server.log

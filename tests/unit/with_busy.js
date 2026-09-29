@@ -1,10 +1,10 @@
-// withBusy() in common.js: a write button answers the click at once and
-// cannot fire twice. common.js is browser-only, so the function is lifted
+// withBusy() in ui.js: a write button answers the click at once and
+// cannot fire twice. ui.js is browser-only, so the function is lifted
 // out of the source and evaluated alone.
 const fs = require('fs');
 const path = require('path');
 
-const src = fs.readFileSync(path.join(__dirname, '../../app/js/common.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '../../app/js/ui.js'), 'utf8');
 const m = src.match(/async function withBusy\([\s\S]*?\n}\n/);
 const withBusy = m && new Function('t', m[0] + '\nreturn withBusy;')(k => k === 'common.saving' ? 'Saving…' : k);
 
@@ -14,7 +14,7 @@ async function run(r) {
   const { testAsync, assert, assertEq, B } = r;
   console.log(B('\nwithBusy'));
 
-  await testAsync('exists in common.js', async () => assert(typeof withBusy === 'function', 'withBusy not found'));
+  await testAsync('exists in ui.js', async () => assert(typeof withBusy === 'function', 'withBusy not found'));
   if (!withBusy) return;
 
   await testAsync('disables and relabels while running, restores after', async () => {

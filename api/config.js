@@ -2,10 +2,10 @@ const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr } = require('./_validate');
 const { checkRateLimit, clientIp } = require('./_ratelimit');
-const { requireAuth, getAccess, canBrowseCatalogue, checkCredentials } = require('./_auth');
+const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, passwordMatches } = require('./_token');
-const { resolveArtist, isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
+const { isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
 const { configSongs } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const { envReport, SCHEMA_VERSION } = require('./_env');
@@ -16,9 +16,13 @@ const subscribe = require('./_domain/subscribe');
 const login = require('./_domain/login');
 const reset = require('./_domain/reset');
 const deletion = require('./_domain/deletion_handlers');
+const { toInput, send } = require('./_domain/http');
 
 // ── Router ────────────────────────────────────────────────────────────────────
 // Feature groups live in ./_domain/*; the core config read/write stays here.
+// The account modules take plain input and return { status, body } — `run`
+// is the one place that turns a request into input and a result into a reply.
+const run = async (fn, req, res) => send(res, await fn(toInput(req)));
 
 module.exports = wrap(async function handler(req, res) {
   if (req.method === 'POST') {
@@ -27,19 +31,19 @@ module.exports = wrap(async function handler(req, res) {
     // let a rewritten POST fall through to the subscribe handler, which
     // answered a login attempt with "Already subscribed".
     const action = req.body?.action || req.query?.action;
-    if (action === 'admin-set-plan')      return admin.setPlan(req, res);
+    if (action === 'admin-set-plan')      return run(admin.setPlan, req, res);
     if (action === 'upgrade')             return upgrade(req, res);
     if (action === 'downgrade')           return downgrade(req, res);
-    if (action === 'login')               return login.passwordLogin(req, res);
-    if (action === 'request-reset')       return reset.requestReset(req, res);
-    if (action === 'set-password')        return reset.setPassword(req, res);
-    if (action === 'signup-link')         return signup.signupLink(req, res);
-    if (action === 'verify-signup-token') return signup.verifySignup(req, res);
-    if (action === 'signup')              return signup.signup(req, res);
-    if (action === 'request-deletion')    return deletion.requestDeletion(req, res);
-    if (action === 'confirm-deletion')    return deletion.confirmDeletion(req, res);
-    if (req.body?.source === 'contact')   return subscribe.contact(req, res);
-    return subscribe.subscribe(req, res);
+    if (action === 'login')               return run(login.passwordLogin, req, res);
+    if (action === 'request-reset')       return run(reset.requestReset, req, res);
+    if (action === 'set-password')        return run(reset.setPassword, req, res);
+    if (action === 'signup-link')         return run(signup.signupLink, req, res);
+    if (action === 'verify-signup-token') return run(signup.verifySignup, req, res);
+    if (action === 'signup')              return run(signup.signup, req, res);
+    if (action === 'request-deletion')    return run(deletion.requestDeletion, req, res);
+    if (action === 'confirm-deletion')    return run(deletion.confirmDeletion, req, res);
+    if (req.body?.source === 'contact')   return run(subscribe.contact, req, res);
+    return run(subscribe.subscribe, req, res);
   }
 
   if (req.method === 'PATCH') return patchConfig(req, res);
@@ -52,11 +56,11 @@ module.exports = wrap(async function handler(req, res) {
   if (req.query.action === 'health')         return health(req, res);
   if (req.query.action === 'check-slug')     return checkSlug(req, res);
   if (req.query.action === 'my-artists')     return myArtists(req, res);
-  if (req.query.action === 'deletion-preflight') return deletion.preflight(req, res);
-  if (req.query.action === 'admin-overview') return admin.overview(req, res);
-  if (req.query.action === 'google-url')     return oauth.googleUrl(req, res);
-  if (req.query.action === 'facebook-url')   return oauth.facebookUrl(req, res);
-  if (req.query.action === 'oauth-callback') return oauth.oauthCallback(req, res);
+  if (req.query.action === 'deletion-preflight') return run(deletion.preflight, req, res);
+  if (req.query.action === 'admin-overview') return run(admin.overview, req, res);
+  if (req.query.action === 'google-url')     return run(oauth.googleUrl, req, res);
+  if (req.query.action === 'facebook-url')   return run(oauth.facebookUrl, req, res);
+  if (req.query.action === 'oauth-callback') return run(oauth.oauthCallback, req, res);
 
   const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
   if (!slugParam) {
@@ -184,14 +188,6 @@ async function myArtists(req, res) {
     // (account deleted) while its signed token is still in date.
     if (!artists.length) return res.status(401).json({ error: 'Unauthorised' });
     return res.json({ artists });
-  }
-  // Legacy bootstrap sessions (artist password as bearer) have no users row —
-  // on single-tenant installs their only workspace is the deployment's.
-  if (authHeader && process.env.ARTIST_SLUG) {
-    const band = await resolveArtist('', sql);
-    if (band && await checkCredentials(authHeader, band)) {
-      return res.json({ artists: [{ slug: band.slug, name: band.name, role: 'admin' }] });
-    }
   }
   return res.status(401).json({ error: 'Unauthorised' });
 }

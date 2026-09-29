@@ -6,7 +6,7 @@ PostgreSQL via **Neon** (hosted). All tables are scoped to an `artist_id` — a 
 
 **postgres.js** (`postgres` npm package, v3). Connects over the standard PostgreSQL wire protocol (port 5432) using Neon's pooler connection string.
 
-`@neondatabase/serverless` is not used by the API — its HTTP transport has no transaction support (`sql.begin()` is unavailable). Only `scripts/apply_schema.js` uses it, to run `schema.sql` over HTTP. postgres.js supports the full interface: tagged-template queries, transactions, and prepared statements.
+The scripts use the same driver through `scripts/_lib.js` (`connect()` turns SSL off for a database on localhost). `@neondatabase/serverless` is no longer a dependency: its HTTP transport has no transactions (`sql.begin()`).
 
 The swap point is the `DB.connect` line in `api/_db.js`. The rest of the codebase is driver-agnostic (`sql\`...\`` tagged templates only).
 
@@ -69,7 +69,7 @@ One row per artist (a workspace). The API is keyed by `slug`, taken from the URL
 | `id` | serial PK | |
 | `slug` | text UNIQUE NOT NULL | URL-safe identifier used in all API routes |
 | `name` | text NOT NULL | Display name |
-| `password_hash` | text | Legacy shared band password (bcrypt). NULL for workspaces created through signup — people log in with their own `users` row |
+| `password_hash` | text | Unused: the shared band password is retired, every login is a `users` row. Kept until every deployment has moved; drop later |
 | `storage_used_bytes` | bigint DEFAULT 0 | Song-media bytes counted against the plan's storage cap |
 | `config` | jsonb DEFAULT `{}` | UI config — see [Artist config](#artist-config) |
 | `social_links` | jsonb DEFAULT `{}` | Legacy social links field (platforms now in `config.platforms`) |

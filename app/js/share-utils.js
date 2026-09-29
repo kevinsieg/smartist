@@ -13,12 +13,9 @@ async function sendSetlistEmail(slug, setlistId, email, token) {
     });
     if (r.status === 401) {
       sessionStorage.removeItem('smartist_token');
-      return { ok: false, unauthorized: true, error: _shareT('share.wrongPassword', 'Wrong password.') };
+      return { ok: false, unauthorized: true, error: _shareT('share.signInAgain', 'Your session has ended — sign in again.') };
     }
-    if (r.ok) {
-      sessionStorage.setItem('smartist_token', token);
-      return { ok: true };
-    }
+    if (r.ok) return { ok: true };
     var err = await r.json().catch(function() { return {}; });
     return { ok: false, error: err.error || _shareT('share.failedToSend', 'Failed to send.') };
   } catch {

@@ -3,13 +3,6 @@ const RESERVED_SLUGS = new Set([
   'auth', 'callback', 'static', 'favicon_io', 'stage', 'contact',
 ]);
 
-async function resolveArtist(slug, sql) {
-  const s = slug || process.env.ARTIST_SLUG || '';
-  if (!s) return null;
-  const [row] = await sql`SELECT id, slug, name, config, password_hash FROM artists WHERE slug = ${s} LIMIT 1`;
-  return row || null;
-}
-
 async function isSlugAvailable(slug, sql) {
   if (RESERVED_SLUGS.has(slug)) return false;
   const [row] = await sql`SELECT EXISTS(SELECT 1 FROM artists WHERE slug = ${slug}) AS exists`;
@@ -26,4 +19,4 @@ async function getArtistsForUser(userId, sql) {
   `;
 }
 
-module.exports = { resolveArtist, isSlugAvailable, getArtistsForUser };
+module.exports = { isSlugAvailable, getArtistsForUser };

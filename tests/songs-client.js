@@ -8,7 +8,7 @@ const vm = require('vm');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(REPO_ROOT, 'app/js/songs.js'), 'utf8');
-const COMMON = fs.readFileSync(path.join(REPO_ROOT, 'app/js/common.js'), 'utf8');
+const COMMON = fs.readFileSync(path.join(REPO_ROOT, 'app/js/core.js'), 'utf8');
 
 const G = s => `\x1b[32m${s}\x1b[0m`;
 const R = s => `\x1b[31m${s}\x1b[0m`;
@@ -60,25 +60,25 @@ function load(songs) {
   return context;
 }
 
-// energyLabel lives in common.js and is used by the songs list, panel and setlist page.
+// energyLabel lives in core.js and is used by the songs list, panel and setlist page.
 function loadEnergyLabel() {
   const context = { console, t: key => ({ 'songs.energyLow': 'low', 'songs.energyMiddle': 'middle',
                                           'songs.energyHigh': 'high' }[key] || key) };
   vm.createContext(context);
-  vm.runInContext(`${extractFunction(COMMON, 'energyLabel', 'app/js/common.js')}; this.fn = energyLabel;`, context);
+  vm.runInContext(`${extractFunction(COMMON, 'energyLabel', 'app/js/core.js')}; this.fn = energyLabel;`, context);
   return context.fn;
 }
 
-// formatDate lives in common.js; the locale comes from window.i18n.
+// formatDate lives in core.js; the locale comes from window.i18n.
 function loadDateHelpers(locale) {
   const context = { console, window: { i18n: { getLocale: () => locale } } };
   vm.createContext(context);
   vm.runInContext(
-    `${extractFunction(COMMON, 'localeTag', 'app/js/common.js')}
+    `${extractFunction(COMMON, 'localeTag', 'app/js/core.js')}
 ` +
-    `${extractFunction(COMMON, 'formatDate', 'app/js/common.js')}
+    `${extractFunction(COMMON, 'formatDate', 'app/js/core.js')}
 ` +
-    `${extractFunction(COMMON, 'formatTime', 'app/js/common.js')}
+    `${extractFunction(COMMON, 'formatTime', 'app/js/core.js')}
 ` +
     'this.formatDate = formatDate; this.formatTime = formatTime;', context);
   return context;

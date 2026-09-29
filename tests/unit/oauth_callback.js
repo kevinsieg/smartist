@@ -10,8 +10,8 @@
 // user token is a different shape keyed on APP_SECRET, so the check could never
 // pass. Every attempt ended on "Invalid or expired login link".
 //
-// It worked on the single-band deployments because those take the
-// ARTIST_ADMIN_EMAIL fallback, which mints a real magic token. Only the
+// It worked on the single-band deployments because those took the
+// ARTIST_ADMIN_EMAIL fallback (since removed), which minted a real magic token. Only the
 // multi-workspace branch was broken, and nobody had a public account until the
 // day this was found.
 
@@ -90,7 +90,9 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
   };
 
   return {
-    oauth: require(path.join(__dirname, '../../api/_domain/oauth')),
+    // Driven the way api/config.js drives it: plain input through the adapter.
+    oauth: { oauthCallback: require(path.join(__dirname, '../../api/_domain/http'))
+      .handle(require(path.join(__dirname, '../../api/_domain/oauth')).oauthCallback) },
     state: realIdentity.generateState('google', 'login', NONCE),
     token: require(tokenPath),   // the real one, loaded after the eviction above
   };

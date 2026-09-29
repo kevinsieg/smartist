@@ -1,60 +1,61 @@
 const crypto = require('crypto');
 const { getDb } = require('../_db');
-const { checkRateLimit, clientIp } = require('../_ratelimit');
-const { generateMagicToken, generateUserToken, TTL_8H } = require('../_token');
+const { checkRateLimit } = require('../_ratelimit');
+const { generateUserToken, TTL_8H } = require('../_token');
 const logger = require('../_logger');
 const { resolveOAuthEmail, generateState, verifyState } = require('./identity');
-const { resolveArtist, getArtistsForUser } = require('./artist');
+const { getArtistsForUser } = require('./artist');
 const { createSignupToken } = require('./registration');
-const { origin } = require('./http');
+const { ok, fail } = require('./http');
 const { FB_GRAPH_VERSION } = require('../_constants');
 
-function callbackUri(req) {
-  return `${origin(req)}/auth/callback`;
+function callbackUri(origin) {
+  return `${origin}/auth/callback`;
 }
 
 const NONCE_COOKIE = 'oauth_nonce';
 
 // Set on the OAuth start (a same-origin fetch), sent back by the browser on the
 // provider's top-level redirect to /auth/callback (SameSite=Lax allows that).
-function setNonceCookie(res) {
+function nonceCookie() {
   const nonce = crypto.randomBytes(16).toString('hex');
-  res.setHeader('Set-Cookie',
-    `${NONCE_COOKIE}=${nonce}; Path=/; Max-Age=900; HttpOnly; Secure; SameSite=Lax`);
-  return nonce;
+  return { nonce, header: `${NONCE_COOKIE}=${nonce}; Path=/; Max-Age=900; HttpOnly; Secure; SameSite=Lax` };
 }
+const CLEAR_NONCE = `${NONCE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 
-function readNonceCookie(req) {
-  const m = new RegExp(`(?:^|;\\s*)${NONCE_COOKIE}=([0-9a-f]{32})(?:;|$)`).exec(req.headers?.cookie || '');
+function readNonceCookie(headers) {
+  const m = new RegExp(`(?:^|;\\s*)${NONCE_COOKIE}=([0-9a-f]{32})(?:;|$)`).exec(headers?.cookie || '');
   return m ? m[1] : null;
 }
 
 // GET ?action=google-url — start Google OAuth flow.
-async function googleUrl(req, res) {
+async function googleUrl({ query, origin }) {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
-    return res.status(503).json({ error: 'Google login is not configured' });
+    return fail(503, 'Google login is not configured');
+  const { nonce, header } = nonceCookie();
   const params = new URLSearchParams({
     client_id:     process.env.GOOGLE_CLIENT_ID,
-    redirect_uri:  callbackUri(req),
+    redirect_uri:  callbackUri(origin),
     response_type: 'code',
     scope:         'openid email',
-    state:         generateState('google', req.query.mode || 'login', setNonceCookie(res)),
+    state:         generateState('google', query.mode || 'login', nonce),
     access_type:   'online',
     prompt:        'select_account',
   });
-  return res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+  return { ...ok({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` }), headers: { 'Set-Cookie': header } };
 }
 
 // GET ?action=facebook-url — start Facebook OAuth flow.
-async function facebookUrl(req, res) {
+async function facebookUrl({ query, origin }) {
   if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET)
-    return res.status(503).json({ error: 'Facebook login is not configured' });
+    return fail(503, 'Facebook login is not configured');
+  const { nonce, header } = nonceCookie();
   const params = new URLSearchParams({
     client_id:    process.env.FACEBOOK_APP_ID,
-    redirect_uri: callbackUri(req),
+    redirect_uri: callbackUri(origin),
     response_type: 'code',
     scope:        'email',
-    state:        generateState('facebook', req.query.mode || 'login', setNonceCookie(res)),
+    state:        generateState('facebook', query.mode || 'login', nonce),
     // email is the only permission we ask for and the login cannot work
     // without it. Facebook will not re-ask for a permission someone has
     // declined unless told to, so without this one untick locks that person
@@ -63,15 +64,15 @@ async function facebookUrl(req, res) {
     // Harmless for everyone else: nothing declined, nothing to re-ask.
     auth_type:    'rerequest',
   });
-  return res.json({ url: `https://www.facebook.com/${FB_GRAPH_VERSION}/dialog/oauth?${params}` });
+  return { ...ok({ url: `https://www.facebook.com/${FB_GRAPH_VERSION}/dialog/oauth?${params}` }), headers: { 'Set-Cookie': header } };
 }
 
 // GET ?action=oauth-callback — OAuth provider redirects here (routed from
 // /auth/callback via vercel.json rewrite). Validates state, exchanges code for
 // email, and on success redirects to /login#session=<token>, which home.js
 // stores and verifies against the slug-independent my-artists endpoint.
-async function oauthCallback(req, res) {
-  const o = origin(req);
+async function oauthCallback({ query, headers, ip, origin }) {
+  const o = origin;
   // Everything that can go wrong answers the visitor identically. The reason
   // separates "no account for that address" from "expired state", and telling
   // them apart out loud would say whether an address is registered here — so
@@ -82,36 +83,39 @@ async function oauthCallback(req, res) {
   // Left un-awaited, the failures worth reading are the ones most likely to be
   // dropped.
   let provider = 'unknown';
-  const fail = async (reason) => {
+  // Once the nonce matched it is spent: every later answer clears the cookie.
+  let cookie = {};
+  const redirect = to => ({ status: 302, redirect: to, headers: cookie });
+  const failed = async (reason) => {
     await logger.error('oauth_callback_failed', { reason, provider });
-    return res.redirect(302, `${o}/login?oauth_error=1`);
+    return redirect(`${o}/login?oauth_error=1`);
   };
 
-  if (req.query.error) return fail(`provider_error:${req.query.error}`);
+  if (query.error) return failed(`provider_error:${query.error}`);
 
-  const { code, state } = req.query;
-  if (!code || !state) return fail('missing_code_or_state');
+  const { code, state } = query;
+  if (!code || !state) return failed('missing_code_or_state');
 
   const stateResult = verifyState(state);
-  if (!stateResult) return fail('invalid_or_expired_state');
-  const cookieNonce = readNonceCookie(req);
+  if (!stateResult) return failed('invalid_or_expired_state');
+  const cookieNonce = readNonceCookie(headers);
   // Not a secret (it also travels in the state): only proof this browser began the flow.
-  if (!cookieNonce || stateResult.nonce !== cookieNonce) return fail('state_not_from_this_browser');
-  res.setHeader('Set-Cookie', `${NONCE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  if (!cookieNonce || stateResult.nonce !== cookieNonce) return failed('state_not_from_this_browser');
+  cookie = { 'Set-Cookie': CLEAR_NONCE };
   provider   = stateResult.provider;
   const mode = stateResult.mode || 'login';
 
-  if (await checkRateLimit(`oauth:${clientIp(req)}`, 10, 60)) return fail('rate_limited');
+  if (await checkRateLimit(`oauth:${ip}`, 10, 60)) return failed('rate_limited');
 
   let email;
   try {
-    email = await resolveOAuthEmail(provider, code, callbackUri(req));
+    email = await resolveOAuthEmail(provider, code, callbackUri(origin));
   } catch (err) {
     await logger.error('oauth_token_exchange_failed', { provider, error: err.message });
-    return fail('token_exchange_failed');
+    return failed('token_exchange_failed');
   }
 
-  if (!email) return fail('no_email_from_provider');
+  if (!email) return failed('no_email_from_provider');
 
   const sql = getDb();
   const [firstUser] = await sql`
@@ -123,17 +127,17 @@ async function oauthCallback(req, res) {
   // accidentally setting up a second workspace.
   if (mode === 'signup' && !firstUser) {
     if (await checkRateLimit(`signup-link:${email.toLowerCase()}`, 3, 3600))
-      return res.redirect(302, `${o}/signup?error=rate_limited`);
+      return redirect(`${o}/signup?error=rate_limited`);
     const rawToken = await createSignupToken(email, sql);
     await logger.info('oauth_signup_started', { provider, email });
-    return res.redirect(302, `${o}/onboarding#token=${encodeURIComponent(rawToken)}`);
+    return redirect(`${o}/onboarding#token=${encodeURIComponent(rawToken)}`);
   }
 
   // Facebook has no verified-email flag (see identity.js). Matching its address
   // to an existing account is therefore opt-in per deployment: without it, an
   // address someone merely typed into Facebook would open that account here.
   if (firstUser && provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true')
-    return fail('facebook_email_not_trusted');
+    return failed('facebook_email_not_trusted');
 
   if (firstUser) {
     const artists = await getArtistsForUser(firstUser.id, sql);
@@ -147,21 +151,11 @@ async function oauthCallback(req, res) {
     // password and a user token is keyed on APP_SECRET, so it always came back
     // "Invalid or expired login link". `session=` is verified as what it is.
     const next = artists.length > 1 ? '/workspaces' : `/${artists[0]?.slug || ''}/dashboard`;
-    return res.redirect(302,
-      `${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
+    return redirect(`${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
   }
 
-  // Single-tenant fallback (ARTIST_ADMIN_EMAIL)
-  const adminEmail = process.env.ARTIST_ADMIN_EMAIL;
-  if (!adminEmail || email.toLowerCase() !== adminEmail.toLowerCase()) {
-    await logger.warn('oauth_email_mismatch', { provider, email });
-    return fail('email_not_authorised');
-  }
-  const band = await resolveArtist('', sql);
-  if (!band || !band.password_hash) return fail('band_not_found');
-  await logger.info('oauth_login', { provider, email });
-  const token = generateMagicToken(band.password_hash);
-  return res.redirect(302, `${o}/login#magic=${encodeURIComponent(token)}`);
+  await logger.warn('oauth_email_mismatch', { provider, email });
+  return failed('email_not_authorised');
 }
 
 module.exports = { googleUrl, facebookUrl, oauthCallback };

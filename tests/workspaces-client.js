@@ -2,7 +2,7 @@
 // Client-side tests for workspaces.js.
 //
 // This page is the one place a person lands when their login belongs to more
-// than one band, and it loads no common.js — so a call to a common.js helper
+// than one band, and it loads none of the shared scripts — so a call to a shared helper
 // throws ReferenceError, the async body aborts, and the page shows its static
 // heading with nothing under it. That shipped, and a static scan alone would
 // not have caught the abort: the script has to actually run.

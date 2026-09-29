@@ -1,10 +1,10 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit, clientIp } = require('../_ratelimit');
+const { checkRateLimit } = require('../_ratelimit');
 const { generateMagicToken, verifyMagicToken, generateUserToken, TTL_8H } = require('../_token');
 const { sendEmail } = require('../_email');
 const { getArtistsForUser } = require('./artist');
-const { origin } = require('./http');
+const { ok, fail } = require('./http');
 const logger = require('../_logger');
 
 // Reset a password without naming a band.
@@ -44,20 +44,20 @@ function _seed(row) {
 }
 
 // POST ?action=request-reset
-async function requestReset(req, res) {
-  const addr = String(req.body?.email ?? '').trim().toLowerCase();
+async function requestReset({ body, ip, origin }) {
+  const addr = String(body.email ?? '').trim().toLowerCase();
   // Always the same answer, with or without an account — otherwise this endpoint
   // will happily tell anyone which addresses are registered here.
-  if (!addr) return res.json({ ok: true });
-  if (await checkRateLimit(`reset:${addr}`, 3, 3600)) return res.json({ ok: true });
+  if (!addr) return ok({ ok: true });
+  if (await checkRateLimit(`reset:${addr}`, 3, 3600)) return ok({ ok: true });
   // Per address alone lets one client mail-bomb many addresses.
-  if (await checkRateLimit(`reset-ip:${clientIp(req)}`, 10, 3600)) return res.json({ ok: true });
+  if (await checkRateLimit(`reset-ip:${ip}`, 10, 3600)) return ok({ ok: true });
 
   const sql  = getDb();
   const rows = await _rowsFor(addr, sql);
   if (!rows.length) {
     await logger.info('reset_requested_unknown', { email: addr });
-    return res.json({ ok: true });
+    return ok({ ok: true });
   }
 
   const token = generateMagicToken(_seed(rows[0]), 'reset');
@@ -65,7 +65,7 @@ async function requestReset(req, res) {
   // Fragment, not query — tokens must not reach server or CDN logs. No `next`
   // here: at the root there is no single workspace to land in, so the login
   // page decides where to go once it knows which bands this person has.
-  const link  = `${origin(req)}/login#reset=${encodeURIComponent(token)}&hint=${hint}`;
+  const link  = `${origin}/login#reset=${encodeURIComponent(token)}&hint=${hint}`;
 
   try {
     await sendEmail({
@@ -75,22 +75,22 @@ async function requestReset(req, res) {
     });
   } catch (err) {
     await logger.error('reset_email_failed', { email: addr, error: err.message });
-    return res.status(500).json({ error: 'Failed to send email — try again later' });
+    return fail(500, 'Failed to send email — try again later');
   }
   await logger.info('reset_requested', { email: addr, workspaces: rows.length });
-  return res.json({ ok: true });
+  return ok({ ok: true });
 }
 
 // POST ?action=set-password
-async function setPassword(req, res) {
-  const { token, hint, password } = req.body ?? {};
-  if (!token || !hint || !password)   return res.status(400).json({ error: 'token, hint and password required' });
-  if (String(password).length < 8)    return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  if (String(password).length > 1000) return res.status(400).json({ error: 'Password too long' });
+async function setPassword({ body }) {
+  const { token, hint, password } = body;
+  if (!token || !hint || !password)   return fail(400, 'token, hint and password required');
+  if (String(password).length < 8)    return fail(400, 'Password must be at least 8 characters');
+  if (String(password).length > 1000) return fail(400, 'Password too long');
 
   let addr;
   try { addr = Buffer.from(String(hint), 'base64url').toString().toLowerCase(); }
-  catch { return res.status(400).json({ error: 'Invalid or expired link' }); }
+  catch { return fail(400, 'Invalid or expired link'); }
 
   const sql  = getDb();
   const rows = await _rowsFor(addr, sql);
@@ -98,7 +98,7 @@ async function setPassword(req, res) {
   // the account the hint actually names. A valid token for one address paired
   // with someone else's proves nothing and rewrites nothing.
   if (!rows.length || !verifyMagicToken(String(token), _seed(rows[0]), 'reset'))
-    return res.status(400).json({ error: 'Invalid or expired link' });
+    return fail(400, 'Invalid or expired link');
 
   const hash = await bcrypt.hash(String(password), 12);
   await sql`UPDATE users SET password_hash = ${hash} WHERE lower(email) = ${addr}`;
@@ -109,7 +109,7 @@ async function setPassword(req, res) {
   const sessionToken = generateUserToken(anchor.id, anchor.role, TTL_8H, hash);
   const artists      = await getArtistsForUser(anchor.id, sql);
   await logger.info('password_set_via_reset', { email: addr, workspaces: rows.length });
-  return res.json({ ok: true, token: sessionToken, role: anchor.role, email: anchor.email, artists });
+  return ok({ ok: true, token: sessionToken, role: anchor.role, email: anchor.email, artists });
 }
 
 module.exports = { requestReset, setPassword };

@@ -12,7 +12,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
     <link rel="stylesheet" href="/app/css/app.css?v=44">
-    <script src="/app/js/i18n.js?v=33"></script>
+    <script src="/app/js/i18n.js?v=34"></script>
 <style>
   .setlist-page-wrap { position: relative; }
 
@@ -106,13 +106,10 @@
         <h2 id="modal-title" data-i18n="setlist.modalTitle">Save Setlist</h2>
 
         <div id="auth-step">
-            <div class="modal-field">
-                <label for="password-input" data-i18n="setlist.passwordLabel">Password</label>
-                <input type="password" id="password-input" autocomplete="current-password" data-i18n-attr="placeholder:setlist.passwordPlaceholder" placeholder="Band password">
-            </div>
+            <p data-i18n="setlist.signInToSave">Sign in to save this setlist.</p>
             <div class="status-msg" id="auth-error"></div>
             <div class="modal-actions">
-                <button class="btn" id="verify-btn" data-i18n="setlist.verifyBtn">Verify</button>
+                <button class="btn" id="signin-btn" data-i18n="setlist.signInBtn">Sign in</button>
                 <button class="btn" onclick="_closeAcceptModal()" data-i18n="setlist.cancelBtn">Cancel</button>
             </div>
         </div>
@@ -158,8 +155,13 @@
 </div>
 
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/common.js?v=26"></script>
+<script src="/app/js/core.js?v=1"></script>
+<script src="/app/js/session.js?v=1"></script>
+<script src="/app/js/ui.js?v=1"></script>
+<script src="/app/js/shell.js?v=1"></script>
 <script src="/app/js/list-view.js?v=2"></script>
-<script src="/app/js/setlist.js?v=11"></script>
+<script src="/app/js/setlist-generator.js?v=1"></script>
+<script src="/app/js/setlist-history-tab.js?v=1"></script>
+<script src="/app/js/setlist.js?v=13"></script>
 </body>
 </html>

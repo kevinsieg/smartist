@@ -11,7 +11,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
     <link rel="stylesheet" href="/app/css/app.css?v=44">
-    <script src="/app/js/i18n.js?v=33"></script>
+    <script src="/app/js/i18n.js?v=34"></script>
   <link rel="stylesheet" href="/app/css/footer.css?v=3">
 </head>
 <body>
@@ -41,15 +41,6 @@
             <div class="pro-section" id="gema-section" style="display:none">
                 <button class="pro-back-btn" onclick="selectPro(null)" data-i18n="pro.backBtn">← PRO</button>
                 <h2 class="pro-section-title" data-i18n="pro.gemaImportTitle">GEMA — Import</h2>
-                <div id="login-area" style="display:none">
-                    <p style="color:var(--third-color);margin-bottom:1rem;" data-i18n="pro.loginRequired">Login required to import GEMA data.</p>
-                    <div class="gema-login-row">
-                        <input type="password" id="login-pw" class="gema-login-input" data-i18n-attr="placeholder:pro.passwordPlaceholder" placeholder="Password" autocomplete="current-password"/>
-                        <button class="btn auth-action" onclick="doLogin()" data-i18n="nav.login">Login</button>
-                    </div>
-                    <p id="login-error" style="color:var(--danger-color);margin-top:0.5rem;display:none"></p>
-                </div>
-
                 <div id="import-area" style="display:none">
                     <p style="color:var(--third-color);margin-bottom:1.5rem;font-size:0.9rem;">
                         <span data-i18n="pro.uploadHint">Upload a GEMA CSV export. Type is detected automatically from the filename.</span><br>
@@ -121,7 +112,10 @@ function selectPro(id) {
 }
 </script>
 <script src="/app/js/footer.js?v=2"></script>
-<script src="/app/js/common.js?v=26"></script>
+<script src="/app/js/core.js?v=1"></script>
+<script src="/app/js/session.js?v=1"></script>
+<script src="/app/js/ui.js?v=1"></script>
+<script src="/app/js/shell.js?v=1"></script>
 <script src="/app/js/pro-import.js?v=2"></script>
 </body>
 </html>

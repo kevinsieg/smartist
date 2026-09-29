@@ -14,13 +14,19 @@ function secret() {
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // Magic tokens are bound to a purpose, so a link minted for one job cannot be
-// redeemed for another: 'login' (sign-in link / bootstrap), 'reset' (set a new
+// redeemed for another: 'login' (sign-in link), 'reset' (set a new
 // password) and 'demo' (the public demo gate — resolves to a member session,
 // never an admin one; see api/_auth.js).
 const PURPOSES = new Set(['login', 'reset', 'demo']);
 
 function _magicSig(seed, purpose, expires) {
   return crypto.createHmac('sha256', seed).update(`${purpose}:${expires}`).digest('hex');
+}
+
+// The demo gate's signing key: per band, derived from APP_SECRET, so a demo
+// band needs no password of its own.
+function demoSeed(artistId) {
+  return crypto.createHmac('sha256', secret()).update(`demo:${artistId}`).digest('hex');
 }
 
 function generateMagicToken(passwordHash, purpose = 'login') {
@@ -87,6 +93,6 @@ function passwordMatches(claim, row) {
 }
 
 module.exports = {
-  generateMagicToken, verifyMagicToken, generateUserToken, verifyUserToken,
+  generateMagicToken, verifyMagicToken, demoSeed, generateUserToken, verifyUserToken,
   passwordFingerprint, passwordMatches, TTL_8H, TTL_30D,
 };

@@ -6,7 +6,7 @@
 
   var AUTH_TOKEN_KEY = 'smartist_token';
 
-  // This page loads no common.js (it runs before a workspace is chosen, so
+  // This page loads none of the shared scripts (it runs before a workspace is chosen, so
   // there is no band to build a nav from), which means getToken/clearToken are
   // not defined here — calling them threw and the page rendered nothing at all.
   // Same guarded-local-copy rule as share-utils.js and arrangement.js on stage.

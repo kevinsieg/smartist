@@ -93,24 +93,34 @@ async function main() {
   await lib.confirmDb(url, { question: 'Apply schema.sql to this database? (y/n): ', yes: args.includes('--yes') });
 
   const sql = connect(url);
-  const statements = splitStatements(src);
+  try {
+    const { applied, skipped } = await applyStatements(sql, src);
+    console.log(`\n  ${G('✓')} ${applied} statements applied, ${skipped} already existed\n`);
+  } catch (e) {
+    console.error(`\n  ${R('failed:')} ${e.message}\n  ${D(e.statement.slice(0, 120))}\n`);
+    process.exitCode = 1;
+  } finally {
+    await sql.end();
+  }
+}
 
+// Runs every statement of schema.sql; "already exists" is not an error. Also
+// used by setup.js. `sql` is a raw runner from connect() above.
+async function applyStatements(sql, src) {
   let applied = 0, skipped = 0;
-  for (const stmt of statements) {
+  for (const stmt of splitStatements(src)) {
     try {
       await sql([stmt]);
       applied++;
     } catch (e) {
       if (e.message.toLowerCase().includes('already exists')) { skipped++; continue; }
-      console.error(`\n  ${R('failed:')} ${e.message}\n  ${D(stmt.slice(0, 120))}\n`);
-      await sql.end();
-      process.exit(1);
+      e.statement = stmt;
+      throw e;
     }
   }
-  await sql.end();
-  console.log(`\n  ${G('✓')} ${applied} statements applied, ${skipped} already existed\n`);
+  return { applied, skipped };
 }
 
 if (require.main === module) main();
 
-module.exports = { splitStatements, migrationIds };
+module.exports = { splitStatements, migrationIds, applyStatements, connect };
