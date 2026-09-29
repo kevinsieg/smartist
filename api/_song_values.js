@@ -30,4 +30,29 @@ function matchGenre(value, known) {
   return known.find(g => genreKey(g) === k) ?? value;
 }
 
-module.exports = { energyToScale, matchGenre };
+const TAG_MAX = 50;
+const TAGS_MAX = 10;
+
+// Tags from a request: undefined = not sent (keep stored), null/[] = none.
+// A tag typed in another casing takes the spelling the workspace already uses.
+function cleanTags(raw, known) {
+  if (raw === undefined) return null;
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) return { error: 'tags must be an array' };
+  const out = [];
+  const seen = new Set();
+  for (const t of raw) {
+    if (typeof t !== 'string') return { error: 'tags must be strings' };
+    const v = t.trim();
+    if (!v) continue;
+    if (v.length > TAG_MAX) return { error: `tag too long (max ${TAG_MAX})` };
+    const k = v.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(known.find(x => x.toLowerCase() === k) ?? v);
+  }
+  if (out.length > TAGS_MAX) return { error: `too many tags (max ${TAGS_MAX})` };
+  return out;
+}
+
+module.exports = { energyToScale, matchGenre, cleanTags };

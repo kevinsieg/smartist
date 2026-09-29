@@ -8,7 +8,7 @@ const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { keyFromUrl } = require('../_r2');
 const { MEDIA_CONFIGS, presignMedia, confirmMedia, deleteMedia } = require('../_media');
 const { songLimit } = require('../_plans');
-const { energyToScale, matchGenre } = require('../_song_values');
+const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
   listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, writeLyrics,
 } = require('../_domain/songs');
@@ -20,6 +20,13 @@ async function genresOf(sql, artistId) {
     SELECT DISTINCT genre FROM songs
     WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> ''`;
   return rows.map(r => r.genre);
+}
+
+async function tagsOf(sql, artistId) {
+  const rows = await sql`
+    SELECT DISTINCT unnest(tags) AS tag FROM songs
+    WHERE artist_id = ${artistId} AND NOT deleted`;
+  return rows.map(r => r.tag);
 }
 
 // `extra` is free-form, but its *Url keys end up in href/src attributes on the
@@ -185,11 +192,12 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const _max = songLimit(band);
-    const [countRows, knownGenres] = await Promise.all([
+    const [countRows, knownGenres, knownTags] = await Promise.all([
       _max != null
         ? sql`SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`
         : null,
       genresOf(sql, band.id),
+      tagsOf(sql, band.id),
     ]);
     if (countRows && countRows[0].count >= _max)
       return res.status(402).json({ error: 'song_limit', limit: _max });
@@ -225,6 +233,8 @@ module.exports = wrap(async function handler(req, res) {
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
     const language = cleanLanguage(req.body?.language !== undefined ? req.body.language : moved.language);
     if (language === false) return res.status(400).json({ error: 'language too long' });
+    const tags = cleanTags(req.body?.tags, knownTags);
+    if (tags?.error) return res.status(400).json({ error: tags.error });
     const lyrics = cleanLyrics(req.body?.lyrics !== undefined ? req.body.lyrics : moved.lyrics);
     if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
@@ -234,11 +244,12 @@ module.exports = wrap(async function handler(req, res) {
     const [song] = await sql`
       WITH s AS (
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
-                           bpm, length_min, interpret, reference_interpret, comment, language, extra)
+                           bpm, length_min, interpret, reference_interpret, comment, language, extra, tags)
         VALUES (${band.id}, ${title}, ${active ?? true}, ${heart ?? false}, ${key},
                 ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
                 ${interpret}, ${reference_interpret},
-                ${comment}, ${language}, ${extra ?? {}})
+                ${comment}, ${language}, ${extra ?? {}},
+                ARRAY(SELECT jsonb_array_elements_text(${sql.json(tags ?? [])})))
         RETURNING *
       ), saved_lyrics AS (
         INSERT INTO song_lyrics (song_id, artist_id, lyrics)
@@ -272,11 +283,12 @@ module.exports = wrap(async function handler(req, res) {
     const NUM_FIELDS = ['bpm', 'length_min'];
 
     const ids = updates.map(u => Number(u?.id)).filter(n => Number.isInteger(n) && n > 0);
-    const [storedRows, knownGenres] = await Promise.all([
+    const [storedRows, knownGenres, knownTags] = await Promise.all([
       ids.length
         ? sql`SELECT * FROM songs WHERE artist_id = ${band.id} AND id = ANY(${ids}::int[]) AND deleted = false`
         : [],
       updates.some(u => u && 'genre' in u) ? genresOf(sql, band.id) : [],
+      updates.some(u => u && 'tags' in u) ? tagsOf(sql, band.id) : [],
     ]);
     const stored = new Map(storedRows.map(row => [row.id, row]));
 
@@ -323,6 +335,11 @@ module.exports = wrap(async function handler(req, res) {
           if (value.language === false) error = 'language too long (max 10)';
         }
       }
+      if (!error) {
+        const tags = cleanTags(update.tags, knownTags);
+        if (tags?.error) error = tags.error;
+        else value.tags = tags ?? current.tags ?? [];
+      }
       if (!error) error = extraError(moved.extra, current.extra);
       if (error) { rejected.push({ id: songId, error }); continue; }
 
@@ -353,11 +370,12 @@ module.exports = wrap(async function handler(req, res) {
             reference_interpret = v.reference_interpret,
             comment             = v.comment,
             language            = v.language,
+            tags                = v.tags,
             extra               = songs.extra || COALESCE(v.extra, '{}'::jsonb)
           FROM jsonb_to_recordset(${sql.json(rows)}) AS v(
             id int, title text, active boolean, heart boolean, key text, genre text,
             energy numeric, time_signature text, bpm numeric, length_min numeric,
-            interpret text, reference_interpret text, comment text, language text, extra jsonb)
+            interpret text, reference_interpret text, comment text, language text, extra jsonb, tags text[])
           WHERE songs.id = v.id AND songs.artist_id = ${band.id} AND songs.deleted = false
           RETURNING songs.*
         ), logged AS (

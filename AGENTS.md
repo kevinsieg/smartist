@@ -36,8 +36,13 @@ production database.
   `process.env` read) **and** onto every Vercel project.
 - A schema change is a dated block appended to `scripts/schema.sql` ending in
   `INSERT INTO schema_migrations …`, with `SCHEMA_VERSION` in `api/_env.js` set
-  to it. Idempotent (`IF NOT EXISTS`), no `DO $$` blocks. It is applied to every
-  production database *before* the release merges — a human step.
+  to it. Idempotent (`IF NOT EXISTS`), no `DO $$` blocks. **Each deployment
+  applies it to its own database while it builds** (`scripts/deploy_migrate.js`,
+  run by `installCommand` in `vercel.json`), a minute or two before the new
+  code goes live.
+- So the live code must survive the new schema: add freely, but drop or rename
+  a column only a release after the code stopped using it. CI's *Live code on
+  the new schema* job runs `main`'s API suite against the new schema.
 - After a deploy, `GET /api/config?action=health` on each domain must say
   `"schema":"current"` with nothing missing.
 

@@ -12,9 +12,10 @@ projects deploy `main`, each with its own database and env vars.
    commit must be green. List what ships: `git log --oneline origin/main..origin/dev`.
 2. **Prerequisites — ask the user, never do these yourself:**
    - A schema change in the range (`git diff origin/main..origin/dev -- scripts/schema.sql`)
-     must be applied to **every** production database *before* the merge:
-     `DATABASE_URL=<prod> node scripts/apply_schema.js`, then `--check`.
-     Production connection strings are the user's; do not ask for them.
+     is applied by each deployment's build (`scripts/deploy_migrate.js`). Check
+     that CI's *Live code on the new schema* job is green, and name the change
+     in the PR's "Before deploy" section. Production connection strings are
+     the user's; do not ask for them.
    - A new variable in `api/_env.js` must be set on every Vercel project.
    - Anything that changes who can sign in (see recent commits) needs a note.
 3. **Open the PR** `dev` → `main`. Body: what ships, grouped by theme, plus a

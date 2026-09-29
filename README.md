@@ -111,13 +111,13 @@ work on dev  →  git push origin dev  →  verify on preview URL
 →  open PR: dev → main  →  review + merge  →  Vercel deploys to production
 ```
 
-If the PR includes a schema change, apply it to **every** production database before merging, then check the deployments:
+A schema change needs no manual step: every deployment runs `scripts/deploy_migrate.js` while it builds (after `npm install`, from `installCommand` in `vercel.json`), which applies pending migrations to that Vercel project's own `DATABASE_URL` (nothing pending → nothing runs; a failure fails the build and the previous deployment stays live). Check the deployments afterwards:
 
 ```bash
-DATABASE_URL=<prod-url> node scripts/apply_schema.js           # idempotent, asks before it connects
-DATABASE_URL=<prod-url> node scripts/apply_schema.js --check   # "up to date"
 curl https://<deployment>/api/config?action=health              # "schema":"current"
 ```
+
+The migration runs a minute or two before the new code is live, so drop a column only a release after the code stopped using it (CI runs `main`'s API suite on the new schema to catch this). To apply by hand, e.g. a database no deployment builds against: `DATABASE_URL=<url> node scripts/apply_schema.js` (asks before it connects), then `--check`.
 
 
 
@@ -402,6 +402,7 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | ----------------------------- | ------------------------------------------------------------------------ |
 | `scripts/setup.js`            | Interactive wizard: schema + band + its admin user + field config        |
 | `scripts/apply_schema.js`     | Apply `schema.sql` to the database in `DATABASE_URL` (idempotent)        |
+| `scripts/deploy_migrate.js`   | Runs on every deployment: apply pending migrations to its own database   |
 | `scripts/seed.js`             | Populate the dev database with test data (wipe + reseed with `--force`)  |
 | `scripts/create_user.js`      | First login for a band, or set an account's password from the CLI        |
 | `scripts/plans.js`            | List bands with plan and usage; grant a plan; recount storage            |

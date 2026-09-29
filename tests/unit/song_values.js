@@ -1,7 +1,7 @@
-const { energyToScale, matchGenre } = require('../../api/_song_values');
+const { energyToScale, matchGenre, cleanTags } = require('../../api/_song_values');
 
 function run(r) {
-  const { test, assertEq, B } = r;
+  const { test, assert, assertEq, B } = r;
   console.log(B('\nsong values — energy scale, genre keys'));
 
   test('energy: 0–10 integers kept', () => {
@@ -46,6 +46,20 @@ function run(r) {
     assertEq(matchGenre(null, ['Folk']), null);
   });
 
+  test('tags: not sent → null', () => assertEq(cleanTags(undefined, []), null));
+  test('tags: null and [] clear', () => {
+    assertEq(JSON.stringify(cleanTags(null, [])), '[]');
+    assertEq(JSON.stringify(cleanTags([], [])), '[]');
+  });
+  test('tags: trimmed, empties dropped, deduped case-insensitively', () =>
+    assertEq(JSON.stringify(cleanTags([' Liebe ', '', 'liebe', 'Arbeit'], [])), '["Liebe","Arbeit"]'));
+  test('tags: known spelling wins', () =>
+    assertEq(JSON.stringify(cleanTags(['la bretagne'], ['La Bretagne'])), '["La Bretagne"]'));
+  test('tags: not an array → error', () => assert(cleanTags('Liebe', []).error));
+  test('tags: non-string item → error', () => assert(cleanTags([3], []).error));
+  test('tags: over 50 chars → error', () => assert(cleanTags(['x'.repeat(51)], []).error));
+  test('tags: more than 10 → error', () =>
+    assert(cleanTags(Array.from({ length: 11 }, (_, i) => 't' + i), []).error));
 }
 
 module.exports = run;

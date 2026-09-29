@@ -30,6 +30,34 @@ function songFieldHidden(config, key) {
   return Array.isArray(hidden) && hidden.indexOf(key) !== -1;
 }
 
+function songTags(song) {
+  return (song && Array.isArray(song.tags)) ? song.tags : [];
+}
+
+function bandTags(songs) {
+  var seen = {};
+  (songs || []).forEach(function(s) { songTags(s).forEach(function(t) { seen[t] = true; }); });
+  return Object.keys(seen).sort(function(a, b) { return a.localeCompare(b); });
+}
+
+// Stable: songs keep their generated order inside a tag. Untagged songs last.
+function orderByFirstTag(songs) {
+  var order = bandTags(songs);
+  var rank = function(s) { var t = songTags(s)[0]; return t === undefined ? order.length : order.indexOf(t); };
+  return songs.map(function(s, i) { return { s: s, i: i }; })
+    .sort(function(a, b) { return rank(a.s) - rank(b.s) || a.i - b.i; })
+    .map(function(x) { return x.s; });
+}
+
+// Indexes where a new first tag starts — a heading goes before each.
+function tagGroupStarts(songs) {
+  var starts = new Set();
+  songs.forEach(function(s, i) {
+    if (i === 0 || songTags(s)[0] !== songTags(songs[i - 1])[0]) starts.add(i);
+  });
+  return starts;
+}
+
 // A4 at 14mm/16mm margins ≈ 757pt usable height.
 // Subtract: header ~52pt, h2 ~14pt, gaps ~10pt → ~681pt for songs.
 // Each row: title line (f*1.35) + meta line (f*0.65*1.1) + border/padding (~4pt)

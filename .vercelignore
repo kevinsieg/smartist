@@ -1,5 +1,11 @@
 # Files to ignore during Vercel deployment
-scripts/
+# The install step (scripts/deploy_migrate.js) needs these four; the other
+# scripts stay out of the deployment.
+scripts/*
+!scripts/deploy_migrate.js
+!scripts/apply_schema.js
+!scripts/_lib.js
+!scripts/schema.sql
 tests/
 .git/
 .github/

@@ -60,6 +60,17 @@ function load(songs) {
   return context;
 }
 
+// Tag filter helpers need songTags/bandTags from core.js.
+function loadTags(songs) {
+  const context = { console, songs };
+  vm.createContext(context);
+  vm.runInContext(
+    `${extractFunction(COMMON, 'songTags', 'app/js/core.js')}\n${extractFunction(COMMON, 'bandTags', 'app/js/core.js')}\n` +
+    `${extractFunction(SRC, '_getSongsForFactory')}\n${extractFunction(SRC, '_availableTags')}\n` +
+    'this.getSongs = _getSongsForFactory; this.tags = _availableTags;', context);
+  return context;
+}
+
 // energyLabel lives in core.js and is used by the songs list, panel and setlist page.
 function loadEnergyLabel() {
   const context = { console, t: key => ({ 'songs.energyLow': 'low', 'songs.energyMiddle': 'middle',
@@ -198,6 +209,14 @@ const SONGS = [
     const t = formatTime(new Date('2026-01-22T19:05:00Z'));
     assert(/^\d{2}:\d{2}$/.test(t), 'expected HH:MM, got ' + t);
     assert(!/AM|PM/i.test(t), 'must not use AM/PM');
+  });
+
+  test('tag filter matches any selected tag', () => {
+    const songs = [{ id: 1, title: 'A', tags: ['Liebe'] }, { id: 2, title: 'B', tags: ['Arbeit'] }, { id: 3, title: 'C', tags: [] }];
+    const ctx = loadTags(songs);
+    assertEq(ctx.getSongs({ tags: ['Liebe', 'Arbeit'] }).map(s => s.id), [1, 2]);
+    assertEq(ctx.getSongs({ tags: [] }).map(s => s.id), [1, 2, 3]);
+    assertEq(ctx.tags({ tags: ['Liebe'] }), ['Arbeit', 'Liebe']);
   });
 
   const total = passed + failed;

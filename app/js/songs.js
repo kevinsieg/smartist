@@ -211,6 +211,7 @@ var COLS = [
   { key: 'extra.gitCapo',       label: 'gitCapo',            type: 'number', cls: 'col-kcapo',   width: 58  },
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
   { key: 'genre',               get label() { return t('songs.colLabelGenre'); },      type: 'text',   cls: 'col-cat',     width: 100 },
+  { key: 'tags',                get label() { return t('songs.colLabelTags'); },       type: 'tags',   cls: 'col-tags',    width: 140 },
   { key: 'energy',              get label() { return t('songs.colLabelEnergy'); },     type: 'energy', cls: 'col-energy',  width: 190 },
   { key: 'time_signature',      get label() { return t('songs.colLabelTimeSig'); },    type: 'select', cls: 'col-timesig', width: 68, options: TIME_SIGNATURES },
   { key: 'bpm',                 get label() { return t('songs.colLabelBpm'); },        type: 'number', cls: 'col-bpm',     width: 55  },
@@ -225,7 +226,7 @@ var COLS = [
 
 // Instrument fields a band can hide in Settings (artists.config.hiddenSongFields).
 // The data stays; only the bulk table and the panel edit form leave them out.
-var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp'];
+var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp', 'tags'];
 
 function _isSongFieldHidden(key) {
   return songFieldHidden(_songsCfg && _songsCfg.config, key);
@@ -381,6 +382,7 @@ function _getSongsForFactory(state) {
     if (state.title && !(s.title || '').toLowerCase().includes(state.title)) return false;
     if (state.interpret && !(s.interpret || '').toLowerCase().includes(state.interpret)) return false;
     if (state.genre && (s.genre || '') !== state.genre) return false;
+    if (state.tags && state.tags.length && !songTags(s).some(function(t) { return state.tags.indexOf(t) !== -1; })) return false;
     if (setlistIds !== undefined && !setlistIds.has(s.id)) return false;
     return true;
   });
@@ -398,12 +400,21 @@ function _availableGenres(state) {
   return Array.from(new Set(available)).sort();
 }
 
+// Tags offered as chips: those on songs that pass the other filters.
+function _availableTags(state) {
+  var rest = Object.assign({}, state || {});
+  delete rest.tags;
+  return bandTags(_getSongsForFactory(rest));
+}
+
 function _renderSongsListView() {
   _songsView = createListView({
     container: document.getElementById('page-content'),
     filters: isViewMode() ? [
       { id: 'title',     label: t('songs.filterTitle'),     type: FILTER_TYPES.TEXT, field: 'title'     },
       { id: 'interpret', label: t('songs.filterInterpret'), type: FILTER_TYPES.TEXT, field: 'interpret' },
+      { id: 'tags',      label: t('songs.filterTags'),      type: FILTER_TYPES.CHIPS, multi: true, field: 'tags',
+        getValues: _availableTags },
     ] : [
       { id: 'title',     label: t('songs.filterTitle'),       type: FILTER_TYPES.TEXT,       field: 'title'     },
       { id: 'interpret', label: t('songs.filterInterpret'),    type: FILTER_TYPES.TEXT,       field: 'interpret' },
@@ -412,6 +423,8 @@ function _renderSongsListView() {
       { id: 'active',    label: t('songs.filterActiveOnly'),   type: FILTER_TYPES.CHECKBOX,   field: 'active', 'default': true },
       { id: 'genre',     label: t('songs.filterGenre'),        type: FILTER_TYPES.CHIPS,      field: 'genre',
         getValues: _availableGenres },
+      { id: 'tags',      label: t('songs.filterTags'),         type: FILTER_TYPES.CHIPS, multi: true, field: 'tags',
+        getValues: _availableTags },
     ],
     actions: isViewMode() ? [] : [
       { label: t('songs.addSong'), onClick: _openNewSongPanel },
@@ -486,6 +499,10 @@ function renderListRowHtml(s) {
   var borderCls = s.active ? 'songs-list-row--active' : 'songs-list-row--inactive';
   var titleCls  = s.active ? '' : ' songs-list-row-title--inactive';
 
+  var tagChips = _isSongFieldHidden('tags') ? '' : songTags(s).map(function(tag) {
+    return '<span class="tag-chip">' + escHtml(tag) + '</span>';
+  }).join('');
+
   var heartBtn = heartButtonHtml(!!s.heart, 'toggleFavourite(' + Number(s.id) + ')', t('songs.colTitleHeart'), _viewMode);
 
   var icons = '';
@@ -499,6 +516,7 @@ function renderListRowHtml(s) {
     '<div class="songs-list-row-stack">' +
       '<span class="songs-list-row-title' + titleCls + '">' + title + '</span>' +
       (interp ? '<span class="songs-list-row-interpret">' + interp + '</span>' : '') +
+      (tagChips ? '<span class="songs-list-row-tags">' + tagChips + '</span>' : '') +
     '</div>' +
     // The slots are always rendered, empty ones included — otherwise a song without a
     // genre shifts key and energy left and the columns no longer line up.

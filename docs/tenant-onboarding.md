@@ -374,12 +374,14 @@ Delivery is blocked until all three show green in the Resend dashboard. Each sen
 
 ## Schema changes
 
-`scripts/schema.sql` is idempotent (`IF NOT EXISTS`, guarded `ALTER`s). Whenever it
-changes, apply it to **every** production database, not only the one your shell
-is linked to — each tenant project has its own `DATABASE_URL`:
+`scripts/schema.sql` is idempotent (`IF NOT EXISTS`, guarded `ALTER`s). Every
+deployment applies pending migrations to its own `DATABASE_URL` in the build
+(`scripts/deploy_migrate.js`), so a new tenant project needs nothing extra: its
+first deployment creates the schema. By hand, for a database no deployment
+builds against:
 
 ```bash
-DATABASE_URL='<that project\'s production url>' node scripts/apply_schema.js
+DATABASE_URL='<url>' node scripts/apply_schema.js
 ```
 
 Each migration block records its date in `schema_migrations`. To see what a
@@ -427,6 +429,7 @@ change) need the tenant's sending domain verified in Resend first.
 **Verification**
 - [ ] At least one successful production deploy — Vercel shows green
 - [ ] `curl https://<domain>/api/config?action=health` answers 200 with `"ok": true` — a 503 lists the missing variables (names only) or says the database is unreachable or behind
+- [ ] Better Stack uptime monitor on the health URL and a "no logs in 30 minutes" alert on the log source ([Monitoring](deployment.md#monitoring))
 - [ ] Login works at the custom domain with the account from `create_user.js`
 - [ ] `curl …/api/config` returns 200 (see Step 6)
 - [ ] Settings → public catalogue / public stage links set as the band wants (both off by default)

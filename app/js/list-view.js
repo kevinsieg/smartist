@@ -51,6 +51,8 @@ function createListView(opts) {
     } else if (f.type === FILTER_TYPES.ASYNC_TEXT) {
       _resolved[f.id] = undefined;
       _asyncRaw[f.id] = '';
+    } else if (f.type === FILTER_TYPES.CHIPS && f.multi) {
+      _state[f.id] = [];
     } else {
       _state[f.id] = '';
     }
@@ -157,27 +159,31 @@ function createListView(opts) {
   function _renderChips() {
     var row2 = document.getElementById('lv-chips-row');
     if (!row2) return;
-    var chipsFilter = opts.filters.find(function(f) { return f.type === FILTER_TYPES.CHIPS; });
-    if (!chipsFilter) return;
+    var chipsFilters = opts.filters.filter(function(f) { return f.type === FILTER_TYPES.CHIPS; });
+    row2.innerHTML = chipsFilters.map(_chipsGroupHtml).join('');
+  }
 
-    // Pass the live filter state so the page can offer only the values that still
-    // have matching rows (e.g. no genre chips for genres without an active song).
+  // Pass the live filter state so the page can offer only the values that still
+  // have matching rows (e.g. no genre chips for genres without an active song).
+  // A multi filter holds an array of selected values; a single one a string.
+  function _chipsGroupHtml(chipsFilter) {
     var values = chipsFilter.getValues
       ? chipsFilter.getValues(Object.assign({}, _state, _resolved))
       : [];
-    var active = _state[chipsFilter.id] || '';
-    // Keep the selected chip visible even when nothing matches it any more, otherwise
+    var selected = chipsFilter.multi ? (_state[chipsFilter.id] || []) : [_state[chipsFilter.id] || ''].filter(Boolean);
+    // Keep selected chips visible even when nothing matches them any more, otherwise
     // the filter stays applied with no way to switch it off.
-    if (active && values.indexOf(active) === -1) values = values.concat(active).sort();
-    if (!values.length) { row2.innerHTML = ''; return; }
+    var missing = selected.filter(function(v) { return values.indexOf(v) === -1; });
+    if (missing.length) values = values.concat(missing).sort();
+    if (!values.length) return '';
 
     var chips = values.map(function(v) {
-      var isSel = active === v;
+      var isSel = selected.indexOf(v) !== -1;
       return '<button class="genre-chip' + (isSel ? ' genre-chip--active' : '') +
         '" data-lv-chip="' + escHtml(v) + '" data-filter-id="' + escHtml(chipsFilter.id) + '">' +
         escHtml(v) + '</button>';
     }).join('');
-    row2.innerHTML = '<span class="filter-genre-label">' + escHtml(chipsFilter.label) + ':</span>' + chips;
+    return '<div class="lv-chips-group"><span class="filter-genre-label">' + escHtml(chipsFilter.label) + ':</span>' + chips + '</div>';
   }
 
   function _renderGroupedList(items) {
@@ -294,7 +300,15 @@ function createListView(opts) {
         if (!chip) return;
         var filterId = chip.dataset.filterId;
         var value    = chip.dataset.lvChip;
-        _state[filterId] = (_state[filterId] === value) ? '' : value;
+        var f = opts.filters.find(function(x) { return x.id === filterId; });
+        if (f && f.multi) {
+          var sel = _state[filterId] || [];
+          _state[filterId] = sel.indexOf(value) === -1
+            ? sel.concat(value)
+            : sel.filter(function(v) { return v !== value; });
+        } else {
+          _state[filterId] = (_state[filterId] === value) ? '' : value;
+        }
         _runPipeline();
       });
     }
@@ -446,7 +460,7 @@ function createListView(opts) {
       if (el) el.checked = !!v;
       _runPipeline();
     } else if (f.type === FILTER_TYPES.CHIPS) {
-      _state[id] = String(v);
+      _state[id] = f.multi ? [].concat(v || []).map(String) : String(v);
       _runPipeline();
     } else if (f.type === FILTER_TYPES.ASYNC_TEXT) {
       if (el) el.value = v;
