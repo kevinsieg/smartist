@@ -374,12 +374,14 @@ Delivery is blocked until all three show green in the Resend dashboard. Each sen
 
 ## Schema changes
 
-`scripts/schema.sql` is idempotent (`IF NOT EXISTS`, guarded `ALTER`s). Whenever it
-changes, apply it to **every** production database, not only the one your shell
-is linked to — each tenant project has its own `DATABASE_URL`:
+`scripts/schema.sql` is idempotent (`IF NOT EXISTS`, guarded `ALTER`s). Every
+deployment applies pending migrations to its own `DATABASE_URL` in the build
+(`scripts/deploy_migrate.js`), so a new tenant project needs nothing extra: its
+first deployment creates the schema. By hand, for a database no deployment
+builds against:
 
 ```bash
-DATABASE_URL='<that project\'s production url>' node scripts/apply_schema.js
+DATABASE_URL='<url>' node scripts/apply_schema.js
 ```
 
 Each migration block records its date in `schema_migrations`. To see what a
