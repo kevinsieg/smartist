@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS gema_rightholders (
   id                   SERIAL PRIMARY KEY,
   gema_work_id         INTEGER NOT NULL REFERENCES gema_works(id) ON DELETE CASCADE,
   name                 TEXT NOT NULL,               -- e.g. "SIEG KEVIN"
-  ip_name_number       TEXT,                        -- IP-Name-Nr., e.g. "755143051"
+  ip_name_number       TEXT,                        -- IP-Name-Nr., e.g. "123456789"
   role                 TEXT NOT NULL,               -- composer | lyricist | publisher | arranger | sub-publisher
   role_order           TEXT,                        -- Reihenfolge Verlagsrollen (E1, E2, …)
   publisher_relation   TEXT,                        -- Urheber/-in-Verlagsbeziehung

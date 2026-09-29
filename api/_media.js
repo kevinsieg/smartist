@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { getDb, insertAuditLog, getSlug } = require('./_db');
-const { requireAuth } = require('./_auth');
+const { requireAuth, refuseDemo } = require('./_auth');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
 const { isOwnMediaUrl } = require('./_ownership');
 const { storageLimitBytes } = require('./_plans');
@@ -172,6 +172,7 @@ function makeMediaFn(config) {
     // paths do the same thing, so a stricter role here protected nothing.
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
+    if (refuseDemo(req, res)) return;
     const sql = getDb();
 
     let result;

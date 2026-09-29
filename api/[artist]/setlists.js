@@ -1,5 +1,5 @@
 const { getDb, getSlug } = require('../_db');
-const { requireAuth, getAccess } = require('../_auth');
+const { requireAuth, getAccess, refuseDemo } = require('../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../_validate');
 const { ownsSongs, ownsGig } = require('../_ownership');
 const { checkRateLimit, clientIp } = require('../_ratelimit');
@@ -72,6 +72,7 @@ module.exports = wrap(async function handler(req, res) {
 
     // ── Share a setlist by email ───────────────────────────────────────────────
     if (rawShareId != null) {
+      if (refuseDemo(req, res)) return;
       const shareId = Number(rawShareId);
       if (!Number.isInteger(shareId) || shareId <= 0) return res.status(400).json({ error: 'Invalid share_id' });
       const email = validateEmail(req.body?.email);

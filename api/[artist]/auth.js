@@ -2,14 +2,14 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getArtist, getDb, getSlug }            = require('../_db');
 const { requireAuth, requireRole } = require('../_auth');
-const { generateUserToken, generateMagicToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
+const { generateUserToken, generateMagicToken, verifyMagicToken, passwordlessSeed, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('../_domain/artist');
 const { DUMMY_HASH } = require('../_domain/login');
 const { sendEmail }    = require('../_email');
 const { escHtml }      = require('../_html');
 const { origin: appOrigin }  = require('../_domain/http');
 const { wrap }         = require('../_handler');
-const { checkRateLimit, clientIp } = require('../_ratelimit');
+const { checkRateLimit, clientIp, loginLocked, countLoginFailure } = require('../_ratelimit');
 const { validateStr, validateEmail } = require('../_validate');
 const logger           = require('../_logger');
 
@@ -48,12 +48,16 @@ module.exports = wrap(async function handler(req, res) {
     `;
     if (!user) return res.status(400).json({ error: 'Invalid or expired invite' });
 
+    // One address, one password: the same person may already sign in to other
+    // bands, and an old password left on those rows would keep working there.
     const hash = await bcrypt.hash(password, 12);
     const [, artists] = await Promise.all([
       sql`
         UPDATE users
-        SET password_hash = ${hash}, invite_token_hash = NULL, invite_expires_at = NULL
-        WHERE id = ${user.id}
+        SET password_hash = ${hash},
+            invite_token_hash = CASE WHEN id = ${user.id} THEN NULL ELSE invite_token_hash END,
+            invite_expires_at = CASE WHEN id = ${user.id} THEN NULL ELSE invite_expires_at END
+        WHERE lower(email) = lower(${user.email})
       `,
       getArtistsForUser(user.id, sql),
     ]);
@@ -86,13 +90,15 @@ module.exports = wrap(async function handler(req, res) {
     // The hint is attacker-supplied, so the token is checked against the seed of
     // the row the hint names. A valid token for one account plus someone else's
     // address therefore proves nothing and rewrites nothing.
-    const seed = user ? (user.password_hash || `${process.env.APP_SECRET}:${user.id}`) : null;
+    const seed = user ? (user.password_hash || passwordlessSeed(user.id)) : null;
     if (!user || !verifyMagicToken(String(token), seed, 'reset'))
       return res.status(400).json({ error: 'Invalid or expired link' });
 
+    // Every band of this address, as the root reset does (api/_domain/reset.js):
+    // an old password left on another band's row would keep working there.
     const hash = await bcrypt.hash(String(password), 12);
     const [, artists] = await Promise.all([
-      sql`UPDATE users SET password_hash = ${hash} WHERE id = ${user.id}`,
+      sql`UPDATE users SET password_hash = ${hash} WHERE lower(email) = lower(${user.email})`,
       getArtistsForUser(user.id, sql),
     ]);
 
@@ -129,10 +135,8 @@ module.exports = wrap(async function handler(req, res) {
     // The seed is the signing key, and it doubles as the expiry: setting a
     // password changes the hash, so the link that set it stops verifying and
     // any other outstanding link dies with it. A password-less account has no
-    // hash to sign with — an empty key would make those tokens forgeable — so
-    // it borrows APP_SECRET, bound to the user id so one such token cannot be
-    // replayed against another account.
-    const tokenSeed = user.password_hash || `${process.env.APP_SECRET}:${user.id}`;
+    // hash to sign with, so it gets passwordlessSeed (see api/_token.js).
+    const tokenSeed = user.password_hash || passwordlessSeed(user.id);
 
     const resetToken = generateMagicToken(tokenSeed, 'reset');
     const origin = appOrigin(req);
@@ -198,7 +202,7 @@ module.exports = wrap(async function handler(req, res) {
     // Email + password login
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
     const [limited, band] = await Promise.all([checkRateLimit(`auth:${clientIp(req)}`, 10, 60), getArtist(slug)]);
-    if (limited) return res.status(429).json({ error: 'Too many attempts — try again later' });
+    if (limited || await loginLocked(email)) return res.status(429).json({ error: 'Too many attempts — try again later' });
     if (!band) return res.status(404).json({ error: 'Artist not found' });
 
     const [user] = await sql`
@@ -210,7 +214,10 @@ module.exports = wrap(async function handler(req, res) {
     // No row still costs one bcrypt round, so timing does not reveal accounts.
     const ok = user ? await bcrypt.compare(password, user.password_hash)
                     : (await bcrypt.compare(String(password), DUMMY_HASH), false);
-    if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+    if (!ok) {
+      await countLoginFailure(email);
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
 
     const ttl     = rememberMe ? TTL_30D : TTL_8H;
     const token   = generateUserToken(user.id, user.role, ttl, user.password_hash);
@@ -402,8 +409,10 @@ module.exports = wrap(async function handler(req, res) {
     if (!user || !user.password_hash || !await bcrypt.compare(String(currentPassword), user.password_hash))
       return res.status(401).json({ error: 'Current password is incorrect' });
 
+    // Every band of this address: after a compromise, a password changed in one
+    // band must not keep working through another.
     const hash = await bcrypt.hash(String(newPassword), 12);
-    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${user.id}`;
+    await sql`UPDATE users SET password_hash = ${hash} WHERE lower(email) = lower(${user.email})`;
     // The new hash invalidates every session issued before it, this one
     // included — hand back a replacement so the caller stays signed in.
     const token = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, hash);

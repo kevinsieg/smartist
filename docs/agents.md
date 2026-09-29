@@ -25,6 +25,7 @@ Personal settings go in `.claude/settings.local.json`, which is ignored.
 ```bash
 npm run test:all     # unit, API and browser tests
 npm run dev:up       # start the stack and print its env; npm run dev:down stops it
+npm run dev:restart  # pick up code changes (the server keeps modules in memory)
 ```
 
 It runs what CI runs, with no Vercel login and no remote database. Sign in at

@@ -482,9 +482,9 @@
   "pro.missing": "absent",
   "pro.otherLabel": "autre",
   "pro.ownLabel": "propre",
-  "pro.ownerIpHint": "(optionnel — permet la classification des compositions personnelles, ex. 755143051)",
+  "pro.ownerIpHint": "(optionnel — permet la classification des compositions personnelles, ex. 123456789)",
   "pro.ownerIpLabel": "Votre IP-Name-Nr",
-  "pro.ownerIpPlaceholder": "ex. 755143051",
+  "pro.ownerIpPlaceholder": "ex. 123456789",
   "pro.regionFrance": "France",
   "pro.regionGermany": "Allemagne",
   "pro.resetBtn": "Réinitialiser",
@@ -1152,5 +1152,7 @@
   "home.emailRequired": "Saisissez votre adresse e-mail.",
   "setlist.signInToSave": "Connectez-vous pour enregistrer cette setlist.",
   "setlist.signInBtn": "Se connecter",
-  "share.signInAgain": "Votre session a expiré — reconnectez-vous."
+  "share.signInAgain": "Votre session a expiré — reconnectez-vous.",
+  "signup.errVerifyEmail": "Facebook n'a pas confirmé cette adresse e-mail. Saisissez-la ci-dessous et nous vous enverrons un lien d'inscription.",
+  "signup.errRateLimited": "Trop de tentatives d'inscription pour cette adresse — réessayez dans une heure."
 }

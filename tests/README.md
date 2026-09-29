@@ -61,6 +61,7 @@ npm run test:api     # starts the stack if needed, then tests/api.js
 npm run test:smoke   # browser: sign in, every page, SPA nav, stage (needs playwright)
 npm run test:all     # unit + api + smoke
 npm run dev:up       # just start it and print the env; npm run dev:down stops it
+npm run dev:restart  # after changing api/ code
 ```
 
 Needs Postgres binaries (`initdb`, `pg_ctl`) and, for the smoke test,

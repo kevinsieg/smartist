@@ -482,9 +482,9 @@
   "pro.missing": "fehlt",
   "pro.otherLabel": "fremd",
   "pro.ownLabel": "eigen",
-  "pro.ownerIpHint": "(optional — ermöglicht die Klassifizierung eigener Kompositionen, z. B. 755143051)",
+  "pro.ownerIpHint": "(optional — ermöglicht die Klassifizierung eigener Kompositionen, z. B. 123456789)",
   "pro.ownerIpLabel": "Ihre IP-Name-Nr",
-  "pro.ownerIpPlaceholder": "z. B. 755143051",
+  "pro.ownerIpPlaceholder": "z. B. 123456789",
   "pro.regionFrance": "Frankreich",
   "pro.regionGermany": "Deutschland",
   "pro.resetBtn": "Zurücksetzen",
@@ -1152,5 +1152,7 @@
   "home.emailRequired": "Gib deine E-Mail-Adresse ein.",
   "setlist.signInToSave": "Melde dich an, um diese Setlist zu speichern.",
   "setlist.signInBtn": "Anmelden",
-  "share.signInAgain": "Deine Sitzung ist abgelaufen — bitte melde dich erneut an."
+  "share.signInAgain": "Deine Sitzung ist abgelaufen — bitte melde dich erneut an.",
+  "signup.errVerifyEmail": "Facebook hat diese E-Mail-Adresse nicht bestätigt. Gib sie unten ein, und wir schicken dir einen Registrierungslink.",
+  "signup.errRateLimited": "Zu viele Registrierungsversuche für diese Adresse — versuche es in einer Stunde erneut."
 }
