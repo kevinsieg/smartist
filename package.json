@@ -6,7 +6,12 @@
     "node": "22.x"
   },
   "scripts": {
-    "test:unit": "node tests/unit.js && node tests/history-client.js && node tests/home-client.js && node tests/viewmode-client.js && node tests/gigs-client.js && node tests/songs-client.js && node tests/songs-split-client.js && node tests/map-client.js && node tests/workspaces-client.js && node tests/logout-client.js"
+    "test:unit": "node tests/unit.js && node tests/history-client.js && node tests/home-client.js && node tests/viewmode-client.js && node tests/gigs-client.js && node tests/songs-client.js && node tests/songs-split-client.js && node tests/map-client.js && node tests/workspaces-client.js && node tests/logout-client.js",
+    "dev:up": "bash scripts/dev_up.sh up",
+    "dev:down": "bash scripts/dev_up.sh down",
+    "test:api": "bash scripts/dev_up.sh run node tests/api.js",
+    "test:smoke": "bash scripts/dev_up.sh run node tests/smoke.js",
+    "test:all": "npm run test:unit && npm run test:api && npm run test:smoke"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1038.0",

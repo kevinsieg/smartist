@@ -214,10 +214,15 @@ Needs Node 22 and the Vercel CLI (`npm i -g vercel`).
 
 ```bash
 npm ci                       # API dependencies (the only install; tests/ has none of its own)
-node tests/unit.js           # unit tests — no database needed
+npm run test:unit            # unit tests — no database needed
+npm run test:all             # + API and browser tests on a local stack (own Postgres, no Vercel login)
 vercel env pull .env.local   # pulls Preview vars — copy values into .env (vercel dev reads .env, not .env.local)
-vercel dev                   # starts local server on port 3000
+vercel dev                   # starts local server on port 3000, against the dev database
 ```
+
+`npm run dev:up` starts the same local stack as CI (see `tests/README.md`) and
+prints its sign-in: open `http://localhost:3000/login` with `dev@example.test` /
+`local-password`.
 
 Seed the dev database with fake gigs, setlists, songs, and sample GEMA rows (targets the artist from `ARTIST_SLUG`, or the first artist in the DB if unset — run `setup.js` first):
 
