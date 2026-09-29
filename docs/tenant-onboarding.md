@@ -252,7 +252,7 @@ The new DB is empty. The wizard will detect this and offer to apply the schema:
 
 ```bash
 DATABASE_URL=<neon-main-url> node scripts/setup.js
-# → apply schema when prompted, then create artist (slug: demo, password: 6+ chars)
+# → apply schema when prompted, then create the band (slug: demo) and its admin (email, password 8+ chars)
 
 DATABASE_URL=<neon-dev-url> node scripts/setup.js
 # → same
@@ -260,7 +260,7 @@ DATABASE_URL=<neon-dev-url> node scripts/setup.js
 
 **If schema apply fails** ("syntax error at end of input"):
 ```bash
-psql <neon-main-url> < scripts/schema.sql
+DATABASE_URL=<neon-main-url> node scripts/apply_schema.js
 DATABASE_URL=<neon-main-url> node scripts/setup.js   # re-run, will skip schema
 ```
 
