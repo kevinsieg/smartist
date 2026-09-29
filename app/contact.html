@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=45">
-  <script src="/app/js/i18n.js?v=37"></script>
+  <script src="/app/js/i18n.js?v=38"></script>
   <style>
     .contact-wrap { max-width: 560px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .contact-hint { font-size: 0.88rem; color: var(--muted-ink); margin-bottom: 1.25rem; }
@@ -25,7 +25,7 @@
     .contact-field input:focus, .contact-field textarea:focus { border-color: var(--secondary-color); }
     .contact-field textarea { min-height: 140px; resize: vertical; }
   </style>
-  <link rel="stylesheet" href="/app/css/footer.css?v=3">
+  <link rel="stylesheet" href="/app/css/footer.css?v=4">
 </head>
 <body>
 <main>
@@ -46,9 +46,10 @@
   </div>
   <div class="status-msg" id="cf-status"></div>
   <button class="btn active" id="cf-send" data-i18n="contact.sendBtn">Send message</button>
+  <p class="contact-hint" style="margin-top:1rem"><span data-i18n="legal.contactNotice">We use your name and email only to answer you.</span> <a href="/privacy" data-i18n="legal.privacyLink">Privacy policy</a></p>
 </div>
 </main>
-<script src="/app/js/footer.js?v=2"></script>
+<script src="/app/js/footer.js?v=3"></script>
 <script src="/app/js/core.js?v=6"></script>
 <script src="/app/js/session.js?v=6"></script>
 <script src="/app/js/ui.js?v=6"></script>

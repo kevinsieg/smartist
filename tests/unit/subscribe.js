@@ -75,6 +75,36 @@ async function run(r) {
     assertEq(res._status, 200);
     assertEq(res._body?.ok, true);
   });
+
+  await testAsync('POST /api/config subscribe demo — stores country only, no city, user agent or referrer', async () => {
+    const values = [];
+    const handler = makeHandler((s, ...v) => { values.push(...v); return Promise.resolve([]); });
+    const res = mockRes();
+    await handler({
+      method: 'POST',
+      headers: {
+        'x-vercel-ip-country': 'FR', 'x-vercel-ip-country-region': 'IDF', 'x-vercel-ip-city': 'Paris',
+        'user-agent': 'UA/1.0', referer: 'https://example.com/',
+      },
+      body: { email: 'demo@example.com', source: 'demo', name: 'Demo' },
+    }, res);
+    assertEq(res._status, 200);
+    const meta = values.find(v => v && typeof v === 'object' && 'geo_country' in v);
+    assertEq(meta.geo_country, 'FR');
+    for (const k of ['geo_city', 'geo_region', 'ua', 'ref']) assertEq(k in meta, false);
+  });
+
+  await testAsync('sweepSubscribers — deletes rows past 24 months and strips dropped meta keys', async () => {
+    const queries = [];
+    const { sweepSubscribers } = require(path.join(__dirname, '../../api/_domain/subscribe'));
+    const random = Math.random;
+    Math.random = () => 0;
+    try { await sweepSubscribers((s, ...v) => { queries.push(s.join('?')); return Promise.resolve([]); }); }
+    finally { Math.random = random; }
+    assertEq(queries.length, 1);
+    assertEq(/DELETE FROM subscribers WHERE created_at < now\(\) - interval '24 months'/.test(queries[0]), true);
+    assertEq(/meta - \?::text\[\]/.test(queries[0]), true);
+  });
 }
 
 if (require.main === module) {
