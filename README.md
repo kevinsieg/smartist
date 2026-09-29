@@ -1,22 +1,48 @@
 # Smartist — DIY Artist Tools
 
-Song catalogue, setlist, gigs and venues management for musicians. Runs as a Vercel serverless application backed by a PostgreSQL database.
+Song catalogue, setlists, gigs, venues and organizers for bands and musicians. Runs as a Vercel serverless application backed by a PostgreSQL database; one deployment can host many bands, each in its own private workspace.
 
-Hosted at [app.smartist.studio](https://app.smartist.studio); this repository is the full source. Why it is built the way it is: [`docs/architecture.md`](docs/architecture.md). Running several deployments: [`docs/deployment.md`](docs/deployment.md).
+Hosted at [app.smartist.studio](https://app.smartist.studio); this repository is the full source.
+
+| Read | For |
+| ---- | --- |
+| [`AGENTS.md`](AGENTS.md) | Rules for changing the code |
+| [`docs/reference.md`](docs/reference.md) | Where everything lives: pages, functions, helpers |
+| [`docs/architecture.md`](docs/architecture.md) | Why it is built this way |
+| [`DATABASE.md`](DATABASE.md) | Tables and columns |
+| [`docs/deployment.md`](docs/deployment.md) | Running several deployments |
+| [`docs/tenant-onboarding.md`](docs/tenant-onboarding.md) | Setting up a new deployment's services |
+| [`docs/oauth-setup.md`](docs/oauth-setup.md) | Google and Facebook sign-in |
+| [`docs/ci-cd.md`](docs/ci-cd.md) | CI pipeline |
+| [`tests/README.md`](tests/README.md) | Test suites and the local stack |
 
 ---
 
 ## Features
 
-**Setlist generator** (`/setlist`) — filter songs by any field, energy slider, generate a random set to a target duration, optimise performance arc, drag-and-drop reorder, save to a gig.
+Workspace pages live at `/<slug>/…`.
 
-**Song catalogue** (`/songs`) — in-cell editing, play count, song appearances, file attachments (audio, sheet music, playback track), AI-assisted lyrics suggest, change log with one-click restore.
+**Dashboard** (`/<slug>`, `/<slug>/dashboard`) — quick actions (find or add a song, build a setlist) and first steps for a new band.
 
-**Setlist history** (`/setlist-history`) — browse all saved setlists by year, share as PDF by email, duplicate, open in stage view.
+**Song catalogue** (`/songs`) — in-cell and bulk editing, play count, song appearances, file attachments (audio, sheet music, playback track), versioned arrangements, lyrics suggest (lyrics.ovh, lrclib, then AI), change log with one-click restore.
+
+**Setlists** (`/setlist`) — generator: filter songs by any field, energy slider, random set to a target duration, optimised performance arc, drag-and-drop reorder, save to a gig. History tab: saved setlists by year, share as PDF by email, duplicate, open in stage view. `/setlist-history` opens that tab.
+
+**Gigs** (`/gigs`) — performances linked to venues, organizers and setlists, with posters and an ICS calendar feed.
+
+**Venues and organizers** (`/venues`, `/organizers`) — booking CRM with map, filters and bulk edit. Pro plan.
+
+**Hub** (`/hub`) — the band's streaming and social profile links.
+
+**PRO import** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. Pro plan. `/gema-import` redirects here.
 
 **Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. Needs a session unless the band turns on *public stage links* in Settings (off by default).
 
-**PRO** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. `/gema-import` redirects to `/pro-import`.
+**Settings** (`/settings`, alias `/users`) — admin only: band details, app settings, members and invites, instruments, plan. **Profile** (`/profile`) — your email and password.
+
+**Accounts** — sign up at `/signup` with email or Google (Facebook when enabled), then create a band at `/onboarding`. One login can belong to several bands (`/workspaces`, alias `/home`). A new Google account that signs in from the login page also goes on to onboarding. `/demo` opens the public demo band; `/admin` is a cross-tenant overview for `SUPER_ADMIN_EMAILS`.
+
+**Plans** — Free: 100 songs, 30 MB storage, songs/setlists/gigs/hub. Pro: unlimited, plus venues, organizers and PRO import. There is no paid checkout yet: Settings upgrades a band to Pro for free, and `scripts/plans.js` or `/admin` set a plan by hand. `api/_plans.js` decides every feature and limit.
 
 ---
 
@@ -29,7 +55,7 @@ Hosted at [app.smartist.studio](https://app.smartist.studio); this repository is
 | ------------ | ------------------------------------------------------------------ |
 | Hosting      | Vercel (serverless functions + static files, no build step)        |
 | Database     | PostgreSQL — Neon serverless (free tier)                           |
-| Auth         | Stateless HMAC-signed Bearer tokens (bcrypt passwords, Google sign-in, 30-min email links) |
+| Auth         | Stateless HMAC-signed Bearer tokens per user (bcrypt passwords, Google/Facebook sign-in, 30-min email links); no shared band password |
 | File storage | Cloudflare R2 (audio, sheet music, playback tracks)                |
 | Email        | Resend REST API                                                    |
 | PDF          | PDFKit                                                             |
@@ -139,6 +165,8 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 | `R2_PUBLIC_URL`        | Prod bucket public URL (e.g. `https://media.yourdomain.com`) | Dev bucket public URL                          |
 
 
+`GET /api/config?action=health` on a deployment lists any required or recommended variable that is missing, and whether the database schema is current.
+
 **Production only** — leave unset in Preview/Development:
 
 
@@ -164,7 +192,7 @@ Link it to this GitHub repo. Framework: **Other** (no build step). Set the produ
 - **Production:** use an existing Neon project or create one
 - **Development:** create a second Neon project; copy the pooler connection string
 
-Run the setup wizard once per database to create the schema, the band and its admin login (email + password):
+Run the setup wizard once per database to create the schema, a first band and its admin login (email + password). On a multi-tenant deployment you can instead apply the schema alone (`scripts/apply_schema.js`) and let bands sign up at `/signup`:
 
 ```bash
 DATABASE_URL=<connection-string> node scripts/setup.js
@@ -215,14 +243,21 @@ Needs Node 22 and the Vercel CLI (`npm i -g vercel`).
 ```bash
 npm ci                       # API dependencies (the only install; tests/ has none of its own)
 npm run test:unit            # unit tests — no database needed
-npm run test:all             # + API and browser tests on a local stack (own Postgres, no Vercel login)
-vercel env pull .env.local   # pulls Preview vars — copy values into .env (vercel dev reads .env, not .env.local)
-vercel dev                   # starts local server on port 3000, against the dev database
+npm run dev:up               # local stack: own Postgres, seeded band, server on :3000
+npm run dev:restart          # after changing api/ code (the server keeps modules in memory)
+npm run test:all             # unit + API + browser smoke tests on the local stack
 ```
 
-`npm run dev:up` starts the same local stack as CI (see `tests/README.md`) and
-prints its sign-in: open `http://localhost:3000/login` with `dev@example.test` /
-`local-password`.
+`npm run dev:up` is the same stack CI runs (see `tests/README.md`) and never
+touches a remote database. It prints its sign-in: open
+`http://localhost:3000/login` with `dev@example.test` / `local-password`.
+
+To run against the Neon dev database instead:
+
+```bash
+vercel env pull .env.local   # pulls Preview vars — copy values into .env (vercel dev reads .env, not .env.local)
+vercel dev                   # local server on port 3000
+```
 
 Seed the dev database with fake gigs, setlists, songs, and sample GEMA rows (targets the artist from `ARTIST_SLUG`, or the first artist in the DB if unset — run `setup.js` first):
 
@@ -265,6 +300,9 @@ UPDATE artists SET config = config || '{
 | `displayFields`    | Ordered columns in the songs table. `field` can be a standard column or `extra.<name>` for custom fields |
 | `filterFields`     | Filter buttons in the setlist generator. Add `"type": "integer"` for numeric range inputs                |
 | `gemaIpNameNumber` | Your GEMA IP-Name-Nr — pre-fills the GEMA import and classifies your own compositions                    |
+| `publicCatalogue`  | `true` opens the song list, song details and gigs without a session (Settings; off by default)           |
+| `publicStage`      | `true` lets shared `/stage?id=N` links open without a session (Settings; off by default)                 |
+| `plan`             | `free` or `pro` — set only through the upgrade/downgrade actions, `/admin` or `scripts/plans.js`         |
 
 
 ---
@@ -292,6 +330,8 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 | `users`             | Logins per workspace — email is the identity across workspaces, role per band |
 | `subscribers`       | Contact-form / demo-gate addresses and pending sign-up tokens                |
 | `rate_limits`       | Sliding-window counters for login, reset, invite and upload endpoints        |
+| `song_lyrics`       | Lyrics text per song, kept out of song lists                                 |
+| `schema_migrations` | Applied schema blocks; the health check compares it with `SCHEMA_VERSION`    |
 
 
 ---
@@ -307,7 +347,10 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | Method | Endpoint                          | Auth | Purpose                                                                                      |
 | ------ | --------------------------------- | ---- | -------------------------------------------------------------------------------------------- |
 | GET    | `/api/config`                     | —    | Band name and branding; songs and counts only with a session or a public catalogue           |
-| POST   | `/api/:artist/auth`               | —    | Log in, get a session token                                                                  |
+| GET    | `/api/config?action=health`       | —    | Missing env vars and schema state of the deployment                                          |
+| POST   | `/api/login`                      | —    | Log in with email + password across workspaces                                               |
+| GET    | `/api/config?action=google-url`   | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
+| POST   | `/api/:artist/auth`               | —    | Log in to one band, get a session token; admins also invite and manage members here          |
 | POST   | `/api/:artist/request-reset`      | —    | Email a link to set a new password                                                           |
 | GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
 | POST   | `/api/:artist/songs`              | ✓    | Create song; also handles lyrics save/delete and media upload via body fields                |
@@ -317,10 +360,15 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | POST   | `/api/:artist/songs/:id/restore`  | ✓    | Restore from audit log                                                                       |
 | GET    | `/api/:artist/songs/:id/setlists` | ✓ / catalogue | Setlists that include this song                                                     |
 | GET    | `/api/:artist/songs/:id/gema`     | ✓    | GEMA works + rightholders for this song                                                      |
+| *      | `/api/:artist/songs/:id/audio`    | ✓    | Upload / remove a file (also `/sheet`, `/playback`)                                          |
+| *      | `/api/:artist/songs/:id/arrangements` | ✓ / stage | Versioned arrangements; `/:arrId` to edit, `/:arrId/activate` to switch             |
+| GET    | `/api/:artist/song-logs`          | ✓    | Change log                                                                                   |
+| POST   | `/api/:artist/gema/import`        | ✓    | Import PRO CSV exports — Pro plan                                                            |
 | GET    | `/api/:artist/setlists`           | ✓    | List setlists with song count                                                                |
 | POST   | `/api/:artist/setlists`           | ✓    | Create (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
 | GET    | `/api/:artist/setlists/:id`       | ✓ / stage | Setlist detail with ordered songs                                                       |
 | PUT    | `/api/:artist/setlists/:id`       | ✓    | Update metadata + song list                                                                  |
+| DELETE | `/api/:artist/setlists/:id`       | ✓    | Delete setlist                                                                               |
 | GET    | `/api/:artist/gigs`               | ✓ / catalogue | List gigs with venue and organizer names (`?format=ics` for a calendar feed)        |
 | POST   | `/api/:artist/gigs`               | ✓    | Create gig                                                                                   |
 | GET    | `/api/:artist/gigs/:id`           | ✓ / catalogue | Single gig; add `?refs` for linked setlists, venue, organizer                       |

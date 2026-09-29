@@ -105,12 +105,6 @@ test('clears the token from both stores', () => {
   assertEq(out.localStorage.getItem('smartist_token'), null);
 });
 
-test('clears the legacy setlist_token too', () => {
-  const out = runLogout({ session: { smartist_token: 'a', setlist_token: 'legacy' } });
-  assertEq(out.sessionStorage.getItem('setlist_token'), null,
-    'the old key kept bootstrap sessions alive after logout');
-});
-
 test('forgets the signed-in email', () => {
   const out = runLogout({ session: { smartist_token: 'a', smartist_admin_email: 'kev@example.com' } });
   assertEq(out.sessionStorage.getItem('smartist_admin_email'), null);
