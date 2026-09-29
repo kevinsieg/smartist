@@ -1,8 +1,8 @@
 # Architecture decisions
 
-The decisions behind the current code, and why they were made. Day-to-day
-conventions (handler skeleton, validation, i18n, styling) are in `CLAUDE.md`;
-the schema is in `DATABASE.md`.
+The decisions behind the current code, and why they were made. The rules are in
+`AGENTS.md`, day-to-day conventions (handler skeleton, validation, i18n,
+styling) in `docs/reference.md`, the schema in `DATABASE.md`.
 
 ---
 
@@ -71,7 +71,7 @@ rewrites.
   one. `scripts/create_user.js` creates the first account for a band that has
   none.
 - **A workspace is private by default.** Anonymous access is opt-in per surface
-  (`publicCatalogue`, `publicStage`, both off); see `CLAUDE.md`.
+  (`publicCatalogue`, `publicStage`, both off); see `docs/reference.md`.
 
 ---
 
