@@ -21,7 +21,7 @@ const PASSWORD = process.env.ARTIST_PASSWORD;
 
 const PAGES = [
   'dashboard', 'songs', 'setlist', 'setlist?view=history', 'setlist-history', 'gigs',
-  'venues', 'organizers', 'hub', 'pro-import', 'settings', 'profile',
+  'venues', 'organizers', 'hub', 'pro-import', 'song-import', 'settings', 'profile',
 ];
 
 const G = s => `\x1b[32m${s}\x1b[0m`;

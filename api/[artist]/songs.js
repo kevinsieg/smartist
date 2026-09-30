@@ -2,7 +2,7 @@ const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
-const { clientIp } = require('../_ratelimit');
+const { clientIp, checkRateLimit } = require('../_ratelimit');
 const { suggestLyrics } = require('../_lyrics');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { keyFromUrl } = require('../_r2');
@@ -12,6 +12,7 @@ const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
   listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, writeLyrics,
 } = require('../_domain/songs');
+const { songImport } = require('../_domain/song_import');
 
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
@@ -184,6 +185,17 @@ module.exports = wrap(async function handler(req, res) {
         ? await confirmMedia(sql, band, songId, config, b.publicUrl)
         : await deleteMedia(sql, band, songId, config);
     }
+    return res.status(result.status).json(result.body);
+  }
+
+  // ── POST CSV import: check a file or edited rows, or import them ─────────
+  if (req.method === 'POST' && req.body?.song_import != null) {
+    const band = await requireAuth(req, res, slug, 'member');
+    if (!band) return;
+    // The preview re-checks after each edit; a burst of edits stays well under this.
+    if (await checkRateLimit(`song-import:${band.id}`, 200, 600))
+      return res.status(429).json({ error: 'Too many requests — try again in a few minutes' });
+    const result = await songImport(sql, band.id, req.body.song_import, { maxSongs: songLimit(band) });
     return res.status(result.status).json(result.body);
   }
 
