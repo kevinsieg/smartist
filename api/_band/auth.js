@@ -103,7 +103,7 @@ module.exports = wrap(async function handler(req, res) {
             AND u.artist_id IN (SELECT artist_id FROM users WHERE email = ${oldEmail})
           LIMIT 1
         `;
-        if (clash) { const e = new Error('taken'); e.taken = true; throw e; }
+        if (clash) throw Object.assign(new Error('taken'), { taken: true });
 
         // One statement moves every membership, so the person keeps all bands.
         await tx`UPDATE users SET email = ${target}, delete_token_hash = NULL, delete_token_expires = NULL WHERE email = ${oldEmail}`;

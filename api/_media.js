@@ -28,6 +28,13 @@ const MEDIA_CONFIGS = {
 
 const out = (status, body) => ({ status, body });
 
+/**
+ * @param {*} sql
+ * @param {*} band
+ * @param {number} songId
+ * @param {*} config
+ * @param {{ filename?: string, contentType?: string, size?: number }} [file]
+ */
 async function presignMedia(sql, band, songId, config, { filename, contentType, size } = {}) {
   const { keyPrefix, maxBytes, allowedExts, mimePrefix } = config;
   if (!filename || typeof filename !== 'string') return out(400, { error: 'filename required' });
