@@ -68,7 +68,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
       getDb: () => sql,
       getArtist: async slug => ({ id: 1, slug, name: 'Test', config: {} }),
       getSlug: () => '',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
     },
   };
   require.cache[emailPath] = {

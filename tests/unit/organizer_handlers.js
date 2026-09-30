@@ -46,7 +46,7 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
       getDb: () => sql,
       getArtist: async () => artist,
       getSlug: req => req.query?.artist || 'test',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };

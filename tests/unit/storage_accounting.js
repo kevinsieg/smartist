@@ -89,7 +89,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
       getDb: () => sql,
       getArtist: async slug => (slug === ARTIST.slug ? ARTIST : null),
       getSlug: req => req.query?.artist || ARTIST.slug,
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     } };
 

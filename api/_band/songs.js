@@ -1,4 +1,4 @@
-const { getDb, getSlug, parsePage } = require('../_db');
+const { getDb, getSlug, parsePage, trimSongLogs } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
@@ -327,6 +327,7 @@ module.exports = wrap(async function handler(req, res) {
       `;
       const done = new Set(updated.map(r => r.id));
       applied = done.size;
+      if (applied) await trimSongLogs(sql, band.id);
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
     return res.json({ ok: true, count: applied, rejected });

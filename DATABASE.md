@@ -286,7 +286,7 @@ Versioned arrangement charts for a song. Each song can have multiple named versi
 
 ### `song_logs`
 
-Append-only audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot.
+Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries: about one logged write in ten trims the band's older ones (`trimSongLogs` in `api/_db.js`). Entries with `song_id` `NULL` are never trimmed.
 
 `song_id` is nullable — if a song is ever hard-deleted the FK goes `NULL` via `ON DELETE SET NULL` but the `song_data` snapshot is preserved.
 

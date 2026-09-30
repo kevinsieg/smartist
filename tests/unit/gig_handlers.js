@@ -44,7 +44,7 @@ function loadHandler(route) {
       getDb: () => sql,
       getArtist: async () => ARTIST,
       getSlug: req => req.query?.artist || req.url.split('?')[0].split('/')[2],
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };
