@@ -16,6 +16,7 @@ in [DATABASE.md](../DATABASE.md).
 | `/setlist-history` | `app/js/setlist-history.js` — redirect to the setlist page's history tab |
 | `/songs` | `app/js/songs.js` (init, data, filters, list view) + `songs-table.js` (bulk edit), `songs-panel.js` (side panel), `songs-media.js` (audio/sheet/playback), `songs-lyrics.js` (lyrics + URL preview) — one global scope, loaded in that order with `songs.js` last because it calls `init()`; `tests/songs-split-client.js` executes them together |
 | `/pro-import` | `app/js/pro-import.js` |
+| `/song-import` | `app/js/song-import.js` — CSV song import (template, preview, fixes, import); reached from the songs page's share menu. `SI_COLUMNS` mirrors `COLUMNS` in `_domain/song_import.js` (checked by `tests/unit/song_import.js`) |
 | `/gigs` | `app/js/gigs.js` |
 | `/venues` | `app/js/venues.js` |
 | `/organizers` | `app/js/organizers.js` |
@@ -48,7 +49,7 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 | `api/[artist]/organizers/[...path].js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
 | `api/[artist]/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
 | `api/[artist]/setlists/[...path].js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `GET /api/:artist/export` (ZIP of CSVs, via rewrite) |
-| `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite) |
+| `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite); `POST {song_import}` — CSV import (`_domain/song_import.js`) |
 | `api/[artist]/songs/[...path].js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite). Lyrics writes go through `POST /songs` body fields |
 | `api/[artist]/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
 | `api/[artist]/venues/[...path].js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
@@ -72,6 +73,7 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 | `_r2.js` | `createPresignedUrl`, `deleteFromR2` — swap storage via `STORAGE` block at top |
 | `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` (shared by the body-dispatched POSTs in `songs.js` and the REST routes, both `member`); `makeMediaFn(config)` wraps them for the catch-all |
 | `_env.js` | Every env var the API reads (required / recommended / pairs), `envReport()`, and `SCHEMA_VERSION` — the newest migration id in `schema.sql` |
+| `_domain/song_import.js` | CSV song import: `parseSongCsv` (`,` `;` or tab, quoted line breaks, header aliases in EN/FR/DE), `checkRows` (same rules as a song created by hand; duplicate = same title ignoring case and spacing, in the band's live songs or an earlier row), `songImport` — `{csv}` or `{rows}` is checked only; `{rows, commit: true}` writes every row not skipped in one statement, or answers 422 while any row has an error or an unresolved duplicate, and 402 past the plan's song limit |
 | `_domain/gema.js` | GEMA CSV parsers and `importWorks` / `importRightholders` — used by the pro-import route and `scripts/import_gema.js` |
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
