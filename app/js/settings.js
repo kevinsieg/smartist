@@ -871,13 +871,14 @@ var _HIDEABLE_SONG_FIELDS = [
   { field: 'extra.banjoCapo', label: 'songs.fieldBanjoCapo' },
   { field: 'extra.git2',      label: 'songs.fieldGuitar2' },
   { field: 'extra.harp',      label: 'songs.fieldHarmonica' },
+  { field: 'extra.aCapella',  label: 'songs.fieldACapella' },
   { field: 'tags',            label: 'songs.fieldTags' },
 ];
 
 function _renderHiddenSongFields(cfg) {
   var box = document.getElementById('hidden-song-fields');
   if (!box) return;
-  var hidden = (cfg.config && cfg.config.hiddenSongFields) || [];
+  var hidden = hiddenSongFields(cfg.config);
   box.innerHTML = _HIDEABLE_SONG_FIELDS.map(function (f) {
     return '<label class="config-check-row"><input type="checkbox" class="auth-action" value="' + f.field + '"' +
       (hidden.indexOf(f.field) !== -1 ? ' checked' : '') + '> <span>' + escHtml(t(f.label)) + '</span></label>';

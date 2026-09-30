@@ -99,6 +99,7 @@ function printSetlistSongs(songs, title, cfg, opts) {
       span(song.tempo || '', 'tempo', 'Tempo'),
       span(song.genre || '', 'genre', 'Genre'),
       song.extra && song.extra.harp ? span('harmonica', 'extra.harp', 'Harmonica') : '',
+      song.extra && song.extra.aCapella ? span('a cappella', 'extra.aCapella', 'A cappella') : '',
       song.extra && song.extra.git2 ? span('guitar 2',  'extra.git2', 'Second guitar') : ''
     ].filter(Boolean).join('');
     var printLabels = song.genre ? '<span>' + escHtml(song.genre) + '</span>' : '';

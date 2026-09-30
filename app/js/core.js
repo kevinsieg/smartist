@@ -25,9 +25,14 @@ function escHtml(s) {
 }
 
 // Instrument fields a band hid in Settings (config.hiddenSongFields, e.g. 'extra.lead').
-function songFieldHidden(config, key) {
+// A band that never saved the list gets DEFAULT_HIDDEN_SONG_FIELDS.
+var DEFAULT_HIDDEN_SONG_FIELDS = ['extra.banjoCapo', 'extra.git2'];
+function hiddenSongFields(config) {
   var hidden = config && config.hiddenSongFields;
-  return Array.isArray(hidden) && hidden.indexOf(key) !== -1;
+  return Array.isArray(hidden) ? hidden : DEFAULT_HIDDEN_SONG_FIELDS;
+}
+function songFieldHidden(config, key) {
+  return hiddenSongFields(config).indexOf(key) !== -1;
 }
 
 function songTags(song) {
