@@ -554,9 +554,10 @@ function _openSongArrangement(id) {
   openArrangementEditor(id, song.title || '', arrCfg);
 }
 
-function _editField(label, html) {
+// icon: an HTML entity from COLS (e.g. '&#9654;'), so it is not escaped.
+function _editField(label, html, icon) {
   return '<div class="edit-field">' +
-    (label ? '<span class="edit-field-label">' + escHtml(label) + '</span>' : '') +
+    (label ? '<span class="edit-field-label">' + (icon ? '<span aria-hidden="true">' + icon + '</span> ' : '') + escHtml(label) + '</span>' : '') +
     html +
   '</div>';
 }
