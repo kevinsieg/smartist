@@ -34,6 +34,7 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 **Key shared-script exports:**
 - `loadConfig()` — stale-while-revalidate; blocks on first call, cached in `sessionStorage` thereafter
 - `invalidateConfigCache()` — call after any `PATCH /api/config` that mutates `artists.config` so the next `loadConfig()` fetches fresh data
+- `announce(msg)` (`ui.js`) — polite screen-reader message for a change with no focus of its own (a song moved or removed); keep focus on the control the user used after re-rendering a list
 - `createSortableList(options)` — reusable column-driven table with sort buttons and filter input. Column shape: `{ field, label, width, sortable, filterable, muted, type, render, actions }`. Multiple instances sharing one filter input register via `filterInputId` (uses `_slFilterRegistry` internally). Returns `{ setData(rows), refresh() }`.
 
 ---
