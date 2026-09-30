@@ -45,7 +45,7 @@ function makeDb(rows) {
     writes.push({ text, values });
 
     // _sessionEmail: who is the bearer token's userId.
-    if (/SELECT email(, password_hash)? FROM users WHERE id =/i.test(text)) {
+    if (/SELECT email(, password_hash(, sessions_valid_after)?)? FROM users WHERE id =/i.test(text)) {
       const row = users.find(u => u.id === values[0]);
       return Promise.resolve(row ? [{ email: row.email }] : []);
     }

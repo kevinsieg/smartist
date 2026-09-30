@@ -494,3 +494,8 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-02') ON CONFLICT DO NOTHING;
 ALTER TABLE songs ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS songs_tags_idx ON songs USING GIN (tags);
 INSERT INTO schema_migrations (id) VALUES ('2026-10-03') ON CONFLICT DO NOTHING;
+
+-- 2026-10-04: "log out everywhere". Session tokens issued before this time are
+-- refused (api/_token.js sessionValid); set on every row of the address.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_after TIMESTAMPTZ;
+INSERT INTO schema_migrations (id) VALUES ('2026-10-04') ON CONFLICT DO NOTHING;

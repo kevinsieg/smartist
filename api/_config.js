@@ -4,7 +4,7 @@ const { validateStr } = require('./_validate');
 const { checkRateLimit, clientIp } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
-const { verifyUserToken, passwordMatches } = require('./_token');
+const { verifyUserToken, sessionValid } = require('./_token');
 const { isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
 const { configSongs } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
@@ -36,6 +36,7 @@ module.exports = wrap(async function handler(req, res) {
     if (action === 'downgrade')           return downgrade(req, res);
     if (action === 'login')               return run(login.passwordLogin, req, res);
     if (action === 'magic-login')         return run(login.magicLogin, req, res);
+    if (action === 'logout-everywhere')   return run(login.logoutEverywhere, req, res);
     if (action === 'request-reset')       return run(reset.requestReset, req, res);
     if (action === 'set-password')        return run(reset.setPassword, req, res);
     if (action === 'signup-link')         return run(signup.signupLink, req, res);
@@ -190,8 +191,8 @@ async function myArtists(req, res) {
   const claim = verifyUserToken(authHeader);
   const sql = getDb();
   if (claim) {
-    const [row] = await sql`SELECT password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
-    if (row && !passwordMatches(claim, row)) return res.status(401).json({ error: 'Unauthorised' });
+    const [row] = await sql`SELECT password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+    if (row && !sessionValid(claim, row)) return res.status(401).json({ error: 'Unauthorised' });
     const artists = await getArtistsForUser(claim.userId, sql);
     // Every users row belongs to a workspace, so none means the user is gone
     // (account deleted) while its signed token is still in date.

@@ -60,9 +60,12 @@ that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
   was a bearer token checked with bcrypt on every request and kept in the
   browser in plain text. A band without a `users` row gets its first login
   from `scripts/create_user.js`. The only other session is the demo gate's.
-- **Sessions end when the password changes.** A session token carries a
-  fingerprint of the password hash it was issued against; changing or resetting
-  the password makes every earlier session stop verifying.
+- **Sessions end when the password changes, or on request.** A session token
+  carries a fingerprint of the password hash it was issued against and its
+  issue time; changing or resetting the password, or "log out everywhere" on
+  the profile page (`users.sessions_valid_after` on every row of the address),
+  makes every earlier session stop verifying. No session table: the check rides
+  on the users row every authenticated request already reads.
 - **One address, one password.** The same person has a `users` row per band.
   Every way of setting a password (reset, change, accepting an invite) writes
   all of them, so an old password never keeps working through another band.

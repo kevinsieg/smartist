@@ -213,7 +213,7 @@ async function run(r) {
 
   const authPath = mp('api/_auth'), tokenPath = mp('api/_token'), dbPath = mp('api/_db');
   for (const p of [authPath, tokenPath, dbPath]) delete require.cache[p];
-  const { generateMagicToken, verifyMagicToken, generateUserToken, verifyUserToken, passwordMatches } = require(tokenPath);
+  const { generateMagicToken, verifyMagicToken, generateUserToken, verifyUserToken, sessionValid } = require(tokenPath);
   const band = { id: 42, slug: 'band', password_hash: crypto.randomBytes(16).toString('hex') };
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true,
     exports: { getArtist: async () => band, getDb: () => { throw new Error('no db'); } } };
@@ -244,16 +244,29 @@ async function run(r) {
 
   test('a session verifies against the hash it was issued with', () => {
     const claim = verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A'));
-    assertEq(passwordMatches(claim, { password_hash: 'hash-A' }), true);
+    assertEq(sessionValid(claim, { password_hash: 'hash-A' }), true);
   });
   test('after a password change the old session no longer matches', () => {
     const claim = verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A'));
-    assertEq(passwordMatches(claim, { password_hash: 'hash-B' }), false);
+    assertEq(sessionValid(claim, { password_hash: 'hash-B' }), false);
   });
   test('setting a first password ends a password-less (OAuth) session', () => {
     const claim = verifyUserToken(generateUserToken(1, 'admin', 60_000, null));
-    assertEq(passwordMatches(claim, { password_hash: null }), true);
-    assertEq(passwordMatches(claim, { password_hash: 'hash-new' }), false);
+    assertEq(sessionValid(claim, { password_hash: null }), true);
+    assertEq(sessionValid(claim, { password_hash: 'hash-new' }), false);
+  });
+  test('"log out everywhere" ends sessions issued before it, not after', () => {
+    const before = verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A'));
+    const cut = new Date(before.iat + 1);
+    const after = { ...before, iat: before.iat + 2 };
+    assertEq(sessionValid(before, { password_hash: 'hash-A', sessions_valid_after: cut }), false);
+    assertEq(sessionValid(after,  { password_hash: 'hash-A', sessions_valid_after: cut }), true);
+    assertEq(sessionValid(before, { password_hash: 'hash-A', sessions_valid_after: null }), true);
+  });
+  test('a token from before issue times were recorded counts as issued at 0', () => {
+    const claim = { ...verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A')), iat: 0 };
+    assertEq(sessionValid(claim, { password_hash: 'hash-A' }), true);
+    assertEq(sessionValid(claim, { password_hash: 'hash-A', sessions_valid_after: new Date(1) }), false);
   });
 }
 

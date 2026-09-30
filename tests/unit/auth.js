@@ -158,7 +158,7 @@ async function run(r) {
         verifyMagicToken: () => false,
         generateMagicToken: () => '',
         generateUserToken: () => '',
-        passwordMatches: () => true,
+        sessionValid: () => true,
         TTL_8H: 28800000, TTL_30D: 2592000000,
       },
     };
