@@ -1,0 +1,170 @@
+name: Nightly backups
+
+# Every production database and upload bucket, copied off-site each night:
+#
+# - Databases: pg_dump (scripts/db_backup.js), restored into a scratch Postgres
+#   here and checked against the source's row counts before anything is kept,
+#   then encrypted to an age public key (only its owner can read a dump) and
+#   uploaded to the backup bucket under db/<label>/<date>/.
+# - Upload buckets: mirrored to files/<label>/. Anything deleted or replaced in
+#   the source moves to deleted-files/<label>/<date>/ instead of disappearing.
+#
+# Retention is the backup bucket's lifecycle rules, not this workflow. Setup,
+# secrets and every restore procedure: docs/backup-restore.md.
+#
+# The Actions logs of a public repository are public: hosts and bucket names
+# are masked, and labels should be neutral (db1, files1 — not band names).
+
+on:
+  schedule:
+    - cron: '30 2 * * *'   # 02:30 UTC daily, before the demo reset at 03:00
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Back up databases and uploads
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    if: ${{ github.repository == 'kevinsieg/smartist' }}
+    # Scratch Postgres for the restore check. Same major version as the client
+    # below (PG_MAJOR), and at least the production servers' version.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 15
+    env:
+      PG_MAJOR: '17'
+      BACKUP_DATABASES: ${{ secrets.BACKUP_DATABASES }}
+      BACKUP_FILE_BUCKETS: ${{ secrets.BACKUP_FILE_BUCKETS }}
+      BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+      BACKUP_R2_BUCKET: ${{ secrets.BACKUP_R2_BUCKET }}
+      HEARTBEAT: ${{ secrets.BACKUP_HEARTBEAT_URL }}
+      # rclone remotes, configured from the environment. "backup" writes to the
+      # backup bucket only; "source" reads the upload buckets only.
+      RCLONE_CONFIG_BACKUP_TYPE: s3
+      RCLONE_CONFIG_BACKUP_PROVIDER: Cloudflare
+      RCLONE_CONFIG_BACKUP_ENDPOINT: https://${{ secrets.BACKUP_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
+      RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
+      RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET: 'true'
+      RCLONE_CONFIG_SOURCE_TYPE: s3
+      RCLONE_CONFIG_SOURCE_PROVIDER: Cloudflare
+      RCLONE_CONFIG_SOURCE_ENDPOINT: https://${{ secrets.BACKUP_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      RCLONE_CONFIG_SOURCE_ACCESS_KEY_ID: ${{ secrets.BACKUP_SOURCE_R2_ACCESS_KEY_ID }}
+      RCLONE_CONFIG_SOURCE_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_SOURCE_R2_SECRET_ACCESS_KEY }}
+      RCLONE_CONFIG_SOURCE_NO_CHECK_BUCKET: 'true'
+    steps:
+      # Not configured at all: nothing to do (forks, or before setup). Half
+      # configured: fail, so a backup that silently stopped cannot look green.
+      - name: Check the configuration
+        id: cfg
+        env:
+          ACCOUNT: ${{ secrets.BACKUP_R2_ACCOUNT_ID }}
+          KEY: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
+          SOURCE_KEY: ${{ secrets.BACKUP_SOURCE_R2_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$BACKUP_DATABASES" ] && [ -z "$BACKUP_FILE_BUCKETS" ]; then
+            echo "::notice::Backups are not configured (docs/backup-restore.md) — nothing to do."
+            exit 0
+          fi
+          missing=""
+          [ -n "$ACCOUNT" ]          || missing="$missing BACKUP_R2_ACCOUNT_ID"
+          [ -n "$KEY" ]              || missing="$missing BACKUP_R2_ACCESS_KEY_ID"
+          [ -n "$BACKUP_R2_BUCKET" ] || missing="$missing BACKUP_R2_BUCKET"
+          if [ -n "$BACKUP_DATABASES" ]; then
+            [ -n "$BACKUP_AGE_RECIPIENT" ] || missing="$missing BACKUP_AGE_RECIPIENT(variable)"
+          fi
+          if [ -n "$BACKUP_FILE_BUCKETS" ]; then
+            [ -n "$SOURCE_KEY" ] || missing="$missing BACKUP_SOURCE_R2_ACCESS_KEY_ID"
+          fi
+          if [ -n "$missing" ]; then echo "::error::Missing:$missing"; exit 1; fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+          echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - if: steps.cfg.outputs.ok == 'true'
+        name: Install dependencies, Postgres client, age and rclone
+        run: |
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common age rclone > /dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq "postgresql-client-$PG_MAJOR" > /dev/null
+          echo "PG_BIN=/usr/lib/postgresql/$PG_MAJOR/bin" >> "$GITHUB_ENV"
+
+      # One line per database in BACKUP_DATABASES: "<label> <connection string>".
+      - if: steps.cfg.outputs.ok == 'true' && env.BACKUP_DATABASES != ''
+        name: Back up, restore-check and upload the databases
+        env:
+          DAY: ${{ steps.cfg.outputs.day }}
+        run: |
+          set -euo pipefail
+          n=0
+          while read -r label url; do
+            case "$label" in ''|'#'*) continue ;; esac
+            n=$((n + 1))
+            host=$(node -e 'console.log(new URL(process.argv[1]).hostname)' "$url")
+            echo "::add-mask::$host"
+            echo "::add-mask::${host/-pooler./.}"
+            echo "::group::$label"
+            "$PG_BIN/psql" -q "postgres://postgres:postgres@localhost:5432/postgres" -c "CREATE DATABASE restore_$n"
+            out="$RUNNER_TEMP/db/$label"
+            DATABASE_URL="$url" node scripts/db_backup.js --yes --label "$label" --out "$out" \
+              --verify "postgres://postgres:postgres@localhost:5432/restore_$n" \
+              --recipient "$BACKUP_AGE_RECIPIENT"
+            rclone copy "$out" "backup:$BACKUP_R2_BUCKET/db/$label/$DAY" -q
+            rm -rf "$out"
+            echo "::endgroup::"
+          done < <(printf '%s\n' "$BACKUP_DATABASES" | tr -d '\r')
+          [ "$n" -gt 0 ] || { echo "::error::BACKUP_DATABASES has no '<label> <url>' line."; exit 1; }
+          echo "$n database(s) backed up."
+
+      # One line per bucket in BACKUP_FILE_BUCKETS: "<label> <bucket name>".
+      # Object keys are unique (a UUID each), so a size check is enough to
+      # skip what is already there. Error lines are printed without the object
+      # key, which can carry a band's slug.
+      - if: steps.cfg.outputs.ok == 'true' && env.BACKUP_FILE_BUCKETS != ''
+        name: Mirror the upload buckets
+        env:
+          DAY: ${{ steps.cfg.outputs.day }}
+        run: |
+          set -euo pipefail
+          while read -r label bucket; do
+            case "$label" in ''|'#'*) continue ;; esac
+            echo "::add-mask::$bucket"
+            echo "::group::$label"
+            log="$RUNNER_TEMP/rclone-$label.log"
+            if ! rclone sync "source:$bucket" "backup:$BACKUP_R2_BUCKET/files/$label" \
+                 --backup-dir "backup:$BACKUP_R2_BUCKET/deleted-files/$label/$DAY" \
+                 --size-only --fast-list --max-delete 1000 --log-file "$log" --log-level NOTICE --stats-log-level NOTICE --stats 0; then
+              sed -E 's/(ERROR|NOTICE) : [^:]+:/\1 : <object>:/' "$log" | tail -20
+              exit 1
+            fi
+            echo "::endgroup::"
+          done < <(printf '%s\n' "$BACKUP_FILE_BUCKETS" | tr -d '\r')
+
+      # A monitor that alerts when this stops arriving catches what a red run
+      # cannot: GitHub disables schedules in a repository without activity for
+      # 60 days, and a disabled schedule sends nothing.
+      - name: Heartbeat
+        if: success() && steps.cfg.outputs.ok == 'true' && env.HEARTBEAT != ''
+        run: curl -fsS -m 10 --retry 3 -o /dev/null "$HEARTBEAT"
+      - name: Report the failure
+        if: failure() && env.HEARTBEAT != ''
+        run: curl -fsS -m 10 --retry 3 -o /dev/null "$HEARTBEAT/fail" || true

@@ -426,6 +426,11 @@ change) need the tenant's sending domain verified in Resend first.
 - [ ] www CNAME added + Vercel redirect configured (optional but recommended)
 - [ ] DMARC TXT record added (`_dmarc` → `v=DMARC1; p=reject;`)
 
+**Backups** ([`backup-restore.md`](backup-restore.md))
+- [ ] A line for the database in the `BACKUP_DATABASES` secret and for the bucket in `BACKUP_FILE_BUCKETS` (neutral labels)
+- [ ] The upload-reader R2 token covers the new bucket
+- [ ] The Neon project's restore window checked
+
 **Verification**
 - [ ] At least one successful production deploy — Vercel shows green
 - [ ] `curl https://<domain>/api/config?action=health` answers 200 with `"ok": true` — a 503 lists the missing variables (names only) or says the database is unreachable or behind

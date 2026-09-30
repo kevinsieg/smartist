@@ -251,6 +251,11 @@ node scripts/create_user.js --artist <slug> --email <addr> --set-password
                                                           # change an existing account's password (no email needed)
 node scripts/demo_reset.js --export                      # snapshot the demo band to scripts/demo_seed.json
 node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nightly via .github/workflows/demo-reset.yml
+node scripts/db_backup.js [--label <l>] [--out <dir>] [--verify <local url>] [--recipient age1…]
+                                                          # pg_dump + manifest; nightly via .github/workflows/backup.yml
+node scripts/db_restore.js --dump <file> [--identity <key>] # into an EMPTY database, checked against the manifest
 ```
+
+**Backups** (`docs/backup-restore.md`): Neon point-in-time restore first; `.github/workflows/backup.yml` dumps every production database nightly (restored into a scratch Postgres and compared before it is kept, then age-encrypted to R2) and mirrors every upload bucket, keeping deleted objects 30 days. `scripts/_backup.js` holds the shared pieces; the libpq password travels in the environment, never argv.
 
 `ARTIST_SLUG` env var targets the artist; falls back to the first artist in the DB.
