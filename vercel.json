@@ -12,7 +12,6 @@
   "rewrites": [
     { "source": "/auth/callback",                                                                 "destination": "/api/config?action=oauth-callback" },
     { "source": "/api/login",                                                                     "destination": "/api/config?action=login" },
-    { "source": "/api/:artist/request-reset",                                                     "destination": "/api/:artist/auth" },
     { "source": "/api/:artist/song-logs",                                                         "destination": "/api/:artist/songs" },
     { "source": "/api/:artist/gema/import",                                                       "destination": "/api/:artist/songs/gema-import" },
     { "source": "/api/:artist/songs/:songId/gema",                                                "destination": "/api/:artist/songs/gema?songId=:songId" },

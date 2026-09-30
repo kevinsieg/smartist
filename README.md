@@ -353,8 +353,8 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | GET    | `/api/config?action=health`       | —    | Missing env vars and schema state of the deployment                                          |
 | POST   | `/api/login`                      | —    | Log in with email + password across workspaces                                               |
 | GET    | `/api/config?action=google-url`   | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
-| POST   | `/api/:artist/auth`               | —    | Log in to one band, get a session token; admins also invite and manage members here          |
-| POST   | `/api/:artist/request-reset`      | —    | Email a link to set a new password                                                           |
+| POST   | `/api/config` `request-reset`     | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
+| POST   | `/api/:artist/auth`               | ✓    | Admins invite and manage members; members change their password or address                   |
 | GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
 | POST   | `/api/:artist/songs`              | ✓    | Create song; also handles lyrics save/delete and media upload via body fields                |
 | PATCH  | `/api/:artist/songs`              | ✓    | Batch update songs (`extra.*Url` values must be http(s))                                     |

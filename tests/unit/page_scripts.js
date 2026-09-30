@@ -47,7 +47,7 @@ function run(r) {
   test('workspace data endpoints are called through apiFetch', () => {
     // Endpoints that answer without a session by design: login, password reset,
     // OAuth start, the public config payload, the contact form.
-    const PUBLIC = /\/auth\b|request-reset|accept-invite|\/api\/config/;
+    const PUBLIC = /\/auth\b|\/api\/login\b|request-reset|accept-invite|\/api\/config/;
     const offenders = [];
     fs.readdirSync(path.join(APP, 'js')).filter(f => f.endsWith('.js')).forEach(function(file) {
       const src = fs.readFileSync(path.join(APP, 'js', file), 'utf8');

@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
 const { checkRateLimit, loginLocked, countLoginFailure } = require('../_ratelimit');
 const { ok, fail } = require('./http');
-const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
+const { generateUserToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const logger = require('../_logger');
 
@@ -63,4 +63,32 @@ async function passwordLogin({ body, ip }) {
   return ok({ ok: true, token, role: user.role, email: clean, artists });
 }
 
-module.exports = { passwordLogin, DUMMY_HASH };
+// Redeem a mailed sign-in link (`/login#magic=…&hint=…`, sent by the signup
+// form to an address that already has an account). `hint` names the address;
+// the token was signed with one of its rows' password hashes, so it is checked
+// against each, as passwordLogin checks the password. A password-less account
+// gets no such link (api/_domain/signup.js).
+async function magicLogin({ body, ip }) {
+  const { magic, hint } = body ?? {};
+  if (!magic || !hint) return fail(400, 'magic and hint required');
+  if (await checkRateLimit(`auth:${ip}`, 10, 60)) return fail(429, 'Too many attempts — try again later');
+
+  const addr = Buffer.from(String(hint), 'base64url').toString().trim().toLowerCase();
+  const sql  = getDb();
+  const rows = await sql`
+    SELECT id, role, password_hash
+    FROM users
+    WHERE email = ${addr} AND password_hash IS NOT NULL
+    ORDER BY id
+    LIMIT ${MAX_CANDIDATES}
+  `;
+  const user = rows.find(r => verifyMagicToken(String(magic), r.password_hash, 'login'));
+  if (!user) return fail(401, 'Invalid or expired login link');
+
+  const token   = generateUserToken(user.id, user.role, TTL_8H, user.password_hash);
+  const artists = await getArtistsForUser(user.id, sql);
+  await logger.info('login_link', { email: addr, artists: artists.length });
+  return ok({ ok: true, token, role: user.role, email: addr, artists });
+}
+
+module.exports = { passwordLogin, magicLogin, DUMMY_HASH };

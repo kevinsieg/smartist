@@ -162,6 +162,55 @@ async function run(r) {
     assertEq(res._body.error, 'Invalid email or password');
   });
 
+  // ── mailed sign-in links ──────────────────────────────────────────────────
+  console.log(B('\nsign-in link'));
+
+  const { generateMagicToken } = require('../../api/_token');
+  const hint = addr => Buffer.from(addr).toString('base64url');
+  async function magic(handler, body) {
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'magic-login', ...body }, headers: {}, query: {} }, res);
+    return res;
+  }
+
+  await testAsync('a link signed for the address logs in and lists the bands', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(res._status, 200);
+    assert(res._body.token, 'expected a session token');
+    assertEq(res._body.email, 'a@b.co');
+    assert(Array.isArray(res._body.artists), 'expected the list of bands');
+  });
+
+  await testAsync('a link signed with another row of the address still works', async () => {
+    const { handler } = makeHandler([
+      { id: 1, role: 'member', password_hash: OTHER },
+      { id: 2, role: 'admin',  password_hash: HASH },
+    ]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(res._status, 200);
+    assertEq(res._body.role, 'admin');
+  });
+
+  await testAsync('a reset link does not log anyone in', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'reset'), hint: hint('a@b.co') });
+    assertEq(res._status, 401);
+  });
+
+  await testAsync('a link for one account with another address in the hint is refused', async () => {
+    const { handler } = makeHandler([{ id: 9, role: 'admin', password_hash: OTHER }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('victim@b.co') });
+    assertEq(res._status, 401);
+  });
+
+  await testAsync('no hint → 400, before any lookup', async () => {
+    const { handler, queries } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login') });
+    assertEq(res._status, 400);
+    assertEq(queries.length, 0);
+  });
+
   // ── the config read the login page makes on load ──────────────────────────
   console.log(B('\nconfig without a slug'));
 

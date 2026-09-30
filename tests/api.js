@@ -595,17 +595,23 @@ async function testSetlists(slug) {
 async function testAuth(slug) {
   console.log(B('\nAuth'));
 
-  await test('POST /auth wrong password → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/auth`, { email: 'nobody@example.test', password: '__wrong__' });
+  await test('POST /login wrong password → 401', async () => {
+    const { res, json } = await POST('/api/login', { email: 'nobody@example.test', password: '__wrong__' });
     assertStatus(res, json, 401);
   });
 
   // The shared band password is retired: a password alone is no login, and
   // never a bearer token.
-  await test('POST /auth with a password and no email → 400 band_password_retired', async () => {
-    const { res, json } = await POST(`/api/${slug}/auth`, { password: '__anything__' });
+  await test('POST /login with a password and no email → 400', async () => {
+    const { res, json } = await POST('/api/login', { password: '__anything__' });
     assertStatus(res, json, 400);
-    assert(json.code === 'band_password_retired', `expected band_password_retired, got ${json.code}`);
+  });
+
+  // Signing in goes through /api/login alone; the band's auth endpoint only
+  // manages its members.
+  await test('POST /auth without an action is not a login → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth`, { email: 'nobody@example.test', password: '__wrong__' });
+    assertStatus(res, json, 401);
   });
 
   if (PASSWORD) await test('a password as the bearer token → 401', async () => {
@@ -613,8 +619,8 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
-  await test('POST /auth empty body → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/auth`, {});
+  await test('POST /login empty body → 400', async () => {
+    const { res, json } = await POST('/api/login', {});
     assertStatus(res, json, 400);
   });
 
@@ -847,8 +853,7 @@ async function testMultiUserAuth(slug, token) {
   });
 
   await test('POST email login missing password → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/auth`,
-      { email: 'test@example.com' });
+    const { res, json } = await POST('/api/login', { email: 'test@example.com' });
     assertStatus(res, json, 400);
   });
 
@@ -1278,8 +1283,8 @@ async function testWrite(slug, token, firstSong, config) {
 
   // Verify password
   let authed = false;
-  await test('POST /auth with correct password → 200', async () => {
-    const { res, json } = await POST(`/api/${slug}/auth`, { email: EMAIL, password: PASSWORD });
+  await test('POST /login with correct password → 200', async () => {
+    const { res, json } = await POST('/api/login', { email: EMAIL, password: PASSWORD });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
     authed = true;
@@ -1598,7 +1603,7 @@ async function main() {
   }
 
   if (EMAIL && PASSWORD) {
-    const { res, json } = await POST(`/api/${SLUG}/auth`, { email: EMAIL, password: PASSWORD });
+    const { res, json } = await POST('/api/login', { email: EMAIL, password: PASSWORD });
     if (!res.ok || !json?.token) {
       // json.error tells a wrong password apart from Vercel's own answers.
       const why = !json ? `non-JSON response, content-type ${res.headers.get('content-type')}`

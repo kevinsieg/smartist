@@ -35,6 +35,7 @@ module.exports = wrap(async function handler(req, res) {
     if (action === 'upgrade')             return upgrade(req, res);
     if (action === 'downgrade')           return downgrade(req, res);
     if (action === 'login')               return run(login.passwordLogin, req, res);
+    if (action === 'magic-login')         return run(login.magicLogin, req, res);
     if (action === 'request-reset')       return run(reset.requestReset, req, res);
     if (action === 'set-password')        return run(reset.setPassword, req, res);
     if (action === 'signup-link')         return run(signup.signupLink, req, res);
