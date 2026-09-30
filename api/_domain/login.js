@@ -17,8 +17,11 @@ const logger = require('../_logger');
 // several bands, see getArtistsForUser), so the address alone is enough to find
 // the account. The OAuth callback already logs people in this way.
 //
-// The same person may hold different passwords on different bands, so every row
-// for that address is checked and the first whose hash matches wins.
+// The same person may hold different passwords on different bands (rows from
+// before one password per address), so every distinct hash is checked and the
+// first row whose hash matches wins. Setting a password writes it to every row
+// of the address, so rows sharing a hash are compared once: each bcrypt round
+// costs hundreds of milliseconds, and a member of several bands paid it per band.
 const MAX_CANDIDATES = 10;
 
 // Compared against when no account matches, so an unknown address costs the
@@ -37,9 +40,12 @@ async function passwordLogin({ body, ip }) {
 
   const sql = getDb();
   const candidates = await sql`
-    SELECT id, role, password_hash
-    FROM users
-    WHERE email = ${clean} AND password_hash IS NOT NULL
+    SELECT id, role, password_hash FROM (
+      SELECT DISTINCT ON (password_hash) id, role, password_hash
+      FROM users
+      WHERE email = ${clean} AND password_hash IS NOT NULL
+      ORDER BY password_hash, id
+    ) first_per_hash
     ORDER BY id
     LIMIT ${MAX_CANDIDATES}
   `;
