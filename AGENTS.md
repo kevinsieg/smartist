@@ -112,6 +112,8 @@ fields: the router makes multi-segment paths safe.
 - Dates only through `formatDate` / `formatTime` (`core.js`).
 - Bump `?v=` on every page when a shared asset changes (`app.css`, the shared
   scripts, `i18n.js` together with `I18N_VERSION`).
+  `/app/js` and `/app/css` are cached immutable for a year: every reference
+  carries `?v=`, and a page script's `?v=` goes up whenever the script changes.
 - i18n: English is the source; `en`, `fr`, `de` hold the same keys; every key
   used in HTML or `t('…')` must exist. Never put `data-i18n` on an element with
   child elements. Scripts `stage.html` loads may not call bare `t()`.
