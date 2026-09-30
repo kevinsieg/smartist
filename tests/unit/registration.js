@@ -8,7 +8,7 @@ async function run(r) {
   const { stubLogger } = require('./_runner');
   stubLogger();
 
-  const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken, checkEmailDeliverable } =
+  const { createSignupToken, verifySignupToken, redeemSignupToken, checkEmailDeliverable } =
     require(path.join(__dirname, '../../api/_domain/registration'));
 
   console.log(B('\ncheckEmailDeliverable'));
@@ -67,16 +67,6 @@ async function run(r) {
     assertEq(stored, 'kev.test@example.com');
   });
 
-  await testAsync('createArtistAndAdmin lowercases the admin address', async () => {
-    let stored;
-    const tx = async (strings, ...vals) => {
-      if (String(strings[0]).includes('INSERT INTO users')) { stored = vals[1]; return [{ id: 2 }]; }
-      return [{ id: 1 }];
-    };
-    const sql = { begin: fn => fn(tx) };
-    await createArtistAndAdmin('Band', 'band', 'Kev.Test@Example.COM', sql);
-    assertEq(stored, 'kev.test@example.com');
-  });
 
   console.log(B('\nverifySignupToken'));
 
@@ -105,46 +95,44 @@ async function run(r) {
     assertEq(result, null);
   });
 
-  console.log(B('\ncreateArtistAndAdmin'));
+  console.log(B('\nredeemSignupToken'));
 
-  await testAsync('inserts artist and user, returns { artistId, userId }', async () => {
+  // A fake transaction: the token row, then the two inserts.
+  function redeemSql({ spent = false, failUsers = false } = {}) {
     const calls = [];
-    const sql = async (strings, ...vals) => {
-      calls.push(String(strings[0]).trim().slice(0, 30));
-      if (String(strings[0]).includes('INSERT INTO artists')) return [{ id: 10 }];
-      if (String(strings[0]).includes('INSERT INTO users'))   return [{ id: 20 }];
+    const tx = async (strings, ...vals) => {
+      const q = String(strings.join('?'));
+      calls.push({ q, vals });
+      if (q.includes('UPDATE subscribers')) return spent ? [] : [{ email: 'Kev.Test@Example.COM' }];
+      if (q.includes('INSERT INTO artists')) return [{ id: 10 }];
+      if (q.includes('INSERT INTO users')) { if (failUsers) throw new Error('users insert failed'); return [{ id: 20 }]; }
       return [];
     };
-    sql.begin = async fn => fn(sql);
-    const result = await createArtistAndAdmin('My Band', 'my-band', 'admin@example.com', sql);
-    assertEq(result.artistId, 10);
-    assertEq(result.userId, 20);
-    assert(calls.some(c => c.includes('INSERT INTO artists')), 'expected artist insert');
-    assert(calls.some(c => c.includes('INSERT INTO users')),   'expected user insert');
+    return { sql: { begin: fn => fn(tx) }, calls };
+  }
+
+  await testAsync('spends the link and creates the band and its admin in one transaction', async () => {
+    const { sql, calls } = redeemSql();
+    const result = await redeemSignupToken('raw', 'My Band', 'my-band', sql);
+    assertEq(result, { email: 'kev.test@example.com', artistId: 10, userId: 20 });
+    assertEq(calls.map(c => c.q.trim().split(/\s+/).slice(0, 2).join(' ')),
+      ['UPDATE subscribers', 'INSERT INTO', 'INSERT INTO']);
+    assert(calls[0].q.includes('now()'), 'an expired link must not redeem');
+    const users = calls.find(c => c.q.includes('INSERT INTO users'));
+    assertEq(users.vals[1], 'kev.test@example.com');
   });
 
-  await testAsync('rolls back if user insert fails', async () => {
-    const failSql = async (strings) => {
-      if (String(strings[0]).includes('INSERT INTO artists')) return [{ id: 10 }];
-      throw new Error('users insert failed');
-    };
-    failSql.begin = async fn => fn(failSql);
+  await testAsync('a spent or unknown link creates nothing', async () => {
+    const { sql, calls } = redeemSql({ spent: true });
+    assertEq(await redeemSignupToken('raw', 'My Band', 'my-band', sql), null);
+    assert(!calls.some(c => c.q.includes('INSERT')), 'nothing inserted');
+  });
+
+  await testAsync('a failed insert throws (the transaction rolls back, the link stays)', async () => {
+    const { sql } = redeemSql({ failUsers: true });
     let threw = false;
-    try { await createArtistAndAdmin('Band', 'band', 'fail@example.com', failSql); }
-    catch { threw = true; }
-    assert(threw, 'expected createArtistAndAdmin to throw when user insert fails');
-  });
-
-  console.log(B('\nclearSignupToken'));
-
-  await testAsync('removes token fields from subscribers.meta', async () => {
-    let updateCalled = false;
-    const sql = async (strings) => {
-      if (String(strings[0]).includes('UPDATE subscribers')) updateCalled = true;
-      return [];
-    };
-    await clearSignupToken('user@example.com', sql);
-    assert(updateCalled, 'expected UPDATE subscribers');
+    try { await redeemSignupToken('raw', 'Band', 'band', sql); } catch { threw = true; }
+    assert(threw, 'expected a throw');
   });
 }
 
