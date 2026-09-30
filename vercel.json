@@ -51,6 +51,7 @@
     { "source": "/:slug/hub",              "destination": "/app/hub.html" },
     { "source": "/:slug/pro-import",       "destination": "/app/pro-import.html" },
     { "source": "/:slug/gema-import",      "destination": "/app/pro-import.html" },
+    { "source": "/:slug/song-import",      "destination": "/app/song-import.html" },
     { "source": "/:slug/profile",          "destination": "/app/profile.html" },
     { "source": "/:slug/settings",         "destination": "/app/settings.html" },
     { "source": "/:slug/users",            "destination": "/app/settings.html" },

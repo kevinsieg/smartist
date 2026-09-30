@@ -34,6 +34,8 @@ Workspace pages live at `/<slug>/…`.
 
 **Hub** (`/hub`) — the band's streaming and social profile links.
 
+**Song import** (`/song-import`) — upload songs from a CSV template; every row is checked and duplicates are flagged in a preview where rows are fixed or skipped before anything is saved.
+
 **PRO import** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. Pro plan. `/gema-import` redirects here.
 
 **Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. Needs a session unless the band turns on *public stage links* in Settings (off by default).
