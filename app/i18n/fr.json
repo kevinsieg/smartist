@@ -519,7 +519,7 @@
   "pro.validateBtn": "Valider",
   "pro.validateHintEnd": ".",
   "pro.validateHintMid": " effectue un aperçu sans écriture — rien n'est enregistré jusqu'à ce que vous cliquiez sur ",
-  "profile.bootstrapNote": "Vous êtes connecté avec le mot de passe de l'espace — les mots de passe personnels sont gérés par compte.",
+  "profile.demoNote": "Vous êtes dans la démo. Créez votre propre compte pour définir un mot de passe.",
   "profile.changeEmail": "Modifier l'e-mail",
   "profile.changePassword": "Changer le mot de passe",
   "profile.changed": "Mot de passe modifié.",

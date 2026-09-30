@@ -99,6 +99,19 @@ function clearToken() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
+// The users row id this session belongs to, or null: no session, or the demo
+// gate's token, which has no personal account (no password, email or deletion).
+function sessionUserId() {
+  var tok = getToken();
+  if (!tok) return null;
+  try {
+    var b64 = tok.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var outer = JSON.parse(atob(b64));
+    return outer.payload ? (JSON.parse(outer.payload).userId || null) : null;
+  } catch { return null; }
+}
+
 function getAuthRole() {
   var tok = getToken();
   if (!tok) return null;

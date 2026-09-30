@@ -5,18 +5,9 @@ window.onNavAuthEmpty = function() { goToLogin(); };
 
 initPage(function(cfg) {
   if (requireLogin()) return;
-  var _role = getAuthRole();
-  if (_role !== null && _role !== 'admin') { navigate('/dashboard'); return; }
+  if (getAuthRole() !== 'admin') { navigate('/dashboard'); return; }
   _settingsSlug = cfg.slug;
-  try {
-    var tok = getToken();
-    if (tok) {
-      var b64 = tok.replace(/-/g, '+').replace(/_/g, '/');
-      while (b64.length % 4) b64 += '=';
-      var outer = JSON.parse(atob(b64));
-      if (outer.payload) _currentUserId = JSON.parse(outer.payload).userId || null;
-    }
-  } catch {}
+  _currentUserId = sessionUserId();
   document.getElementById('settings-loading').style.display = 'none';
   document.getElementById('settings-content').style.display = '';
   renderWorkspace(cfg);

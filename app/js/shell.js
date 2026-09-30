@@ -87,7 +87,7 @@ function updateAuthIndicator() {
   var header = document.querySelector('.app-header');
   if (header) {
     header.classList.toggle('app-header--authed', authed);
-    header.classList.toggle('app-header--admin',  authed && (_role === 'admin' || _role === null));
+    header.classList.toggle('app-header--admin',  authed && _role === 'admin');
   }
   var _logoBase = _artistSlug ? '/' + _artistSlug : '';
   document.querySelectorAll('.app-logo').forEach(function(a) {
@@ -164,11 +164,11 @@ function _openAuthMenu(btn) {
   var existing = document.getElementById('nav-auth-menu');
   if (existing) { existing.remove(); return; }
   var _profilePath = _artistSlug ? '/' + _artistSlug + '/profile' : '/profile';
-  // Switch-workspace only makes sense for real (token) logins: bootstrap
-  // password sessions (role null) are bound to one fixed workspace. We don't
-  // gate on singleTenant — local dev sets ARTIST_SLUG (→ singleTenant) purely
-  // as a default-slug convenience while still serving multiple workspaces.
-  var _showSwitch = getAuthRole() !== null;
+  // Switch-workspace needs a personal account: the demo session is bound to
+  // the demo band. We don't gate on singleTenant — local dev sets ARTIST_SLUG
+  // (→ singleTenant) purely as a default-slug convenience while still serving
+  // multiple workspaces.
+  var _showSwitch = sessionUserId() !== null;
   var menu = document.createElement('div');
   menu.id = 'nav-auth-menu';
   menu.className = 'nav-auth-menu';
