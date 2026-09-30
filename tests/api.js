@@ -1596,7 +1596,7 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(B('Band Tools — API Tests'));
+  console.log(B('smartist — API tests'));
   console.log(D(`${BASE_URL}`));
   if (!R2_BASE) console.log(Y('  R2_PUBLIC_URL not set — R2-dependent tests will be skipped'));
 

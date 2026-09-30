@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Band Tools — GEMA works importer
+ * smartist — GEMA works importer
  *
  * Imports works and rightholders from GEMA CSV exports — the same import the
  * pro-import page runs (api/_domain/gema.js), from the command line.

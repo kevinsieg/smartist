@@ -1,4 +1,4 @@
-# Smartist — DIY Artist Tools
+# smartist
 
 Song catalogue, setlists, gigs, venues and organizers for bands and musicians. Runs as a Vercel serverless application backed by a PostgreSQL database; one deployment can host many bands, each in its own private workspace.
 
@@ -416,7 +416,6 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | `scripts/create_user.js`      | First login for a band, or set an account's password from the CLI        |
 | `scripts/plans.js`            | List bands with plan and usage; grant a plan; recount storage            |
 | `scripts/import_songs.js`     | Bulk-import songs from a JSON file (`--artist <slug>`)                   |
-| `scripts/import_venues.js`    | Bulk-import venues from a CSV file (`--artist <slug>`)                   |
 | `scripts/import_gema.js`      | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/delete_artist.js`    | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
 | `scripts/demo_reset.js`       | Snapshot / restore the public demo band (`scripts/demo_seed.json`)       |
