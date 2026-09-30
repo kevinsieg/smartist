@@ -1,9 +1,14 @@
 const { getDb, getSlug } = require('../../_db');
-const { requireAuth, getAccess, canOpenStage } = require('../../_auth');
-const { validateSongIds, validateStr } = require('../../_validate');
+const { requireAuth, getAccess, canOpenStage, refuseDemo } = require('../../_auth');
+const { validateSongIds, validateStr, validateEmail } = require('../../_validate');
 const { ownsSongs, ownsGig } = require('../../_ownership');
+const { checkRateLimit, clientIp } = require('../../_ratelimit');
+const { buildSetlistPdf, setlistTitle } = require('../../_pdf');
+const { sendEmail } = require('../../_email');
 const { wrap } = require('../../_handler');
+const logger = require('../../_logger');
 const { toCsv, buildZip } = require('../../_export');
+const { duplicateSetlist, setlistForShare } = require('../../_domain/setlists');
 
 module.exports = wrap(async function handler(req, res) {
   // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
@@ -182,8 +187,51 @@ module.exports = wrap(async function handler(req, res) {
     return res.json(results[results.length - 1][0]);
   }
 
-  // Duplicate and share are POST /api/:artist/setlists with duplicate_id /
-  // share_id in the body (see setlists.js): multi-segment POSTs to this
-  // catch-all fail under vercel dev.
+  // ── POST /setlists/:id/duplicate — copy the row and its songs ─────────────
+  if (action === 'duplicate' || action === 'share') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    const band = await requireAuth(req, res, slug, 'member');
+    if (!band) return;
+
+    if (action === 'duplicate') {
+      const [created] = await duplicateSetlist(sql, band.id, setlistId);
+      if (!created) return res.status(404).json({ error: 'Setlist not found' });
+      return res.status(201).json(created);
+    }
+
+    // ── POST /setlists/:id/share — email it as a PDF ────────────────────────
+    if (refuseDemo(req, res)) return;
+    const email = validateEmail(req.body?.email);
+    if (!email) return res.status(400).json({ error: 'Valid email required' });
+
+    const { setlist, songs } = await setlistForShare(sql, band.id, setlistId);
+    if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
+
+    // Mail to any address: capped per band and per IP so a session is not a relay.
+    if (await checkRateLimit(`share:${band.id}`, 30, 3600)
+        || await checkRateLimit(`share-ip:${clientIp(req)}`, 30, 3600))
+      return res.status(429).json({ error: 'Too many shares — try again later' });
+
+    await logger.info('setlist_share', { setlistId, band: slug, to: email, songCount: songs.length });
+
+    const pdf     = await buildSetlistPdf(setlist, songs, band.name);
+    const title   = setlistTitle(setlist);
+    const subject = title ? `Setlist — ${String(title).replace(/[\r\n]+/g, ' ')}` : `Setlist #${setlistId}`;
+
+    try {
+      await sendEmail({
+        to: email,
+        subject,
+        text: `${subject}\n\n${songs.map((s, i) => `${i + 1}. ${s.title}`).join('\n')}`,
+        attachments: [{ filename: 'setlist.pdf', content: pdf.toString('base64') }],
+      });
+      await logger.info('setlist_share_sent', { setlistId, to: email });
+    } catch (err) {
+      await logger.error('setlist_share_failed', { setlistId, to: email, error: err.message });
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
+    return res.json({ ok: true });
+  }
+
   return res.status(404).json({ error: 'Not found' });
 });

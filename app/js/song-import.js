@@ -92,7 +92,7 @@ async function _siSend(body, isFile) {
   var seq = ++_siSeq;
   var r, data;
   try {
-    r = await apiFetch('/api/' + _siSlug + '/songs', 'POST', { song_import: body });
+    r = await apiFetch('/api/' + _siSlug + '/songs/import', 'POST', body);
     data = await r.json();
   } catch (e) {
     if (seq === _siSeq) _siStatus(t('common.networkError'), true);
@@ -134,7 +134,7 @@ async function siImport(btn) {
   _siStatus(t('songImport.importing'));
   var r, data;
   try {
-    r = await apiFetch('/api/' + _siSlug + '/songs', 'POST', { song_import: { rows: _siPayloadRows(), commit: true } });
+    r = await apiFetch('/api/' + _siSlug + '/songs/import', 'POST', { rows: _siPayloadRows(), commit: true });
     data = await r.json();
   } catch (e) {
     _siStatus(t('common.networkError'), true);

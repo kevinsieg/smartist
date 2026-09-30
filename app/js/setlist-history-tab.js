@@ -816,10 +816,10 @@ async function _histShareSend(sid) {
   if (st) { st.textContent = ''; st.className = 'status-msg'; }
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists', {
+    var r = await fetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ share_id: Number(sid), email: email })
+      body: JSON.stringify({ email: email })
     });
 
     if (r.status === 401) {
@@ -862,10 +862,9 @@ async function _histDuplicate(sid) {
   if (dupBtn) { dupBtn.disabled = true; dupBtn.textContent = '…'; }
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists', {
+    var r = await fetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/duplicate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ duplicate_id: Number(sid) })
+      headers: { 'Authorization': 'Bearer ' + token }
     });
 
     if (r.status === 401) {

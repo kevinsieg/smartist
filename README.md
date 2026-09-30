@@ -356,22 +356,26 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | POST   | `/api/config` `request-reset`     | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
 | POST   | `/api/:artist/auth`               | ✓    | Admins invite and manage members; members change their password or address                   |
 | GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
-| POST   | `/api/:artist/songs`              | ✓    | Create song; also handles lyrics save/delete and media upload via body fields                |
+| POST   | `/api/:artist/songs`              | ✓    | Create song                                                                                  |
+| POST   | `/api/:artist/songs/import`       | ✓    | CSV import: `{csv}` or `{rows}` is checked, `{rows, commit: true}` imports                   |
 | PATCH  | `/api/:artist/songs`              | ✓    | Batch update songs (`extra.*Url` values must be http(s))                                     |
 | GET    | `/api/:artist/songs/:id`          | ✓ / catalogue / stage | Single song (used by stage view)                                            |
 | DELETE | `/api/:artist/songs/:id`          | ✓    | Soft-delete song                                                                             |
 | POST   | `/api/:artist/songs/:id/restore`  | ✓    | Restore from audit log                                                                       |
 | GET    | `/api/:artist/songs/:id/setlists` | ✓ / catalogue | Setlists that include this song                                                     |
 | GET    | `/api/:artist/songs/:id/gema`     | ✓    | GEMA works + rightholders for this song                                                      |
-| *      | `/api/:artist/songs/:id/audio`    | ✓    | Upload / remove a file (also `/sheet`, `/playback`)                                          |
+| *      | `/api/:artist/songs/:id/audio`    | ✓    | `POST` presign, `PUT` confirm, `DELETE` remove a file (also `/sheet`, `/playback`)          |
+| PUT    | `/api/:artist/songs/:id/lyrics`   | ✓    | Save lyrics `{lyrics}` (`DELETE` removes them, `POST …/lyrics/suggest` looks them up)       |
 | *      | `/api/:artist/songs/:id/arrangements` | ✓ / stage | Versioned arrangements; `/:arrId` to edit, `/:arrId/activate` to switch             |
 | GET    | `/api/:artist/song-logs`          | ✓    | Change log                                                                                   |
 | POST   | `/api/:artist/gema/import`        | ✓    | Import PRO CSV exports — Pro plan                                                            |
 | GET    | `/api/:artist/setlists`           | ✓    | List setlists with song count                                                                |
-| POST   | `/api/:artist/setlists`           | ✓    | Create (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
+| POST   | `/api/:artist/setlists`           | ✓    | Create (`{song_ids}`)                                                                        |
 | GET    | `/api/:artist/setlists/:id`       | ✓ / stage | Setlist detail with ordered songs                                                       |
 | PUT    | `/api/:artist/setlists/:id`       | ✓    | Update metadata + song list                                                                  |
 | DELETE | `/api/:artist/setlists/:id`       | ✓    | Delete setlist                                                                               |
+| POST   | `/api/:artist/setlists/:id/duplicate` | ✓ | Copy a setlist with its songs                                                               |
+| POST   | `/api/:artist/setlists/:id/share` | ✓    | Email it as a PDF (`{email}`)                                                                |
 | GET    | `/api/:artist/gigs`               | ✓ / catalogue | List gigs with venue and organizer names (`?format=ics` for a calendar feed)        |
 | POST   | `/api/:artist/gigs`               | ✓    | Create gig                                                                                   |
 | GET    | `/api/:artist/gigs/:id`           | ✓ / catalogue | Single gig; add `?refs` for linked setlists, venue, organizer                       |

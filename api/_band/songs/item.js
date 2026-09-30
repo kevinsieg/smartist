@@ -5,12 +5,12 @@ const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
 const { validateStr } = require('../../_validate');
 const { energyToScale } = require('../../_song_values');
 const { requireFeature } = require('../../_plans');
-const { checkRateLimit } = require('../../_ratelimit');
-const { songDetail } = require('../../_domain/songs');
+const { checkRateLimit, clientIp } = require('../../_ratelimit');
+const { suggestLyrics } = require('../../_lyrics');
+const { songDetail, cleanLyrics, writeLyrics } = require('../../_domain/songs');
 const { importWorks, importRightholders } = require('../../_domain/gema');
 
-// Song sub-resources. Lyrics are written through POST /api/:artist/songs
-// (lyrics_update_id, lyrics_delete_id, lyrics_suggest_id) — see songs.js.
+// Song sub-resources: media, lyrics, arrangements, GEMA, history.
 
 const MEDIA = {
   audio:    makeMediaFn(MEDIA_CONFIGS.audio),
@@ -81,6 +81,34 @@ module.exports = wrap(async function handler(req, res) {
   if (action in MEDIA) {
     req.query.id = rawId;
     return MEDIA[action](req, res);
+  }
+
+  // ── PUT/DELETE /api/:artist/songs/:id/lyrics, POST …/lyrics/suggest ──────
+  if (action === 'lyrics') {
+    const sub = pathParts[2];
+    if (sub && sub !== 'suggest') return res.status(404).json({ error: 'Not found' });
+    const allowed = sub ? ['POST'] : ['PUT', 'DELETE'];
+    if (!allowed.includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+    const band = await requireAuth(req, res, slug, 'member');
+    if (!band) return;
+    const sql = getDb();
+    if (sub) {
+      // The demo session (no user row) gets the free sources only.
+      const result = await suggestLyrics(sql, band, songId, clientIp(req), { allowAI: req.user.id !== null });
+      return res.status(result.status).json(result.body);
+    }
+    let text = null;
+    if (req.method === 'PUT') {
+      if (typeof req.body?.lyrics !== 'string')
+        return res.status(400).json({ error: 'lyrics must be a string' });
+      const lyrics = cleanLyrics(req.body.lyrics);
+      if (lyrics.error) return res.status(400).json({ error: lyrics.error });
+      text = lyrics.value;
+    }
+    const song = await writeLyrics(sql, band.id, songId, text,
+      req.method === 'PUT' ? 'lyrics_update' : 'lyrics_delete');
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+    return res.json({ ok: true });
   }
 
   // ── GET /api/:artist/songs/:id/arrangements ───────────────────────────────

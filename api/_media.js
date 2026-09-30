@@ -6,9 +6,9 @@ const { isOwnMediaUrl } = require('./_ownership');
 const { storageLimitBytes } = require('./_plans');
 
 // Song media (audio, sheet, playback) stored in R2. The three steps — presign,
-// confirm, delete — are shared by the REST-style catch-all routes
-// (makeMediaFn) and the body-dispatched POSTs in songs.js, so both behave the
-// same. Each step returns { status, body } and never touches the response.
+// confirm, delete — are POST, PUT and DELETE on /api/:artist/songs/:id/:type
+// (makeMediaFn). Each step returns { status, body } and never touches the
+// response.
 //
 // Config shape:
 //   keyPrefix     — R2 key prefix, e.g. 'audio/'
@@ -168,8 +168,7 @@ function makeMediaFn(config) {
     if (!Number.isInteger(songId) || songId <= 0)
       return res.status(400).json({ error: 'Invalid song id' });
 
-    // Member, like the body-dispatched POSTs in songs.js the app uses: the two
-    // paths do the same thing, so a stricter role here protected nothing.
+    // Member: anyone who may edit a song may attach its files.
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     if (refuseDemo(req, res)) return;

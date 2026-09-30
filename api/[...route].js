@@ -40,6 +40,7 @@ const ROUTES = [
   ['/api/:artist/auth',                                    'auth'],
   ['/api/:artist/songs',                                   'songs'],
   ['/api/:artist/song-logs',                               'songs'],
+  ['/api/:artist/songs/import',                            'songs', { action: 'import' }],
   ['/api/:artist/gema/import',                             'song', { path: ['gema-import'] }],
   ['/api/:artist/songs/:songId/gema',                      'song', { path: ['gema'] }],
   ['/api/:artist/songs/:songId/arrangements/:arrId/activate', 'song', { path: ['arrangements'], sub: 'activate' }],

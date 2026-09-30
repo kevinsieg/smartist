@@ -93,13 +93,9 @@ async function suggestLyrics() {
   _lyricsShowSuggestState(t('songs.lyricsSearching'), '', false);
   _lyricsSuggestAbort = new AbortController();
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
+    const r = await fetch(`/api/${artistSlug}/songs/${currentLyricsSid}/lyrics/suggest`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({ lyrics_suggest_id: currentLyricsSid }),
+      headers: { Authorization: `Bearer ${getToken()}` },
       signal: _lyricsSuggestAbort.signal,
     });
     if (!r.ok) {
@@ -175,10 +171,10 @@ async function saveLyrics() {
   _lyricsSaveStatus('', false);
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/lyrics`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify({ lyrics_update_id: sid, lyrics: text }),
+      body: JSON.stringify({ lyrics: text }),
     });
     if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } closeLyrics(); return; }
     if (!r.ok) {
@@ -243,10 +239,9 @@ async function confirmDeleteLyrics() {
   closeLyrics();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify({ lyrics_delete_id: sid }),
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/lyrics`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
     });
     if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotDeleteLyrics')); return; }

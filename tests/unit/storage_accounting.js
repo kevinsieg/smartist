@@ -40,7 +40,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
   const dbPath      = modulePath('api/_db');
   const authPath    = modulePath('api/_auth');
   const tokenPath   = modulePath('api/_token');
-  const handlerPath = modulePath('api/_band/songs.js');
+  const handlerPath = modulePath('api/_band/songs/item.js');
   const r2Path      = modulePath('api/_r2');
   const rlPath      = modulePath('api/_ratelimit');
   const emailPath   = modulePath('api/_email');
@@ -95,27 +95,28 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
 
   const tokenApi = require(path.join(__dirname, '../../api/_token'));
   return {
-    handler: require(path.join(__dirname, '../../api/_band/songs.js')),
+    handler: require(path.join(__dirname, '../../api/_band/songs/item.js')),
     token:   tokenApi.generateUserToken(7, 'member', tokenApi.TTL_8H),
     deltas,
     deleted,
   };
 }
 
-async function call(handler, token, body) {
+// PUT /songs/5/audio confirms an upload, DELETE removes the file.
+async function call(handler, token, { method, body }) {
   const res = mockRes();
   await handler({
-    method: 'POST',
-    url: `/api/${ARTIST.slug}/songs`,
-    query: { artist: ARTIST.slug },
+    method,
+    url: `/api/${ARTIST.slug}/songs/5/audio`,
+    query: { artist: ARTIST.slug, path: ['5', 'audio'] },
     headers: { authorization: `Bearer ${token}` },
     body,
   }, res);
   return res;
 }
 
-const confirmAudio = { media_confirm_id: 5, media_type: 'audio', publicUrl: NEW_URL };
-const deleteAudio  = { media_delete_id: 5, media_type: 'audio' };
+const confirmAudio = { method: 'PUT', body: { publicUrl: NEW_URL } };
+const deleteAudio  = { method: 'DELETE' };
 
 async function run(r) {
   const { testAsync, assert, assertEq } = r;
