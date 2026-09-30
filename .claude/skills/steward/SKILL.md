@@ -14,7 +14,7 @@ description: Conventions for driving a smartist pull request to green — commit
 - **Branches:** work on the assigned branch; `dev` takes direct pushes; `main`
   only through a PR (see the `release` skill). Merge `origin/dev` into a
   feature branch rather than rebasing someone else's history.
-- **Before every push:** `npm run lint` and `npm run test:unit`; for API or page changes also
+- **Before every push:** `npm run lint`, `npm run typecheck` and `npm run test:unit`; for API or page changes also
   `npm run test:api` and `npm run test:smoke` (local stack, same as CI).
 - **CI red:** reproduce locally first with the same command, fix the cause,
   push once. The browser job fails on any console error — a missing script or

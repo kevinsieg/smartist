@@ -59,6 +59,11 @@ function _stripMarkdown(text) {
 // genre:    string ('FOLK', 'SCHLAGER', …)
 // Returns { lyrics: string } on success, { lyrics: null, skipped: true } when the
 // AI provider is unavailable (no key / quota exceeded), or { lyrics: null } on miss.
+/**
+ * @param {string} title
+ * @param {string} artist
+ * @param {{ language?: string, genre?: string }} [opts]
+ */
 async function suggestLyricsWithAI(title, artist, { language, genre } = {}) {
   const apiKey = AI.apiKey();
   if (!apiKey) {

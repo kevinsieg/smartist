@@ -23,6 +23,8 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Type check
+        run: npm run typecheck
       - name: Run unit tests
         run: npm run test:unit
 
@@ -210,7 +212,7 @@ jobs:
         if: steps.creds.outputs.ok == 'true'
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" > /dev/null
-          DEPLOY_URL=$(vercel deploy --token="$VERCEL_TOKEN" 2>/dev/null)
+          DEPLOY_URL=$(vercel deploy --token="$VERCEL_TOKEN" 2> deploy.err) || { tail -n 20 deploy.err; exit 1; }
           echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
 
       - name: Run integration tests

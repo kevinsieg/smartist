@@ -30,7 +30,8 @@ const HANDLERS = {
 
 // [pattern, handler, fixed query]. First match wins. `:name` matches one
 // segment; a trailing `*` collects the rest into `path`.
-const ROUTES = [
+/** @type {[string, string, object?][]} */
+const TABLE = [
   ['/api/config',                                          'config'],
   ['/api/login',                                           'config', { action: 'login' }],
   ['/api/docs',                                            'docs'],
@@ -61,7 +62,9 @@ const ROUTES = [
   ['/api/:artist/venues/*',                                'venue'],
   ['/api/:artist/organizers',                              'organizers'],
   ['/api/:artist/organizers/*',                            'organizer'],
-].map(([pattern, handler, fixed = {}]) => {
+];
+
+const ROUTES = TABLE.map(([pattern, handler, fixed = {}]) => {
   const names = [];
   const rest  = pattern.endsWith('/*');
   const body  = (rest ? pattern.slice(0, -2) : pattern)

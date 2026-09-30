@@ -21,6 +21,10 @@ const PROVIDER = {
 
 const FROM = process.env.RESEND_FROM || 'Smartist Studio <noreply@smartist.studio>';
 
+/**
+ * @param {{ to: string, subject: string, text?: string, html?: string,
+ *   attachments?: { filename: string, content: string }[], reply_to?: string }} mail
+ */
 async function sendEmail({ to, subject, text, html, attachments, reply_to }) {
   const apiKey = process.env[PROVIDER.envVar];
   if (!apiKey) throw new Error(`${PROVIDER.envVar} not configured`);

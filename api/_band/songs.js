@@ -175,7 +175,7 @@ module.exports = wrap(async function handler(req, res) {
     const language = cleanLanguage(req.body?.language !== undefined ? req.body.language : moved.language);
     if (language === false) return res.status(400).json({ error: 'language too long' });
     const tags = cleanTags(req.body?.tags, knownTags);
-    if (tags?.error) return res.status(400).json({ error: tags.error });
+    if (tags && 'error' in tags) return res.status(400).json({ error: tags.error });
     const lyrics = cleanLyrics(req.body?.lyrics !== undefined ? req.body.lyrics : moved.lyrics);
     if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
@@ -278,7 +278,7 @@ module.exports = wrap(async function handler(req, res) {
       }
       if (!error) {
         const tags = cleanTags(update.tags, knownTags);
-        if (tags?.error) error = tags.error;
+        if (tags && 'error' in tags) error = tags.error;
         else value.tags = tags ?? current.tags ?? [];
       }
       if (!error) error = extraError(moved.extra, current.extra);

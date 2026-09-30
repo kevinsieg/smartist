@@ -245,6 +245,7 @@ Needs Node 24 and the Vercel CLI (`npm i -g vercel`).
 ```bash
 npm ci                       # API dependencies (the only install; tests/ has none of its own)
 npm run lint                 # ESLint — unused and undefined names, dead code
+npm run typecheck            # tsc over api/ (JSDoc types, jsconfig.json)
 npm run test:unit            # unit tests — no database needed
 npm run dev:up               # local stack: own Postgres, seeded band, server on :3000
 npm run dev:restart          # after changing api/ code (the server keeps modules in memory)

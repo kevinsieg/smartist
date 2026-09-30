@@ -35,6 +35,7 @@ const TAGS_MAX = 10;
 
 // Tags from a request: undefined = not sent (keep stored), null/[] = none.
 // A tag typed in another casing takes the spelling the workspace already uses.
+/** @returns {string[] | { error: string } | null} */
 function cleanTags(raw, known) {
   if (raw === undefined) return null;
   if (raw === null) return [];

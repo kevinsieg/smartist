@@ -237,7 +237,7 @@ function checkCell(col, raw, ctx) {
     }
     case 'tags': {
       const tags = cleanTags(t.split(/[;|,]/), ctx.tags);
-      if (tags.error) return { error: /too many/.test(tags.error) ? 'too_many_tags' : 'tag_too_long' };
+      if ('error' in tags) return { error: /too many/.test(tags.error) ? 'too_many_tags' : 'tag_too_long' };
       return { value: tags, text: tags.join('; ') };
     }
     case 'energy': {
