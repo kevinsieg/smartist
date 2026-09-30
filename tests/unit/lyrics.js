@@ -39,12 +39,13 @@ async function runAiGate(r) {
     [api('_domain/songs.js')]: { lyricsSearchInfo: async () => ({ title: 'T', interpret: 'A' }) },
     [api('_logger.js')]:       { info: async () => {}, warn: async () => {}, error: async () => {} },
   };
-  async function attempt({ allowAI, capped }) {
+  async function attempt({ allowAI, capped, bandCapped = false }) {
     let aiCalls = 0;
     const saved = {};
     const all = {
       ...stubs,
-      [api('_ratelimit.js')]: { checkRateLimit: async key => key === 'lyrics-ai-day' ? capped : false },
+      [api('_ratelimit.js')]: { checkRateLimit: async key =>
+        key === 'lyrics-ai-day' ? capped : key === 'lyrics-ai-day:1' ? bandCapped : false },
       [api('_ai.js')]:        { suggestLyricsWithAI: async () => { aiCalls++; return { lyrics: 'x'.repeat(60) }; } },
     };
     for (const [f, exports] of Object.entries(all)) {
@@ -78,6 +79,11 @@ async function runAiGate(r) {
   await testAsync('the daily AI cap stops the AI step for everyone', async () => {
     const { aiCalls } = await attempt({ allowAI: true, capped: true });
     assertEq(aiCalls, 0);
+  });
+  await testAsync('a band over its own daily AI cap stops at the free sources', async () => {
+    const { aiCalls, res } = await attempt({ allowAI: true, capped: false, bandCapped: true });
+    assertEq(aiCalls, 0);
+    assertEq(res.body.aiSkipped, true);
   });
 }
 

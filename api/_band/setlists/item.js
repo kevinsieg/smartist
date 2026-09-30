@@ -2,7 +2,7 @@ const { getDb, getSlug } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, refuseDemo } = require('../../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../../_validate');
 const { ownsSongs, ownsGig } = require('../../_ownership');
-const { checkRateLimit, clientIp } = require('../../_ratelimit');
+const { checkRateLimit, clientIp, outboundMailLimited } = require('../../_ratelimit');
 const { buildSetlistPdf, setlistTitle } = require('../../_pdf');
 const { sendEmail } = require('../../_email');
 const { wrap } = require('../../_handler');
@@ -135,7 +135,8 @@ module.exports = wrap(async function handler(req, res) {
 
     // Mail to any address: capped per band and per IP so a session is not a relay.
     if (await checkRateLimit(`share:${band.id}`, 30, 3600)
-        || await checkRateLimit(`share-ip:${clientIp(req)}`, 30, 3600))
+        || await checkRateLimit(`share-ip:${clientIp(req)}`, 30, 3600)
+        || await outboundMailLimited(req.user.email || `user:${req.user.id}`))
       return res.status(429).json({ error: 'Too many shares — try again later' });
 
     await logger.info('setlist_share', { setlistId, band: slug, to: email, songCount: songs.length });

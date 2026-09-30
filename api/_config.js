@@ -1,7 +1,7 @@
 const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr } = require('./_validate');
-const { checkRateLimit, clientIp } = require('./_ratelimit');
+const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, sessionValid } = require('./_token');
@@ -219,6 +219,7 @@ async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) 
   const size = Number(req.query.size);
   if (!Number.isInteger(size) || size <= 0 || size > IMAGE_MAX_BYTES)
     return res.status(400).json({ error: `size required, max ${IMAGE_MAX_BYTES / 1024 / 1024} MB` });
+  if (await presignLimited(band.id)) return res.status(429).json({ error: 'Too many uploads — try again later' });
   const key = `bands/${band.slug}/${kind}`;
   const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType, size);
   return res.json({ uploadUrl, publicUrl });

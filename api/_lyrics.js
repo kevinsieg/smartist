@@ -13,7 +13,10 @@ function plainFromSynced(synced) {
 // The AI step is the only one that costs money. The public demo hands anyone a
 // member session, so it gets the free sources only, and every band together
 // shares a daily cap: the per-IP limit alone let many addresses spend without end.
+// A per-band cap under the global one keeps a single band (any free sign-up)
+// from spending the whole day's budget for everyone else.
 const AI_DAILY_MAX = 500;
+const AI_BAND_DAILY_MAX = 50;
 
 // opts.allowAI: false skips the AI step (the demo session).
 async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
@@ -75,7 +78,9 @@ async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
     await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lrclib', error: e.message });
   }
 
-  const aiAllowed = allowAI && !(await checkRateLimit('lyrics-ai-day', AI_DAILY_MAX, 86400));
+  const aiAllowed = allowAI
+    && !(await checkRateLimit(`lyrics-ai-day:${band.id}`, AI_BAND_DAILY_MAX, 86400))
+    && !(await checkRateLimit('lyrics-ai-day', AI_DAILY_MAX, 86400));
   const { lyrics, skipped } = aiAllowed
     ? await suggestLyricsWithAI(title, artist, { language, genre })
     : { lyrics: null, skipped: true };
@@ -87,4 +92,4 @@ async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
   return { status: 200, body: { lyrics: null, sources: LYRICS_SOURCES, aiSkipped: skipped ?? false } };
 }
 
-module.exports = { LYRICS_SOURCES, AI_DAILY_MAX, plainFromSynced, suggestLyrics };
+module.exports = { LYRICS_SOURCES, AI_DAILY_MAX, AI_BAND_DAILY_MAX, plainFromSynced, suggestLyrics };

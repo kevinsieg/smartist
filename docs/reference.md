@@ -159,7 +159,9 @@ Both compare by identity (`=== true`) because `config` is JSONB and a string `"t
 
 **Everything else needs a session, with no setting involved:** venues (rows carry `contact_name`, `phone`, `generic_email` — this is why the old single flag was wrong), organizers, the setlists *list*, song logs and GEMA. Individual setlists are reachable for stage; the list is not, so nothing can be enumerated.
 
-A stage link carries no token and ids are sequential, so with `publicStage` on anyone can walk that band's songs and setlists by id — that is why it is off by default. Anonymous stage responses drop song `comment`s. The `share_token` sketched in `scripts/schema.sql` would replace this with per-link access.
+A stage link carries no token and ids are sequential, so with `publicStage` on anyone can walk that band's songs and setlists by id — that is why it is off by default. Every anonymous song read (catalogue list, `/api/config`, one song, a stage setlist) goes through `publicSong()` (`api/_domain/songs.js`), which drops `comment`. The `share_token` sketched in `scripts/schema.sql` would replace this with per-link access.
+
+**Abuse limits** (`api/_ratelimit.js`): mail to an address the caller chooses (invites, setlist shares) is capped per band and IP at the call site, and by `outboundMailLimited` per sender address and overall per day. Presigned uploads are capped per band per hour (`presignLimited`) — storage is only counted on confirm. AI lyrics suggestions are capped per band and overall per day (`api/_lyrics.js`).
 
 **Song `extra.*Url` values** must be http(s); a URL into our bucket is only accepted when it is the one already stored (uploads go through presign → confirm). New media keys are `audio|sheets|playback/<artist id>/<uuid>-<name>`, and confirm checks that prefix.
 
