@@ -23,7 +23,7 @@ in [DATABASE.md](../DATABASE.md).
 | `/hub` | `app/js/hub.js` |
 | `/profile` | `app/js/profile.js` — personal (email, change password) |
 | `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
-| `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav** |
+| `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav**. Keeps the screen awake (Wake Lock) while visible; ←/→ (and page-turner pedals) go to the previous/next song, Escape closes the share menu and dialogs |
 | `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, none of the shared scripts, English-only |
 | `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
 | `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
