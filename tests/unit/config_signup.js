@@ -115,7 +115,7 @@ async function run(r) {
     let signupTokenStored = false;
     const sql = async function(strings) {
       const q = String(strings[0]);
-      if (q.includes('FROM users')) return [{ id: 7, email: 'old@gmail.com', password_hash: '$2b$12$hash' }];
+      if (q.includes('FROM users')) return [{ id: 7, email: 'old@gmail.com', password_hash: '$2b$12$hash', slug: 'old-band' }];
       if (q.includes('INSERT INTO subscribers')) signupTokenStored = true;
       return [];
     };
@@ -132,6 +132,8 @@ async function run(r) {
     assert(/already/i.test(sentMail.subject || '') || /already/i.test(sentMail.html || ''), 'expected already-have-account email');
     assert(!/onboarding/.test(sentMail.html || ''), 'must NOT contain a workspace-setup link');
     assert(/\/login/.test(sentMail.html || ''), 'expected a login link');
+    // The login page finds the workspace to redeem the link at from `next`.
+    assert(/next=%2Fold-band%2Fdashboard/.test(sentMail.html || ''), 'expected the link to name the workspace');
     assert(!signupTokenStored, 'must not store a signup token for existing accounts');
   });
 
