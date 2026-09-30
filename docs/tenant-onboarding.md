@@ -35,7 +35,7 @@ openssl rand -hex 32
 |---|---|
 | `APP_SECRET` | 32 random bytes as hex. Not a passphrase — it is an HMAC key, never typed by a human. |
 
-This signs the user session tokens (`{userId, role, exp, pwv}` — `pwv` is a password fingerprint, so a password change ends older sessions) that every authenticated request carries. Without it no one can sign in: signing a token fails (500) and every session is rejected (401). `GET /api/config?action=health` reports it as missing (see the checklist).
+This signs the user session tokens (`{userId, role, iat, exp, pwv}` — `pwv` is a password fingerprint, so a password change ends older sessions; `iat` lets "log out everywhere" end them too) that every authenticated request carries. Without it no one can sign in: signing a token fails (500) and every session is rejected (401). `GET /api/config?action=health` reports it as missing (see the checklist).
 
 Give each project its own value. Tokens are only ever verified by the deployment that issued them, so separate keys mean a leak in one workspace cannot forge sessions in another. Set it for **all environments**. Treat it as permanent: changing it invalidates every active session on that deployment.
 

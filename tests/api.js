@@ -619,6 +619,13 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
+  // The signed-in path ends the shared test user's sessions, so it is covered
+  // by tests/unit/login_handler.js, not here.
+  await test('POST logout-everywhere without token → 401', async () => {
+    const { res, json } = await POST('/api/config', { action: 'logout-everywhere' });
+    assertStatus(res, json, 401);
+  });
+
   await test('POST /login empty body → 400', async () => {
     const { res, json } = await POST('/api/login', {});
     assertStatus(res, json, 400);

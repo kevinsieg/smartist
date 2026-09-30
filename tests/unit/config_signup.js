@@ -445,7 +445,7 @@ async function run(r) {
   function superAdminSql(email, onQuery) {
     return async function(strings, ...values) {
       const q = strings.join('?');
-      if (/SELECT email(, password_hash)? FROM users/.test(q)) return email ? [{ email }] : [];
+      if (/SELECT email(, password_hash(, sessions_valid_after)?)? FROM users/.test(q)) return email ? [{ email }] : [];
       return (onQuery && onQuery(q, values)) || [];
     };
   }

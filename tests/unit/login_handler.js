@@ -211,6 +211,39 @@ async function run(r) {
     assertEq(queries.length, 0);
   });
 
+  // ── log out everywhere ────────────────────────────────────────────────────
+  console.log(B('\nlog out everywhere'));
+
+  const { generateUserToken, TTL_8H } = require('../../api/_token');
+  async function logoutAll(handler, token) {
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'logout-everywhere' },
+      headers: token ? { authorization: `Bearer ${token}` } : {}, query: {} }, res);
+    return res;
+  }
+
+  await testAsync('a valid session stamps every row of its address', async () => {
+    const { handler, queries } = makeHandler([{ email: 'a@b.co', password_hash: HASH, sessions_valid_after: null }]);
+    const res = await logoutAll(handler, generateUserToken(7, 'member', TTL_8H, HASH));
+    assertEq(res._status, 200);
+    const upd = queries.find(q => /UPDATE users SET sessions_valid_after/.test(q.text));
+    assert(upd, 'expected the update');
+    assert(/WHERE email =/.test(upd.text), 'every workspace of the address, not only this row');
+    assertEq(upd.values[1], 'a@b.co');
+  });
+
+  await testAsync('no token → 401, nothing written', async () => {
+    const { handler, queries } = makeHandler([]);
+    assertEq((await logoutAll(handler, null))._status, 401);
+    assertEq(queries.length, 0);
+  });
+
+  await testAsync('a session already ended by a password change → 401, nothing written', async () => {
+    const { handler, queries } = makeHandler([{ email: 'a@b.co', password_hash: OTHER, sessions_valid_after: null }]);
+    assertEq((await logoutAll(handler, generateUserToken(7, 'member', TTL_8H, HASH)))._status, 401);
+    assertEq(queries.filter(q => /UPDATE/.test(q.text)).length, 0);
+  });
+
   // ── the config read the login page makes on load ──────────────────────────
   console.log(B('\nconfig without a slug'));
 

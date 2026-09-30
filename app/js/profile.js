@@ -46,6 +46,9 @@
     document.getElementById('email-section').style.display = '';
     document.getElementById('em-save-btn').addEventListener('click', requestEmailChange);
 
+    document.getElementById('sessions-section').style.display = '';
+    document.getElementById('logout-all-btn').addEventListener('click', logoutEverywhere);
+
     // Same reasoning: deletion acts on a users row.
     document.getElementById('delete-account-btn').addEventListener('click', _requestDeletion);
     _loadDeletionZone();
@@ -98,6 +101,21 @@
       msg.textContent = t('profile.emailLinkSent'); msg.className = 'save-msg ok';
       document.getElementById('em-current').value = '';
       document.getElementById('em-new').value = '';
+    } catch (e) {
+      if (!String(e.message).includes('Session')) { msg.textContent = t('profile.connError'); msg.className = 'save-msg err'; }
+    } finally { btn.disabled = false; }
+  }
+
+  // Ends every session of this address, this one included, then leaves the
+  // page the way the menu's logout does.
+  async function logoutEverywhere() {
+    var btn = document.getElementById('logout-all-btn');
+    var msg = document.getElementById('logout-all-msg');
+    btn.disabled = true; msg.className = 'save-msg'; msg.textContent = '';
+    try {
+      var r = await apiFetch('/api/config', 'POST', { action: 'logout-everywhere' });
+      if (!r.ok) { msg.textContent = t('profile.logoutEverywhereFailed'); msg.className = 'save-msg err'; return; }
+      doLogout();
     } catch (e) {
       if (!String(e.message).includes('Session')) { msg.textContent = t('profile.connError'); msg.className = 'save-msg err'; }
     } finally { btn.disabled = false; }

@@ -383,6 +383,7 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `password_hash` text | bcrypt; NULL until an invite is accepted, or for Google-only accounts |
 | `role` text | `admin`, `member` or `viewer` |
 | `invite_token_hash`, `invite_expires_at` | SHA-256 of the emailed invite token; 7 days |
+| `sessions_valid_after` timestamptz | Set by "log out everywhere" on every row of the address; session tokens issued earlier are refused |
 | `invited_by` FK → `users` SET NULL | |
 | `pending_email`, `email_change_token_hash`, `email_change_expires_at` | Email change waiting for confirmation from the new address (24 h) |
 | `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |

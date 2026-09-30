@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
 const { checkRateLimit, loginLocked, countLoginFailure } = require('../_ratelimit');
 const { ok, fail } = require('./http');
-const { generateUserToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
+const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const logger = require('../_logger');
 
@@ -91,4 +91,21 @@ async function magicLogin({ body, ip }) {
   return ok({ ok: true, token, role: user.role, email: addr, artists });
 }
 
-module.exports = { passwordLogin, magicLogin, DUMMY_HASH };
+// POST ?action=logout-everywhere — every session of this person ends: on every
+// device, in every workspace (the address is the identity), this one included.
+// Sessions issued before the stored time no longer verify (sessionValid).
+async function logoutEverywhere({ headers }) {
+  const claim = verifyUserToken((headers.authorization || '').replace(/^Bearer /, ''));
+  if (!claim) return fail(401, 'Unauthorized');
+  const sql = getDb();
+  const [me] = await sql`
+    SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  if (!me || !sessionValid(claim, me)) return fail(401, 'Unauthorized');
+  // The function's own clock, which is what iat was taken from.
+  const { count } = await sql`
+    UPDATE users SET sessions_valid_after = ${new Date()} WHERE email = ${me.email}`;
+  await logger.info('logout_everywhere', { userId: claim.userId, rows: count });
+  return ok({ ok: true });
+}
+
+module.exports = { passwordLogin, magicLogin, logoutEverywhere, DUMMY_HASH };

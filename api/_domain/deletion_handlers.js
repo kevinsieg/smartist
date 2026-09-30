@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const { getDb } = require('../_db');
-const { verifyUserToken, passwordMatches } = require('../_token');
+const { verifyUserToken, sessionValid } = require('../_token');
 const { checkRateLimit } = require('../_ratelimit');
 const { deleteFromR2 } = require('../_r2');
 const { sendEmail } = require('../_email');
@@ -17,8 +17,8 @@ async function _sessionEmail(headers, sql) {
   const bearer = (headers.authorization || '').replace(/^Bearer /, '');
   const claim  = verifyUserToken(bearer);
   if (!claim) return null;
-  const [row] = await sql`SELECT email, password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
-  return row && passwordMatches(claim, row) ? String(row.email).toLowerCase() : null;
+  const [row] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  return row && sessionValid(claim, row) ? String(row.email).toLowerCase() : null;
 }
 
 // GET ?action=deletion-preflight — what would happen, in the person's own words.
