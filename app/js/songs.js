@@ -45,26 +45,6 @@ function getConfig() {
 // --- Init ---
 
 async function init() {
-  // Magic link login: /songs#magic=TOKEN
-  const magic = new URLSearchParams(window.location.hash.slice(1)).get('magic');
-  if (magic) {
-    history.replaceState(null, '', window.location.pathname);
-    try {
-      const cfg = await getConfig();
-      artistSlug = cfg.slug;
-      applyNav(cfg.name, cfg.config);
-      const r = await fetch(`/api/${artistSlug}/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: magic }),
-      });
-      if (r.ok) {
-        sessionStorage.setItem(AUTH_TOKEN_KEY, magic);
-        await loadAndRender();
-        return;
-      }
-    } catch {}
-  }
   var _vm = isViewMode();
   if (_vm) {
     document.body.classList.add('view-mode');

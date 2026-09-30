@@ -40,32 +40,10 @@ function goToLogin(e) {
 }
 window.goToLogin = goToLogin;
 
-// Token format: base64url({"exp":unixsecs}.hexsig) — readable without the HMAC secret.
-// Passwords are also stored here (plain text, non-expiring client-side).
-// Only return true when we can positively identify an expired magic token.
-function _isTokenExpired(token) {
-  try {
-    var b64 = token.replace(/-/g, '+').replace(/_/g, '/');
-    var pad = b64.length % 4;
-    if (pad) b64 += '===='.slice(pad);
-    var decoded = atob(b64);
-    var dotIdx = decoded.indexOf('.');
-    if (dotIdx < 1) return false;                           // not magic-token format
-    var parsed = JSON.parse(decoded.slice(0, dotIdx));
-    if (!parsed.exp) return false;                          // no exp → not a magic token
-    return Math.floor(Date.now() / 1000) >= parsed.exp;
-  } catch (_) { return false; }                            // unparseable → plain password
-}
-
+// No session in this browser. An expired or revoked one is found out by the
+// first request that answers 401 (apiFetch sends the person to log in).
 function isViewMode() {
-  var token = getToken();
-  if (!token) return true;
-  if (_isTokenExpired(token)) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    return true;
-  }
-  return false;
+  return !getToken();
 }
 
 // opts.light skips the songs payload — use it on pages that only need

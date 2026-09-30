@@ -82,11 +82,6 @@ function updateAuthIndicator() {
   var el = document.getElementById('nav-auth');
   if (!el) return;
   var _tok = getToken();
-  if (_tok && _isTokenExpired(_tok)) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    _tok = null;
-  }
   var authed = !!_tok;
   var _role  = authed ? getAuthRole() : null;
   var header = document.querySelector('.app-header');
@@ -439,7 +434,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
   // Set auth class early so CSS hides/shows auth-gated nav items before applyNav() runs.
   try {
     const _earlyTok = sessionStorage.getItem(AUTH_TOKEN_KEY);
-    if (_earlyTok && !_isTokenExpired(_earlyTok)) header.classList.add('app-header--authed');
+    if (_earlyTok) header.classList.add('app-header--authed');
   } catch {}
 
   // Apply cached config before first paint so header renders complete on load.

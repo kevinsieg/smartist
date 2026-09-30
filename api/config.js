@@ -258,12 +258,9 @@ async function publicConfig(req, res, slugParam) {
     config,
     // Per-workspace role of the authenticated caller (the session token's own
     // role claim is only valid for the workspace it was issued for, so the
-    // client must read this instead of decoding the token). Bootstrap
-    // password sessions (user.id === null) report null — the client treats
-    // null as "legacy admin" and uses it to detect bootstrap logins.
-    // Band-password sessions have no users row; a full one reports null
-    // ("legacy admin"), a demo-gate session reports its real, lesser role.
-    role:          user ? ((user.id != null || user.role !== 'admin') ? user.role : null) : null,
+    // client must read this instead of decoding the token). The demo gate's
+    // session reports 'member'; no session reports null.
+    role:          user ? user.role : null,
     songs:         light ? undefined : songs,
     counts,
     plan:          planSummary(band),
