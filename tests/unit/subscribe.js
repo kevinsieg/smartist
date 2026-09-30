@@ -94,6 +94,24 @@ async function run(r) {
     for (const k of ['geo_city', 'geo_region', 'ua', 'ref']) assertEq(k in meta, false);
   });
 
+  await testAsync('POST /api/config subscribe demo — form fields are bounded strings', async () => {
+    const values = [];
+    const handler = makeHandler((s, ...v) => { values.push(...v); return Promise.resolve([]); });
+    const res = mockRes();
+    await handler({
+      method: 'POST', headers: {},
+      body: {
+        email: 'demo@example.com', source: 'demo',
+        name: 'x'.repeat(5000), genres: ['Folk', { big: 'x'.repeat(5000) }, 'Jazz'], perform_country: { nested: true },
+      },
+    }, res);
+    assertEq(res._status, 200);
+    const meta = values.find(v => v && typeof v === 'object' && 'geo_country' in v);
+    assertEq(meta.name, null);
+    assertEq(meta.genres, ['Folk', 'Jazz']);
+    assertEq(meta.perform_country, null);
+  });
+
   await testAsync('sweepSubscribers — deletes rows past 24 months and strips dropped meta keys', async () => {
     const queries = [];
     const { sweepSubscribers } = require(path.join(__dirname, '../../api/_domain/subscribe'));
