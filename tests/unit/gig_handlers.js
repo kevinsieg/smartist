@@ -1,12 +1,10 @@
 'use strict';
 
-// gigs.js serves both the collection and a single gig: /api/:artist/gigs/:id is rewritten
-// to /api/:artist/gigs?id=:id so the two handlers fit in one serverless function
-// (Hobby plan caps at 12). These tests pin the routing and the id parsing, including the
-// vercel dev case where req.query is not populated.
+// gigs.js serves both the collection and a single gig: the router sets `id` from
+// /api/:artist/gigs/:id. These tests pin the routing and the id parsing.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -68,7 +66,7 @@ function loadHandler(route) {
       keyFromUrl: () => 'k', filenameFromUrl: () => 'f',
     },
   };
-  return { handler: require(path.join(__dirname, '../..', 'api/_band/gigs.js')), calls };
+  return { handler: viaRouter(path.join(__dirname, '../..', 'api/_band/gigs.js')), calls };
 }
 
 async function call(handler, method, url, { query = {}, body } = {}) {
@@ -83,7 +81,7 @@ async function run(r) {
 
   await testAsync('GET with an id returns that gig', async () => {
     const { handler } = loadHandler(text => (text.includes('FROM gigs g') ? [GIG] : []));
-    const res = await call(handler, 'GET', '/api/test/gigs?id=7', { query: { id: '7' } });
+    const res = await call(handler, 'GET', '/api/test/gigs/7');
     assertEq(res.statusCode, 200);
     assertEq(res.body?.id, 7);
   });
@@ -95,30 +93,23 @@ async function run(r) {
     assert(Array.isArray(res.body?.rows), 'collection response should have rows');
   });
 
-  await testAsync('id is taken from the URL when req.query is not populated (vercel dev)', async () => {
-    const { handler } = loadHandler(text => (text.includes('FROM gigs g') ? [GIG] : []));
-    const res = await call(handler, 'GET', '/api/test/gigs/7');
-    assertEq(res.statusCode, 200);
-    assertEq(res.body?.id, 7);
-  });
-
   await testAsync('a non-numeric id is rejected', async () => {
     const { handler } = loadHandler(() => []);
-    const res = await call(handler, 'GET', '/api/test/gigs/abc', { query: { id: 'abc' } });
+    const res = await call(handler, 'GET', '/api/test/gigs/abc');
     assertEq(res.statusCode, 400);
     assertEq(res.body?.error, 'Invalid gig id');
   });
 
   await testAsync('an unknown gig is a 404, not an empty 200', async () => {
     const { handler } = loadHandler(() => []);
-    const res = await call(handler, 'GET', '/api/test/gigs?id=999', { query: { id: '999' } });
+    const res = await call(handler, 'GET', '/api/test/gigs/999');
     assertEq(res.statusCode, 404);
   });
 
   await testAsync('PUT updates the gig the id points at', async () => {
     const { handler, calls } = loadHandler(text =>
       (text.startsWith('SELECT * FROM gigs') ? [GIG] : [{ ...GIG, title: 'Renamed' }]));
-    const res = await call(handler, 'PUT', '/api/test/gigs?id=7', { query: { id: '7' }, body: { title: 'Renamed' } });
+    const res = await call(handler, 'PUT', '/api/test/gigs/7', { body: { title: 'Renamed' } });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE gigs'));
     assert(update, 'no UPDATE issued');
@@ -135,7 +126,7 @@ async function run(r) {
   await testAsync('DELETE soft-deletes the gig', async () => {
     const { handler, calls } = loadHandler(text =>
       (text.startsWith('SELECT * FROM gigs') ? [GIG] : [{ id: 7 }]));
-    const res = await call(handler, 'DELETE', '/api/test/gigs?id=7', { query: { id: '7' } });
+    const res = await call(handler, 'DELETE', '/api/test/gigs/7');
     assertEq(res.statusCode, 200);
     assert(calls.some(c => /UPDATE gigs SET deleted/.test(c.text)), 'no soft delete issued');
   });

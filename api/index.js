@@ -1,15 +1,19 @@
 'use strict';
 
-// The one serverless function. Every /api/* request lands here and is sent to
-// its handler by the table below, so a new route is a line in ROUTES, not a
-// file under api/ (Vercel Hobby allows twelve functions) and not a rewrite in
-// vercel.json. Handlers live in files and directories prefixed `_`, which
-// Vercel does not turn into functions of their own.
+// The one serverless function. vercel.json rewrites every /api/* request (and
+// /auth/callback) to it with the original path in `__path`, and the table
+// below sends it to its handler. A new route is a line in ROUTES, not a
+// file under api/ (Vercel Hobby allows twelve functions). Handlers live in
+// files and directories prefixed `_`, which Vercel does not turn into
+// functions of their own.
 //
-// A handler gets `req.query` as it would from Vercel's file-system routing:
-// the URL's own query string, plus `artist` and the route's parameters, plus
-// `path` (the segments after the resource) for the item handlers. `req.url` is
-// left as the client sent it.
+// Not a catch-all file (`api/[...route].js`): outside Next.js, Vercel matched
+// that for one-segment paths only, so /api/config worked and /api/:artist/…
+// was Vercel's own 404.
+//
+// A handler gets `req.query`: the URL's own query string, plus `artist` and the
+// route's parameters, plus `path` (the segments after the resource) for the
+// item handlers. Handlers read these and never parse `req.url` themselves.
 
 const HANDLERS = {
   config:     () => require('./_config'),
@@ -18,6 +22,8 @@ const HANDLERS = {
   song:       () => require('./_band/songs/item'),
   setlists:   () => require('./_band/setlists'),
   setlist:    () => require('./_band/setlists/item'),
+  export:     () => require('./_band/export'),
+  gema:       () => require('./_band/gema'),
   gigs:       () => require('./_band/gigs'),
   venues:     () => require('./_band/venues'),
   venue:      () => require('./_band/venues/item'),
@@ -40,22 +46,13 @@ const TABLE = [
 
   ['/api/:artist/auth',                                    'auth'],
   ['/api/:artist/songs',                                   'songs'],
-  ['/api/:artist/song-logs',                               'songs'],
+  ['/api/:artist/song-logs',                               'songs', { action: 'logs' }],
   ['/api/:artist/songs/import',                            'songs', { action: 'import' }],
-  ['/api/:artist/gema/import',                             'song', { path: ['gema-import'] }],
-  ['/api/:artist/songs/:songId/gema',                      'song', { path: ['gema'] }],
-  ['/api/:artist/songs/:songId/arrangements/:arrId/activate', 'song', { path: ['arrangements'], sub: 'activate' }],
-  ['/api/:artist/songs/:songId/arrangements/:arrId',       'song', { path: ['arrangements'] }],
-  ['/api/:artist/songs/:songId/arrangements',              'song', { path: ['arrangements'] }],
-  ['/api/:artist/songs/:songId/audio',                     'song', { path: ['audio'] }],
-  ['/api/:artist/songs/:songId/sheet',                     'song', { path: ['sheet'] }],
-  ['/api/:artist/songs/:songId/playback',                  'song', { path: ['playback'] }],
-  ['/api/:artist/songs/:songId/setlists',                  'song', { path: ['setlists'] }],
-  ['/api/:artist/songs/:songId/restore',                   'song', { path: ['restore'] }],
   ['/api/:artist/songs/*',                                 'song'],
+  ['/api/:artist/gema/import',                             'gema'],
   ['/api/:artist/setlists',                                'setlists'],
-  ['/api/:artist/export',                                  'setlist', { path: ['export'] }],
   ['/api/:artist/setlists/*',                              'setlist'],
+  ['/api/:artist/export',                                  'export'],
   ['/api/:artist/gigs',                                    'gigs'],
   ['/api/:artist/gigs/:id',                                'gigs'],
   ['/api/:artist/venues',                                  'venues'],
@@ -86,9 +83,14 @@ function match(pathname) {
 
 module.exports = async function route(req, res) {
   const url   = new URL(req.url, 'http://x');
-  const found = match(url.pathname);
+  // Vercel keeps the original URL on req.url after a rewrite; `__path` from the
+  // rewrite's destination covers a runtime that passes the destination instead.
+  const rewritten = req.query?.__path;
+  const found = match(typeof rewritten === 'string' && url.pathname === '/api' ? rewritten : url.pathname);
   if (!found) return res.status(404).json({ error: 'Not found' });
-  req.query = { ...Object.fromEntries(url.searchParams), ...found.params };
+  const query = Object.fromEntries(url.searchParams);
+  delete query.__path;
+  req.query = { ...query, ...found.params };
   return HANDLERS[found.handler]()(req, res);
 };
 

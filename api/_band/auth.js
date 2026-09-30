@@ -20,7 +20,7 @@ const ADMIN = { 'invite': members.invite, 'resend-invite': members.resendInvite 
 
 module.exports = wrap(async function handler(req, res) {
   const slug   = getSlug(req);
-  const action = new URL(req.url, 'http://x').searchParams.get('action') || '';
+  const action = req.query.action || '';
   /** @type {Record<string, any>} */
   const ctx    = { ...toInput(req), slug };
 
