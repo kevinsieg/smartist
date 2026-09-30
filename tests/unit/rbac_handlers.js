@@ -5,6 +5,7 @@
 // NOT from the signed token claim — so role is driven through the stubbed
 // membership query, and the token only proves identity (userId 7).
 
+const fs = require('fs');
 const path = require('path');
 const { makeRunner, stubLogger } = require('./_runner');
 
@@ -49,6 +50,9 @@ function loadHandler(relPath, { role = 'admin', rows } = {}) {
 
   // Re-require the handler and _auth fresh so the stubbed _db is picked up.
   for (const p of [dbPath, authPath, tokenPath, handlerPath]) delete require.cache[p];
+  // Domain modules hold the _db they were first loaded with, too.
+  for (const f of fs.readdirSync(path.join(__dirname, '../../api/_domain')))
+    delete require.cache[modulePath(`api/_domain/${f}`)];
 
   // requireAuth reads the band and the caller's membership in one statement.
   const sql = async (strings, ...values) => {
