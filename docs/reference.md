@@ -23,7 +23,7 @@ in [DATABASE.md](../DATABASE.md).
 | `/hub` | `app/js/hub.js` |
 | `/profile` | `app/js/profile.js` — personal (email, change password) |
 | `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
-| `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav** |
+| `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav**. Keeps the screen awake (Wake Lock) while visible; ←/→ (and page-turner pedals) go to the previous/next song, Escape closes the share menu and dialogs |
 | `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, none of the shared scripts, English-only |
 | `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
 | `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
@@ -34,6 +34,7 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 **Key shared-script exports:**
 - `loadConfig()` — stale-while-revalidate; blocks on first call, cached in `sessionStorage` thereafter
 - `invalidateConfigCache()` — call after any `PATCH /api/config` that mutates `artists.config` so the next `loadConfig()` fetches fresh data
+- `announce(msg)` (`ui.js`) — polite screen-reader message for a change with no focus of its own (a song moved or removed); keep focus on the control the user used after re-rendering a list
 - `createSortableList(options)` — reusable column-driven table with sort buttons and filter input. Column shape: `{ field, label, width, sortable, filterable, muted, type, render, actions }`. Multiple instances sharing one filter input register via `filterInputId` (uses `_slFilterRegistry` internally). Returns `{ setData(rows), refresh() }`.
 
 ---
