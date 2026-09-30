@@ -22,11 +22,11 @@ in [DATABASE.md](../DATABASE.md).
 | `/organizers` | `app/js/organizers.js` |
 | `/hub` | `app/js/hub.js` |
 | `/profile` | `app/js/profile.js` — personal (email, change password) |
-| `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
+| `/settings` | `app/js/settings.js` — admin only: band, app settings, members, instruments |
 | `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav**. Keeps the screen awake (Wake Lock) while visible; ←/→ (and page-turner pedals) go to the previous/next song, Escape closes the share menu and dialogs |
 | `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, none of the shared scripts, English-only |
 | `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
-| `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
+| `/workspaces` | `app/js/workspaces.js` — the signed-in user's bands |
 | `/contact`, `/confirm-email`, `/demo` | `app/js/contact.js`, `app/js/confirm-email.js`, `app/js/demo.js` |
 
 Every app page loads the four shared scripts in this order, after `footer.js`: `core.js` (escaping, `safeUrl`, `formatDate`/`formatTime`, `formatLength`, `songFieldHidden` — no session, no DOM shell), `session.js` (slug, token, `apiFetch`, `loadConfig`), `ui.js` (lists, typeahead, modals, `withBusy`, hard delete) and `shell.js` (header/nav, auth menu, `initPage`, SPA `navigate()`; its IIFEs run at load, so it comes last). SPA navigation keeps these four loaded and re-runs only page scripts. `stage.html` loads `core.js` only. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `shell.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()`. Bump the `?v=` of all four together (`tests/unit/asset_versions.js`).

@@ -36,13 +36,13 @@ Workspace pages live at `/<slug>/…`.
 
 **Song import** (`/song-import`) — upload songs from a CSV template; every row is checked and duplicates are flagged in a preview where rows are fixed or skipped before anything is saved.
 
-**PRO import** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. Pro plan. `/gema-import` redirects here.
+**PRO import** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. Pro plan.
 
 **Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. Needs a session unless the band turns on *public stage links* in Settings (off by default).
 
-**Settings** (`/settings`, alias `/users`) — admin only: band details, app settings, members and invites, instruments, plan. **Profile** (`/profile`) — your email and password.
+**Settings** (`/settings`) — admin only: band details, app settings, members and invites, instruments, plan. **Profile** (`/profile`) — your email and password.
 
-**Accounts** — sign up at `/signup` with email or Google (Facebook when enabled), then create a band at `/onboarding`. One login can belong to several bands (`/workspaces`, alias `/home`). A new Google account that signs in from the login page also goes on to onboarding. `/demo` opens the public demo band; `/admin` is a cross-tenant overview for `SUPER_ADMIN_EMAILS`.
+**Accounts** — sign up at `/signup` with email or Google (Facebook when enabled), then create a band at `/onboarding`. One login can belong to several bands (`/workspaces`). A new Google account that signs in from the login page also goes on to onboarding. `/demo` opens the public demo band; `/admin` is a cross-tenant overview for `SUPER_ADMIN_EMAILS`.
 
 **Plans** — Free: 100 songs, 30 MB storage, songs/setlists/gigs/hub. Pro: unlimited, plus venues, organizers and PRO import. There is no paid checkout yet: Settings upgrades a band to Pro for free, and `scripts/plans.js` or `/admin` set a plan by hand. `api/_plans.js` decides every feature and limit.
 
