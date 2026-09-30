@@ -526,6 +526,7 @@ function renderResult(songs) {
         <select id="add-song-select" data-onchange="addSongToSet(this)">
           <option value="">${t('setlist.addSongPlaceholder')}</option>
           ${options}
+          ${artistSlug && getToken() ? `<option value="__new">${t('setlist.newSongOption')}</option>` : ''}
         </select>
       </div>
       <p class="total-time">${t('setlist.total', { duration: formatLength(totalMin) })}</p>
@@ -547,6 +548,7 @@ function removeFromSet(index) {
 }
 
 function addSongToSet(select) {
+  if (select.value === '__new') { select.value = ''; _openQuickSong(); return; }
   const songId = Number(select.value);
   if (!songId) return;
   const song = allSongs.find(s => s.id === songId);
@@ -554,6 +556,56 @@ function addSongToSet(select) {
   currentSet.push(song);
   _splitAt = null;
   renderResult(currentSet);
+}
+
+// --- Quick new song: created in the band's catalogue, then added to the set ---
+
+function _openQuickSong() {
+  document.getElementById('quick-song-name').value   = '';
+  document.getElementById('quick-song-key').innerHTML = _keyOptions('');
+  document.getElementById('quick-song-length').value = '';
+  document.getElementById('quick-song-error').className = 'status-msg';
+  document.getElementById('quick-song-modal').classList.add('open');
+  setTimeout(() => document.getElementById('quick-song-name').focus(), 50);
+}
+
+function _closeQuickSong() {
+  document.getElementById('quick-song-modal').classList.remove('open');
+}
+registerModal('quick-song-modal', _closeQuickSong);
+
+async function _saveQuickSong() {
+  const nameEl = document.getElementById('quick-song-name');
+  const title  = nameEl.value.trim();
+  if (!title) { nameEl.focus(); return; }
+  const lenEl  = document.getElementById('quick-song-length');
+  const length = timeToMins(lenEl.value);
+  if (lenEl.value.trim() && length === null) { lenEl.focus(); return; }
+
+  const btn   = document.getElementById('quick-song-save');
+  const errEl = document.getElementById('quick-song-error');
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`/api/${artistSlug}/songs`, 'POST', {
+      title:      title.charAt(0).toUpperCase() + title.slice(1),
+      key:        document.getElementById('quick-song-key').value || null,
+      length_min: length,
+      active:     true,
+    });
+    if (!r.ok) throw new Error('create failed');
+    const song = await r.json();
+    invalidateConfigCache();
+    allSongs.push(song);
+    currentSet.push(song);
+    _splitAt = null;
+    _closeQuickSong();
+    renderResult(currentSet);
+  } catch {
+    errEl.textContent = t('songs.saveFailed');
+    errEl.className   = 'status-msg error';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // --- Optimize order ---
