@@ -8,7 +8,7 @@ const path = require('path');
 const vm = require('vm');
 const { makeRunner } = require('./_runner');
 const {
-  COLUMNS, parseCsvText, parseSongCsv, checkRows, normKey, normLength, songImport,
+  COLUMNS, cleanCell, parseCsvText, parseSongCsv, checkRows, normKey, normLength, songImport,
 } = require('../../api/_domain/song_import');
 
 const CTX = () => ({ titles: new Set(['wonderwall']), genres: ['Rock'], tags: ['Liebe'] });
@@ -115,7 +115,7 @@ async function run(r) {
     } }], CTX());
     assertEq(row.status, 'ready');
     const rec = row.record;
-    assertEq(rec.title, 'New  Song');
+    assertEq(rec.title, 'New Song', 'spaces collapsed');
     assertEq(rec.key, 'B♭');
     assertEq(rec.active, false);
     assertEq(rec.heart, true);
@@ -127,6 +127,22 @@ async function run(r) {
     assertEq(JSON.stringify(rec.extra), JSON.stringify({ gitCapo: 2, author: 'A. Writer', referenceUrl: 'https://www.example.com' }));
     assertEq(row.values.length, '3:30');
     assertEq(row.values.active, 'no');
+  });
+
+  test('cells are cleaned of invisible characters, odd spaces and export quotes', () => {
+    assertEq(cleanCell('\u200BHey\u00A0\u00A0Jude\u00AD\t ', false), 'Hey Jude');
+    assertEq(cleanCell('two\r\nlines', false), 'two lines', 'single-line fields lose line breaks');
+    assertEq(cleanCell("'=Intro", false), '=Intro', 'the export formula guard is removed');
+    assertEq(cleanCell("Don't", false), "Don't");
+    assertEq(cleanCell('bell\u0007', false), 'bell');
+    assertEq(cleanCell('Cafe\u0301', false), 'Caf\u00e9', 'NFC');
+    assertEq(cleanCell('  a  \r\n\r\n\r\n\r\nb \n', true), 'a\n\nb', 'lyrics keep breaks, lose trailing spaces and extra blank lines');
+  });
+
+  test('a title differing only in invisible characters is a duplicate', () => {
+    const [row] = checkRows([{ line: 2, values: { title: 'Wonder\u200Bwall\u00A0' } }], CTX());
+    assertEq(row.values.title, 'Wonderwall');
+    assertEq(row.status, 'duplicate');
   });
 
   test('duplicates: a title the band has, or an earlier row, ignoring case and spaces', () => {

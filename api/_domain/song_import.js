@@ -71,7 +71,7 @@ for (const c of COLUMNS) for (const h of [c.name, c.field, ...c.aliases]) BY_HEA
 
 // Two titles are the same song when they differ only in case and spacing.
 function titleKey(s) {
-  return String(s ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
+  return cleanCell(s ?? '', false).toLowerCase();
 }
 
 // ── CSV ───────────────────────────────────────────────────────────────────────
@@ -180,9 +180,29 @@ function minsToText(mins) {
 
 // One cell → { value, text } (text: what the preview shows, and what a
 // re-check sends back) or { error: code }. Empty cells are { value: null }.
+// What a spreadsheet leaves in a cell that no one meant to type: invisible
+// characters (zero-width spaces, BOMs, soft hyphens, control codes), odd
+// spaces (no-break, thin, ideographic), Windows line ends, runs of spaces,
+// and the ' our own CSV export puts before a leading = + - @ so Excel does
+// not run it as a formula. Single-line fields become one line; lyrics keep
+// their line breaks with trailing spaces and extra blank lines removed.
+function cleanCell(raw, multiline) {
+  let v = String(raw).normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '')
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\t]/g, ' ')
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F-\u009F]/g, '');
+  if (multiline) {
+    v = v.split('\n').map(l => l.replace(/ +$/, '')).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  } else {
+    v = v.replace(/\s+/g, ' ').trim();
+  }
+  return v.replace(/^'(?=[=+\-@])/, '');
+}
+
 function checkCell(col, raw, ctx) {
-  const s = raw == null ? '' : String(raw);
-  const t = s.trim();
+  const s = raw == null ? '' : cleanCell(raw, col.type === 'lyrics');
+  const t = s;
   if (!t) return col.required ? { error: 'required' } : { value: null, text: '' };
   switch (col.type) {
     case 'text':
@@ -410,6 +430,6 @@ async function songImport(sql, artistId, input, { maxSongs = null } = {}) {
 }
 
 module.exports = {
-  COLUMNS, MAX_ROWS, parseCsvText, parseSongCsv, checkCell, checkRows, titleKey,
+  COLUMNS, cleanCell, MAX_ROWS, parseCsvText, parseSongCsv, checkCell, checkRows, titleKey,
   normKey, normLength, songImport,
 };
