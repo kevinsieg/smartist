@@ -42,15 +42,46 @@ async function run(r) {
       await logger.withContext({ requestId: 'abc12345' }, async () => {
         await logger.info('one', { to: 'x@y.com' });
         await logger.warn('two');
+        assertEq(sent.length, 0, 'nothing sent before flush');
+        await logger.flush();
+        assertEq(sent.length, 1);
+        assertEq(sent[0].map(e => e.event), ['one', 'two']);
+        assert(sent[0].every(e => e.requestId === 'abc12345'), 'request id on every entry');
+        assert(!JSON.stringify(sent).includes('x@y.com'), 'address leaked');
+        await logger.flush();
+        assertEq(sent.length, 1, 'an empty buffer sends nothing');
       });
-      assertEq(sent.length, 0, 'nothing sent before flush');
-      await logger.flush();
-      assertEq(sent.length, 1);
-      assertEq(sent[0].map(e => e.event), ['one', 'two']);
-      assert(sent[0].every(e => e.requestId === 'abc12345'), 'request id on every entry');
-      assert(!JSON.stringify(sent).includes('x@y.com'), 'address leaked');
-      await logger.flush();
-      assertEq(sent.length, 1, 'an empty buffer sends nothing');
+    } finally {
+      global.fetch = realFetch; console.log = realLog;
+      if (token === undefined) delete process.env.BETTERSTACK_TOKEN; else process.env.BETTERSTACK_TOKEN = token;
+      delete require.cache[require.resolve(LOGGER)];
+    }
+  });
+
+  await testAsync('production: requests in flight together each send only their own lines', async () => {
+    const logger = freshLogger('production');
+    const sent = [];
+    const realFetch = global.fetch, realLog = console.log, token = process.env.BETTERSTACK_TOKEN;
+    global.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { status: 202 }; };
+    console.log = () => {};
+    process.env.BETTERSTACK_TOKEN = 't';
+    try {
+      let releaseA;
+      const aWaits = new Promise(r => { releaseA = r; });
+      const a = logger.withContext({ requestId: 'aaaaaaaa' }, async () => {
+        await logger.info('a1');
+        await aWaits;
+        await logger.flush();
+      });
+      await logger.withContext({ requestId: 'bbbbbbbb' }, async () => {
+        await logger.info('b1');
+        await logger.flush();
+      });
+      releaseA();
+      await a;
+      assertEq(sent.length, 2);
+      assertEq(sent[0].map(e => e.requestId), ['bbbbbbbb']);
+      assertEq(sent[1].map(e => e.requestId), ['aaaaaaaa']);
     } finally {
       global.fetch = realFetch; console.log = realLog;
       if (token === undefined) delete process.env.BETTERSTACK_TOKEN; else process.env.BETTERSTACK_TOKEN = token;
