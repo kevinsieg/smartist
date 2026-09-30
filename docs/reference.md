@@ -45,7 +45,7 @@ One serverless function, `api/[...route].js`, sends every `/api/*` path to a han
 | File | Routes |
 |------|--------|
 | `api/_config.js` | `GET /api/config` (returns `plan`+`usage`); `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `POST ?action=upgrade|downgrade` (self-serve plan seam — see Plans); `GET ?action=admin-overview` / `POST ?action=admin-set-plan` (super-admin); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (`/auth/callback`); `GET ?action=photo-url` (presigned upload) |
-| `api/_band/auth.js` | `POST ?action=invite\|resend-invite\|accept-invite\|change-password\|request-email-change\|confirm-email-change`; `GET` (list users), `PUT` (role only — login email is the cross-workspace identity and is never admin-editable), `DELETE` — admin — signing in and password reset are root actions in `api/_config.js` (`_domain/login.js`, `_domain/reset.js`) |
+| `api/_band/auth.js` | Who may call what, then `_domain/members.js`: `POST ?action=accept-invite\|confirm-email-change` (public, the email links), `change-password\|request-email-change` (own account), `invite\|resend-invite`, `GET` (list users), `PUT` (role only — login email is the cross-workspace identity and is never admin-editable), `DELETE` — admin. Signing in and password reset are root actions in `api/_config.js` (`_domain/login.js`, `_domain/reset.js`) |
 | `api/_band/gigs.js` | `GET/POST /api/:artist/gigs`; `GET/PUT/DELETE /api/:artist/gigs/:id` and the poster actions (the router sets `id` from `/gigs/:id`) |
 | `api/_band/organizers.js` | `GET/POST /api/:artist/organizers` |
 | `api/_band/organizers/item.js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |

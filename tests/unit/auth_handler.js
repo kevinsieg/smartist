@@ -41,7 +41,10 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   const handlerPath  = require.resolve(path.join(__dirname, '../../api/_handler'));
   const apiAuthPath  = require.resolve(path.join(__dirname, '../../api/_band/auth'));
 
+  const membersPath  = require.resolve(path.join(__dirname, '../../api/_domain/members'));
+
   delete require.cache[apiAuthPath];
+  delete require.cache[membersPath];
   delete require.cache[handlerPath];
 
   require.cache[dbPath] = {

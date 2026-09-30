@@ -11,11 +11,15 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
 - **`api/`**: thin HTTP handlers. They parse, call domain code, respond.
 - **`api/_domain/`**: business logic, no DOM, no request or response objects.
   Modules take plain values and return data or a result: the account modules
-  (login, signup, reset, oauth, subscribe, admin, deletion) take
+  (login, signup, reset, oauth, subscribe, admin, deletion, members) take
   `{ body, query, headers, ip, origin }` and return `{ status, body }` (or
   `{ status, redirect, headers }`), and `api/_domain/http.js` (`toInput`,
   `send`, `handle`) is the only code that turns a request into input and a
-  result into a reply. Most of `api/_config.js` is a router into these modules.
+  result into a reply. Most of `api/_config.js` and all of `api/_band/auth.js`
+  are routers into these modules. The band resources (songs, setlists, gigs,
+  venues, organizers) keep their validation and SQL in the handler, with the
+  shared parts in `_domain/songs.js`, `setlists.js`, `records.js`: they are
+  one statement per route, and a second layer would only pass arguments on.
   Scripts call the same code (`scripts/import_gema.js` runs the page's import).
 - **Round-trips, not parallelism**: with `prepare: false` on one connection,
   `Promise.all` does not overlap queries. Fewer statements is what saves time
