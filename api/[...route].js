@@ -6,6 +6,11 @@
 // vercel.json. Handlers live in files and directories prefixed `_`, which
 // Vercel does not turn into functions of their own.
 //
+// Outside Next.js, Vercel reads `[...route]` as ONE dynamic segment: it matches
+// /api/config but not /api/<band>/songs. vercel.json therefore rewrites every
+// other /api/* path to /api/route (one segment, so this file); the function
+// still sees the URL the client sent in req.url and routes on that.
+//
 // A handler gets `req.query` as it would from Vercel's file-system routing:
 // the URL's own query string, plus `artist` and the route's parameters, plus
 // `path` (the segments after the resource) for the item handlers. `req.url` is

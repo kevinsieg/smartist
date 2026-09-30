@@ -83,6 +83,22 @@ async function run(r) {
     })(path.join(ROOT, 'api'));
     assertEq(fns, ['api/[...route].js']);
   });
+  runVercelRewrite(r);
+}
+
+// Vercel matches api/[...route].js for one path segment only, so the paths
+// with more (every /api/<band>/…) reach it through a catch-all rewrite. Without
+// that line every band route is Vercel's own 404 while the local stack passes.
+function runVercelRewrite(r) {
+  const { test, assert } = r;
+  test('vercel.json rewrites every /api/* path to the one function', () => {
+    const { rewrites } = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+    const i = rewrites.findIndex(x => x.source === '/api/:path*');
+    assert(i !== -1, 'no /api/:path* rewrite');
+    assert(/^\/api\/[^/]+$/.test(rewrites[i].destination), `destination must be one /api segment: ${rewrites[i].destination}`);
+    const docs = rewrites.findIndex(x => x.source === '/api/docs');
+    assert(docs === -1 || docs < i, '/api/docs must come before the catch-all');
+  });
 }
 
 if (require.main === module) {

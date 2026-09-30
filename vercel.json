@@ -22,6 +22,7 @@
     { "source": "/home",            "destination": "/app/workspaces.html" },
     { "source": "/admin",           "destination": "/app/admin.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
+    { "source": "/api/:path*",      "destination": "/api/route" },
     { "source": "/contact",         "destination": "/app/contact.html" },
     { "source": "/privacy",         "destination": "/app/privacy.html" },
     { "source": "/demo",            "destination": "/app/demo.html" },
