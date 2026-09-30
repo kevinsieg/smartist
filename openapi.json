@@ -2541,6 +2541,14 @@
               ]
             },
             "description": "`ics` returns an iCalendar feed of upcoming gigs (no comments)"
+          },
+          {
+            "name": "slim",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: every gig of the band, unpaged, as a plain array of `{ id, title, date, deleted, venue_id, venue_name, venue_city, organizer_id, organizer_name }` for pickers and filters. Needs a session."
           }
         ],
         "description": "Paged, newest first. Without a session only with a public catalogue; comments are then omitted.",

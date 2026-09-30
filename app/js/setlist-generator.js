@@ -754,12 +754,13 @@ document.getElementById('signin-btn').addEventListener('click', () => {
 
 async function loadGigs() {
   try {
-    const r = await apiFetch(`/api/${artistSlug}/gigs?limit=500`);
+    const r = await apiFetch(`/api/${artistSlug}/gigs?slim=1`);
     if (!r.ok) return;
-    const { rows } = await r.json();
+    const gigs = await r.json();
     const sel = document.getElementById('gig-select');
     while (sel.options.length > 1) sel.remove(1);
-    for (const g of rows) {
+    for (const g of gigs) {
+      if (g.deleted) continue;
       const opt = document.createElement('option');
       opt.value = g.id;
       opt.textContent = g.title + (g.date ? ' — ' + formatDate(g.date) : '');
