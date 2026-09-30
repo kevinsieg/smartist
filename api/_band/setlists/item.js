@@ -9,6 +9,7 @@ const { wrap } = require('../../_handler');
 const logger = require('../../_logger');
 const { toCsv, buildZip } = require('../../_export');
 const { duplicateSetlist, setlistForShare } = require('../../_domain/setlists');
+const { publicSong } = require('../../_domain/songs');
 
 module.exports = wrap(async function handler(req, res) {
   // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
@@ -124,8 +125,7 @@ module.exports = wrap(async function handler(req, res) {
       if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
       // Visitors on a public stage link never see the band's private song
       // notes. The setlist's own comment stays: stage shows it as a subtitle.
-      if (!user) for (const s of songs) delete s.comment;
-      return res.json({ ...setlist, songs });
+      return res.json({ ...setlist, songs: user ? songs : songs.map(publicSong) });
     }
 
     const band = await requireAuth(req, res, slug, 'member');

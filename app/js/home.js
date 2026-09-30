@@ -3,12 +3,15 @@ var _loginNext = '';
 
 // Where to go after signing in: a path on this site, nothing else. A plain
 // "starts with / but not //" check let `/\evil.example` through — browsers
-// read the backslash as a slash and leave the site.
+// read the backslash as a slash and leave the site. The parsed path is
+// checked too: `/.//evil.example` resolves to the path `//evil.example`, which
+// the browser then reads as another host.
 function _safeNext(next) {
   if (!next) return '';
   try {
     var u = new URL(next, window.location.origin);
-    return u.origin === window.location.origin ? u.pathname + u.search + u.hash : '';
+    if (u.origin !== window.location.origin || /^\/[/\\]/.test(u.pathname)) return '';
+    return u.pathname + u.search + u.hash;
   } catch (e) { return ''; }
 }
 

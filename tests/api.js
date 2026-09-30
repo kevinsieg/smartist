@@ -1457,6 +1457,32 @@ async function testWrite(slug, token, firstSong, config) {
     assert(json.ok === true, 'expected ok:true');
   });
 
+  // Private song notes stay private in a public catalogue: every anonymous
+  // read of a song (list, /api/config, one song) leaves `comment` out. The
+  // switch is restored whatever happens; cache-busting query strings keep a
+  // CDN copy of the private variant out of the way on a preview.
+  await test('public catalogue never shows a song comment', async () => {
+    const before = (await GET(CONFIG_URL, { token })).json?.config?.publicCatalogue === true;
+    const { res: cr, json: song } = await POST(`/api/${slug}/songs`,
+      { title: '[TEST] public notes', comment: '[TEST] private note', active: true }, { token });
+    if (cr.status === 402) return;   // a free band at its song limit
+    assertStatus(cr, song, 201);
+    try {
+      await PATCH(CONFIG_URL, { config: { publicCatalogue: true } }, { token });
+      const bust = `_t=${Date.now()}`;
+      const list = await GET(`/api/${slug}/songs?limit=30&${bust}`);
+      assertStatus(list.res, list.json, 200);
+      const cfg  = await GET(`${CONFIG_URL}&${bust}`);
+      const one  = await GET(`/api/${slug}/songs/${song.id}?${bust}`);
+      assertStatus(one.res, one.json, 200);
+      for (const [label, body] of [['list', list.json], ['config', cfg.json], ['song', one.json]])
+        assert(!JSON.stringify(body).includes('[TEST] private note'), `comment leaked in anonymous ${label}`);
+    } finally {
+      await PATCH(CONFIG_URL, { config: { publicCatalogue: before } }, { token });
+      await DELETE(`/api/${slug}/songs/${song.id}`, { token });
+    }
+  });
+
   // Export
   await test('GET /export returns a ZIP of CSV tables', async () => {
     const res = await fetch(`${BASE_URL}/api/${slug}/export`, {

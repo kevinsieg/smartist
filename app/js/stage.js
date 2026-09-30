@@ -189,8 +189,8 @@ async function initSetlist(params, el, cfg) {
       <span class="stage-num">${i + 1}.</span>
       <a class="stage-song-title stage-song-link" href="/${cfg.slug}/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
       ${song.key     ? `<span class="stage-key">${escHtml(song.key)}</span>`    : ''}
-      ${gitCapo !== null ? `<span class="stage-capo">Git: ${gitCapo}</span>` : ''}
-      ${bjCapo  !== null ? `<span class="stage-capo">Bj: ${bjCapo}</span>`   : ''}
+      ${gitCapo !== null ? `<span class="stage-capo">Git: ${escHtml(gitCapo)}</span>` : ''}
+      ${bjCapo  !== null ? `<span class="stage-capo">Bj: ${escHtml(bjCapo)}</span>`   : ''}
       ${song.extra && song.extra.aCapella && !songFieldHidden(cfg.config, 'extra.aCapella') ? `<span class="stage-capo">A cappella</span>` : ''}
     </li>`;
   }).join('');

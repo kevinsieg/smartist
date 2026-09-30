@@ -8,7 +8,7 @@ const { keyFromUrl } = require('../_r2');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
-  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys,
+  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong,
 } = require('../_domain/songs');
 const { songImport } = require('../_domain/song_import');
 
@@ -104,7 +104,7 @@ module.exports = wrap(async function handler(req, res) {
       const total = Number(rows[0]?.total ?? 0);
       res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
       return res.json({
-        rows: rows.map(({ total: _, ...row }) => row),
+        rows: rows.map(({ total: _, ...row }) => publicSong(row)),
         total,
         limit,
         offset,

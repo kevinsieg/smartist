@@ -7,7 +7,7 @@ const { energyToScale } = require('../../_song_values');
 const { requireFeature } = require('../../_plans');
 const { checkRateLimit, clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
-const { songDetail, cleanLyrics, writeLyrics } = require('../../_domain/songs');
+const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
 const { importWorks, importRightholders } = require('../../_domain/gema');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
@@ -254,8 +254,7 @@ module.exports = wrap(async function handler(req, res) {
     ]);
     if (!song) return res.status(404).json({ error: 'Song not found' });
     // A visitor without a session never sees the band's private notes.
-    if (!user) delete song.comment;
-    return res.json({ ...song, arrangements });
+    return res.json({ ...(user ? song : publicSong(song)), arrangements });
   }
 
   // ── DELETE song ───────────────────────────────────────────────────────────
