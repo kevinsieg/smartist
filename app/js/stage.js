@@ -191,6 +191,7 @@ async function initSetlist(params, el, cfg) {
       ${song.key     ? `<span class="stage-key">${escHtml(song.key)}</span>`    : ''}
       ${gitCapo !== null ? `<span class="stage-capo">Git: ${gitCapo}</span>` : ''}
       ${bjCapo  !== null ? `<span class="stage-capo">Bj: ${bjCapo}</span>`   : ''}
+      ${song.extra && song.extra.aCapella && !songFieldHidden(cfg.config, 'extra.aCapella') ? `<span class="stage-capo">A cappella</span>` : ''}
     </li>`;
   }).join('');
 
@@ -269,6 +270,7 @@ async function initSong(params, el, cfg) {
     gitCapo !== null ? `<span class="stage-capo">Git: ${escHtml(String(gitCapo))}</span>` : '',
     bjCapo  !== null ? `<span class="stage-capo">Bj: ${escHtml(String(bjCapo))}</span>`  : '',
     extra.lead && !songFieldHidden(cfg.config, 'extra.lead') ? `<span class="stage-capo">${escHtml(extra.lead)}</span>`        : '',
+    extra.aCapella && !songFieldHidden(cfg.config, 'extra.aCapella') ? `<span class="stage-capo">A cappella</span>` : '',
     song.tempo       ? `<span class="stage-capo">${escHtml(song.tempo)}</span>`        : '',
     song.bpm         ? `<span class="stage-capo">${song.bpm} bpm</span>`               : '',
     song.length_min  ? `<span class="stage-capo">${_stageLength(song.length_min)}</span>` : '',

@@ -460,6 +460,7 @@ function renderResult(songs) {
       s(energyLabel(song.energy), 'energy',        t('setlist.energyTitle')),
       s(song.genre       || '',  'genre',         t('setlist.genreTitle')),
       song.extra?.harp ? s(t('setlist.harmonica'), 'extra.harp', t('setlist.harmonicaTitle')) : '',
+      song.extra?.aCapella ? s(t('setlist.aCapella'), 'extra.aCapella', t('setlist.aCapellaTitle')) : '',
       song.extra?.git2 ? s(t('setlist.guitar2'),   'extra.git2', t('setlist.guitar2Title')) : '',
     ].filter(Boolean).join('');
 

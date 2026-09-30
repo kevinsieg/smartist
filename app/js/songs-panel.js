@@ -59,6 +59,7 @@ function _openSongPanelContent(item, panelEl) {
   var bjCapo  = getVal(song, 'extra.banjoCapo');
   var git2    = getVal(song, 'extra.git2');
   var harp    = getVal(song, 'extra.harp');
+  var aCapella = getVal(song, 'extra.aCapella');
   var perfCells =
     (key     ? _vspCell(t('songs.fieldKey'),        escHtml(String(key)))     : '') +
     (energy  ? _vspCell(t('songs.fieldEnergy'),     escHtml(energyLabel(energy))) : '') +
@@ -69,7 +70,8 @@ function _openSongPanelContent(item, panelEl) {
     (gitCapo ? _vspCell(t('songs.fieldGitCapo'),    escHtml(String(gitCapo))) : '') +
     (bjCapo  ? _vspCell(t('songs.fieldBanjoCapo'),  escHtml(String(bjCapo)))  : '') +
     (git2    ? _vspCell(t('songs.fieldGuitar2'),    '&#10003;')               : '') +
-    (harp    ? _vspCell(t('songs.fieldHarmonica'),  '&#10003;')               : '');
+    (harp    ? _vspCell(t('songs.fieldHarmonica'),  '&#10003;')               : '') +
+    (aCapella && !_isSongFieldHidden('extra.aCapella') ? _vspCell(t('songs.fieldACapella'), '&#10003;') : '');
   var perfHtml = perfCells ? _vspSection(t('songs.sectionPerformance'), perfCells) : '';
 
   var genre   = getVal(song, 'genre');
@@ -217,6 +219,7 @@ function _openSongEditForm(sid, panelEl) {
   var gitCapo  = escHtml(String(getVal(song, 'extra.gitCapo') || ''));
   var bjCapo   = escHtml(String(getVal(song, 'extra.banjoCapo') || ''));
   var harp     = getVal(song, 'extra.harp') ? ' checked' : '';
+  var aCapella = getVal(song, 'extra.aCapella') ? ' checked' : '';
   var listen   = escHtml(getVal(song, 'extra.listenUrl') || '');
   var sheet    = escHtml(getVal(song, 'extra.sheetUrl') || '');
   var playback = escHtml(getVal(song, 'extra.playbackUrl') || '');
@@ -266,6 +269,7 @@ function _openSongEditForm(sid, panelEl) {
           (_isSongFieldHidden('extra.lead') ? '' : _editField(t('songs.fieldLead'), inp('extra.lead', lead))) +
           (_isSongFieldHidden('extra.git2') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.git2', git2) + '<span>' + t('songs.fieldGuitar2') + '</span></div>')) +
           (_isSongFieldHidden('extra.harp') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.harp', harp) + '<span>' + t('songs.fieldHarmonica') + '</span></div>')) +
+          (_isSongFieldHidden('extra.aCapella') ? '' : _editField('', '<div class="edit-check-row">' + chk('extra.aCapella', aCapella) + '<span>' + t('songs.fieldACapella') + '</span></div>')) +
           (_isSongFieldHidden('extra.gitCapo') ? '' : _editField(t('songs.fieldGitCapo'), num('extra.gitCapo', gitCapo))) +
           (_isSongFieldHidden('extra.banjoCapo') ? '' : _editField(t('songs.fieldBanjoCapo'), num('extra.banjoCapo', bjCapo)));
 
@@ -313,7 +317,9 @@ function _openSongEditForm(sid, panelEl) {
         '</div>' +
       '</details>' +
       (perfFields ? '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionPerformance') + '</summary>' +
-        '<div class="edit-section-body">' + perfFields + '</div>' +
+        '<div class="edit-section-body">' +
+          '<p class="auth-hint" style="margin-top:0">' + t('songs.perfFieldsHint') + ' <a href="/' + _artistSlug + '/settings#hidden-song-fields">' + t('songs.perfFieldsLink') + '</a></p>' +
+          perfFields + '</div>' +
       '</details>' : '') +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionRights') + '</summary>' +
         '<div class="edit-section-body">' +

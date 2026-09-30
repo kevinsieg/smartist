@@ -174,6 +174,7 @@ var COLS = [
   { key: 'extra.git2',          label: 'git2',               type: 'bool',   cls: 'col-lgit',    width: 70  },
   { key: 'extra.gitCapo',       label: 'gitCapo',            type: 'number', cls: 'col-kcapo',   width: 58  },
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
+  { key: 'extra.aCapella',      get label() { return t('songs.fieldACapella'); }, type: 'bool', cls: 'col-acapella', width: 76 },
   { key: 'genre',               get label() { return t('songs.colLabelGenre'); },      type: 'text',   cls: 'col-cat',     width: 100 },
   { key: 'tags',                get label() { return t('songs.colLabelTags'); },       type: 'tags',   cls: 'col-tags',    width: 140 },
   { key: 'energy',              get label() { return t('songs.colLabelEnergy'); },     type: 'energy', cls: 'col-energy',  width: 190 },
@@ -190,7 +191,7 @@ var COLS = [
 
 // Instrument fields a band can hide in Settings (artists.config.hiddenSongFields).
 // The data stays; only the bulk table and the panel edit form leave them out.
-var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp', 'tags'];
+var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp', 'extra.aCapella', 'tags'];
 
 function _isSongFieldHidden(key) {
   return songFieldHidden(_songsCfg && _songsCfg.config, key);
