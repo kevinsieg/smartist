@@ -916,6 +916,35 @@ async function testMultiUserAuth(slug, token) {
   }
 }
 
+// The feed calendar apps subscribe to: a timed and an all-day gig, dates in
+// the iCalendar form (YYYYMMDD), text escaped.
+async function testIcsFeed(slug, token) {
+  console.log(B('\niCalendar feed'));
+  const made = [];
+  await test('GET ?format=ics lists upcoming gigs with iCalendar dates', async () => {
+    for (const body of [
+      { title: '[TEST] Club, Night; late', date: '2099-12-31', time_start: '20:30' },
+      { title: '[TEST] All day', date: '2099-12-31' },
+    ]) {
+      const { res, json } = await POST(`/api/${slug}/gigs`, body, { token });
+      assertStatus(res, json, 201);
+      made.push(json.id);
+    }
+    const res = await fetch(`${BASE_URL}/api/${slug}/gigs?format=ics`,
+      { headers: { ...BYPASS, Authorization: `Bearer ${token}` } });
+    const ics = await res.text();
+    const event = id => (ics.split('BEGIN:VEVENT').find(e => e.includes(`UID:gig-${id}@`)) || '');
+    const [timed, allDay] = made.map(event);
+    assert(timed.includes('DTSTART:20991231T203000\r\n'), `timed start: ${timed.slice(0, 120)}`);
+    assert(timed.includes('DTEND:20991231T223000\r\n'), 'timed end is two hours later');
+    assert(timed.includes('SUMMARY:[TEST] Club\\, Night\\; late'), 'summary not escaped');
+    assert(allDay.includes('DTSTART;VALUE=DATE:20991231\r\n'), `all-day start: ${allDay.slice(0, 120)}`);
+    assert(allDay.includes('DTEND;VALUE=DATE:21000101\r\n'), 'all-day end is the next day');
+  });
+  for (const id of made)
+    await DELETE(`/api/${slug}/gigs?id=${id}`, { body: { hard: true }, token });
+}
+
 // ── Sessions, roles and tenancy on the real database ──────────────────────────
 // The unit suites stub the membership query; these run it. They need a second
 // person with a password, so they invite one — which takes the mailed link, so
@@ -1798,6 +1827,7 @@ async function main() {
       badUpdate:   { date: '2099-13-45' },
       linkField:   'additional_link',
     });
+    await testIcsFeed(slug, TOKEN);
     await testMultiUserAuth(slug, TOKEN);
     await testSessions(slug, TOKEN);
   }

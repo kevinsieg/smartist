@@ -239,8 +239,10 @@ module.exports = wrap(async function handler(req, res) {
       function esc(s) {
         return (s || '').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
       }
+      // postgres.js hands a DATE back as a Date at UTC midnight, not as text.
+      const ymd = t => new Date(t).toISOString().slice(0, 10).replace(/-/g, '');
       const events = gigs.map(g => {
-        const d = String(g.date).slice(0, 10).replace(/-/g, '');
+        const d = ymd(g.date);
         let dtstart, dtend;
         if (g.time_start) {
           const ts = g.time_start.slice(0, 5).replace(':', '');
@@ -252,9 +254,8 @@ module.exports = wrap(async function handler(req, res) {
             dtend = `DTEND:${d}T${String(h).padStart(2,'0')}${ts.slice(2)}00`;
           }
         } else {
-          const next = new Date(g.date); next.setDate(next.getDate() + 1);
           dtstart = `DTSTART;VALUE=DATE:${d}`;
-          dtend   = `DTEND;VALUE=DATE:${next.toISOString().slice(0,10).replace(/-/g,'')}`;
+          dtend   = `DTEND;VALUE=DATE:${ymd(new Date(g.date).getTime() + 86400000)}`;
         }
         const loc  = [g.venue_name, g.venue_city].filter(Boolean).join(', ');
         // No comments here: the feed URL is guessable (webcal can't auth),
