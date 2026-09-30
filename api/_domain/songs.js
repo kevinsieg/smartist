@@ -1,6 +1,6 @@
 'use strict';
 
-// Song reads and writes shared by api/[artist]/songs.js and the songs catch-all.
+// Song reads and writes shared by api/_band/songs.js and api/_band/songs/item.js.
 //
 // Lyrics live in song_lyrics, not in songs.extra: a band's lyrics run to
 // megabytes, and the song list is loaded on every songs and setlist page. Lists

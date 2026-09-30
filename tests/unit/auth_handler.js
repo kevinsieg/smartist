@@ -39,7 +39,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   const rlPath       = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const bcryptPath   = require.resolve('bcryptjs');
   const handlerPath  = require.resolve(path.join(__dirname, '../../api/_handler'));
-  const apiAuthPath  = require.resolve(path.join(__dirname, '../../api/[artist]/auth'));
+  const apiAuthPath  = require.resolve(path.join(__dirname, '../../api/_band/auth'));
 
   delete require.cache[apiAuthPath];
   delete require.cache[handlerPath];
@@ -98,7 +98,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
 
   sentMail = null;
-  return require(path.join(__dirname, '../../api/[artist]/auth'));
+  return require(path.join(__dirname, '../../api/_band/auth'));
 }
 
 function mockRes() {

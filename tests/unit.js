@@ -13,6 +13,7 @@ const suites = [
   require('./unit/gema'),
   require('./unit/ai'),
   require('./unit/handler'),
+  require('./unit/router'),
   require('./unit/subscribe'),
   require('./unit/contact'),
   require('./unit/i18n'),

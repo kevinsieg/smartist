@@ -101,7 +101,7 @@ function loadMakeLayer(withCluster) {
 
   test('the map asks the API only for venues it can place', () => {
     assert(/lat IS NOT NULL AND lng IS NOT NULL/.test(
-      fs.readFileSync(path.join(REPO_ROOT, 'api/[artist]/venues.js'), 'utf8')),
+      fs.readFileSync(path.join(REPO_ROOT, 'api/_band/venues.js'), 'utf8')),
       'the ?all= payload should skip venues without coordinates');
   });
 

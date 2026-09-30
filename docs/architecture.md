@@ -15,7 +15,7 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   `{ body, query, headers, ip, origin }` and return `{ status, body }` (or
   `{ status, redirect, headers }`), and `api/_domain/http.js` (`toInput`,
   `send`, `handle`) is the only code that turns a request into input and a
-  result into a reply. Most of `api/config.js` is a router into these modules.
+  result into a reply. Most of `api/_config.js` is a router into these modules.
   Scripts call the same code (`scripts/import_gema.js` runs the page's import).
 - **Round-trips, not parallelism**: with `prepare: false` on one connection,
   `Promise.all` does not overlap queries. Fewer statements is what saves time
@@ -24,10 +24,10 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   limits). Each swappable provider sits behind one block at the top of its file.
 - **`app/js/services/`**: API client wrappers used by the standalone pages.
 
-Vercel's Hobby plan allows 12 functions, and the app uses 11. Files starting
-with `_` are not functions, so new logic goes into `_domain/` rather than a new
-endpoint. That is also why some routes share a handler via `vercel.json`
-rewrites.
+The whole API is one serverless function, `api/[...route].js`: a table of
+paths, each sent to a handler in `api/_config.js` or `api/_band/`. Files and
+directories starting with `_` are not functions, so an endpoint costs a line in
+that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
 
 ---
 

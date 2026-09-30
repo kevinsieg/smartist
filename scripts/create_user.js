@@ -9,7 +9,7 @@
  *   DATABASE_URL=<url> node scripts/create_user.js --artist myband --email me@example.com
  *
  * Why this exists: signup (api/_domain/registration.js) creates a *new* band,
- * and invite (api/[artist]/auth.js) needs an already-authenticated admin. A band
+ * and invite (api/_band/auth.js) needs an already-authenticated admin. A band
  * created before multi-user auth has no `users` rows at all, and since the shared
  * band password was retired nobody can sign in to it. This script writes that
  * first row so the normal flows take over.

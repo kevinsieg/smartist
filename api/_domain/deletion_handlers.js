@@ -12,7 +12,7 @@ const { planDeletion, executeDeletion } = require('./deletion');
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 
 // Slug-independent: deletion spans every workspace, so there is no slug to
-// authenticate against. Same shape as myArtists in api/config.js.
+// authenticate against. Same shape as myArtists in api/_config.js.
 async function _sessionEmail(headers, sql) {
   const bearer = (headers.authorization || '').replace(/^Bearer /, '');
   const claim  = verifyUserToken(bearer);

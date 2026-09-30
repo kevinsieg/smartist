@@ -22,7 +22,7 @@ function mockRes() {
 
 function loadHandler(route) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), r2Path = mp('api/_r2');
-  const handlerPath = mp('api/[artist]/songs.js');
+  const handlerPath = mp('api/_band/songs.js');
   for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
   const calls = [];
   const sql = (strings, ...values) => {
@@ -58,7 +58,7 @@ function loadHandler(route) {
     exports: { createPresignedUrl: async () => ({}), deleteFromR2: async () => {},
       verifyUpload: async () => ({}), keyFromUrl: () => 'k', filenameFromUrl: () => 'f' },
   };
-  return { handler: require(path.join(__dirname, '../..', 'api/[artist]/songs.js')), calls };
+  return { handler: require(path.join(__dirname, '../..', 'api/_band/songs.js')), calls };
 }
 
 async function patch(handler, body) {

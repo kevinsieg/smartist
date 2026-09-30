@@ -22,7 +22,7 @@ function makeHandler(rows, { rateLimited = false, artists = [{ slug: 'a', name: 
   const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const authPath   = require.resolve(path.join(__dirname, '../../api/_auth'));
   const tokenPath  = require.resolve(path.join(__dirname, '../../api/_token'));
-  const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
   [dbPath, authPath, tokenPath, configPath].forEach(p => delete require.cache[p]);
   const domainDir = path.join(__dirname, '../../api/_domain');
@@ -51,7 +51,7 @@ function makeHandler(rows, { rateLimited = false, artists = [{ slug: 'a', name: 
       getSlug: req => (req.query && req.query.artist) || 'test',
     },
   };
-  return { handler: require(path.join(__dirname, '../../api/config')), queries };
+  return { handler: require(path.join(__dirname, '../../api/_config')), queries };
 }
 
 function mockRes() {
@@ -219,7 +219,7 @@ async function run(r) {
     delete process.env.ARTIST_SLUG;
     const { handler } = makeHandler([]);
     const res = mockRes();
-    await handler({ method: 'GET', query: {}, headers: {}, url: '/api/config' }, res);
+    await handler({ method: 'GET', query: {}, headers: {}, url: '/api/_config' }, res);
     if (saved !== undefined) process.env.ARTIST_SLUG = saved;
     assertEq(res._status, 200, 'the multi-tenant root would log a 404 on every page load');
     assertEq(res._body.singleTenant, false);
@@ -230,7 +230,7 @@ async function run(r) {
     delete process.env.ARTIST_SLUG;
     const { handler } = makeHandler([]);
     const res = mockRes();
-    await handler({ method: 'GET', query: { action: 'photo-url' }, headers: {}, url: '/api/config' }, res);
+    await handler({ method: 'GET', query: { action: 'photo-url' }, headers: {}, url: '/api/_config' }, res);
     if (saved !== undefined) process.env.ARTIST_SLUG = saved;
     assertEq(res._status, 404);
   });

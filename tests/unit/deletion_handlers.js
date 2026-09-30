@@ -168,7 +168,7 @@ function load(rows, opts) {
 
   return {
     // The handlers take plain input and return { status, body }; these tests
-    // drive them the way api/config.js does, through the http adapter.
+    // drive them the way api/_config.js does, through the http adapter.
     handlers: asHttp(require(path.join(__dirname, '../../api/_domain/deletion_handlers'))),
     token: require(tokenPath),   // the real one, loaded after the eviction above
     db, sent, deletedFiles, rateKeys,

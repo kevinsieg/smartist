@@ -90,7 +90,7 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
   };
 
   return {
-    // Driven the way api/config.js drives it: plain input through the adapter.
+    // Driven the way api/_config.js drives it: plain input through the adapter.
     oauth: { oauthCallback: require(path.join(__dirname, '../../api/_domain/http'))
       .handle(require(path.join(__dirname, '../../api/_domain/oauth')).oauthCallback) },
     state: realIdentity.generateState(provider, 'login', NONCE),

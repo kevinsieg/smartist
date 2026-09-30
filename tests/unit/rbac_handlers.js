@@ -116,14 +116,14 @@ async function run(r) {
   console.log(r.B('\nRBAC handler gates'));
 
   await testAsync('viewer is blocked before member song creation validation', async () => {
-    const { handler, token } = loadHandler('api/[artist]/songs.js', { role: 'viewer' });
+    const { handler, token } = loadHandler('api/_band/songs.js', { role: 'viewer' });
     const res = await call(handler, mockReq('POST', `/api/${ARTIST.slug}/songs`, { token, body: {} }));
     assertEq(res.statusCode, 403);
     assertEq(res.body?.error, 'Forbidden');
   });
 
   await testAsync('member passes the song gate and reaches validation', async () => {
-    const { handler, token } = loadHandler('api/[artist]/songs.js', {
+    const { handler, token } = loadHandler('api/_band/songs.js', {
       role: 'member',
       rows: (text) => text.includes('count(*)') ? [{ count: 0 }] : [],
     });
@@ -133,27 +133,27 @@ async function run(r) {
   });
 
   await testAsync('membership with an unknown role is denied on the member route', async () => {
-    const { handler, token } = loadHandler('api/[artist]/songs.js', { role: 'owner' });
+    const { handler, token } = loadHandler('api/_band/songs.js', { role: 'owner' });
     const res = await call(handler, mockReq('POST', `/api/${ARTIST.slug}/songs`, { token, body: {} }));
     assertEq(res.statusCode, 403);
     assertEq(res.body?.error, 'Forbidden');
   });
 
   await testAsync('identity with no membership in this workspace is rejected → 401', async () => {
-    const { handler, token } = loadHandler('api/[artist]/songs.js', { role: null });
+    const { handler, token } = loadHandler('api/_band/songs.js', { role: null });
     const res = await call(handler, mockReq('POST', `/api/${ARTIST.slug}/songs`, { token, body: {} }));
     assertEq(res.statusCode, 401);
   });
 
   await testAsync('member is blocked from admin user listing', async () => {
-    const { handler, token } = loadHandler('api/[artist]/auth.js', { role: 'member' });
+    const { handler, token } = loadHandler('api/_band/auth.js', { role: 'member' });
     const res = await call(handler, mockReq('GET', `/api/${ARTIST.slug}/auth`, { token }));
     assertEq(res.statusCode, 403);
     assertEq(res.body?.error, 'Forbidden');
   });
 
   await testAsync('admin can list users through the auth handler', async () => {
-    const { handler, token } = loadHandler('api/[artist]/auth.js', {
+    const { handler, token } = loadHandler('api/_band/auth.js', {
       role: 'admin',
       rows: text => (text.includes('FROM users WHERE artist_id') ? [{ id: 7, email: 'admin@example.com', role: 'admin' }] : []),
     });
@@ -163,15 +163,15 @@ async function run(r) {
   });
 
   await testAsync('member is blocked from admin config patch', async () => {
-    const { handler, token } = loadHandler('api/config.js', { role: 'member' });
-    const res = await call(handler, mockReq('PATCH', '/api/config', { token, body: { name: 'Blocked' } }));
+    const { handler, token } = loadHandler('api/_config.js', { role: 'member' });
+    const res = await call(handler, mockReq('PATCH', '/api/_config', { token, body: { name: 'Blocked' } }));
     assertEq(res.statusCode, 403);
     assertEq(res.body?.error, 'Forbidden');
   });
 
   await testAsync('admin can patch the config handler', async () => {
-    const { handler, token } = loadHandler('api/config.js', { role: 'admin' });
-    const res = await call(handler, mockReq('PATCH', '/api/config', { token, body: {} }));
+    const { handler, token } = loadHandler('api/_config.js', { role: 'admin' });
+    const res = await call(handler, mockReq('PATCH', '/api/_config', { token, body: {} }));
     assertEq(res.statusCode, 200);
     assertEq(res.body?.ok, true);
   });
