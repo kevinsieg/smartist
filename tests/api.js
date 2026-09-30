@@ -114,6 +114,15 @@ const DELETE = (path, opts)       => req('DELETE', path, opts);
 // Feature keys match resource names (venues, organizers, gigs); gated endpoints return 402 when the plan lacks them.
 const planHas = (config, feature) => !!config.plan?.features?.includes(feature);
 
+// Mail the local harness kept instead of sending (tests/harness/server.js), or
+// null against a deployment, which sends it for real.
+async function outbox(to) {
+  const res = await fetch(`${BASE_URL}/__outbox?to=${encodeURIComponent(to.toLowerCase())}`, { headers: BYPASS })
+    .catch(() => null);
+  const json = res?.ok ? await res.json().catch(() => null) : null;
+  return Array.isArray(json?.outbox) ? json.outbox : null;
+}
+
 // ── Test sections ─────────────────────────────────────────────────────────────
 
 async function testConfig() {
@@ -850,8 +859,6 @@ async function testMultiUserAuth(slug, token) {
     assertStatus(res, json, 400);
   });
 
-  skip('POST change-password success path', 'needs a named-user token; invite flow is email-gated locally');
-
   // POST login with email — wrong password → 401
   await test('POST email login rejects bad credentials → 401', async () => {
     const { res, json } = await POST(`/api/${slug}/auth`,
@@ -907,6 +914,97 @@ async function testMultiUserAuth(slug, token) {
       assertStatus(res, json, 200);
     });
   }
+}
+
+// ── Sessions, roles and tenancy on the real database ──────────────────────────
+// The unit suites stub the membership query; these run it. They need a second
+// person with a password, so they invite one — which takes the mailed link, so
+// only on the local stack (outbox). Never the admin the suite signs in as: the
+// last steps end every session of the account.
+async function testSessions(slug, adminToken) {
+  console.log(B('\nSessions, roles and tenancy'));
+
+  const email = `[test]member_${Date.now()}@example.test`;
+  if (!await outbox(email)) return skip('sessions, roles and tenancy', 'needs the local stack\'s mail outbox');
+
+  const pw1 = 'first-password-1', pw2 = 'second-password-2';
+  const songs = t => GET(`/api/${slug}/songs`, { token: t });
+  const login = password => POST('/api/login', { email, password });
+  let userId, first, second;
+
+  await test('an invited member accepts the mailed link and is signed in', async () => {
+    const inv = await POST(`/api/${slug}/auth?action=invite`, { email, role: 'member' }, { token: adminToken });
+    assertStatus(inv.res, inv.json, 201);
+    userId = inv.json.user.id;
+    const [mail] = await outbox(email);
+    const link = /#invite=([\w-]+)/.exec(mail?.html || '');
+    assert(link, 'no invite link in the mail');
+    const { res, json } = await POST(`/api/${slug}/auth?action=accept-invite`, { token: link[1], password: pw1 });
+    assertStatus(res, json, 200);
+    first = json.token;
+    const r = await songs(first);
+    assertStatus(r.res, r.json, 200);
+  });
+  if (!first) return;
+
+  await test('a member is refused the admin endpoints → 403', async () => {
+    const users = await GET(`/api/${slug}/auth`, { token: first });
+    assertStatus(users.res, users.json, 403);
+    const cfg = await PATCH(CONFIG_URL, { config: { _test: null } }, { token: first });
+    assertStatus(cfg.res, cfg.json, 403);
+  });
+
+  await test('the role comes from the database, not the token', async () => {
+    const down = await PUT(`/api/${slug}/auth`, { userId, role: 'viewer' }, { token: adminToken });
+    assertStatus(down.res, down.json, 200);
+    const { res, json } = await POST(`/api/${slug}/songs`, { title: '[TEST] viewer write' }, { token: first });
+    const up = await PUT(`/api/${slug}/auth`, { userId, role: 'member' }, { token: adminToken });
+    assertStatus(res, json, 403);
+    assertStatus(up.res, up.json, 200);
+  });
+
+  const other = process.env.DEMO_ARTIST_SLUG || 'demo';
+  if ((await GET(`/api/config?slug=${other}`)).json?.slug !== other) {
+    skip('sessions of one band open no other band', `no band "${other}" here`);
+  } else {
+    await test('sessions of one band open no other band → 401', async () => {
+      for (const t of [first, adminToken]) {
+        const read = await GET(`/api/${other}/songs`, { token: t });
+        assertStatus(read.res, read.json, 401);
+        const write = await POST(`/api/${other}/songs`, { title: '[TEST] cross-band' }, { token: t });
+        assertStatus(write.res, write.json, 401);
+      }
+    });
+  }
+
+  await test('a password change ends the old session and the old password', async () => {
+    const { res, json } = await POST(`/api/${slug}/auth?action=change-password`,
+      { currentPassword: pw1, newPassword: pw2 }, { token: first });
+    assertStatus(res, json, 200);
+    second = json.token;
+    assertStatus((await songs(first)).res, null, 401);
+    assertStatus((await songs(second)).res, null, 200);
+    assertStatus((await login(pw1)).res, null, 401);
+  });
+
+  await test('log out everywhere ends every session, a new sign-in works', async () => {
+    const signedIn = await login(pw2);
+    assertStatus(signedIn.res, signedIn.json, 200);
+    const { res, json } = await POST('/api/config', { action: 'logout-everywhere' }, { token: second });
+    assertStatus(res, json, 200);
+    assertStatus((await songs(second)).res, null, 401);
+    assertStatus((await songs(signedIn.json.token)).res, null, 401);
+    const again = await login(pw2);
+    assertStatus(again.res, again.json, 200);
+    second = again.json.token;
+    assertStatus((await songs(second)).res, null, 200);
+  });
+
+  await test('a removed member\'s session opens nothing → 401', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/auth`, { body: { userId }, token: adminToken });
+    assertStatus(res, json, 200);
+    assertStatus((await songs(second)).res, null, 401);
+  });
 }
 
 // ── File endpoint tests ───────────────────────────────────────────────────────
@@ -1248,6 +1346,17 @@ async function testSetlistShareValidation(slug, token, setlistId) {
     const { res, json } = await POST(`/api/${slug}/setlists/999999999/share`,
       { email: 'test@example.com' }, { token });
     assertStatus(res, json, 404);
+  });
+
+  if (!await outbox('share@example.test')) return skip('setlist share mail', 'mail is sent for real here');
+  await test('POST /setlists/:id/share mails the setlist as a PDF → 200', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/${setlistId}/share`,
+      { email: 'share@example.test' }, { token });
+    assertStatus(res, json, 200);
+    const [mail] = (await outbox('share@example.test')).slice(-1);
+    const pdf = Buffer.from(mail?.attachments?.[0]?.content || '', 'base64');
+    assert(pdf.subarray(0, 5).toString() === '%PDF-', 'attachment is not a PDF');
+    assert(/^1\. /m.test(mail.text), 'mail text does not list the songs');
   });
 }
 
@@ -1690,6 +1799,7 @@ async function main() {
       linkField:   'additional_link',
     });
     await testMultiUserAuth(slug, TOKEN);
+    await testSessions(slug, TOKEN);
   }
 
   printSummary();
