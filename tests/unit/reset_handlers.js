@@ -163,7 +163,7 @@ async function run(r) {
     assert(flat.includes('hashed:a-new-password'), `stored the raw password: ${flat}`);
     // The statement must name the address, not an artist and not an id — and
     // must not be able to reach the neighbour's row.
-    assert(/lower\(email\)/i.test(writes[0].text), `write is not scoped by address: ${writes[0].text}`);
+    assert(/WHERE email =/i.test(writes[0].text), `write is not scoped by address: ${writes[0].text}`);
     assert(flat.includes(VICTIM), 'write does not name the victim address');
     assert(!flat.includes(NEIGHBOUR), `write names another address: ${flat}`);
   });

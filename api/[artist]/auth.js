@@ -57,7 +57,7 @@ module.exports = wrap(async function handler(req, res) {
         SET password_hash = ${hash},
             invite_token_hash = CASE WHEN id = ${user.id} THEN NULL ELSE invite_token_hash END,
             invite_expires_at = CASE WHEN id = ${user.id} THEN NULL ELSE invite_expires_at END
-        WHERE lower(email) = lower(${user.email})
+        WHERE email = ${user.email}
       `,
       getArtistsForUser(user.id, sql),
     ]);
@@ -85,7 +85,7 @@ module.exports = wrap(async function handler(req, res) {
     catch { return res.status(400).json({ error: 'Invalid or expired link' }); }
 
     const [user] = await sql`
-      SELECT * FROM users WHERE artist_id = ${band.id} AND lower(email) = ${hintEmail}
+      SELECT * FROM users WHERE artist_id = ${band.id} AND email = ${hintEmail}
     `;
     // The hint is attacker-supplied, so the token is checked against the seed of
     // the row the hint names. A valid token for one account plus someone else's
@@ -98,7 +98,7 @@ module.exports = wrap(async function handler(req, res) {
     // an old password left on another band's row would keep working there.
     const hash = await bcrypt.hash(String(password), 12);
     const [, artists] = await Promise.all([
-      sql`UPDATE users SET password_hash = ${hash} WHERE lower(email) = lower(${user.email})`,
+      sql`UPDATE users SET password_hash = ${hash} WHERE email = ${user.email}`,
       getArtistsForUser(user.id, sql),
     ]);
 
@@ -416,7 +416,7 @@ module.exports = wrap(async function handler(req, res) {
     // Every band of this address: after a compromise, a password changed in one
     // band must not keep working through another.
     const hash = await bcrypt.hash(String(newPassword), 12);
-    await sql`UPDATE users SET password_hash = ${hash} WHERE lower(email) = lower(${user.email})`;
+    await sql`UPDATE users SET password_hash = ${hash} WHERE email = ${user.email}`;
     // The new hash invalidates every session issued before it, this one
     // included — hand back a replacement so the caller stays signed in.
     const token = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, hash);

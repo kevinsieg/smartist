@@ -30,7 +30,7 @@ async function _rowsFor(addr, sql) {
   return await sql`
     SELECT id, email, role, password_hash
     FROM users
-    WHERE lower(email) = ${addr}
+    WHERE email = ${addr}
     ORDER BY id
     LIMIT ${MAX_ROWS}
   `;
@@ -100,7 +100,7 @@ async function setPassword({ body }) {
     return fail(400, 'Invalid or expired link');
 
   const hash = await bcrypt.hash(String(password), 12);
-  await sql`UPDATE users SET password_hash = ${hash} WHERE lower(email) = ${addr}`;
+  await sql`UPDATE users SET password_hash = ${hash} WHERE email = ${addr}`;
 
   // Setting the password is what logs them in; they are here because they could
   // not, and handing them back to the login form would be a joke.
