@@ -304,6 +304,8 @@ initPage(async function(config) {
     emptyHint:       t('gigs.noPastGigs'),
   });
 
+  // The setlists for the cross-entity filter load alongside the gigs.
+  var _setsPromise = apiFetch('/api/' + artistSlug + '/setlists').catch(function() { return null; });
   await loadGigs();
 
   // Re-insert year dividers after sort bar re-renders the past list
@@ -316,7 +318,7 @@ initPage(async function(config) {
 
   // Fetch setlists for cross-entity filter
   try {
-    var setsRes = await apiFetch('/api/' + artistSlug + '/setlists');
+    var setsRes = await _setsPromise;
     _gigAllSetlists = await setsRes.json();
     if (!Array.isArray(_gigAllSetlists)) _gigAllSetlists = [];
   } catch { _gigAllSetlists = []; }
