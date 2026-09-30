@@ -57,7 +57,7 @@ function makeContext() {
     getToken: () => 'tok',
     t: k => k,
     escHtml: s => String(s == null ? '' : s),
-    formatDate: () => '', energyLabel: () => '', apiFetch: async () => ({ ok: true, json: async () => ({}) }),
+    formatDate: () => '', energyLabel: () => '', MUSICAL_KEYS: [], apiFetch: async () => ({ ok: true, json: async () => ({}) }),
     loadConfig: async () => ({}), invalidateConfigCache() {}, createListView: () => ({}),
     setStatus() {}, openModal() {}, closeModal() {}, registerModal() {},
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },

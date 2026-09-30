@@ -79,6 +79,33 @@ function formatLength(mins) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// Circle-of-fifths keys: 15 majors then their 15 relative minors.
+var MUSICAL_KEYS = [
+  'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯', 'F', 'B♭', 'E♭', 'A♭', 'D♭', 'G♭', 'C♭',
+  'Am', 'Em', 'Bm', 'F♯m', 'C♯m', 'G♯m', 'D♯m', 'A♯m', 'Dm', 'Gm', 'Cm', 'Fm', 'B♭m', 'E♭m', 'A♭m',
+];
+
+// Option HTML for a key <select>. Preserves a legacy/free-text value that
+// predates this list so editing a song never silently drops its key.
+function _keyOptions(cur) {
+  cur = cur || '';
+  var list = (cur && MUSICAL_KEYS.indexOf(cur) === -1) ? [cur].concat(MUSICAL_KEYS) : MUSICAL_KEYS;
+  return '<option value="">—</option>' + list.map(function(k) {
+    return '<option value="' + escHtml(k) + '"' + (k === cur ? ' selected' : '') + '>' + escHtml(k) + '</option>';
+  }).join('');
+}
+
+// 'MM:SS' → minutes, or null when empty or malformed.
+function timeToMins(str) {
+  if (!str || !str.trim()) return null;
+  const parts = str.trim().split(':');
+  if (parts.length !== 2) return null;
+  const m = parseInt(parts[0], 10);
+  const s = parseInt(parts[1], 10);
+  if (isNaN(m) || isNaN(s) || s >= 60) return null;
+  return m + s / 60;
+}
+
 // Full locale tag for Intl. English uses en-GB so dates stay day-first like the rest.
 // Without i18n.js (stage.html) the page's own lang attribute decides.
 function localeTag() {
