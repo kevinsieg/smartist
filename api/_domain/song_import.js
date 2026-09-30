@@ -1,6 +1,6 @@
 'use strict';
 
-// CSV song import (POST /api/:artist/songs with a `song_import` body field).
+// CSV song import (POST /api/:artist/songs/import).
 //
 // The songs page offers a template whose header row is COLUMNS' names. An
 // uploaded file is parsed here, every row is checked against the same rules
@@ -388,7 +388,7 @@ async function insertSongs(sql, artistId, records) {
   return res?.count ?? 0;
 }
 
-// The whole request: body.song_import is { csv } (a new file) or
+// The whole request body: { csv } (a new file) or
 // { rows, commit } (a re-check after edits, or the import itself).
 // maxSongs: the plan's song limit, or null. → { status, body }
 async function songImport(sql, artistId, input, { maxSongs = null } = {}) {

@@ -1,16 +1,14 @@
 const { getDb, getSlug, parsePage } = require('../_db');
-const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
+const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { validateStr, validateNum } = require('../_validate');
 const { wrap } = require('../_handler');
-const { clientIp, checkRateLimit } = require('../_ratelimit');
-const { suggestLyrics } = require('../_lyrics');
+const { checkRateLimit } = require('../_ratelimit');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { keyFromUrl } = require('../_r2');
-const { MEDIA_CONFIGS, presignMedia, confirmMedia, deleteMedia } = require('../_media');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
-  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, writeLyrics,
+  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys,
 } = require('../_domain/songs');
 const { songImport } = require('../_domain/song_import');
 
@@ -52,12 +50,6 @@ function toBool(v, fallback) {
   if (v === true || v === 'true') return true;
   if (v === false || v === 'false') return false;
   return fallback;
-}
-
-// Song id from a body field (lyrics_update_id, media_confirm_id, …), or null.
-function bodyId(value) {
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 module.exports = wrap(async function handler(req, res) {
@@ -124,79 +116,15 @@ module.exports = wrap(async function handler(req, res) {
     }));
   }
 
-  // ── POST lyrics-suggest ───────────────────────────────────────────────────
-  // Dispatched via body field to avoid multi-segment POST routing issues.
-  // Client sends POST /api/:band/songs with { lyrics_suggest_id: songId }.
-  if (req.method === 'POST' && req.body?.lyrics_suggest_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    const songId = bodyId(req.body.lyrics_suggest_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-    // The demo session (no user row) gets the free sources only.
-    const result = await suggestLyrics(sql, band, songId, clientIp(req), { allowAI: req.user.id !== null });
-    return res.status(result.status).json(result.body);
-  }
-
-  // ── POST lyrics update (replaces PUT /songs/:id/lyrics) ───────────────────
-  if (req.method === 'POST' && req.body?.lyrics_update_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    const songId = bodyId(req.body.lyrics_update_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-    if (typeof req.body.lyrics !== 'string')
-      return res.status(400).json({ error: 'lyrics must be a string' });
-    const lyrics = cleanLyrics(req.body.lyrics);
-    if (lyrics.error) return res.status(400).json({ error: lyrics.error });
-    const song = await writeLyrics(sql, band.id, songId, lyrics.value);
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-    return res.json({ ok: true });
-  }
-
-  // ── POST lyrics delete (replaces DELETE /songs/:id/lyrics) ────────────────
-  if (req.method === 'POST' && req.body?.lyrics_delete_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    const songId = bodyId(req.body.lyrics_delete_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-    const song = await writeLyrics(sql, band.id, songId, null, 'lyrics_delete');
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-    return res.json({ ok: true });
-  }
-
-  // ── POST upload presign / confirm / delete (workaround: multi-segment PUT/DELETE to
-  //    /songs/:id/:type fails on Vercel catch-alls in dynamic dirs) ────────────────────────
-  if (req.method === 'POST' && (req.body?.media_confirm_id != null
-      || req.body?.media_delete_id != null || req.body?.upload_presign_id != null)) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    if (refuseDemo(req, res)) return;
-    const b = req.body;
-    const songId = bodyId(b.media_confirm_id ?? b.media_delete_id ?? b.upload_presign_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-
-    let result;
-    if (b.upload_presign_id != null) {
-      const config = MEDIA_CONFIGS[b.upload_type];
-      if (!config) return res.status(400).json({ error: 'upload_type must be audio, sheet, or playback' });
-      result = await presignMedia(sql, band, songId, config, b);
-    } else {
-      const config = MEDIA_CONFIGS[b.media_type];
-      if (!config) return res.status(400).json({ error: 'media_type must be audio, sheet, or playback' });
-      result = b.media_confirm_id != null
-        ? await confirmMedia(sql, band, songId, config, b.publicUrl)
-        : await deleteMedia(sql, band, songId, config);
-    }
-    return res.status(result.status).json(result.body);
-  }
-
-  // ── POST CSV import: check a file or edited rows, or import them ─────────
-  if (req.method === 'POST' && req.body?.song_import != null) {
+  // ── POST /songs/import: check a CSV file or edited rows, or import them ──
+  if (req.query.action === 'import') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     // The preview re-checks after each edit; a burst of edits stays well under this.
     if (await checkRateLimit(`song-import:${band.id}`, 200, 600))
       return res.status(429).json({ error: 'Too many requests — try again in a few minutes' });
-    const result = await songImport(sql, band.id, req.body.song_import, { maxSongs: songLimit(band) });
+    const result = await songImport(sql, band.id, req.body ?? {}, { maxSongs: songLimit(band) });
     return res.status(result.status).json(result.body);
   }
 

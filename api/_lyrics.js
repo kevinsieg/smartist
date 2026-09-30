@@ -7,7 +7,7 @@ function plainFromSynced(synced) {
 }
 
 // Look lyrics up for one song: lyrics.ovh, then lrclib, then the AI provider.
-// Shared by the body-dispatched POST in songs.js and the catch-all route.
+// Behind POST /api/:artist/songs/:id/lyrics/suggest (songs/item.js).
 // Returns { status, body }. Required lazily so the pure helpers above stay
 // loadable without the database or logger.
 // The AI step is the only one that costs money. The public demo hands anyone a

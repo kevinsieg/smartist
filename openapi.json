@@ -1025,7 +1025,7 @@
             "$ref": "#/components/parameters/band"
           }
         ],
-        "description": "Member role. The same endpoint also carries lyrics and media actions selected by a body field (`lyrics_update_id`, `lyrics_delete_id`, `lyrics_suggest_id`, `upload_presign_id`, `media_confirm_id`, `media_delete_id`) — these exist because multi-segment POSTs to catch-all routes fail under `vercel dev`.",
+        "description": "Member role.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1178,6 +1178,122 @@
           },
           "403": {
             "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/import": {
+      "post": {
+        "summary": "Import songs from CSV",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role. `{ csv }` (a new file) or `{ rows }` (edited rows) is only checked and answers each row's values, errors and duplicates; `{ rows, commit: true }` writes every row not marked `skip` in one statement.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "csv": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "commit": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checked, nothing written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Imported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imported": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan song limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A row still has an error or an unresolved duplicate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
             "content": {
               "application/json": {
                 "schema": {
@@ -2150,6 +2266,182 @@
         }
       }
     },
+    "/api/{band}/songs/{id}/lyrics": {
+      "put": {
+        "summary": "Save a song's lyrics",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "lyrics"
+                ],
+                "properties": {
+                  "lyrics": {
+                    "type": "string",
+                    "maxLength": 20000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a song's lyrics",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/lyrics/suggest": {
+      "post": {
+        "summary": "Look up lyrics for a song",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Tries lyrics.ovh, lrclib, then the AI provider (not for the demo session). Nothing is saved.",
+        "responses": {
+          "200": {
+            "description": "Suggestion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Song has no artist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
     "/api/{band}/song-logs": {
       "get": {
         "summary": "Recent audit log",
@@ -2628,7 +2920,7 @@
         }
       },
       "post": {
-        "summary": "Create, duplicate or share a setlist",
+        "summary": "Create a setlist",
         "tags": [
           "Setlists"
         ],
@@ -2642,59 +2934,18 @@
             "$ref": "#/components/parameters/band"
           }
         ],
-        "description": "Member role. One endpoint, three actions chosen by the body: `{ song_ids, title?, comment?, gig_id? }` creates; `{ duplicate_id }` copies a setlist; `{ share_id, email }` emails it as a PDF (rate-limited per band and IP).",
+        "description": "Member role. `{ song_ids, title?, comment?, gig_id? }`.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/SetlistInput"
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "duplicate_id"
-                    ],
-                    "properties": {
-                      "duplicate_id": {
-                        "type": "integer"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "share_id",
-                      "email"
-                    ],
-                    "properties": {
-                      "share_id": {
-                        "type": "integer"
-                      },
-                      "email": {
-                        "type": "string",
-                        "format": "email"
-                      }
-                    }
-                  }
-                ]
+                "$ref": "#/components/schemas/SetlistInput"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Shared",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
-                }
-              }
-            }
-          },
           "201": {
             "description": "Created",
             "content": {
@@ -2730,16 +2981,6 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
-          },
-          "429": {
-            "description": "Rate limited",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           },
           "500": {
             "$ref": "#/components/responses/500"
@@ -2921,6 +3162,141 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}/duplicate": {
+      "post": {
+        "summary": "Duplicate a setlist",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Copies the setlist and its songs.",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setlist"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}/share": {
+      "post": {
+        "summary": "Email a setlist as a PDF",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role, not the demo. Rate-limited per band and IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Demo is read-only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "500": {
             "$ref": "#/components/responses/500"

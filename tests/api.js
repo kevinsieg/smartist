@@ -649,8 +649,8 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
-  await test('POST /setlists with share_id without token → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists`, { share_id: 1, email: 'test@example.com' });
+  await test('POST /setlists/:id/share without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/1/share`, { email: 'test@example.com' });
     assertStatus(res, json, 401);
   });
 
@@ -675,16 +675,16 @@ async function testAuth(slug) {
     });
   }
 
-  await test('POST /songs lyrics_update_id without token → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_update_id: 1, lyrics: 'x' });
+  await test('PUT /songs/:id/lyrics without token → 401', async () => {
+    const { res, json } = await PUT(`/api/${slug}/songs/1/lyrics`, { lyrics: 'x' });
     assertStatus(res, json, 401);
   });
-  await test('POST /songs lyrics_delete_id without token → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_delete_id: 1 });
+  await test('DELETE /songs/:id/lyrics without token → 401', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/songs/1/lyrics`);
     assertStatus(res, json, 401);
   });
-  await test('POST /songs lyrics_suggest_id without token → 401', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_suggest_id: 1 });
+  await test('POST /songs/:id/lyrics/suggest without token → 401', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/1/lyrics/suggest`);
     assertStatus(res, json, 401);
   });
 
@@ -918,13 +918,13 @@ async function testDemoGate() {
     assert(songId, 'no song visible to the demo session');
   });
   await test('demo session cannot email a setlist → 403 demo_readonly', async () => {
-    const { res, json } = await POST(`/api/${demo}/setlists`, { share_id: 1, email: 'someone@example.test' }, { token });
+    const { res, json } = await POST(`/api/${demo}/setlists/1/share`, { email: 'someone@example.test' }, { token });
     assertStatus(res, json, 403);
     assert(json.code === 'demo_readonly', `expected demo_readonly, got ${json.code}`);
   });
   await test('demo session cannot get an upload URL → 403 demo_readonly', async () => {
-    const { res, json } = await POST(`/api/${demo}/songs`,
-      { upload_presign_id: songId, upload_type: 'sheet', filename: 'x.pdf', size: 1000 }, { token });
+    const { res, json } = await POST(`/api/${demo}/songs/${songId}/sheet`,
+      { filename: 'x.pdf', size: 1000 }, { token });
     assertStatus(res, json, 403);
   });
   await test('demo session is not an admin: settings stay closed → 403', async () => {
@@ -1135,28 +1135,27 @@ async function testLyricsLifecycle(slug, token, songId) {
   console.log(B('\nLyrics lifecycle'));
 
   // Validation
-  await test('POST /songs lyrics_update_id wrong body key → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`,
-      { lyrics_update_id: songId, text: 'wrong key' }, { token });
+  await test('PUT /songs/:id/lyrics wrong body key → 400', async () => {
+    const { res, json } = await PUT(`/api/${slug}/songs/${songId}/lyrics`,
+      { text: 'wrong key' }, { token });
     assertStatus(res, json, 400);
   });
-  await test('POST /songs lyrics_update_id too long → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`,
-      { lyrics_update_id: songId, lyrics: 'x'.repeat(20001) }, { token });
+  await test('PUT /songs/:id/lyrics too long → 400', async () => {
+    const { res, json } = await PUT(`/api/${slug}/songs/${songId}/lyrics`,
+      { lyrics: 'x'.repeat(20001) }, { token });
     assertStatus(res, json, 400);
   });
-  await test('POST /songs lyrics_delete_id nonexistent song → 404', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`,
-      { lyrics_delete_id: 999999999 }, { token });
+  await test('DELETE /songs/:id/lyrics nonexistent song → 404', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/songs/999999999/lyrics`, { token });
     assertStatus(res, json, 404);
   });
 
   // Full round-trip
   const testLyrics = 'Verse 1\nSecond line\n\nChorus\nSing along';
 
-  await test('POST /songs lyrics_update_id saves text → 200', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`,
-      { lyrics_update_id: songId, lyrics: testLyrics }, { token });
+  await test('PUT /songs/:id/lyrics saves text → 200', async () => {
+    const { res, json } = await PUT(`/api/${slug}/songs/${songId}/lyrics`,
+      { lyrics: testLyrics }, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
   });
@@ -1209,9 +1208,8 @@ async function testLyricsLifecycle(slug, token, songId) {
     assert(!song.extra?.language, 'language must not be stored in extra');
   });
 
-  await test('POST /songs lyrics_delete_id clears field → 200', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`,
-      { lyrics_delete_id: songId }, { token });
+  await test('DELETE /songs/:id/lyrics clears field → 200', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/songs/${songId}/lyrics`, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
   });
@@ -1223,9 +1221,8 @@ async function testLyricsLifecycle(slug, token, songId) {
       `expected no lyrics, got: ${JSON.stringify(json.lyrics)}`);
   });
 
-  await test('POST /songs lyrics_delete_id again (already empty) → 200', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`,
-      { lyrics_delete_id: songId }, { token });
+  await test('DELETE /songs/:id/lyrics again (already empty) → 200', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/songs/${songId}/lyrics`, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
   });
@@ -1234,15 +1231,15 @@ async function testLyricsLifecycle(slug, token, songId) {
 async function testSetlistShareValidation(slug, token, setlistId) {
   console.log(B('\nSetlist share validation'));
 
-  await test('POST /setlists share_id + invalid email → 400', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists`,
-      { share_id: setlistId, email: 'not-an-email' }, { token });
+  await test('POST /setlists/:id/share + invalid email → 400', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/${setlistId}/share`,
+      { email: 'not-an-email' }, { token });
     assertStatus(res, json, 400);
   });
 
-  await test('POST /setlists share_id + unknown setlist → 404', async () => {
-    const { res, json } = await POST(`/api/${slug}/setlists`,
-      { share_id: 999999999, email: 'test@example.com' }, { token });
+  await test('POST /setlists/:id/share + unknown setlist → 404', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/999999999/share`,
+      { email: 'test@example.com' }, { token });
     assertStatus(res, json, 404);
   });
 }
@@ -1252,8 +1249,8 @@ async function testSetlistShareValidation(slug, token, setlistId) {
 async function testSongImport(slug, token, firstSong, atLimit) {
   const csv = `title,key,length\n[TEST] Import,Bb,3:30\n[TEST] Bad key,Q,\n${firstSong ? `"${firstSong.title.replace(/"/g, '""')}",,` : ''}\n`;
   let rows;
-  await test('POST /songs song_import {csv} → 200, checked, nothing written', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`, { song_import: { csv } }, { token });
+  await test('POST /songs/import {csv} → 200, checked, nothing written', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/import`, { csv }, { token });
     assertStatus(res, json, 200);
     assert(json.rows[0].status === 'ready' && json.rows[0].values.key === 'B♭', `row 1 — got ${JSON.stringify(json.rows[0])}`);
     assert(json.rows[1].errors.key?.code === 'key', 'bad key flagged');
@@ -1261,14 +1258,14 @@ async function testSongImport(slug, token, firstSong, atLimit) {
     rows = json.rows;
   });
   if (!rows) return;
-  await test('POST /songs song_import commit with a flagged row → 422', async () => {
-    const { res, json } = await POST(`/api/${slug}/songs`, { song_import: { rows, commit: true } }, { token });
+  await test('POST /songs/import commit with a flagged row → 422', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs/import`, { rows, commit: true }, { token });
     assertStatus(res, json, 422);
   });
-  if (atLimit) { skip('POST /songs song_import commit → 201', 'band at song limit'); return; }
-  await test('POST /songs song_import commit, flagged rows skipped → 201', async () => {
+  if (atLimit) { skip('POST /songs/import commit → 201', 'band at song limit'); return; }
+  await test('POST /songs/import commit, flagged rows skipped → 201', async () => {
     const send = rows.map(r => ({ line: r.line, values: r.values, skip: r.status !== 'ready' }));
-    const { res, json } = await POST(`/api/${slug}/songs`, { song_import: { rows: send, commit: true } }, { token });
+    const { res, json } = await POST(`/api/${slug}/songs/import`, { rows: send, commit: true }, { token });
     assertStatus(res, json, 201);
     assert(json.imported === 1, `imported — got ${json.imported}`);
     const { json: list } = await GET(`/api/${slug}/songs`, { token });
@@ -1333,8 +1330,8 @@ async function testWrite(slug, token, firstSong, config) {
       assert(json.ok === true, 'expected ok:true');
     });
 
-    await test('POST /songs lyrics_suggest_id without artist → 400', async () => {
-      const { res, json } = await POST(`/api/${slug}/songs`, { lyrics_suggest_id: song.id }, { token });
+    await test('POST /songs/:id/lyrics/suggest without artist → 400', async () => {
+      const { res, json } = await POST(`/api/${slug}/songs/${song.id}/lyrics/suggest`, undefined, { token });
       assertStatus(res, json, 400);
       assert(json.error?.includes('No artist'), `unexpected error: ${JSON.stringify(json)}`);
     });
@@ -1414,9 +1411,8 @@ async function testWrite(slug, token, firstSong, config) {
         assert(json.title === '[TEST] updated', 'title not updated');
       });
 
-      await test('POST /setlists duplicate_id → 201 with new id and copied songs', async () => {
-        const { res, json } = await POST(`/api/${slug}/setlists`,
-          { duplicate_id: setlist.id }, { token });
+      await test('POST /setlists/:id/duplicate → 201 with new id and copied songs', async () => {
+        const { res, json } = await POST(`/api/${slug}/setlists/${setlist.id}/duplicate`, undefined, { token });
         assertStatus(res, json, 201);
         assert(json.id !== setlist.id, 'duplicate has same id as original');
         assert(json.song_count === setlist.song_count, `song count mismatch — expected ${setlist.song_count}, got ${json.song_count}`);

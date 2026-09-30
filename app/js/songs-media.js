@@ -48,10 +48,10 @@ async function _panelUploadHandler(input, sid, mediaType) {
 async function _uploadSongMedia(sid, type, file) {
   var token = getToken();
   var contentType = type === 'sheet' ? 'application/pdf' : file.type;
-  var r = await fetch('/api/' + artistSlug + '/songs', {
+  var r = await fetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ upload_presign_id: sid, upload_type: type, filename: file.name, contentType: file.type, size: file.size }),
+    body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
   });
   if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
   if (!r.ok) throw new Error('presign');
@@ -60,10 +60,10 @@ async function _uploadSongMedia(sid, type, file) {
   var put = await fetch(json.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
   if (!put.ok) throw new Error('storage');
 
-  var confirm = await fetch('/api/' + artistSlug + '/songs', {
-    method: 'POST',
+  var confirm = await fetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ media_confirm_id: sid, media_type: type, publicUrl: json.publicUrl }),
+    body: JSON.stringify({ publicUrl: json.publicUrl }),
   });
   if (confirm.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
   if (!confirm.ok) throw new Error('confirm');
@@ -188,10 +188,9 @@ async function confirmDeleteAudio() {
   closePlayer();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify({ media_delete_id: sid, media_type: 'audio' }),
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
     });
     if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveAudio')); return; }
@@ -374,10 +373,9 @@ async function confirmDeleteSheet() {
   closeSheet();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify({ media_delete_id: sid, media_type: 'sheet' }),
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
     });
     if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveSheet')); return; }
@@ -564,10 +562,9 @@ async function confirmDeletePlayback() {
   closePlayback();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify({ media_delete_id: sid, media_type: 'playback' }),
+    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
     });
     if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemovePlayback')); return; }

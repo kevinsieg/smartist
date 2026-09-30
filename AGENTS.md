@@ -91,9 +91,9 @@ and cleaned up.
 
 Routing that works on Vercel can fail under `vercel dev`; the local stack
 (`npm run dev:up`) does not use it. Handlers still fall back to parsing
-`req.url` when `req.query.path` or `req.query.artist` is missing, and
-duplicate and share stay body fields on `POST /setlists` (`duplicate_id`,
-`share_id`), from when multi-segment POSTs to catch-alls returned a 404 there.
+`req.url` when `req.query.path` or `req.query.artist` is missing. Actions are
+URL paths (`POST /setlists/:id/duplicate`, `PUT /songs/:id/lyrics`), not body
+fields: the router makes multi-segment paths safe.
 
 ## Client rules
 

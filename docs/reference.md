@@ -49,14 +49,12 @@ One serverless function, `api/[...route].js`, sends every `/api/*` path to a han
 | `api/_band/gigs.js` | `GET/POST /api/:artist/gigs`; `GET/PUT/DELETE /api/:artist/gigs/:id` and the poster actions (the router sets `id` from `/gigs/:id`) |
 | `api/_band/organizers.js` | `GET/POST /api/:artist/organizers` |
 | `api/_band/organizers/item.js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
-| `api/_band/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
-| `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `GET /api/:artist/export` (ZIP of CSVs) |
-| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST {song_import}` — CSV import (`_domain/song_import.js`) |
-| `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `gema-import` (internal segment, routed from `/api/:artist/gema/import`). Lyrics writes go through `POST /songs` body fields |
+| `api/_band/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}` |
+| `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `POST …/:id/duplicate`, `POST …/:id/share` `{email}`; `GET /api/:artist/export` (ZIP of CSVs) |
+| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`) |
+| `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `lyrics` (PUT/DELETE, `/lyrics/suggest` POST); `gema-import` (internal segment, routed from `/api/:artist/gema/import`) |
 | `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
 | `api/_band/venues/item.js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
-
-**Duplicate and share are both `POST /api/:artist/setlists`** with a body field — not separate URL paths. This dates from a vercel dev bug with multi-segment POSTs (see AGENTS.md).
 
 `/api/docs` is a static rewrite to `app/api-docs.html` in `vercel.json`.
 
@@ -73,7 +71,7 @@ One serverless function, `api/[...route].js`, sends every `/api/*` path to a han
 | `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
 | `_pdf.js` | `buildSetlistPdf(setlist, songs, artistName)` → Buffer; `setlistTitle(setlist)` |
 | `_r2.js` | `createPresignedUrl`, `deleteFromR2` — swap storage via `STORAGE` block at top |
-| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` (shared by the body-dispatched POSTs in `songs.js` and the REST routes, both `member`); `makeMediaFn(config)` wraps them for the catch-all |
+| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` ; `makeMediaFn(config)` serves them as POST / PUT / DELETE on `/songs/:id/:type` (`member`) |
 | `_env.js` | Every env var the API reads (required / recommended / pairs), `envReport()`, and `SCHEMA_VERSION` — the newest migration id in `schema.sql` |
 | `_domain/song_import.js` | CSV song import: `parseSongCsv` (`,` `;` or tab, quoted line breaks, header aliases in EN/FR/DE), `checkRows` (same rules as a song created by hand; duplicate = same title ignoring case and spacing, in the band's live songs or an earlier row), `songImport` — `{csv}` or `{rows}` is checked only; `{rows, commit: true}` writes every row not skipped in one statement, or answers 422 while any row has an error or an unresolved duplicate, and 402 past the plan's song limit |
 | `_domain/gema.js` | GEMA CSV parsers and `importWorks` / `importRightholders` — used by the pro-import route and `scripts/import_gema.js` |
