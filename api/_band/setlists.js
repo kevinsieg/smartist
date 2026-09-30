@@ -17,7 +17,7 @@ module.exports = wrap(async function handler(req, res) {
     const { artist, user } = await getAccess(req, slug);
     if (!artist) return res.status(404).json({ error: 'Band not found' });
     // The list of setlists is never public — only an individual one, reached
-    // from a stage link (see setlists/[...path].js).
+    // from a stage link (see setlists/item.js).
     if (!user) return res.status(401).json({ error: 'Sign in to view this' });
 
     // ?song_q=<text>: the setlists (and their gigs) that contain a song whose

@@ -22,7 +22,7 @@ function makeHandler(rows, { rateLimited = false, artists = [{ slug: 'a', name: 
   const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const authPath   = require.resolve(path.join(__dirname, '../../api/_auth'));
   const tokenPath  = require.resolve(path.join(__dirname, '../../api/_token'));
-  const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
   [dbPath, authPath, tokenPath, configPath].forEach(p => delete require.cache[p]);
   const domainDir = path.join(__dirname, '../../api/_domain');
@@ -51,7 +51,7 @@ function makeHandler(rows, { rateLimited = false, artists = [{ slug: 'a', name: 
       getSlug: req => (req.query && req.query.artist) || 'test',
     },
   };
-  return { handler: require(path.join(__dirname, '../../api/config')), queries };
+  return { handler: require(path.join(__dirname, '../../api/_config')), queries };
 }
 
 function mockRes() {
@@ -62,9 +62,6 @@ function mockRes() {
   res.redirect = (c, u) => { res._status = c; res._redirected = u; return res; };
   return res;
 }
-
-const post = (handler, body) =>
-  handler({ method: 'POST', body: { action: 'login', ...body }, headers: {}, query: {} }, mockRes());
 
 // The rewrite /api/login → /api/config?action=login delivers the action in the
 // QUERY. Exercising only the body shape is exactly what let a rewritten login
@@ -165,6 +162,55 @@ async function run(r) {
     assertEq(res._body.error, 'Invalid email or password');
   });
 
+  // ── mailed sign-in links ──────────────────────────────────────────────────
+  console.log(B('\nsign-in link'));
+
+  const { generateMagicToken } = require('../../api/_token');
+  const hint = addr => Buffer.from(addr).toString('base64url');
+  async function magic(handler, body) {
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'magic-login', ...body }, headers: {}, query: {} }, res);
+    return res;
+  }
+
+  await testAsync('a link signed for the address logs in and lists the bands', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(res._status, 200);
+    assert(res._body.token, 'expected a session token');
+    assertEq(res._body.email, 'a@b.co');
+    assert(Array.isArray(res._body.artists), 'expected the list of bands');
+  });
+
+  await testAsync('a link signed with another row of the address still works', async () => {
+    const { handler } = makeHandler([
+      { id: 1, role: 'member', password_hash: OTHER },
+      { id: 2, role: 'admin',  password_hash: HASH },
+    ]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(res._status, 200);
+    assertEq(res._body.role, 'admin');
+  });
+
+  await testAsync('a reset link does not log anyone in', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'reset'), hint: hint('a@b.co') });
+    assertEq(res._status, 401);
+  });
+
+  await testAsync('a link for one account with another address in the hint is refused', async () => {
+    const { handler } = makeHandler([{ id: 9, role: 'admin', password_hash: OTHER }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('victim@b.co') });
+    assertEq(res._status, 401);
+  });
+
+  await testAsync('no hint → 400, before any lookup', async () => {
+    const { handler, queries } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login') });
+    assertEq(res._status, 400);
+    assertEq(queries.length, 0);
+  });
+
   // ── the config read the login page makes on load ──────────────────────────
   console.log(B('\nconfig without a slug'));
 
@@ -173,7 +219,7 @@ async function run(r) {
     delete process.env.ARTIST_SLUG;
     const { handler } = makeHandler([]);
     const res = mockRes();
-    await handler({ method: 'GET', query: {}, headers: {}, url: '/api/config' }, res);
+    await handler({ method: 'GET', query: {}, headers: {}, url: '/api/_config' }, res);
     if (saved !== undefined) process.env.ARTIST_SLUG = saved;
     assertEq(res._status, 200, 'the multi-tenant root would log a 404 on every page load');
     assertEq(res._body.singleTenant, false);
@@ -184,7 +230,7 @@ async function run(r) {
     delete process.env.ARTIST_SLUG;
     const { handler } = makeHandler([]);
     const res = mockRes();
-    await handler({ method: 'GET', query: { action: 'photo-url' }, headers: {}, url: '/api/config' }, res);
+    await handler({ method: 'GET', query: { action: 'photo-url' }, headers: {}, url: '/api/_config' }, res);
     if (saved !== undefined) process.env.ARTIST_SLUG = saved;
     assertEq(res._status, 404);
   });

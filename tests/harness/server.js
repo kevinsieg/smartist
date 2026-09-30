@@ -1,8 +1,8 @@
 'use strict';
 
 // Local stand-in for Vercel's router, for the CI integration job: vercel.json
-// rewrites, then file-system routing into api/ with the [artist] and [...path]
-// params, and static files. Not vercel dev: that needs a Vercel login.
+// rewrites, static files, and every /api/* path into the one function,
+// api/[...route].js. Not vercel dev: that needs a Vercel login.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -26,19 +26,10 @@ function matchRewrite(p) {
   return null;
 }
 
+// Every /api/* path is the one function, api/[...route].js, which routes it.
 function resolve(p) {
-  const segs = p.split('/').filter(Boolean); // ['api', ...]
-  if (segs[0] !== 'api') return null;
-  if (segs.length === 2 && fs.existsSync(path.join(ROOT, 'api', segs[1] + '.js')))
-    return { file: path.join(ROOT, 'api', segs[1] + '.js'), query: {} };
-  const artist = segs[1], rest = segs.slice(2);
-  if (!rest.length) return null;
-  const base = path.join(ROOT, 'api', '[artist]');
-  if (rest.length === 1 && fs.existsSync(path.join(base, rest[0] + '.js')))
-    return { file: path.join(base, rest[0] + '.js'), query: { artist } };
-  const catchAll = path.join(base, rest[0], '[...path].js');
-  if (fs.existsSync(catchAll)) return { file: catchAll, query: { artist, path: rest.slice(1) } };
-  return null;
+  if (!p.startsWith('/api/')) return null;
+  return { file: path.join(ROOT, 'api', '[...route].js'), query: {} };
 }
 
 http.createServer(async (req, res) => {

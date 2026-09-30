@@ -2,14 +2,13 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { getArtist, getDb, getSlug }            = require('../_db');
 const { requireAuth, requireRole } = require('../_auth');
-const { generateUserToken, generateMagicToken, verifyMagicToken, passwordlessSeed, TTL_8H, TTL_30D } = require('../_token');
+const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('../_domain/artist');
-const { DUMMY_HASH } = require('../_domain/login');
 const { sendEmail }    = require('../_email');
 const { escHtml }      = require('../_html');
 const { origin: appOrigin }  = require('../_domain/http');
 const { wrap }         = require('../_handler');
-const { checkRateLimit, clientIp, loginLocked, countLoginFailure } = require('../_ratelimit');
+const { checkRateLimit, clientIp } = require('../_ratelimit');
 const { validateStr, validateEmail } = require('../_validate');
 const logger           = require('../_logger');
 
@@ -63,166 +62,6 @@ module.exports = wrap(async function handler(req, res) {
     ]);
     const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
     return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
-  }
-
-  // ── Set a password from an emailed reset link ─────────────────────────────
-  // Deliberately separate from change-password, which still demands the current
-  // password. This authenticates on the emailed token instead, which is the only
-  // thing someone who has forgotten their password actually holds.
-  if (req.method === 'POST' && action === 'set-password') {
-    const { token, hint, password } = req.body ?? {};
-    if (!token || !hint || !password)    return res.status(400).json({ error: 'token, hint and password required' });
-    if (String(password).length < 8)     return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    if (String(password).length > 1000)  return res.status(400).json({ error: 'Password too long' });
-    if (await checkRateLimit(`setpw:${clientIp(req)}`, 5, 600))
-      return res.status(429).json({ error: 'Too many attempts — try again later' });
-
-    const band = await getArtist(slug);
-    if (!band) return res.status(404).json({ error: 'Not found' });
-
-    let hintEmail;
-    try { hintEmail = Buffer.from(String(hint), 'base64url').toString().toLowerCase(); }
-    catch { return res.status(400).json({ error: 'Invalid or expired link' }); }
-
-    const [user] = await sql`
-      SELECT * FROM users WHERE artist_id = ${band.id} AND email = ${hintEmail}
-    `;
-    // The hint is attacker-supplied, so the token is checked against the seed of
-    // the row the hint names. A valid token for one account plus someone else's
-    // address therefore proves nothing and rewrites nothing.
-    const seed = user ? (user.password_hash || passwordlessSeed(user.id)) : null;
-    if (!user || !verifyMagicToken(String(token), seed, 'reset'))
-      return res.status(400).json({ error: 'Invalid or expired link' });
-
-    // Every band of this address, as the root reset does (api/_domain/reset.js):
-    // an old password left on another band's row would keep working there.
-    const hash = await bcrypt.hash(String(password), 12);
-    const [, artists] = await Promise.all([
-      sql`UPDATE users SET password_hash = ${hash} WHERE email = ${user.email}`,
-      getArtistsForUser(user.id, sql),
-    ]);
-
-    // Setting the password is what logs them in — they came here because they
-    // could not, and sending them back to a login form would be a joke.
-    const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
-    await logger.info('password_set_via_reset', { band: slug, email: user.email });
-    return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
-  }
-
-  // ── Password reset request (via /api/:artist/request-reset rewrite) ───────
-  if (req.method === 'POST' && req.url.includes('request-reset')) {
-    const { email } = req.body ?? {};
-    if (await checkRateLimit(`reset:${clientIp(req)}`, 3, 600))
-      return res.json({ ok: true }); // silent
-    if (await checkRateLimit(`reset:${String(email || '').trim().toLowerCase()}`, 3, 3600))
-      return res.json({ ok: true }); // silent
-
-    const band = await getArtist(slug);
-    if (!band) return res.status(404).json({ error: 'Not found' });
-
-    const cleanEmail = String(email || '').trim().toLowerCase();
-    // No `password_hash IS NOT NULL` here. An account created through Google or
-    // Facebook has no password at all, and excluding those meant the one group
-    // most in need of this got the reassuring "if that email is correct…" and
-    // no email ever. For them this sets a first password rather than replacing one.
-    const [user] = await sql`
-      SELECT * FROM users
-      WHERE artist_id = ${band.id} AND email = ${cleanEmail}
-    `;
-
-    if (!user) return res.json({ ok: true }); // silent: no account enumeration
-    const resetEmail = user.email;
-    // The seed is the signing key, and it doubles as the expiry: setting a
-    // password changes the hash, so the link that set it stops verifying and
-    // any other outstanding link dies with it. A password-less account has no
-    // hash to sign with, so it gets passwordlessSeed (see api/_token.js).
-    const tokenSeed = user.password_hash || passwordlessSeed(user.id);
-
-    const resetToken = generateMagicToken(tokenSeed, 'reset');
-    const origin = appOrigin(req);
-    // Encode email as hint so client can pass it back for user lookup
-    const hint   = Buffer.from(resetEmail).toString('base64url');
-    // Fragment, not query — tokens must not land in server/CDN logs.
-    // `reset=`, not `magic=`: this lands on the set-password screen rather than
-    // logging someone in with the password they just told us they had forgotten.
-    // `magic=` stays in use by the "you already have an account" signup mail.
-    // `next` carries the slug: home.js derives the workspace from it, and
-    // without one a multi-tenant deployment bails at its "no slug" guard before
-    // it ever looks at the reset token. It also lands the person on their
-    // dashboard once the password is set.
-    const link   = `${origin}/login#reset=${encodeURIComponent(resetToken)}&hint=${hint}&next=/${slug}/dashboard`;
-
-    try {
-      await sendEmail({
-        to: resetEmail,
-        subject: 'Set a new password',
-        html: `<p>Choose a new password for your smartist account:</p><p><a href="${link}">${link}</a></p><p>Valid for 30 minutes. Do not share this link. If you did not ask for this, ignore this email — nothing changes until you set a password.</p>`,
-      });
-    } catch (err) {
-      await logger.error('request_reset_failed', { band: slug, error: err.message });
-      return res.status(500).json({ error: 'Failed to send email' });
-    }
-    return res.json({ ok: true });
-  }
-
-  // ── Login ─────────────────────────────────────────────────────────────────
-  if (req.method === 'POST' && !action) {
-    const { email, password, rememberMe, magic, hint } = req.body ?? {};
-
-    // Magic token login (password reset link click)
-    if (magic) {
-      const [limited, band] = await Promise.all([checkRateLimit(`auth:${clientIp(req)}`, 10, 60), getArtist(slug)]);
-      if (limited) return res.status(429).json({ error: 'Too many attempts — try again later' });
-      if (!band) return res.status(404).json({ error: 'Not found' });
-
-      if (hint) {
-        // Multi-user magic: decode email from hint, verify against user's password_hash
-        const hintEmail = Buffer.from(hint, 'base64url').toString().toLowerCase();
-        const [user] = await sql`
-          SELECT * FROM users
-          WHERE artist_id = ${band.id} AND email = ${hintEmail} AND password_hash IS NOT NULL
-        `;
-        if (user && verifyMagicToken(magic, user.password_hash, 'login')) {
-          const sessionToken = generateUserToken(user.id, user.role, TTL_8H, user.password_hash);
-          const artists      = await getArtistsForUser(user.id, sql);
-          return res.json({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
-        }
-      }
-      return res.status(401).json({ error: 'Invalid or expired login link' });
-    }
-
-    // The shared band password is retired: every login is a named user.
-    if (!email && password) {
-      return res.status(400).json({
-        error: 'Sign in with your email address. The shared band password is no longer used.',
-        code: 'band_password_retired',
-      });
-    }
-
-    // Email + password login
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    const [limited, band] = await Promise.all([checkRateLimit(`auth:${clientIp(req)}`, 10, 60), getArtist(slug)]);
-    if (limited || await loginLocked(email)) return res.status(429).json({ error: 'Too many attempts — try again later' });
-    if (!band) return res.status(404).json({ error: 'Artist not found' });
-
-    const [user] = await sql`
-      SELECT * FROM users
-      WHERE artist_id = ${band.id}
-        AND email = ${String(email).trim().toLowerCase()}
-        AND password_hash IS NOT NULL
-    `;
-    // No row still costs one bcrypt round, so timing does not reveal accounts.
-    const ok = user ? await bcrypt.compare(password, user.password_hash)
-                    : (await bcrypt.compare(String(password), DUMMY_HASH), false);
-    if (!ok) {
-      await countLoginFailure(email);
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
-
-    const ttl     = rememberMe ? TTL_30D : TTL_8H;
-    const token   = generateUserToken(user.id, user.role, ttl, user.password_hash);
-    const artists = await getArtistsForUser(user.id, sql);
-    return res.json({ ok: true, token, role: user.role, email: user.email, artists });
   }
 
   // POST ?action=confirm-email-change — public: the link is clicked from an

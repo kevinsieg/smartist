@@ -18,7 +18,7 @@ async function run(r) {
     const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
     const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
     const emailPath  = require.resolve(path.join(__dirname, '../../api/_email'));
-    const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+    const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
     const tokenPath = require.resolve(path.join(__dirname, '../../api/_token'));
     const authPath  = require.resolve(path.join(__dirname, '../../api/_auth'));
@@ -52,7 +52,7 @@ async function run(r) {
       exports: { sendEmail: emailFn || (async () => {}) },
     };
 
-    return require(path.join(__dirname, '../../api/config'));
+    return require(path.join(__dirname, '../../api/_config'));
   }
 
   function mockRes() {

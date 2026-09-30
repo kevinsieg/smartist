@@ -10,7 +10,7 @@ stubLogger();
 function makeHandler(sqlFn) {
   const dbPath = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
-  const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
   delete require.cache[dbPath];
   delete require.cache[configPath];
@@ -33,7 +33,7 @@ function makeHandler(sqlFn) {
     },
   };
 
-  return require(path.join(__dirname, '../../api/config'));
+  return require(path.join(__dirname, '../../api/_config'));
 }
 
 function mockRes() {

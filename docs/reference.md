@@ -38,25 +38,27 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 
 ---
 
-## Serverless functions (11 of 12 — Hobby plan limit)
+## API handlers
+
+One serverless function, `api/[...route].js`, sends every `/api/*` path to a handler through its route table (`tests/unit/router.js` pins each path).
 
 | File | Routes |
 |------|--------|
-| `api/config.js` | `GET /api/config` (returns `plan`+`usage`); `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `POST ?action=upgrade|downgrade` (self-serve plan seam — see Plans); `GET ?action=admin-overview` / `POST ?action=admin-set-plan` (super-admin); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (via `/auth/callback` rewrite); `GET ?action=photo-url` (presigned upload) |
-| `api/[artist]/auth.js` | `POST /api/:artist/auth` (login); `POST ?action=invite\|resend-invite\|accept-invite\|change-password`; `GET` (list users), `PUT` (role only — login email is the cross-workspace identity and is never admin-editable), `DELETE` — admin; `POST /api/:artist/request-reset` (via rewrite) |
-| `api/[artist]/gigs.js` | `GET/POST /api/:artist/gigs`; `GET/PUT/DELETE /api/:artist/gigs/:id` and the poster actions (via the `/api/:artist/gigs/:id` → `?id=:id` rewrite — one function for both) |
-| `api/[artist]/organizers.js` | `GET/POST /api/:artist/organizers` |
-| `api/[artist]/organizers/[...path].js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
-| `api/[artist]/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
-| `api/[artist]/setlists/[...path].js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `GET /api/:artist/export` (ZIP of CSVs, via rewrite) |
-| `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite); `POST {song_import}` — CSV import (`_domain/song_import.js`) |
-| `api/[artist]/songs/[...path].js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite). Lyrics writes go through `POST /songs` body fields |
-| `api/[artist]/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
-| `api/[artist]/venues/[...path].js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
+| `api/_config.js` | `GET /api/config` (returns `plan`+`usage`); `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `POST ?action=upgrade|downgrade` (self-serve plan seam — see Plans); `GET ?action=admin-overview` / `POST ?action=admin-set-plan` (super-admin); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (`/auth/callback`); `GET ?action=photo-url` (presigned upload) |
+| `api/_band/auth.js` | `POST ?action=invite\|resend-invite\|accept-invite\|change-password\|request-email-change\|confirm-email-change`; `GET` (list users), `PUT` (role only — login email is the cross-workspace identity and is never admin-editable), `DELETE` — admin — signing in and password reset are root actions in `api/_config.js` (`_domain/login.js`, `_domain/reset.js`) |
+| `api/_band/gigs.js` | `GET/POST /api/:artist/gigs`; `GET/PUT/DELETE /api/:artist/gigs/:id` and the poster actions (the router sets `id` from `/gigs/:id`) |
+| `api/_band/organizers.js` | `GET/POST /api/:artist/organizers` |
+| `api/_band/organizers/item.js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
+| `api/_band/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
+| `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `GET /api/:artist/export` (ZIP of CSVs) |
+| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST {song_import}` — CSV import (`_domain/song_import.js`) |
+| `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `gema-import` (internal segment, routed from `/api/:artist/gema/import`). Lyrics writes go through `POST /songs` body fields |
+| `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
+| `api/_band/venues/item.js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
 
-**Duplicate and share are both `POST /api/:artist/setlists`** with a body field — not separate URL paths. This avoids the vercel dev multi-segment POST bug (see AGENTS.md).
+**Duplicate and share are both `POST /api/:artist/setlists`** with a body field — not separate URL paths. This dates from a vercel dev bug with multi-segment POSTs (see AGENTS.md).
 
-`/api/docs` is a static rewrite to `app/api-docs.html` — uses zero functions.
+`/api/docs` is a static rewrite to `app/api-docs.html` in `vercel.json`.
 
 ---
 

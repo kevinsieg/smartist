@@ -101,7 +101,9 @@
           },
           "tags": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Theme tags"
           },
           "energy": {
@@ -206,7 +208,10 @@
           "tags": {
             "type": "array",
             "nullable": true,
-            "items": { "type": "string", "maxLength": 50 },
+            "items": {
+              "type": "string",
+              "maxLength": 50
+            },
             "maxItems": 10,
             "description": "Theme tags; trimmed, deduplicated case-insensitively, matched to the band's existing spelling. Omit to keep the stored tags, null or [] clears them."
           },
@@ -798,21 +803,15 @@
             "$ref": "#/components/responses/500"
           }
         }
-      }
-    },
-    "/api/{band}/auth": {
+      },
       "post": {
-        "summary": "Log in",
+        "summary": "Request a password-reset link (action: request-reset)",
         "tags": [
           "Auth"
         ],
         "security": [],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/band"
-          }
-        ],
-        "description": "Email + password login for a member of this band. Returns a session token for `Authorization: Bearer`, valid 8 hours (30 days with `rememberMe`). Changing or resetting the password ends every earlier session. A password without an email is refused with 400 (`code: band_password_retired`). Rate-limited per IP.",
+        "parameters": [],
+        "description": "Emails a 30-minute link to set a new password; the password is set on every account of the address. Sent as `POST /api/config` with `action: \"request-reset\"`. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
         "requestBody": {
           "required": true,
           "content": {
@@ -820,6 +819,59 @@
               "schema": {
                 "type": "object",
                 "required": [
+                  "action",
+                  "email"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "request-reset"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Always returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "summary": "Log in",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Email + password login. The address is the identity across workspaces: every account for it is tried and the response lists the bands it belongs to. Returns a session token for `Authorization: Bearer`, valid 8 hours (30 days with `rememberMe`). Changing or resetting the password ends every earlier session. Rate-limited per IP and per address.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
                   "password"
                 ],
                 "properties": {
@@ -899,64 +951,12 @@
           "401": {
             "$ref": "#/components/responses/401"
           },
-          "404": {
-            "$ref": "#/components/responses/404"
-          },
           "429": {
             "description": "Rate limited",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "$ref": "#/components/responses/500"
-          }
-        }
-      }
-    },
-    "/api/{band}/request-reset": {
-      "post": {
-        "summary": "Request a password-reset link",
-        "tags": [
-          "Auth"
-        ],
-        "security": [],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/band"
-          }
-        ],
-        "description": "Emails a 30-minute link to set a new password to a member of this band. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Always returned",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
                 }
               }
             }

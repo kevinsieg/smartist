@@ -40,7 +40,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
   const dbPath      = modulePath('api/_db');
   const authPath    = modulePath('api/_auth');
   const tokenPath   = modulePath('api/_token');
-  const handlerPath = modulePath('api/[artist]/songs.js');
+  const handlerPath = modulePath('api/_band/songs.js');
   const r2Path      = modulePath('api/_r2');
   const rlPath      = modulePath('api/_ratelimit');
   const emailPath   = modulePath('api/_email');
@@ -95,7 +95,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
 
   const tokenApi = require(path.join(__dirname, '../../api/_token'));
   return {
-    handler: require(path.join(__dirname, '../../api/[artist]/songs.js')),
+    handler: require(path.join(__dirname, '../../api/_band/songs.js')),
     token:   tokenApi.generateUserToken(7, 'member', tokenApi.TTL_8H),
     deltas,
     deleted,

@@ -94,7 +94,7 @@ async function run(r) {
   console.log(B('\ntenant isolation — foreign ids in request bodies'));
 
   await testAsync("a setlist cannot include another band's song", async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists.js', ownershipRoute);
+    const { handler, sql } = loadHandler('api/_band/setlists.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10, 12345] } }, res);
@@ -103,7 +103,7 @@ async function run(r) {
   });
 
   await testAsync('a setlist of own songs is created', async () => {
-    const { handler } = loadHandler('api/[artist]/setlists.js', ownershipRoute);
+    const { handler } = loadHandler('api/_band/setlists.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10, 11], gig_id: 5 } }, res);
@@ -111,7 +111,7 @@ async function run(r) {
   });
 
   await testAsync("a setlist cannot hang off another band's gig", async () => {
-    const { handler } = loadHandler('api/[artist]/setlists.js', ownershipRoute);
+    const { handler } = loadHandler('api/_band/setlists.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10], gig_id: 6 } }, res);
@@ -119,7 +119,7 @@ async function run(r) {
   });
 
   await testAsync("updating a setlist cannot pull in another band's song", async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', (text, values) => {
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
       if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
       return ownershipRoute(text, values);
     });
@@ -131,7 +131,7 @@ async function run(r) {
   });
 
   await testAsync('updating a setlist rewrites its songs in one transaction', async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', (text, values) => {
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
       if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
       if (text.startsWith('SELECT s.*, g.title AS gig_name')) return [{ id: 3, song_count: 2 }];
       return ownershipRoute(text, values);
@@ -151,7 +151,7 @@ async function run(r) {
   });
 
   await testAsync('reading a setlist only joins this band\'s songs', async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', text =>
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', text =>
       text.startsWith('SELECT s.*, g.title AS gig_name') ? [{ id: 3 }] : []);
     const res = mockRes();
     await handler({ method: 'GET', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {} }, res);
@@ -161,7 +161,7 @@ async function run(r) {
 
   await testAsync("a gig cannot point at another band's venue or organizer", async () => {
     for (const body of [{ title: 'x', venue_id: 70 }, { title: 'x', organizer_id: 80 }]) {
-      const { handler, sql } = loadHandler('api/[artist]/gigs.js', ownershipRoute);
+      const { handler, sql } = loadHandler('api/_band/gigs.js', ownershipRoute);
       const res = mockRes();
       await handler({ method: 'POST', url: '/api/test/gigs', query: {}, headers: {}, body }, res);
       assertEq(res.statusCode, 400, JSON.stringify(body));
@@ -170,7 +170,7 @@ async function run(r) {
   });
 
   await testAsync('a gig with own venue and organizer is created', async () => {
-    const { handler } = loadHandler('api/[artist]/gigs.js', ownershipRoute);
+    const { handler } = loadHandler('api/_band/gigs.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/gigs', query: {}, headers: {},
       body: { title: 'x', venue_id: 7, organizer_id: 8 } }, res);
@@ -192,7 +192,7 @@ async function run(r) {
     ['clearing a link is fine', { sheetUrl: '' }, true],
   ]) {
     await testAsync(label, async () => {
-      const { handler } = loadHandler('api/[artist]/songs.js', songRoute);
+      const { handler } = loadHandler('api/_band/songs.js', songRoute);
       const res = mockRes();
       await handler({ method: 'PATCH', url: '/api/test/songs', query: {}, headers: {},
         body: [{ id: 10, extra }] }, res);
@@ -202,7 +202,7 @@ async function run(r) {
   }
 
   await testAsync('a new song cannot start with a script link', async () => {
-    const { handler } = loadHandler('api/[artist]/songs.js', () => [{ count: 0 }]);
+    const { handler } = loadHandler('api/_band/songs.js', () => [{ count: 0 }]);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/songs', query: {}, headers: {},
       body: { title: 'x', extra: { songinfoUrl: 'JaVaScRiPt:alert(1)' } } }, res);

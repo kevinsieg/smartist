@@ -73,8 +73,8 @@ async function call(handler, method, url, { query = {}, body } = {}) {
   return res;
 }
 
-const LIST = 'api/[artist]/organizers.js';
-const ITEM = 'api/[artist]/organizers/[...path].js';
+const LIST = 'api/_band/organizers.js';
+const ITEM = 'api/_band/organizers/item.js';
 
 async function run(r) {
   const { testAsync, assert, assertEq } = r;

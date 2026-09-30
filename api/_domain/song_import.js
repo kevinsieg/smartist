@@ -93,7 +93,7 @@ function detectDelimiter(text) {
 // RFC 4180: quoted cells may hold the delimiter, line breaks and "" for a quote.
 // Returns rows of cells with the line each row starts on.
 function parseCsvText(text) {
-  const src = String(text).replace(/^﻿/, '');
+  const src = String(text).replace(/^\uFEFF/, '');
   const delim = detectDelimiter(src);
   const rows = [];
   let row = [], cell = '', inQuotes = false, line = 1, rowLine = 1;
@@ -191,6 +191,7 @@ function cleanCell(raw, multiline) {
     .replace(/\r\n?/g, '\n')
     .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '')
     .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\t]/g, ' ')
+    // eslint-disable-next-line no-control-regex -- stripping control characters is the point
     .replace(/[\u0000-\u0009\u000B-\u001F\u007F-\u009F]/g, '');
   if (multiline) {
     v = v.split('\n').map(l => l.replace(/ +$/, '')).join('\n').replace(/\n{3,}/g, '\n\n').trim();

@@ -244,6 +244,7 @@ Needs Node 24 and the Vercel CLI (`npm i -g vercel`).
 
 ```bash
 npm ci                       # API dependencies (the only install; tests/ has none of its own)
+npm run lint                 # ESLint — unused and undefined names, dead code
 npm run test:unit            # unit tests — no database needed
 npm run dev:up               # local stack: own Postgres, seeded band, server on :3000
 npm run dev:restart          # after changing api/ code (the server keeps modules in memory)
@@ -352,8 +353,8 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | GET    | `/api/config?action=health`       | —    | Missing env vars and schema state of the deployment                                          |
 | POST   | `/api/login`                      | —    | Log in with email + password across workspaces                                               |
 | GET    | `/api/config?action=google-url`   | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
-| POST   | `/api/:artist/auth`               | —    | Log in to one band, get a session token; admins also invite and manage members here          |
-| POST   | `/api/:artist/request-reset`      | —    | Email a link to set a new password                                                           |
+| POST   | `/api/config` `request-reset`     | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
+| POST   | `/api/:artist/auth`               | ✓    | Admins invite and manage members; members change their password or address                   |
 | GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
 | POST   | `/api/:artist/songs`              | ✓    | Create song; also handles lyrics save/delete and media upload via body fields                |
 | PATCH  | `/api/:artist/songs`              | ✓    | Batch update songs (`extra.*Url` values must be http(s))                                     |

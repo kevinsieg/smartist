@@ -31,7 +31,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
   const emailPath = require.resolve(path.join(__dirname, '../../api/_email'));
   const tokenPath = require.resolve(path.join(__dirname, '../../api/_token'));
   const bcryptPath  = require.resolve('bcryptjs');
-  const configPath  = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath  = require.resolve(path.join(__dirname, '../../api/_config'));
 
   [dbPath, configPath, tokenPath].forEach(p => delete require.cache[p]);
   const domainDir = path.join(__dirname, '../../api/_domain');
@@ -98,7 +98,7 @@ function mockRes() {
   return r;
 }
 
-const post = (body) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: {}, url: '/api/config' });
+const post = (body) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: {}, url: '/api/_config' });
 
 async function run(r) {
   const { testAsync, assert, assertEq, B } = r;
