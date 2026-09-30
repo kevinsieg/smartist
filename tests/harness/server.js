@@ -1,8 +1,9 @@
 'use strict';
 
 // Local stand-in for Vercel's router, for the CI integration job: vercel.json
-// rewrites, static files, and every /api/* path into the one function,
-// api/[...route].js. Not vercel dev: that needs a Vercel login.
+// rewrites, static files, and the one function at /api (api/index.js), which
+// /api/* reaches only through its rewrite, as on Vercel. Not vercel dev: that
+// needs a Vercel login.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -16,7 +17,7 @@ const CSP = vercel.headers.flatMap(h => h.headers).find(h => h.key === 'Content-
 function matchRewrite(p) {
   for (const r of rewrites) {
     const names = [];
-    const re = new RegExp('^' + r.source.replace(/:(\w+)/g, (_, n) => { names.push(n); return '([^/]+)'; }) + '$');
+    const re = new RegExp('^' + r.source.replace(/:(\w+)(\*?)/g, (_, n, star) => { names.push(n + star); return star ? '(.*)' : '([^/]+)'; }) + '$');
     const m = re.exec(p);
     if (!m) continue;
     let dest = r.destination;
@@ -26,10 +27,11 @@ function matchRewrite(p) {
   return null;
 }
 
-// Every /api/* path is the one function, api/[...route].js, which routes it.
+// The function lives at /api only; any other /api/* path is Vercel's 404
+// unless a rewrite sent it there.
 function resolve(p) {
-  if (!p.startsWith('/api/')) return null;
-  return { file: path.join(ROOT, 'api', '[...route].js'), query: {} };
+  if (p !== '/api') return null;
+  return { file: path.join(ROOT, 'api', 'index.js'), query: {} };
 }
 
 http.createServer(async (req, res) => {

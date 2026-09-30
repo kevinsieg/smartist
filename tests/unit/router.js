@@ -1,6 +1,6 @@
 'use strict';
 
-// api/[...route].js is the one serverless function: each path must reach its
+// api/index.js is the one serverless function: each path must reach its
 // handler with the req.query that handler reads.
 
 const fs = require('fs');
@@ -8,7 +8,7 @@ const path = require('path');
 const { makeRunner } = require('./_runner');
 
 const ROOT = path.join(__dirname, '../..');
-const { match } = require(path.join(ROOT, 'api', '[...route].js'));
+const { match } = require(path.join(ROOT, 'api', 'index.js'));
 
 async function run(r) {
   const { test, assert, assertEq, B } = r;
@@ -60,8 +60,32 @@ async function run(r) {
     assertEq(match('/api/band'), null);
   });
 
+  // Vercel serves api/index.js at /api only; every other /api/* path reaches it
+  // through this rewrite. Last, so /api/docs (a static page) still wins.
+  test('vercel.json rewrites every /api path to the function, last', () => {
+    const { rewrites } = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+    assertEq(rewrites[rewrites.length - 1], { source: '/api/:path*', destination: '/api?__path=/api/:path*' });
+    const cb = rewrites.find(r => r.source === '/auth/callback');
+    assertEq(cb.destination, '/api?__path=/auth/callback');
+  });
+
+  await (async () => {
+    const route = require(path.join(ROOT, 'api', 'index.js'));
+    for (const [label, req] of [
+      ['the original URL on req.url', { url: '/api/nowhere/x?a=1', query: {} }],
+      ['the destination on req.url, the path in __path', { url: '/api?__path=/api/nowhere/x&a=1', query: { __path: '/api/nowhere/x', a: '1' } }],
+    ]) {
+      test(`the router finds the path from ${label}`, () => {
+        // An unknown path answers 404 without loading a handler.
+        let status = null;
+        route(req, { status: s => { status = s; return { json: () => {} }; } });
+        assertEq(status, 404);
+      });
+    }
+  })();
+
   test('every route names a handler that loads', () => {
-    const src = fs.readFileSync(path.join(ROOT, 'api', '[...route].js'), 'utf8');
+    const src = fs.readFileSync(path.join(ROOT, 'api', 'index.js'), 'utf8');
     for (const [, file] of src.matchAll(/require\('(\.\/[^']+)'\)/g))
       assert(fs.existsSync(path.join(ROOT, 'api', file + '.js')), `missing ${file}`);
   });
@@ -78,7 +102,7 @@ async function run(r) {
         else if (e.name.endsWith('.js')) fns.push(path.relative(ROOT, p));
       }
     })(path.join(ROOT, 'api'));
-    assertEq(fns, ['api/[...route].js']);
+    assertEq(fns, ['api/index.js']);
   });
 }
 

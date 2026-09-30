@@ -63,7 +63,7 @@ and cleaned up.
 
 ## API rules
 
-- **One function: `api/[...route].js`.** Every `/api/*` path goes through its
+- **One function: `api/index.js`.** Every `/api/*` path goes through its
   route table to a handler in `api/_config.js` or `api/_band/`. A new endpoint
   is a line in that table; every other file under `api/` starts with `_` (a
   unit test checks), so Vercel's function limit never comes into it.

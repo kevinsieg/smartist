@@ -75,10 +75,10 @@ function stubLogger() {
   }
 }
 
-// Calls a handler as production does: through api/[...route].js, which fills
+// Calls a handler as production does: through api/index.js, which fills
 // req.query (artist, path, id, action) from the URL. The handler is loaded
 // first so the router picks up the test's stubs.
-const ROUTER = path.join(__dirname, '../../api/[...route].js');
+const ROUTER = path.join(__dirname, '../../api/index.js');
 function viaRouter(handlerPath) {
   require(handlerPath);
   return require(ROUTER);

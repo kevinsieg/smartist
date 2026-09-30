@@ -1,10 +1,15 @@
 'use strict';
 
-// The one serverless function. Every /api/* request lands here and is sent to
-// its handler by the table below, so a new route is a line in ROUTES, not a
-// file under api/ (Vercel Hobby allows twelve functions) and not a rewrite in
-// vercel.json. Handlers live in files and directories prefixed `_`, which
-// Vercel does not turn into functions of their own.
+// The one serverless function. vercel.json rewrites every /api/* request (and
+// /auth/callback) to it with the original path in `__path`, and the table
+// below sends it to its handler. A new route is a line in ROUTES, not a
+// file under api/ (Vercel Hobby allows twelve functions). Handlers live in
+// files and directories prefixed `_`, which Vercel does not turn into
+// functions of their own.
+//
+// Not a catch-all file (`api/[...route].js`): outside Next.js, Vercel matched
+// that for one-segment paths only, so /api/config worked and /api/:artist/…
+// was Vercel's own 404.
 //
 // A handler gets `req.query`: the URL's own query string, plus `artist` and the
 // route's parameters, plus `path` (the segments after the resource) for the
@@ -78,9 +83,14 @@ function match(pathname) {
 
 module.exports = async function route(req, res) {
   const url   = new URL(req.url, 'http://x');
-  const found = match(url.pathname);
+  // Vercel keeps the original URL on req.url after a rewrite; `__path` from the
+  // rewrite's destination covers a runtime that passes the destination instead.
+  const rewritten = req.query?.__path;
+  const found = match(typeof rewritten === 'string' && url.pathname === '/api' ? rewritten : url.pathname);
   if (!found) return res.status(404).json({ error: 'Not found' });
-  req.query = { ...Object.fromEntries(url.searchParams), ...found.params };
+  const query = Object.fromEntries(url.searchParams);
+  delete query.__path;
+  req.query = { ...query, ...found.params };
   return HANDLERS[found.handler]()(req, res);
 };
 

@@ -40,7 +40,7 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 
 ## API handlers
 
-One serverless function, `api/[...route].js`, sends every `/api/*` path to a handler through its route table (`tests/unit/router.js` pins each path).
+One serverless function, `api/index.js`, sends every `/api/*` path to a handler through its route table (`tests/unit/router.js` pins each path).
 
 | File | Routes |
 |------|--------|
