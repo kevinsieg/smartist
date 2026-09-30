@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
-    <link rel="stylesheet" href="/app/css/app.css?v=47">
+    <link rel="stylesheet" href="/app/css/app.css?v=48">
     <script src="/app/js/i18n.js?v=54"></script>
     <style>
         /* Songs page needs full-width layout, not max-width 960px */
@@ -33,7 +33,7 @@
             flex: 1;
             min-width: 120px;
             padding: 0.45rem 0.7rem;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--field-border);
             border-radius: 6px;
             font-family: inherit;
             font-size: 0.9rem;
@@ -97,6 +97,8 @@
             background: none;
             border: none;
             padding: 0.2rem 0.35rem;
+            min-width: 28px;
+            min-height: 28px;
             font-size: 0.82rem;
             color: var(--third-color);
             cursor: pointer;
@@ -163,7 +165,7 @@
         .edit-section-body { padding: 0.5rem 0.75rem 0.75rem; }
         .edit-field { margin-bottom: 0.55rem; display: flex; flex-direction: column; gap: 0.2rem; }
         .edit-field-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--third-color); }
-        .edit-input, .edit-select { width: 100%; font-size: 1rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: #fff; font-family: inherit; box-sizing: border-box; }
+        .edit-input, .edit-select { width: 100%; font-size: 1rem; padding: 0.35rem 0.5rem; border: 1px solid var(--field-border); border-radius: 4px; background: #fff; font-family: inherit; box-sizing: border-box; }
         .edit-textarea { min-height: 80px; resize: vertical; font-family: inherit; }
         .edit-readonly { font-size: 0.84rem; color: var(--third-color); padding: 0.2rem 0; }
         .edit-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; }

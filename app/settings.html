@@ -10,14 +10,14 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=47">
+  <link rel="stylesheet" href="/app/css/app.css?v=48">
   <script src="/app/js/i18n.js?v=54"></script>
   <style>
     .settings-wrap { max-width: 680px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .invite-bar { display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;padding:1rem 1.1rem;background:var(--surface-color);border:1px solid var(--border-color);border-radius:4px; }
     .invite-field { display:flex;flex-direction:column;gap:0.3rem;flex:1 1 180px;min-width:0; }
     .invite-field label { font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color); }
-    .invite-input { padding:0.45rem 0.65rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:0.88rem;background:var(--bg-color);color:var(--black);outline:none; }
+    .invite-input { padding:0.45rem 0.65rem;border:1px solid var(--field-border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:0.88rem;background:var(--bg-color);color:var(--black);outline:none; }
     .invite-input:focus { border-color:var(--secondary-color); }
     .invite-role { padding:0.45rem 0.55rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:0.88rem;background:var(--bg-color);color:var(--black);cursor:pointer;min-width:110px; }
     .user-section-label { font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--third-color);margin:1.25rem 0 0.5rem; }
@@ -30,7 +30,7 @@
     .status-badge { font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:10px;white-space:nowrap; }
     .status-active  { background:#dcfce7;color:#166534; }
     .status-pending { background:#fef9c3;color:#854d0e; }
-    .role-select-inline { padding:0.15rem 0.35rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-family:inherit;font-size:0.75rem;background:var(--bg-color);cursor:pointer; }
+    .role-select-inline { padding:0.15rem 0.35rem;border:1px solid var(--field-border);border-radius:var(--radius-sm);font-family:inherit;font-size:0.75rem;background:var(--bg-color);cursor:pointer; }
     .user-action-btn { background:none;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.2rem 0.5rem;font-family:inherit;font-size:0.72rem;color:var(--third-color);cursor:pointer;white-space:nowrap; }
     .user-action-btn:hover { border-color:var(--secondary-ink);color:var(--secondary-ink); }
     .user-action-btn.danger:hover { border-color:#e55;color:#e55; }
@@ -59,7 +59,7 @@
       width: 100%;
       height: 100%;
       background: var(--secondary-color);
-      color: var(--white);
+      color: var(--black);
       font-size: 2.4rem;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -195,7 +195,7 @@
     .config-check-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
     .config-check-row.required { opacity: 0.5; }
     .config-custom-row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.35rem; }
-    .config-custom-row input { padding: 0.3rem 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.78rem; font-family: var(--font-mono); }
+    .config-custom-row input { padding: 0.3rem 0.5rem; border: 1px solid var(--field-border); border-radius: var(--radius-sm); font-size: 0.78rem; font-family: var(--font-mono); }
     .config-custom-row .lbl-input { font-family: inherit; }
     .config-remove-btn { background: none; border: none; color: #e55; cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 0.2rem; }
     .config-add-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
@@ -204,7 +204,7 @@
     .arr-cfg-sub { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.4rem; }
     .arr-cfg-list { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.5rem; }
     .arr-member-row { display: flex; align-items: center; gap: 0.4rem; }
-    .arr-cfg-input { flex: 1; padding: 0.3rem 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.85rem; font-family: inherit; background: var(--bg-color); color: inherit; }
+    .arr-cfg-input { flex: 1; padding: 0.3rem 0.5rem; border: 1px solid var(--field-border); border-radius: var(--radius-sm); font-size: 0.85rem; font-family: inherit; background: var(--bg-color); color: inherit; }
     .arr-cfg-abbr { width: 48px; text-align: center; }
     .arr-cfg-remove { background: none; border: none; color: var(--third-color); cursor: pointer; font-size: 1rem; padding: 0 3px; line-height: 1; }
     .arr-cfg-remove:hover { color: #e55; }
@@ -233,7 +233,7 @@
     .member-inst-empty { font-size:0.72rem; color:var(--third-color); }
     .member-account-row { display:flex; align-items:center; gap:0.5rem; margin-top:0.45rem; }
     .member-account-row label { display:flex; align-items:center; gap:0.5rem; font-size:0.65rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--third-color); }
-    .member-account-select { text-transform:none; letter-spacing:normal; color:var(--black); padding:0.2rem 0.4rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.78rem; font-family:inherit; background:var(--bg-color); }
+    .member-account-select { text-transform:none; letter-spacing:normal; color:var(--black); padding:0.2rem 0.4rem; border:1px solid var(--field-border); border-radius:var(--radius-sm); font-size:0.78rem; font-family:inherit; background:var(--bg-color); }
   </style>
   <link rel="stylesheet" href="/app/css/footer.css?v=4">
 </head>

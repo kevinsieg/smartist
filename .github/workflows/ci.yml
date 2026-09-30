@@ -91,7 +91,7 @@ jobs:
       # which the Vercel deployments must not do.
       - name: Install Playwright and Chromium
         run: |
-          npm install --no-save playwright@1.56.1
+          npm install --no-save playwright@1.56.1 axe-core@4.13.0
           npx playwright install --with-deps chromium
       - name: Browser smoke test (sign in, every page, SPA nav, stage)
         run: node tests/smoke.js

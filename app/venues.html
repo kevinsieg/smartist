@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <script src="/app/js/i18n.js?v=54"></script>
-  <link rel="stylesheet" href="/app/css/app.css?v=47">
+  <link rel="stylesheet" href="/app/css/app.css?v=48">
   <script async src="/app/vendor/leaflet-1.9.4/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="/app/vendor/leaflet-1.9.4/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
   <!-- Clustering: ~1800 separate pins are unreadable and slow to draw. The plugin is
@@ -50,17 +50,17 @@
     .venues-pager { display: flex; gap: 0.3rem; align-items: center; justify-content: center; flex-wrap: wrap; }
     .venues-pager .btn { min-width: 2rem; min-height: 1.9rem; padding: 0.1rem 0.5rem; font-size: 0.95rem; line-height: 1.5; }
     .venues-pageinfo { display: flex; gap: 0.3rem; align-items: center; font-size: 0.82rem; color: var(--third-color); }
-    #venues-page-input { width: 3.5rem; padding: 0.2rem; text-align: center; border: 1px solid var(--border-color);
+    #venues-page-input { width: 3.5rem; padding: 0.2rem; text-align: center; border: 1px solid var(--field-border);
       border-radius: 3px; font-family: inherit; font-size: 0.82rem; }
     /* not .filter-select — that one is flex:1 and would stretch across the pager */
     #venues-page-size { width: 4.5rem; flex: 0 0 auto; padding: 0.2rem 0.3rem; font-size: 0.82rem;
-      border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-color);
+      border: 1px solid var(--field-border); border-radius: 3px; background: var(--bg-color);
       color: inherit; font-family: inherit; cursor: pointer; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: nowrap; align-items: flex-start; margin-bottom: 0.75rem; }
     .venue-filter-fields { display: flex; flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: center; min-width: 0; }
-    .venue-filter-fields input[type="text"] { flex: 1 1 180px; min-width: 0; height: var(--control-h); padding: 0 0.7rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: var(--text-md); font-family: inherit; outline: none; }
+    .venue-filter-fields input[type="text"] { flex: 1 1 180px; min-width: 0; height: var(--control-h); padding: 0 0.7rem; border: 1px solid var(--field-border); border-radius: var(--radius-sm); font-size: var(--text-md); font-family: inherit; outline: none; }
     .venue-filter-fields input[type="text"]:focus { border-color: var(--secondary-color); }
-    .filter-select { flex: 1 1 110px; min-width: 80px; height: var(--control-h); padding: 0 0.55rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: var(--text-md); font-family: inherit; background: var(--bg-color); color: inherit; cursor: pointer; }
+    .filter-select { flex: 1 1 110px; min-width: 80px; height: var(--control-h); padding: 0 0.55rem; border: 1px solid var(--field-border); border-radius: var(--radius-sm); font-size: var(--text-md); font-family: inherit; background: var(--bg-color); color: inherit; cursor: pointer; }
     .filter-select:focus { border-color: var(--secondary-color); outline: none; }
     .toolbar > .btn { flex-shrink: 0; }
     @media (max-width: 639px) {
@@ -93,7 +93,7 @@
       width: 100%;
       box-sizing: border-box;
       padding: 0.35rem 0.6rem;
-      border: 1px solid var(--border-color);
+      border: 1px solid var(--field-border);
       border-radius: 3px;
       font-size: 0.85rem;
       font-family: inherit;

@@ -463,10 +463,10 @@ function renderListRowHtml(s) {
   var heartBtn = heartButtonHtml(!!s.heart, 'toggleFavourite(' + Number(s.id) + ')', t('songs.colTitleHeart'), _viewMode);
 
   var icons = '';
-  if (hasListen) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
-  if (hasLyrics) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '">&#182;</button>';
+  if (hasListen) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '" aria-label="' + t('songs.listen') + '">&#9654;</button>';
+  if (hasLyrics) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '" aria-label="' + t('songs.lyricsTitle') + '">&#182;</button>';
   var hasArrangement = !_viewMode && !!s.has_arrangement;
-  if (hasArrangement) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
+  if (hasArrangement) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '" aria-label="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
     heartBtn +
