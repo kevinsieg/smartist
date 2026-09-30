@@ -10,8 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <script src="/app/js/i18n.js?v=52"></script>
-  <link rel="stylesheet" href="/app/css/app.css?v=46">
+  <script src="/app/js/i18n.js?v=53"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=47">
   <style>
     .organizers-wrap { max-width: 1000px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
     .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
@@ -27,12 +27,12 @@
 <script src="/app/js/footer.js?v=3"></script>
 <script src="/app/js/core.js?v=9"></script>
 <script src="/app/js/session.js?v=9"></script>
-<script src="/app/js/ui.js?v=8"></script>
-<script src="/app/js/shell.js?v=9"></script>
+<script src="/app/js/ui.js?v=9"></script>
+<script src="/app/js/shell.js?v=10"></script>
 <div class="app-wrap organizers-wrap">
   <h1 data-i18n="organizers.pageTitle">Organizers</h1>
   <div class="toolbar">
-    <input type="text" id="filter-input" data-i18n-attr="placeholder:organizers.searchPlaceholder" placeholder="Search name, city, country, email…">
+    <input type="text" id="filter-input" data-i18n-attr="placeholder:organizers.searchPlaceholder;aria-label:organizers.searchPlaceholder" placeholder="Search name, city, country, email…" aria-label="Search name, city, country, email…">
     <label class="filter-check"><input type="checkbox" id="filter-favourite"> <span data-i18n="venues.favouritesOnly">Favourites only</span></label>
     <button class="btn active auth-action" disabled id="organizer-add-btn" data-onclick="openAddModal()" data-i18n="organizers.addBtn">+ Add organizer</button>
   </div>
@@ -49,11 +49,11 @@
   <div class="modal" style="max-width:460px;">
     <h2 id="organizer-modal-title" data-i18n="organizers.addTitle">Add organizer</h2>
     <div class="modal-field">
-      <label data-i18n="venues.fieldName">Name *</label>
+      <label for="om-name" data-i18n="venues.fieldName">Name *</label>
       <input type="text" id="om-name" data-i18n-attr="placeholder:organizers.namePlaceholder" placeholder="Organizer name">
     </div>
     <div class="modal-field">
-      <label data-i18n="organizers.fieldType">Type</label>
+      <label for="om-type" data-i18n="organizers.fieldType">Type</label>
       <select id="om-type">
         <option value="">—</option>
         <option value="person" data-i18n="organizers.typePerson">Person</option>
@@ -64,27 +64,27 @@
       </select>
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldEmail">Email</label>
+      <label for="om-email" data-i18n="venues.fieldEmail">Email</label>
       <input type="email" id="om-email" placeholder="contact@…">
     </div>
     <div class="modal-field">
-      <label data-i18n="organizers.fieldPhone">Phone</label>
+      <label for="om-phone" data-i18n="organizers.fieldPhone">Phone</label>
       <input type="tel" id="om-phone" data-i18n-attr="placeholder:organizers.phonePlaceholder" placeholder="+49…">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldWebsite">Website</label>
+      <label for="om-website" data-i18n="venues.fieldWebsite">Website</label>
       <input type="url" id="om-website" placeholder="https://…">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldCity">City</label>
+      <label for="om-city" data-i18n="venues.fieldCity">City</label>
       <input type="text" id="om-city" data-i18n-attr="placeholder:venues.fieldCityPlaceholder" placeholder="City" autocomplete="address-level2">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldCountry">Country</label>
+      <label for="om-country" data-i18n="venues.fieldCountry">Country</label>
       <input type="text" id="om-country" data-i18n-attr="placeholder:venues.fieldCountryPlaceholder" placeholder="Country" autocomplete="country-name">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldComment">Comment</label>
+      <label for="om-comment" data-i18n="venues.fieldComment">Comment</label>
       <textarea id="om-comment" data-i18n-attr="placeholder:venues.commentPlaceholder" placeholder="Notes…" rows="2"></textarea>
     </div>
     <div class="related-section" id="om-gigs-section" style="display:none;">

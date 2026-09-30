@@ -10,8 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <script src="/app/js/i18n.js?v=52"></script>
-  <link rel="stylesheet" href="/app/css/app.css?v=46">
+  <script src="/app/js/i18n.js?v=53"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=47">
   <script async src="/app/vendor/leaflet-1.9.4/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="/app/vendor/leaflet-1.9.4/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
   <!-- Clustering: ~1800 separate pins are unreadable and slow to draw. The plugin is
@@ -167,14 +167,14 @@
   <h1 data-i18n="venues.pageTitle">Venues</h1>
   <div class="toolbar">
     <div class="venue-filter-fields">
-      <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…" data-i18n-attr="placeholder:venues.searchPlaceholder">
-      <select id="filter-status" class="filter-select venue-filter-desktop">
+      <input type="text" id="filter-input" placeholder="Search name, city, country, postcode…" aria-label="Search name, city, country, postcode…" data-i18n-attr="placeholder:venues.searchPlaceholder;aria-label:venues.searchPlaceholder">
+      <select id="filter-status" class="filter-select venue-filter-desktop" aria-label="Status" data-i18n-attr="aria-label:venues.fieldStatus">
         <option value="" data-i18n="venues.allStatuses">All statuses</option>
       </select>
-      <select id="filter-category" class="filter-select venue-filter-desktop">
+      <select id="filter-category" class="filter-select venue-filter-desktop" aria-label="Category" data-i18n-attr="aria-label:venues.fieldCategory">
         <option value="" data-i18n="venues.allCategories">All categories</option>
       </select>
-      <select id="filter-country" class="filter-select venue-filter-desktop">
+      <select id="filter-country" class="filter-select venue-filter-desktop" aria-label="Country" data-i18n-attr="aria-label:venues.fieldCountry">
         <option value="" data-i18n="venues.allCountries">All countries</option>
       </select>
       <label class="filter-check"><input type="checkbox" id="filter-favourite"> <span data-i18n="venues.favouritesOnly">Favourites only</span></label>
@@ -227,60 +227,60 @@
   <div class="modal" style="max-width:480px;">
     <h2 id="venue-modal-title" data-i18n="venues.addVenue">Add venue</h2>
     <div class="modal-field">
-      <label data-i18n="venues.fieldName">Name *</label>
+      <label for="vm-name" data-i18n="venues.fieldName">Name *</label>
       <input type="text" id="vm-name" placeholder="Venue name" data-i18n-attr="placeholder:venues.fieldNamePlaceholder" data-oninput="checkVenueDuplicate()">
       <div id="vm-dup-warning" style="display:none;font-size:0.8rem;color:#c80;margin-top:0.3rem;"></div>
     </div>
     <div class="modal-field" style="display:flex;gap:0.6rem;">
       <div style="flex:0 0 80px;">
-        <label data-i18n="venues.fieldStreetNo">No.</label>
+        <label for="vm-street-number" data-i18n="venues.fieldStreetNo">No.</label>
         <input type="text" id="vm-street-number" placeholder="63" style="width:100%;">
       </div>
       <div style="flex:1 1 auto;">
-        <label data-i18n="venues.fieldStreet">Street</label>
+        <label for="vm-street" data-i18n="venues.fieldStreet">Street</label>
         <input type="text" id="vm-street" placeholder="Rue Grande" style="width:100%;">
       </div>
     </div>
     <div class="modal-field" style="display:flex;gap:0.6rem;">
       <div style="flex:0 0 90px;">
-        <label data-i18n="venues.fieldPostcode">Postcode</label>
+        <label for="vm-postcode" data-i18n="venues.fieldPostcode">Postcode</label>
         <input type="text" id="vm-postcode" placeholder="75001" autocomplete="postal-code" style="width:100%;">
       </div>
       <div style="flex:1 1 auto;">
-        <label data-i18n="venues.fieldCity">City</label>
+        <label for="vm-city" data-i18n="venues.fieldCity">City</label>
         <input type="text" id="vm-city" placeholder="City" data-i18n-attr="placeholder:venues.fieldCityPlaceholder" autocomplete="address-level2" style="width:100%;">
       </div>
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldCountry">Country</label>
+      <label for="vm-country" data-i18n="venues.fieldCountry">Country</label>
       <input type="text" id="vm-country" placeholder="Country" data-i18n-attr="placeholder:venues.fieldCountryPlaceholder" autocomplete="country-name">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldStatus">Status</label>
+      <label for="vm-status" data-i18n="venues.fieldStatus">Status</label>
       <select id="vm-status">
         <option value="">—</option>
       </select>
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldCategory">Category</label>
+      <label for="vm-category" data-i18n="venues.fieldCategory">Category</label>
       <select id="vm-category">
         <option value="">—</option>
       </select>
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldEmail">Email</label>
+      <label for="vm-email" data-i18n="venues.fieldEmail">Email</label>
       <input type="email" id="vm-email" placeholder="booking@venue.com">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldWebsite">Website</label>
+      <label for="vm-website" data-i18n="venues.fieldWebsite">Website</label>
       <input type="url" id="vm-website" placeholder="https://…">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldPhone">Phone</label>
+      <label for="vm-phone" data-i18n="venues.fieldPhone">Phone</label>
       <input type="tel" id="vm-phone" placeholder="+49 …">
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldContactName">Contact person</label>
+      <label for="vm-contact-name" data-i18n="venues.fieldContactName">Contact person</label>
       <input type="text" id="vm-contact-name">
     </div>
     <div id="vm-geocode-preview" style="display:none">
@@ -291,7 +291,7 @@
       </div>
     </div>
     <div class="modal-field">
-      <label data-i18n="venues.fieldComment">Comment</label>
+      <label for="vm-comment" data-i18n="venues.fieldComment">Comment</label>
       <textarea id="vm-comment" placeholder="Notes…" data-i18n-attr="placeholder:venues.commentPlaceholder" rows="2"></textarea>
     </div>
       <div class="related-section" id="vm-gigs-section" style="display:none;">
@@ -321,8 +321,8 @@
 <script src="/app/js/footer.js?v=3"></script>
 <script src="/app/js/core.js?v=9"></script>
 <script src="/app/js/session.js?v=9"></script>
-<script src="/app/js/ui.js?v=8"></script>
-<script src="/app/js/shell.js?v=9"></script>
+<script src="/app/js/ui.js?v=9"></script>
+<script src="/app/js/shell.js?v=10"></script>
 <script src="/app/js/geo.js?v=2"></script>
 <script src="/app/js/venues.js?v=8"></script>
 <script src="/app/js/map.js?v=3"></script>

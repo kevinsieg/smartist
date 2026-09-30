@@ -1179,6 +1179,7 @@
   "settings.hiddenSongFieldsLabel": "Ausgeblendete Songfelder",
   "settings.hiddenSongFieldsHint": "Angehakte Felder verschwinden aus Songs, Setlists, Ausdrucken und der Bühnenansicht. Vorhandene Werte bleiben erhalten.",
   "home.emailRequired": "Gib deine E-Mail-Adresse ein.",
+  "nav.skipToContent": "Zum Inhalt springen",
   "setlist.addSongLabel": "Song hinzufügen",
   "setlist.capoChangedShort": "Capo-Wechsel",
   "setlist.movedTo": "{title} an Position {pos} von {total} verschoben",

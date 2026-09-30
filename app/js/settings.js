@@ -244,8 +244,8 @@ function renderArrMembers(members) {
         (chips || '<span class="member-inst-empty">' + t('settings.noInstrumentsYet') + '</span>') +
       '</div>' +
       '<div class="member-account-row">' +
-        '<label>' + t('settings.accountLabel') + '</label>' +
-        '<select class="member-account-select" data-onchange="arrMemberAccountChange(' + i + ',this.value)">' + accountOpts + '</select>' +
+        '<label>' + t('settings.accountLabel') +
+        ' <select class="member-account-select" data-onchange="arrMemberAccountChange(' + i + ',this.value)">' + accountOpts + '</select></label>' +
       '</div>' +
     '</div>';
   }).join('');

@@ -1179,6 +1179,7 @@
   "settings.hiddenSongFieldsLabel": "Champs de morceau masqués",
   "settings.hiddenSongFieldsHint": "Les champs cochés disparaissent des morceaux, des setlists, des impressions et de la vue scène. Les valeurs existantes sont conservées.",
   "home.emailRequired": "Saisissez votre adresse e-mail.",
+  "nav.skipToContent": "Aller au contenu",
   "setlist.addSongLabel": "Ajouter une chanson",
   "setlist.capoChangedShort": "changement de capo",
   "setlist.movedTo": "{title} déplacé en position {pos} sur {total}",
