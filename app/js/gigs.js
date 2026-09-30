@@ -387,7 +387,7 @@ initPage(async function(config) {
     var hdr = document.querySelector('.app-header');
     if (hdr) document.documentElement.style.setProperty('--songs-toolbar-top', hdr.getBoundingClientRect().height + 'px');
   });
-}, { fullConfig: true }); // song filter needs cfg.songs
+});
 
 async function loadGigs() {
   _gigsOffset = 0;
