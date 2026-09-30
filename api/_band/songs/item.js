@@ -4,11 +4,9 @@ const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
 const { validateStr } = require('../../_validate');
 const { energyToScale } = require('../../_song_values');
-const { requireFeature } = require('../../_plans');
-const { checkRateLimit, clientIp } = require('../../_ratelimit');
+const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
 const { songDetail, cleanLyrics, writeLyrics } = require('../../_domain/songs');
-const { importWorks, importRightholders } = require('../../_domain/gema');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
 
@@ -19,59 +17,10 @@ const MEDIA = {
 };
 
 module.exports = wrap(async function handler(req, res) {
-  // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
-  const pathParts = Array.isArray(req.query.path) && req.query.path.length
-    ? req.query.path
-    : req.url.split('?')[0].split('/songs/')[1]?.split('/') ?? [];
-  let rawId  = pathParts[0];
-  let action = pathParts[1];
-  let arrId  = Number(pathParts[2]);
-  let arrSub = pathParts[3]; // 'activate' or undefined
-
-  // vercel dev: multi-segment paths fail on catch-alls; vercel.json rewrites flatten them
-  if (rawId === 'arrangements' && req.query.songId) {
-    rawId  = req.query.songId;
-    action = 'arrangements';
-    arrId  = Number(req.query.arrId) || 0;
-    arrSub = req.query.sub;
-  }
-  if (rawId === 'gema' && req.query.songId) {
-    rawId  = req.query.songId;
-    action = 'gema';
-  }
-  // vercel dev: single-segment sub-routes also need flattening rewrites
-  if (req.query.songId && ['audio', 'sheet', 'playback', 'setlists', 'restore'].includes(rawId)) {
-    action = rawId;
-    rawId  = req.query.songId;
-  }
+  // /songs/:id/:action/:sub/:arrSub — e.g. [12, 'arrangements', 3, 'activate'], [12, 'lyrics', 'suggest']
+  const [rawId, action, sub, arrSub] = req.query.path || [];
+  const arrId = Number(sub);
   const slug = getSlug(req);
-
-  // ── GEMA import (via the /api/:artist/gema/import rewrite) ────────────────
-  if (rawId === 'gema-import') {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    if (!requireFeature(res, band, 'pro-import')) return;
-
-    const { type, csv, dryRun = false, ownerIpNameNumber } = req.body || {};
-    if (!type || !['info', 'ids', 'beteiligte'].includes(type))
-      return res.status(400).json({ error: 'type must be "info", "ids", or "beteiligte"' });
-    if (typeof csv !== 'string' || csv.length < 10)
-      return res.status(400).json({ error: 'csv must be a non-empty string' });
-    if (csv.length > 5_000_000)
-      return res.status(400).json({ error: 'CSV too large (max 5 MB)' });
-
-    // Each call parses up to 5 MB and writes a batch; a page run is a handful.
-    if (await checkRateLimit(`gema-import:${band.id}`, 30, 600))
-      return res.status(429).json({ error: 'Too many imports — try again in a few minutes' });
-
-    const sql = getDb();
-    const result = type === 'beteiligte'
-      ? await importRightholders(sql, band, csv, { dryRun })
-      : await importWorks(sql, band, type, csv, { dryRun, ownerIpNameNumber });
-    return res.status(result.status).json(result.body);
-  }
 
   const songId = Number(rawId);
   if (!Number.isInteger(songId) || songId <= 0)
@@ -85,7 +34,6 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── PUT/DELETE /api/:artist/songs/:id/lyrics, POST …/lyrics/suggest ──────
   if (action === 'lyrics') {
-    const sub = pathParts[2];
     if (sub && sub !== 'suggest') return res.status(404).json({ error: 'Not found' });
     const allowed = sub ? ['POST'] : ['PUT', 'DELETE'];
     if (!allowed.includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });

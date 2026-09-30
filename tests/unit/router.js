@@ -1,9 +1,7 @@
 'use strict';
 
-// api/[...route].js is the one serverless function. The handlers were written
-// for Vercel's file-system routing plus the rewrites that used to sit in
-// vercel.json, so each path must reach the same handler with the same
-// req.query it got then.
+// api/[...route].js is the one serverless function: each path must reach its
+// handler with the req.query that handler reads.
 
 const fs = require('fs');
 const path = require('path');
@@ -22,26 +20,25 @@ async function run(r) {
     ['/auth/callback',                      'config', { action: 'oauth-callback' }],
     ['/api/band/auth',                      'auth',   { artist: 'band' }],
     ['/api/band/songs',                     'songs',  { artist: 'band' }],
-    ['/api/band/song-logs',                 'songs',  { artist: 'band' }],
+    ['/api/band/song-logs',                 'songs',  { artist: 'band', action: 'logs' }],
     ['/api/band/songs/import',              'songs',  { artist: 'band', action: 'import' }],
     ['/api/band/songs/12',                  'song',   { artist: 'band', path: ['12'] }],
     ['/api/band/songs/12/lyrics',           'song',   { artist: 'band', path: ['12', 'lyrics'] }],
     ['/api/band/songs/12/lyrics/suggest',   'song',   { artist: 'band', path: ['12', 'lyrics', 'suggest'] }],
-    ['/api/band/songs/gema-import',         'song',   { artist: 'band', path: ['gema-import'] }],
-    ['/api/band/gema/import',               'song',   { artist: 'band', path: ['gema-import'] }],
-    ['/api/band/songs/12/gema',             'song',   { artist: 'band', songId: '12', path: ['gema'] }],
-    ['/api/band/songs/12/arrangements',     'song',   { artist: 'band', songId: '12', path: ['arrangements'] }],
-    ['/api/band/songs/12/arrangements/3',   'song',   { artist: 'band', songId: '12', arrId: '3', path: ['arrangements'] }],
-    ['/api/band/songs/12/arrangements/3/activate', 'song', { artist: 'band', songId: '12', arrId: '3', path: ['arrangements'], sub: 'activate' }],
-    ['/api/band/songs/12/audio',            'song',   { artist: 'band', songId: '12', path: ['audio'] }],
-    ['/api/band/songs/12/sheet',            'song',   { artist: 'band', songId: '12', path: ['sheet'] }],
-    ['/api/band/songs/12/playback',         'song',   { artist: 'band', songId: '12', path: ['playback'] }],
-    ['/api/band/songs/12/setlists',         'song',   { artist: 'band', songId: '12', path: ['setlists'] }],
-    ['/api/band/songs/12/restore',          'song',   { artist: 'band', songId: '12', path: ['restore'] }],
+    ['/api/band/gema/import',               'gema',   { artist: 'band' }],
+    ['/api/band/songs/12/gema',             'song',   { artist: 'band', path: ['12', 'gema'] }],
+    ['/api/band/songs/12/arrangements',     'song',   { artist: 'band', path: ['12', 'arrangements'] }],
+    ['/api/band/songs/12/arrangements/3',   'song',   { artist: 'band', path: ['12', 'arrangements', '3'] }],
+    ['/api/band/songs/12/arrangements/3/activate', 'song', { artist: 'band', path: ['12', 'arrangements', '3', 'activate'] }],
+    ['/api/band/songs/12/audio',            'song',   { artist: 'band', path: ['12', 'audio'] }],
+    ['/api/band/songs/12/sheet',            'song',   { artist: 'band', path: ['12', 'sheet'] }],
+    ['/api/band/songs/12/playback',         'song',   { artist: 'band', path: ['12', 'playback'] }],
+    ['/api/band/songs/12/setlists',         'song',   { artist: 'band', path: ['12', 'setlists'] }],
+    ['/api/band/songs/12/restore',          'song',   { artist: 'band', path: ['12', 'restore'] }],
     ['/api/band/setlists',                  'setlists', { artist: 'band' }],
     ['/api/band/setlists/7/duplicate',      'setlist',  { artist: 'band', path: ['7', 'duplicate'] }],
     ['/api/band/setlists/7/share',          'setlist',  { artist: 'band', path: ['7', 'share'] }],
-    ['/api/band/export',                    'setlist',  { artist: 'band', path: ['export'] }],
+    ['/api/band/export',                    'export',   { artist: 'band' }],
     ['/api/band/gigs',                      'gigs',     { artist: 'band' }],
     ['/api/band/gigs/5',                    'gigs',     { artist: 'band', id: '5' }],
     ['/api/band/venues',                    'venues',   { artist: 'band' }],

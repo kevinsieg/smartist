@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -101,7 +101,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
 
   sentMail = null;
-  return require(path.join(__dirname, '../../api/_band/auth'));
+  return viaRouter(path.join(__dirname, '../../api/_band/auth'));
 }
 
 function mockRes() {

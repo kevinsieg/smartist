@@ -209,8 +209,7 @@ module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
   const sql = getDb();
 
-  // vercel dev does not always populate req.query for rewrites, so fall back to the path.
-  const rawId = req.query.id ?? req.url.split('?')[0].split('/gigs/')[1];
+  const rawId = req.query.id;
   if (rawId !== undefined && rawId !== '') {
     if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method))
       return res.status(405).json({ error: 'Method not allowed' });

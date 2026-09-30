@@ -6,10 +6,9 @@
 // vercel.json. Handlers live in files and directories prefixed `_`, which
 // Vercel does not turn into functions of their own.
 //
-// A handler gets `req.query` as it would from Vercel's file-system routing:
-// the URL's own query string, plus `artist` and the route's parameters, plus
-// `path` (the segments after the resource) for the item handlers. `req.url` is
-// left as the client sent it.
+// A handler gets `req.query`: the URL's own query string, plus `artist` and the
+// route's parameters, plus `path` (the segments after the resource) for the
+// item handlers. Handlers read these and never parse `req.url` themselves.
 
 const HANDLERS = {
   config:     () => require('./_config'),
@@ -18,6 +17,8 @@ const HANDLERS = {
   song:       () => require('./_band/songs/item'),
   setlists:   () => require('./_band/setlists'),
   setlist:    () => require('./_band/setlists/item'),
+  export:     () => require('./_band/export'),
+  gema:       () => require('./_band/gema'),
   gigs:       () => require('./_band/gigs'),
   venues:     () => require('./_band/venues'),
   venue:      () => require('./_band/venues/item'),
@@ -40,22 +41,13 @@ const TABLE = [
 
   ['/api/:artist/auth',                                    'auth'],
   ['/api/:artist/songs',                                   'songs'],
-  ['/api/:artist/song-logs',                               'songs'],
+  ['/api/:artist/song-logs',                               'songs', { action: 'logs' }],
   ['/api/:artist/songs/import',                            'songs', { action: 'import' }],
-  ['/api/:artist/gema/import',                             'song', { path: ['gema-import'] }],
-  ['/api/:artist/songs/:songId/gema',                      'song', { path: ['gema'] }],
-  ['/api/:artist/songs/:songId/arrangements/:arrId/activate', 'song', { path: ['arrangements'], sub: 'activate' }],
-  ['/api/:artist/songs/:songId/arrangements/:arrId',       'song', { path: ['arrangements'] }],
-  ['/api/:artist/songs/:songId/arrangements',              'song', { path: ['arrangements'] }],
-  ['/api/:artist/songs/:songId/audio',                     'song', { path: ['audio'] }],
-  ['/api/:artist/songs/:songId/sheet',                     'song', { path: ['sheet'] }],
-  ['/api/:artist/songs/:songId/playback',                  'song', { path: ['playback'] }],
-  ['/api/:artist/songs/:songId/setlists',                  'song', { path: ['setlists'] }],
-  ['/api/:artist/songs/:songId/restore',                   'song', { path: ['restore'] }],
   ['/api/:artist/songs/*',                                 'song'],
+  ['/api/:artist/gema/import',                             'gema'],
   ['/api/:artist/setlists',                                'setlists'],
-  ['/api/:artist/export',                                  'setlist', { path: ['export'] }],
   ['/api/:artist/setlists/*',                              'setlist'],
+  ['/api/:artist/export',                                  'export'],
   ['/api/:artist/gigs',                                    'gigs'],
   ['/api/:artist/gigs/:id',                                'gigs'],
   ['/api/:artist/venues',                                  'venues'],
