@@ -12,7 +12,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
     <link rel="stylesheet" href="/app/css/app.css?v=45">
-    <script src="/app/js/i18n.js?v=45"></script>
+    <script src="/app/js/i18n.js?v=46"></script>
 <style>
   .setlist-page-wrap { position: relative; }
 
@@ -101,6 +101,29 @@
 </div>
 
 <!-- Accept / save modal -->
+<div class="modal-overlay" id="quick-song-modal" role="dialog" aria-modal="true" aria-labelledby="quick-song-title">
+    <div class="modal">
+        <h2 id="quick-song-title" data-i18n="songs.newSong">New song</h2>
+        <div class="modal-field">
+            <label for="quick-song-name" data-i18n="songs.fieldTitle">Title</label>
+            <input type="text" id="quick-song-name">
+        </div>
+        <div class="modal-field">
+            <label for="quick-song-key" data-i18n="songs.fieldKey">Key</label>
+            <select id="quick-song-key"></select>
+        </div>
+        <div class="modal-field">
+            <label for="quick-song-length" data-i18n="songs.fieldLengthMmss">Length (MM:SS)</label>
+            <input type="text" id="quick-song-length" placeholder="MM:SS">
+        </div>
+        <div class="status-msg" id="quick-song-error"></div>
+        <div class="modal-actions">
+            <button class="btn active" id="quick-song-save" data-onclick="_saveQuickSong()" data-i18n="songs.add">Add</button>
+            <button class="btn" data-onclick="_closeQuickSong()" data-i18n="setlist.cancelBtn">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="accept-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal">
         <h2 id="modal-title" data-i18n="setlist.modalTitle">Save Setlist</h2>
@@ -155,12 +178,12 @@
 </div>
 
 <script src="/app/js/footer.js?v=3"></script>
-<script src="/app/js/core.js?v=6"></script>
+<script src="/app/js/core.js?v=7"></script>
 <script src="/app/js/session.js?v=6"></script>
 <script src="/app/js/ui.js?v=6"></script>
 <script src="/app/js/shell.js?v=6"></script>
 <script src="/app/js/list-view.js?v=3"></script>
-<script src="/app/js/setlist-generator.js?v=3"></script>
+<script src="/app/js/setlist-generator.js?v=4"></script>
 <script src="/app/js/setlist-history-tab.js?v=2"></script>
 <script src="/app/js/setlist.js?v=13"></script>
 </body>
