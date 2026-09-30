@@ -135,7 +135,7 @@ function run(r) {
 
     const scriptsOf = html => {
       const out = [];
-      const re = /<script[^>]+src="\/app\/js\/([A-Za-z0-9_\/-]+)\.js/g;
+      const re = /<script[^>]+src="\/app\/js\/([A-Za-z0-9_/-]+)\.js/g;
       let m;
       while ((m = re.exec(html)) !== null) out.push(m[1]);
       return out;

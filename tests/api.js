@@ -1688,7 +1688,6 @@ async function main() {
 }
 
 function printSummary() {
-  const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(
     `${G(`${passed} passed`)}  ` +

@@ -63,9 +63,6 @@ function mockRes() {
   return res;
 }
 
-const post = (handler, body) =>
-  handler({ method: 'POST', body: { action: 'login', ...body }, headers: {}, query: {} }, mockRes());
-
 // The rewrite /api/login → /api/config?action=login delivers the action in the
 // QUERY. Exercising only the body shape is exactly what let a rewritten login
 // fall through to the subscribe handler in production.

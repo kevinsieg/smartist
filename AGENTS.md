@@ -49,6 +49,7 @@ production database.
 ## Run and test
 
 ```bash
+npm run lint         # always, before every push (ESLint, eslint.config.js)
 npm run test:unit    # always, before every push (no database needed)
 npm run test:all     # unit + API + browser smoke test on a local stack
 npm run dev:up       # the local stack alone: own Postgres, seeded band, :3000

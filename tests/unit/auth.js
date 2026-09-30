@@ -6,7 +6,6 @@ async function run(r) {
   // requireRole is the only thing we need from _auth.js
   // We must stub _db and _token before requiring _auth to avoid DB connection
   const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
-  const tokenPath  = require.resolve(path.join(__dirname, '../../api/_token'));
   if (!require.cache[dbPath]) {
     require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true,
       exports: { getArtist: async () => null, getDb: () => null } };

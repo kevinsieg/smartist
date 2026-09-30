@@ -51,7 +51,7 @@ function _stripMarkdown(text) {
     .replace(/^---+$/gm, '')            // --- dividers
     .replace(/\[\d+\]/g, '')            // [1] citation indices
     .replace(/\^(\[\d+\]|\d+)\^/g, '') // ^[1]^ or ^1^ superscript citations
-    .replace(/\(https?:\/\/[^\)]*\)/g, '') // (https://...) inline links
+    .replace(/\(https?:\/\/[^)]*\)/g, '') // (https://...) inline links
     .trim();
 }
 

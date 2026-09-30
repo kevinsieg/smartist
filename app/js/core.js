@@ -190,7 +190,7 @@ var _ON_EVENTS = ['click', 'dblclick', 'change', 'input', 'keydown', 'dragover',
 var _onCache = {};
 
 function _onTokens(src) {
-  var re = /\s*(?:([A-Za-z_$][\w$]*)|(-?\d+(?:\.\d+)?)|'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|([(),.;\[\]]))/y;
+  var re = /\s*(?:([A-Za-z_$][\w$]*)|(-?\d+(?:\.\d+)?)|'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|([(),.;[\]]))/y;
   var out = [], m;
   re.lastIndex = 0;
   while (re.lastIndex < src.length) {

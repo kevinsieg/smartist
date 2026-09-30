@@ -7,6 +7,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/deploy_migrate.js",
+    "lint": "eslint .",
     "test:unit": "node tests/unit.js && node tests/history-client.js && node tests/home-client.js && node tests/viewmode-client.js && node tests/gigs-client.js && node tests/songs-client.js && node tests/songs-split-client.js && node tests/map-client.js && node tests/workspaces-client.js && node tests/logout-client.js",
     "dev:up": "bash scripts/dev_up.sh up",
     "dev:restart": "bash scripts/dev_up.sh restart",
@@ -21,5 +22,10 @@
     "bcryptjs": "^3.0.3",
     "pdfkit": "^0.20.2",
     "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0"
   }
 }
