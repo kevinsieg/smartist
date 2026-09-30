@@ -1242,6 +1242,37 @@ async function testSetlistShareValidation(slug, token, setlistId) {
   });
 }
 
+// CSV import: a file is only checked; a commit is refused while a row needs
+// attention and writes the rest once it is skipped.
+async function testSongImport(slug, token, firstSong, atLimit) {
+  const csv = `title,key,length\n[TEST] Import,Bb,3:30\n[TEST] Bad key,Q,\n${firstSong ? `"${firstSong.title.replace(/"/g, '""')}",,` : ''}\n`;
+  let rows;
+  await test('POST /songs song_import {csv} → 200, checked, nothing written', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`, { song_import: { csv } }, { token });
+    assertStatus(res, json, 200);
+    assert(json.rows[0].status === 'ready' && json.rows[0].values.key === 'B♭', `row 1 — got ${JSON.stringify(json.rows[0])}`);
+    assert(json.rows[1].errors.key?.code === 'key', 'bad key flagged');
+    if (firstSong) assert(json.rows[2].duplicate?.of === 'song', 'existing title flagged as duplicate');
+    rows = json.rows;
+  });
+  if (!rows) return;
+  await test('POST /songs song_import commit with a flagged row → 422', async () => {
+    const { res, json } = await POST(`/api/${slug}/songs`, { song_import: { rows, commit: true } }, { token });
+    assertStatus(res, json, 422);
+  });
+  if (atLimit) { skip('POST /songs song_import commit → 201', 'band at song limit'); return; }
+  await test('POST /songs song_import commit, flagged rows skipped → 201', async () => {
+    const send = rows.map(r => ({ line: r.line, values: r.values, skip: r.status !== 'ready' }));
+    const { res, json } = await POST(`/api/${slug}/songs`, { song_import: { rows: send, commit: true } }, { token });
+    assertStatus(res, json, 201);
+    assert(json.imported === 1, `imported — got ${json.imported}`);
+    const { json: list } = await GET(`/api/${slug}/songs`, { token });
+    const song = list.find(x => x.title === '[TEST] Import');
+    assert(song && song.key === 'B♭' && Number(song.length_min) === 3.5, `stored — got ${JSON.stringify(song)}`);
+    await DELETE(`/api/${slug}/songs/${song.id}`, { token });
+  });
+}
+
 async function testWrite(slug, token, firstSong, config) {
   console.log(B('\nWrite ops'));
 
@@ -1347,6 +1378,8 @@ async function testWrite(slug, token, firstSong, config) {
       assert(res.status === 204, `Expected 204, got ${res.status}`);
     });
   }
+
+  await testSongImport(slug, token, firstSong, songLimit != null && config.usage?.songs >= songLimit);
 
   // Setlist operations
   if (firstSong) {

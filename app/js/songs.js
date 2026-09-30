@@ -623,7 +623,11 @@ function _songsShareMenu(btn) {
   menu.innerHTML =
     '<div class="share-menu-item" data-onclick="exportCsv();closeShareMenu()">' +
       '<span class="share-menu-icon">&#10515;</span><span class="share-menu-label">' + t('songs.exportCsv') + '</span>' +
-    '</div>';
+    '</div>' +
+    (getAuthRole() === 'viewer' ? '' :
+    '<div class="share-menu-item" data-onclick="closeShareMenu();navigate(\'/song-import\')">' +
+      '<span class="share-menu-icon">&#10514;</span><span class="share-menu-label">' + t('songs.importCsv') + '</span>' +
+    '</div>');
 
   var rect = btn.getBoundingClientRect();
   menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;left:' + rect.left + 'px';
