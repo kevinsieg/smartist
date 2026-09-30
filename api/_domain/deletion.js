@@ -195,13 +195,14 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
     // The contact-form / mailing-list row is this person's own data too —
     // erasure means it goes as well, matched the same way, nothing wider.
     await tx`DELETE FROM subscribers WHERE lower(email) = ${addr}`;
-    // rate_limits keys are `<prefix>:<address>` and nothing ever reaps them, so
-    // without this a bare email address sits in the database for an hour after
-    // the account it belonged to was erased. Only the two prefixes that are
-    // keyed on an address (delete-req here, signup-link in signup.js/oauth.js);
-    // every other key is keyed on an IP or an artist id. lower(key) because the
-    // key was built from whatever casing the row stored.
-    await tx`DELETE FROM rate_limits WHERE lower(key) IN ('delete-req:' || ${addr}, 'signup-link:' || ${addr})`;
+    // rate_limits keys are `<prefix>:<address>` for the prefixes below, and the
+    // sweep in api/_ratelimit.js only clears them a day later — without this a
+    // bare email address outlives the account it belonged to. Every other key
+    // is keyed on an IP, an artist id or a song. lower(key) because the key
+    // was built from whatever casing the request carried.
+    await tx`DELETE FROM rate_limits WHERE lower(key) IN (
+      'delete-req:' || ${addr}, 'signup-link:' || ${addr},
+      'reset:' || ${addr}, 'login-fail:' || ${addr})`;
   });
 
   // Outside the transaction on purpose: R2 has no rollback. An orphaned file is

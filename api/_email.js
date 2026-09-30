@@ -33,10 +33,10 @@ async function sendEmail({ to, subject, text, html, attachments, reply_to }) {
 
   if (!r.ok) {
     const body = await r.text();
-    console.error(`[email] ${r.status}: ${body}`);
-    throw new Error(`email send failed: ${r.status}`);
+    // Not printed here: the reply can quote the recipient. Callers log the
+    // error through the logger, which redacts addresses.
+    throw new Error(`email send failed: ${r.status} ${body.slice(0, 300)}`);
   }
-  console.log(`[email] sent to=${Array.isArray(to) ? to.join(',') : to} subject="${subject}"`);
 }
 
 module.exports = { sendEmail };

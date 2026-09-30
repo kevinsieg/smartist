@@ -351,6 +351,7 @@ module.exports = wrap(async function handler(req, res) {
                <p>This link expires in 7 days.</p>`,
       });
     } catch (err) {
+      await logger.error('invite_email_failed', { band: slug, error: err.message });
       await sql`DELETE FROM users WHERE id = ${newUser.id}`;
       return res.status(500).json({ error: 'Failed to send invite email' });
     }
@@ -386,7 +387,10 @@ module.exports = wrap(async function handler(req, res) {
                <p><a href="${link}">Accept invite and set your password</a></p>
                <p>This link expires in 7 days.</p>`,
       });
-    } catch { return res.status(500).json({ error: 'Failed to send email' }); }
+    } catch (err) {
+      await logger.error('invite_email_failed', { band: slug, error: err.message });
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
 
     return res.json({ ok: true });
   }
