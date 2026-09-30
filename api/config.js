@@ -131,6 +131,8 @@ async function downgrade(req, res) {
 }
 
 // ── PATCH — update artist name / config ─────────────────────────────────────────
+const CONFIG_MAX_BYTES = 64 * 1024;
+
 async function patchConfig(req, res) {
   const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
   if (!slugParam) return res.status(400).json({ error: 'slug required' });
@@ -158,7 +160,13 @@ async function patchConfig(req, res) {
       if (key !== null && !key.startsWith(`bands/${band.slug}/`))
         return res.status(400).json({ error: `Invalid ${k}` });
     }
-    await sql`UPDATE artists SET config = config || ${update} WHERE id = ${band.id}`;
+    // artists.* is read on every authenticated request of the band, so its
+    // settings stay small: a merge past CONFIG_MAX_BYTES is refused.
+    const [saved] = await sql`
+      UPDATE artists SET config = config || ${update}
+      WHERE id = ${band.id} AND octet_length((config || ${update})::text) <= ${CONFIG_MAX_BYTES}
+      RETURNING id`;
+    if (!saved) return res.status(413).json({ error: 'Settings too large' });
   }
   return res.json({ ok: true });
 }
@@ -214,7 +222,14 @@ async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) 
   return res.json({ uploadUrl, publicUrl });
 }
 
-const PRIVATE_CONFIG_KEYS = ['gemaIpNameNumber', 'upgradedAt'];
+// What a visitor without a session sees of a band's config: branding, display
+// settings and its public switches. An allowlist, so a key added later stays
+// private until it is named here (gemaIpNameNumber and upgradedAt never are).
+const PUBLIC_CONFIG_KEYS = [
+  'logoUrl', 'faviconUrl', 'platforms', 'plan',
+  'displayFields', 'hiddenSongFields', 'filterFields', 'arrangementConfig',
+  'publicCatalogue', 'publicStage',
+];
 
 // ── GET — public config (songs, counts, feature flags) ──────────────────────────
 // ?light=1 skips the songs payload (full song rows + GEMA join) for pages that
@@ -249,8 +264,7 @@ async function publicConfig(req, res, slugParam) {
   // rights-administration details or plan history.
   let config = band.config;
   if (!user && config) {
-    config = { ...config };
-    for (const k of PRIVATE_CONFIG_KEYS) delete config[k];
+    config = Object.fromEntries(PUBLIC_CONFIG_KEYS.filter(k => k in band.config).map(k => [k, band.config[k]]));
   }
   res.json({
     slug:          band.slug,
@@ -258,12 +272,9 @@ async function publicConfig(req, res, slugParam) {
     config,
     // Per-workspace role of the authenticated caller (the session token's own
     // role claim is only valid for the workspace it was issued for, so the
-    // client must read this instead of decoding the token). Bootstrap
-    // password sessions (user.id === null) report null — the client treats
-    // null as "legacy admin" and uses it to detect bootstrap logins.
-    // Band-password sessions have no users row; a full one reports null
-    // ("legacy admin"), a demo-gate session reports its real, lesser role.
-    role:          user ? ((user.id != null || user.role !== 'admin') ? user.role : null) : null,
+    // client must read this instead of decoding the token). The demo gate's
+    // session reports 'member'; no session reports null.
+    role:          user ? user.role : null,
     songs:         light ? undefined : songs,
     counts,
     plan:          planSummary(band),

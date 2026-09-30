@@ -9,12 +9,10 @@ stubLogger();
 const VICTIM    = 'player@example.com';
 const NEIGHBOUR = 'other@example.com';
 
-// Mirrors real Postgres: an exact-string column compares case-sensitively
-// unless the SQL text itself wraps the column in lower(...). This is what
-// catches an implementation that forgets the lower() and silently matches
-// nothing for a mixed-case stored address.
-function emailMatches(queryText, rowEmail, paramValue) {
-  return /lower\s*\(/i.test(queryText) ? rowEmail.toLowerCase() === paramValue : rowEmail === paramValue;
+// Mirrors real Postgres: addresses are stored lowercase (users_email_lowercase)
+// and compared exactly, so the lookup can use users_email_idx.
+function emailMatches(_queryText, rowEmail, paramValue) {
+  return rowEmail === paramValue;
 }
 
 // rows: [{ artist_id, slug, name, email, role }]
@@ -82,15 +80,14 @@ async function run(r) {
     assertEq(p.destroy.map(a => a.slug).join(','), 'thrs');
   });
 
-  // oauth.js and registration.js insert whatever the provider/form sent, not
-  // a lowercased address — the lookup must fold case or this address is
-  // simply never found, and executeDeletion would report success for a
-  // no-op (see the "not found" tests below).
-  await testAsync('a mixed-case stored address is still matched', async () => {
-    const sql = fakeSql([
-      { artist_id: 1, slug: 'mine', name: 'Mine', email: 'Someone@Example.COM', role: 'admin' },
-    ]);
-    const p = await planDeletion('someone@example.com', sql);
+  // The lookups compare exactly (no lower() on the column, so the index is
+  // used). That is only safe while the database keeps every address lowercase.
+  await testAsync('the schema keeps users.email lowercase, so exact lookups find every row', async () => {
+    const schema = require('fs').readFileSync(path.join(__dirname, '../../scripts/schema.sql'), 'utf8');
+    assert(/CONSTRAINT users_email_lowercase CHECK \(email = lower\(email\)\)/.test(schema),
+      'users_email_lowercase is gone: lookups by address would miss mixed-case rows');
+    const sql = fakeSql([{ artist_id: 1, slug: 'mine', name: 'Mine', email: 'someone@example.com', role: 'admin' }]);
+    const p = await planDeletion('Someone@Example.COM', sql);
     assertEq(p.destroy.map(a => a.slug).join(','), 'mine');
   });
 
@@ -290,10 +287,9 @@ async function run(r) {
       'invited_by must be cleared before the row it references is deleted');
   });
 
-  // The DB stores whatever case a provider or the signup form sent — the
-  // deletes must fold case the same way the lookup does, or a row that
-  // planDeletion found is left behind by the write that's supposed to remove it.
-  await testAsync('the row deletes match the stored email regardless of case', async () => {
+  // The deletes name the same lowercase address the lookup used, so a row
+  // planDeletion found is never left behind by the write meant to remove it.
+  await testAsync('the row deletes match the stored address exactly', async () => {
     const { executeDeletion } = require(path.join(__dirname, '../../api/_domain/deletion'));
     const sql = recordingSql([
       { artist_id: 1, slug: 'mine', name: 'Mine', email: VICTIM, role: 'admin' },
@@ -304,10 +300,10 @@ async function run(r) {
     });
     const deleteUsers = sql.issued.find(q => /^DELETE FROM users\b/i.test(q.text));
     const deleteSubs  = sql.issued.find(q => /^DELETE FROM subscribers\b/i.test(q.text));
-    assert(deleteUsers && /lower\(/i.test(deleteUsers.text),
-      'DELETE FROM users must match case-insensitively: ' + (deleteUsers && deleteUsers.text));
-    assert(deleteSubs && /lower\(/i.test(deleteSubs.text),
-      'DELETE FROM subscribers must match case-insensitively: ' + (deleteSubs && deleteSubs.text));
+    assert(deleteUsers && /WHERE email =/i.test(deleteUsers.text) && deleteUsers.values.includes(VICTIM),
+      'DELETE FROM users must name the address: ' + (deleteUsers && deleteUsers.text));
+    assert(deleteSubs && /WHERE email =/i.test(deleteSubs.text) && deleteSubs.values.includes(VICTIM),
+      'DELETE FROM subscribers must name the address: ' + (deleteSubs && deleteSubs.text));
   });
 
   // "delete my account" includes the mailing-list/contact-form row, matched

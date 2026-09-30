@@ -47,8 +47,11 @@ const TTL_MS = 30 * 60 * 1000; // 30 minutes
 // never an admin one; see api/_auth.js).
 const PURPOSES = new Set(['login', 'reset', 'demo']);
 
+// Keyed on APP_SECRET, with the seed (a password hash) in the message: the
+// seed still ties the link to the password it was issued against, and a copy
+// of the users table alone is no longer enough to mint sign-in or reset links.
 function _magicSig(seed, purpose, expires) {
-  return crypto.createHmac('sha256', seed).update(`${purpose}:${expires}`).digest('hex');
+  return crypto.createHmac('sha256', secret()).update(`${purpose}:${expires}:${seed}`).digest('hex');
 }
 
 // The demo gate's signing key: per band, derived from APP_SECRET, so a demo

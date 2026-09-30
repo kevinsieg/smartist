@@ -519,7 +519,7 @@
   "pro.validateBtn": "Validieren",
   "pro.validateHintEnd": " klicken.",
   "pro.validateHintMid": " führt eine Vorschau ohne Speicherung durch — nichts wird gespeichert, bis Sie auf ",
-  "profile.bootstrapNote": "Sie sind mit dem Workspace-Passwort angemeldet — persönliche Passwörter werden pro Konto verwaltet.",
+  "profile.demoNote": "Sie sind in der Demo. Legen Sie ein eigenes Konto an, um ein Passwort festzulegen.",
   "profile.changeEmail": "E-Mail ändern",
   "profile.changePassword": "Passwort ändern",
   "profile.changed": "Passwort geändert.",

@@ -132,7 +132,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     const songId = bodyId(req.body.lyrics_suggest_id);
     if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-    const result = await suggestLyrics(sql, band, songId, clientIp(req));
+    // The demo session (no user row) gets the free sources only.
+    const result = await suggestLyrics(sql, band, songId, clientIp(req), { allowAI: req.user.id !== null });
     return res.status(result.status).json(result.body);
   }
 

@@ -27,13 +27,20 @@ async function signupLink({ body, ip, origin }) {
   // The page response is identical either way (no account enumeration).
   // Additional workspaces are created from /home after logging in.
   const [existing] = await sql`
-    SELECT id, email, password_hash FROM users WHERE email = ${email} LIMIT 1
+    SELECT u.id, u.email, u.password_hash, a.slug
+    FROM users u JOIN artists a ON a.id = u.artist_id
+    WHERE u.email = ${email}
+    ORDER BY u.id LIMIT 1
   `;
   if (existing) {
     const o    = origin;
     const hint = Buffer.from(email).toString('base64url');
+    // The link is redeemed at /api/<slug>/auth, so it names a workspace: at the
+    // root of a multi-tenant deployment the login page has no other way to find
+    // one, and dropped the link as if it had never been clicked.
+    const next = encodeURIComponent(`/${existing.slug}/dashboard`);
     const loginHtml = existing.password_hash
-      ? `<p><a href="${o}/login#magic=${encodeURIComponent(generateMagicToken(existing.password_hash))}&hint=${hint}">Click here to log in</a> (valid for 30 minutes).</p>`
+      ? `<p><a href="${o}/login#magic=${encodeURIComponent(generateMagicToken(existing.password_hash))}&hint=${hint}&next=${next}">Click here to log in</a> (valid for 30 minutes).</p>`
       : `<p>Log in at <a href="${o}/login">${o}/login</a> — if you signed up with Google or Facebook, use those buttons.</p>`;
     try {
       await sendEmail({

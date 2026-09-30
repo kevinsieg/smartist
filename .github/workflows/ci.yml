@@ -4,7 +4,7 @@ on:
   push:
     branches: [dev, main]
   pull_request:
-    branches: [main]
+    branches: [dev, main]
 
 # Read-only token: nothing here writes to the repository.
 permissions:
@@ -84,6 +84,11 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Browser smoke test (sign in, every page, SPA nav, stage)
         run: node tests/smoke.js
+      # Production serves many bands from one root; the steps above pin one band
+      # (ARTIST_SLUG). This starts a second server without it and checks the
+      # root flows: sign-in at /login and the sign-in and reset links mailed out.
+      - name: Browser smoke test at a multi-tenant root
+        run: node tests/smoke-root.js
       - name: Server log
         if: failure()
         run: cat server.log

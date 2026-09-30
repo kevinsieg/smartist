@@ -519,7 +519,7 @@
   "pro.validateBtn": "Validate",
   "pro.validateHintEnd": ".",
   "pro.validateHintMid": " runs a dry-run preview — nothing is written until you click ",
-  "profile.bootstrapNote": "You are logged in with the workspace password — personal passwords are managed per account.",
+  "profile.demoNote": "You are in the demo. Sign up for your own account to set a password.",
   "profile.changeEmail": "Change email",
   "profile.changePassword": "Change password",
   "profile.changed": "Password changed.",

@@ -56,7 +56,7 @@ module.exports = wrap(async function handler(req, res) {
         SELECT a.slug AS workspace, a.name AS workspace_name, u.email, u.role,
                u.pending_email, u.created_at, (u.password_hash IS NOT NULL) AS has_password
         FROM users me
-        JOIN users u   ON lower(u.email) = lower(me.email)
+        JOIN users u   ON u.email = me.email
         JOIN artists a ON a.id = u.artist_id
         WHERE me.id = ${req.user.id}
         ORDER BY a.name

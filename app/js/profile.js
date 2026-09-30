@@ -34,19 +34,19 @@
     document.getElementById('profile-email').textContent =
       sessionStorage.getItem('smartist_admin_email') || '—';
 
-    // Bootstrap (workspace-password) logins have no users row → no personal password.
-    var isBootstrap = getAuthRole() === null;
-    document.getElementById(isBootstrap ? 'bootstrap-note' : 'password-section').style.display = '';
-    if (isBootstrap) return;
+    // The demo session has no users row → no personal password, email or deletion.
+    var noAccount = sessionUserId() === null;
+    document.getElementById(noAccount ? 'demo-note' : 'password-section').style.display = '';
+    if (noAccount) return;
 
     document.getElementById('pw-save-btn').addEventListener('click', changePassword);
 
-    // Reached only past the bootstrap early-return above, so accounts without a
-    // users row never see this — matching the server, which rejects them.
+    // Reached only past the early return above, so sessions without a users
+    // row never see this — matching the server, which rejects them.
     document.getElementById('email-section').style.display = '';
     document.getElementById('em-save-btn').addEventListener('click', requestEmailChange);
 
-    // Same reasoning: deletion acts on a users row, so bootstrap logins skip it too.
+    // Same reasoning: deletion acts on a users row.
     document.getElementById('delete-account-btn').addEventListener('click', _requestDeletion);
     _loadDeletionZone();
   }
