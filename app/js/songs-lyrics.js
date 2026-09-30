@@ -13,6 +13,8 @@ function _lyricsSetMode(mode) { // 'view' or 'edit'
   // AI suggest needs a saved song (title + artist) — hide it for a new, unsaved one.
   var suggestBtn = document.getElementById('lyrics-suggest-btn');
   if (suggestBtn) suggestBtn.style.display = _isNewPanelSid(currentLyricsSid) ? 'none' : '';
+  var newHint = document.getElementById('lyrics-suggest-new-hint');
+  if (newHint) newHint.style.display = mode === 'edit' && _isNewPanelSid(currentLyricsSid) ? '' : 'none';
   _lyricsSaveStatus('', false);
 }
 
