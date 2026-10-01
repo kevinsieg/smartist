@@ -41,6 +41,10 @@
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────────── */
+.sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { transition: opacity 0.15s ease; }
 main { transition: opacity 0.15s ease; }
@@ -708,12 +712,13 @@ input[type="date"], input[type="number"] {
     .drag-handle:active { cursor: grabbing; }
 }
 .song-remove-btn {
-    background: none; border: none; cursor: pointer; color: rgba(221,213,200,0.5);
+    background: none; border: none; cursor: pointer; color: var(--muted-ink);
     font-size: 1.25rem; line-height: 1; padding: 0 0.2rem; flex-shrink: 0;
+    min-width: 36px; min-height: 36px;
     transition: color 0.15s; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 .song-remove-btn:hover { color: var(--danger-color); }
-@media (min-width: 640px) { .song-remove-btn { font-size: 1.1rem; padding: 0 0.15rem; } }
+@media (min-width: 640px) { .song-remove-btn { font-size: 1.1rem; padding: 0 0.15rem; min-width: 28px; min-height: 28px; } }
 .add-song-row { margin: 0.4rem 0 0.2rem; }
 .add-song-row select {
     font-family: var(--font-ui); font-size: 0.82rem;
@@ -741,7 +746,9 @@ input[type="date"], input[type="number"] {
     white-space: nowrap; display: inline-block;
 }
 .capo-badge  { font-weight: 600; letter-spacing: 0.02em; }
-.capo-change { color: var(--secondary-color) !important; font-weight: 600; }
+/* A capo change is marked by more than colour: the ⇄ sign and hidden text. */
+.capo-change { color: var(--secondary-ink) !important; border-color: var(--secondary-ink) !important; font-weight: 600; }
+.capo-change::before { content: "⇄ "; }
 .set-break {
     list-style: none;
     display: flex; flex-direction: column; align-items: center;

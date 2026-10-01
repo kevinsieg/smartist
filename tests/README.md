@@ -113,7 +113,7 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | `GET /api/:artist/gigs` | array; single gig by id |
 | `GET /api/:artist/setlists` | array with song_count; single setlist with ordered songs |
 | Validation | id=0 → 400, non-integer id → 400, missing required fields → 400, unknown id → 404 |
-| `POST /api/:artist/auth` | email + correct password → 200 |
+| `POST /api/login` | email + correct password → 200 |
 | Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
 | `POST /api/:artist/songs` | missing title → 400 |
 | Lyrics suggest | rejects songs without an artist before calling external providers |

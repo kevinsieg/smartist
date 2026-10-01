@@ -31,7 +31,15 @@ async function checkRefs(sql, artistId, body, res) {
 // a single serverless function (Hobby plan allows 12, and all 12 are in use).
 const POSTER_MAX_BYTES = 5 * 1024 * 1024;
 
+// Sub-resources of one gig: the poster, and the upload URLs for it.
+const GIG_SUBS = { 'poster-url': ['POST'], poster: ['PUT', 'DELETE'] };
+
 async function handleOneGig(req, res, { slug, sql, gigId }) {
+  const { sub } = req.query;
+  if (sub !== undefined) {
+    if (!GIG_SUBS[sub]) return res.status(404).json({ error: 'Not found' });
+    if (!GIG_SUBS[sub].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+  }
   if (req.method === 'GET') {
       const { artist, user } = await getAccess(req, slug);
       if (!artist) return res.status(404).json({ error: 'Artist not found' });
@@ -87,7 +95,7 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
     if (!artist) return;
     // A PUT's fields are validated first; its venue/organizer ownership checks
     // don't depend on the gig row, so they run alongside it.
-    const isUpdate = req.method === 'PUT' && req.query.action !== 'poster';
+    const isUpdate = req.method === 'PUT' && req.query.sub !== 'poster';
     const parsed = isUpdate ? parseFields(req.body, GIG_FIELDS, { partial: true }) : null;
     if (parsed?.error) return res.status(400).json({ error: parsed.error });
     const [[gig], refs] = await Promise.all([
@@ -96,8 +104,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
     ]);
     if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
-    // ── POST ?action=poster-url — get presigned upload URLs ──────────────────
-    if (req.method === 'POST' && req.query.action === 'poster-url') {
+    // ── POST /gigs/:id/poster-url — get presigned upload URLs ──────────────────
+    if (req.method === 'POST' && req.query.sub === 'poster-url') {
       if (refuseDemo(req, res)) return;
       const { contentType, posterSize, thumbSize } = req.body ?? {};
       const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -123,8 +131,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       });
     }
 
-    // ── PUT ?action=poster — confirm upload, save to DB ──────────────────────
-    if (req.method === 'PUT' && req.query.action === 'poster') {
+    // ── PUT /gigs/:id/poster — confirm upload, save to DB ──────────────────────
+    if (req.method === 'PUT' && req.query.sub === 'poster') {
       if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
       const { posterUrl, thumbUrl } = req.body ?? {};
       if (!posterUrl || !thumbUrl)
@@ -174,8 +182,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       return res.json(updated);
     }
 
-    // ── DELETE ?action=poster — remove poster files and clear DB ─────────────
-    if (req.method === 'DELETE' && req.query.action === 'poster') {
+    // ── DELETE /gigs/:id/poster — remove poster files and clear DB ─────────────
+    if (req.method === 'DELETE' && req.query.sub === 'poster') {
       if (gig.poster_url) await deleteFromR2(gig.poster_url).catch(() => {});
       if (gig.thumb_url)  await deleteFromR2(gig.thumb_url).catch(() => {});
       await sql`
@@ -209,8 +217,7 @@ module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
   const sql = getDb();
 
-  // vercel dev does not always populate req.query for rewrites, so fall back to the path.
-  const rawId = req.query.id ?? req.url.split('?')[0].split('/gigs/')[1];
+  const rawId = req.query.id;
   if (rawId !== undefined && rawId !== '') {
     if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method))
       return res.status(405).json({ error: 'Method not allowed' });

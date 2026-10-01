@@ -56,8 +56,8 @@ module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
   const sql = getDb();
 
-  // ── song-logs (merged from song-logs.js via vercel.json rewrite) ──────────
-  if (req.url.includes('song-logs')) {
+  // ── GET /api/:artist/song-logs ─────────────────────────────────────────────
+  if (req.query.action === 'logs') {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
     const band = await requireAuth(req, res, slug);
     if (!band) return;

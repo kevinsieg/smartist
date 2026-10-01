@@ -63,11 +63,15 @@ and cleaned up.
 
 ## API rules
 
-- **One function: `api/[...route].js`.** Every `/api/*` path goes through its
+- **One function: `api/index.js`.** Every `/api/*` path goes through its
   route table to a handler in `api/_config.js` or `api/_band/`. A new endpoint
   is a line in that table; every other file under `api/` starts with `_` (a
   unit test checks), so Vercel's function limit never comes into it.
-- Every handler is wrapped in `wrap()` (`api/_handler.js`).
+- Every handler is wrapped in `wrap()` (`api/_handler.js`) and reads the
+  route from `req.query` (`artist`, `path`, `id`, `action`) as the router sets
+  it, never from `req.url`.
+- Actions are URL paths (`POST /setlists/:id/duplicate`, `PUT /songs/:id/lyrics`),
+  not body fields.
 - **Every workspace is private.** Reads and writes go through `requireAuth` /
   `getAccess`; anonymous access exists only where the band opted in
   (`publicCatalogue`, `publicStage`, compared with `=== true`).
@@ -87,14 +91,6 @@ and cleaned up.
 - Lyrics never travel in a song list: lists carry `has_lyrics`; the text comes
   with one song's details.
 - Plans: `api/_plans.js` is the only place features and limits are decided.
-
-## vercel dev bugs (52.x)
-
-Routing that works on Vercel can fail under `vercel dev`; the local stack
-(`npm run dev:up`) does not use it. Handlers still fall back to parsing
-`req.url` when `req.query.path` or `req.query.artist` is missing. Actions are
-URL paths (`POST /setlists/:id/duplicate`, `PUT /songs/:id/lyrics`), not body
-fields: the router makes multi-segment paths safe.
 
 ## Client rules
 

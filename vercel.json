@@ -10,7 +10,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/auth/callback",                                                                 "destination": "/api/config?action=oauth-callback" },
+    { "source": "/auth/callback",   "destination": "/api?__path=/auth/callback" },
 
     { "source": "/",                "destination": "/app/index.html" },
     { "source": "/login",           "destination": "/app/index.html" },
@@ -44,7 +44,9 @@
     { "source": "/:slug/stage",            "destination": "/app/stage.html" },
     { "source": "/:slug/contact",          "destination": "/app/contact.html" },
 
-    { "source": "/:slug",           "destination": "/app/dashboard.html" }
+    { "source": "/:slug",           "destination": "/app/dashboard.html" },
+
+    { "source": "/api/:path*",      "destination": "/api?__path=/api/:path*" }
   ],
   "headers": [
     {

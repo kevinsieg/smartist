@@ -6,7 +6,7 @@
 // failed — deleteFromR2 reports whether the object really went away.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -95,7 +95,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
 
   const tokenApi = require(path.join(__dirname, '../../api/_token'));
   return {
-    handler: require(path.join(__dirname, '../../api/_band/songs/item.js')),
+    handler: viaRouter(path.join(__dirname, '../../api/_band/songs/item.js')),
     token:   tokenApi.generateUserToken(7, 'member', tokenApi.TTL_8H),
     deltas,
     deleted,

@@ -321,7 +321,7 @@ async function doAcceptInvite(inviteToken, cfg) {
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
     const slug = cfg?.slug || artistSlug;
-    const r    = await fetch(`/api/${slug}/auth?action=accept-invite`, {
+    const r    = await fetch(`/api/${slug}/members/accept-invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: inviteToken, password: pw }),

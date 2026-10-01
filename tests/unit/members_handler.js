@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -39,7 +39,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   const rlPath       = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const bcryptPath   = require.resolve('bcryptjs');
   const handlerPath  = require.resolve(path.join(__dirname, '../../api/_handler'));
-  const apiAuthPath  = require.resolve(path.join(__dirname, '../../api/_band/auth'));
+  const apiAuthPath  = require.resolve(path.join(__dirname, '../../api/_band/members'));
 
   const membersPath  = require.resolve(path.join(__dirname, '../../api/_domain/members'));
 
@@ -101,7 +101,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
 
   sentMail = null;
-  return require(path.join(__dirname, '../../api/_band/auth'));
+  return viaRouter(path.join(__dirname, '../../api/_band/members'));
 }
 
 function mockRes() {
@@ -118,7 +118,7 @@ function authReq(method, url, body, headers = {}) {
 async function run(r) {
   const { testAsync, assert, assertEq, B } = r;
 
-  console.log(B('\nauth handler'));
+  console.log(B('\nmembers handler'));
 
   await testAsync('POST accept-invite succeeds, hashes password, and consumes invite token', async () => {
     const rawToken = 'invite-token';
@@ -145,7 +145,7 @@ async function run(r) {
     const handler = makeHandler({ sql });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=accept-invite', {
+    await handler(authReq('POST', '/api/test/members/accept-invite', {
       token: rawToken,
       password: 'long-enough',
     }), res);
@@ -177,7 +177,7 @@ async function run(r) {
     const handler = makeHandler({ sql });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=accept-invite', {
+    await handler(authReq('POST', '/api/test/members/accept-invite', {
       token: 'expired-token',
       password: 'long-enough',
     }), res);
@@ -197,7 +197,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 2, role: 'member' } });
     const res = mockRes();
 
-    await handler(authReq('GET', '/api/test/auth', undefined, { authorization: 'Bearer member' }), res);
+    await handler(authReq('GET', '/api/test/members', undefined, { authorization: 'Bearer member' }), res);
 
     assertEq(res.statusCode, 403);
     assertEq(res._body, { error: 'Forbidden' });
@@ -214,7 +214,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 42, role: 'admin' } });
     const res = mockRes();
 
-    await handler(authReq('PUT', '/api/test/auth', { userId: 42, role: 'viewer' }, {
+    await handler(authReq('PUT', '/api/test/members', { userId: 42, role: 'viewer' }, {
       authorization: 'Bearer admin',
     }), res);
 
@@ -230,7 +230,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 1, role: 'admin' } });
     const res = mockRes();
 
-    await handler(authReq('PUT', '/api/test/auth', { userId: 42, email: 'victim@example.com' }, {
+    await handler(authReq('PUT', '/api/test/members', { userId: 42, email: 'victim@example.com' }, {
       authorization: 'Bearer admin',
     }), res);
 
@@ -243,7 +243,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 1, role: 'admin' } });
     const res = mockRes();
 
-    await handler(authReq('PUT', '/api/test/auth', { userId: 42, role: 'member', email: 'victim@example.com' }, {
+    await handler(authReq('PUT', '/api/test/members', { userId: 42, role: 'member', email: 'victim@example.com' }, {
       authorization: 'Bearer admin',
     }), res);
 
@@ -261,7 +261,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 42, role: 'admin' } });
     const res = mockRes();
 
-    await handler(authReq('DELETE', '/api/test/auth', { userId: 42 }, {
+    await handler(authReq('DELETE', '/api/test/members', { userId: 42 }, {
       authorization: 'Bearer admin',
     }), res);
 
@@ -277,7 +277,7 @@ async function run(r) {
     const handler = makeHandler({ sql, authFails: true });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', {}), res);
+    await handler(authReq('POST', '/api/test/members/confirm-email-change', {}), res);
 
     assertEq(res.statusCode, 400);
     assertEq(res._body, { error: 'token required' });
@@ -290,7 +290,7 @@ async function run(r) {
     const handler = makeHandler({ sql, authFails: true });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: 'e'.repeat(64) }), res);
+    await handler(authReq('POST', '/api/test/members/confirm-email-change', { token: 'e'.repeat(64) }), res);
 
     assertEq(res.statusCode, 400);
     assertEq(res._body, { error: 'Invalid or expired link' });
@@ -304,7 +304,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+    await handler(authReq('POST', '/api/test/members/request-email-change', {
       currentPassword: 'wrong-password', newEmail: 'new@example.com',
     }, { authorization: 'Bearer member' }), res);
 
@@ -317,7 +317,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: null, role: 'admin' } });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+    await handler(authReq('POST', '/api/test/members/request-email-change', {
       currentPassword: 'whatever', newEmail: 'new@example.com',
     }, { authorization: 'Bearer band' }), res);
 
@@ -330,7 +330,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+    await handler(authReq('POST', '/api/test/members/request-email-change', {
       currentPassword: 'correct-password', newEmail: 'not-an-email',
     }, { authorization: 'Bearer member' }), res);
 
@@ -349,7 +349,7 @@ async function run(r) {
     const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=request-email-change', {
+    await handler(authReq('POST', '/api/test/members/request-email-change', {
       currentPassword: 'correct-password', newEmail: 'New@Example.com',
     }, { authorization: 'Bearer member' }), res);
 
@@ -385,7 +385,7 @@ async function run(r) {
     const handler = makeHandler({ sql });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: rawToken }), res);
+    await handler(authReq('POST', '/api/test/members/confirm-email-change', { token: rawToken }), res);
 
     assertEq(res.statusCode, 200);
     assertEq(res._body, {
@@ -405,7 +405,7 @@ async function run(r) {
     const handler = makeHandler({ sql });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: 'b'.repeat(64) }), res);
+    await handler(authReq('POST', '/api/test/members/confirm-email-change', { token: 'b'.repeat(64) }), res);
 
     assertEq(res.statusCode, 400);
     assertEq(res._body, { error: 'Invalid or expired link' });
@@ -425,7 +425,7 @@ async function run(r) {
     const handler = makeHandler({ sql });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: rawToken, confirm: true }), res);
+    await handler(authReq('POST', '/api/test/members/confirm-email-change', { token: rawToken, confirm: true }), res);
 
     assertEq(res.statusCode, 200);
     assertEq(res._body, { ok: true, email: 'new@example.com' });
@@ -451,7 +451,7 @@ async function run(r) {
     const handler = makeHandler({ sql });
     const res = mockRes();
 
-    await handler(authReq('POST', '/api/test/auth?action=confirm-email-change', { token: rawToken, confirm: true }), res);
+    await handler(authReq('POST', '/api/test/members/confirm-email-change', { token: rawToken, confirm: true }), res);
 
     assertEq(res.statusCode, 409);
     assertEq(sql.calls.filter(c => c.text.includes('SET email')).length, 0);
