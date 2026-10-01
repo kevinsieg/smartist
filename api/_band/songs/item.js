@@ -1,14 +1,23 @@
-const { getDb, getSlug } = require('../../_db');
+const { getDb, getSlug, trimSongLogs } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
-const { validateStr } = require('../../_validate');
+const { validateStr, jsonBytes } = require('../../_validate');
 const { energyToScale } = require('../../_song_values');
 const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
-const { songDetail, cleanLyrics, writeLyrics } = require('../../_domain/songs');
+const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
+
+// An arrangement's rows and hidden instruments are stored as sent; cap them so
+// one request cannot park megabytes that every stage view then loads.
+const ARRANGEMENT_MAX_BYTES = 128 * 1024;
+function arrangementError(rows, hidden) {
+  if (rows !== undefined && jsonBytes(rows) > ARRANGEMENT_MAX_BYTES) return 'rows is too large';
+  if (hidden !== undefined && jsonBytes(hidden) > 4 * 1024) return 'hidden_instruments is too large';
+  return null;
+}
 
 const MEDIA = {
   audio:    makeMediaFn(MEDIA_CONFIGS.audio),
@@ -56,6 +65,7 @@ module.exports = wrap(async function handler(req, res) {
     const song = await writeLyrics(sql, band.id, songId, text,
       req.method === 'PUT' ? 'lyrics_update' : 'lyrics_delete');
     if (!song) return res.status(404).json({ error: 'Song not found' });
+    await trimSongLogs(sql, band.id);
     return res.json({ ok: true });
   }
 
@@ -87,6 +97,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     const sql = getDb();
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
+    const tooBig = arrangementError(rows, hidden_instruments);
+    if (tooBig) return res.status(400).json({ error: tooBig });
     const [[song], [src]] = await Promise.all([
       sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
       copy_from
@@ -118,6 +130,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
     const { name, rows, hidden_instruments } = req.body ?? {};
+    const tooBig = arrangementError(rows, hidden_instruments);
+    if (tooBig) return res.status(400).json({ error: tooBig });
     const updates = {};
     if (name !== undefined) {
       const validatedName = validateStr(name, 200);
@@ -202,8 +216,7 @@ module.exports = wrap(async function handler(req, res) {
     ]);
     if (!song) return res.status(404).json({ error: 'Song not found' });
     // A visitor without a session never sees the band's private notes.
-    if (!user) delete song.comment;
-    return res.json({ ...song, arrangements });
+    return res.json({ ...(user ? song : publicSong(song)), arrangements });
   }
 
   // ── DELETE song ───────────────────────────────────────────────────────────

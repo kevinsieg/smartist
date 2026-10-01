@@ -111,6 +111,30 @@ async function run(r) {
     });
   });
 
+  await testAsync('with the platform\'s waitUntil, the response ends without waiting for the send', async () => {
+    await withStubbedLogger(async (wrap, logs, order) => {
+      const key = Symbol.for('@vercel/request-context');
+      const handed = [];
+      /** @type {any} */ (globalThis)[key] = { get: () => ({ waitUntil: p => { order.push('waitUntil'); handed.push(p); } }) };
+      // A send that takes a while: the response must not wait for it.
+      const logger = require.cache[require.resolve(path.join(__dirname, '../../api/_logger'))].exports;
+      logger.flush = async () => { await new Promise(r => setTimeout(r, 20)); order.push('flushed'); };
+      try {
+        const res = makeRes();
+        res.end = function () { order.push('end'); this.headersSent = true; };
+        res.json = function (body) { this.body = body; this.end(JSON.stringify(body)); return this; };
+        await wrap(async (_req, res) => res.status(200).json({}))({ method: 'GET', url: '/fast' }, res);
+        await Promise.all(handed);
+
+        assertEq(order, ['waitUntil', 'end', 'flushed'], 'the send is handed over, not awaited');
+        assertEq(handed.length, 1, 'one send per request');
+        assertEq(logs.map(l => l.event), ['request']);
+      } finally {
+        delete /** @type {any} */ (globalThis)[key];
+      }
+    });
+  });
+
   await testAsync('wrap does not write a second response after headers were sent', async () => {
     await withStubbedLogger(async (wrap, logs) => {
       const res = makeRes({ headersSent: true });

@@ -114,6 +114,15 @@ const DELETE = (path, opts)       => req('DELETE', path, opts);
 // Feature keys match resource names (venues, organizers, gigs); gated endpoints return 402 when the plan lacks them.
 const planHas = (config, feature) => !!config.plan?.features?.includes(feature);
 
+// Mail the local harness kept instead of sending (tests/harness/server.js), or
+// null against a deployment, which sends it for real.
+async function outbox(to) {
+  const res = await fetch(`${BASE_URL}/__outbox?to=${encodeURIComponent(to.toLowerCase())}`, { headers: BYPASS })
+    .catch(() => null);
+  const json = res?.ok ? await res.json().catch(() => null) : null;
+  return Array.isArray(json?.outbox) ? json.outbox : null;
+}
+
 // ── Test sections ─────────────────────────────────────────────────────────────
 
 async function testConfig() {
@@ -149,8 +158,18 @@ async function testConfig() {
       const { res, json } = await GET(CONFIG_URL, AUTH);
       assertStatus(res, json, 200);
       assert(Array.isArray(json.songs), 'songs not an array');
+      // Limits and usage come with a session only; the write tests need them.
+      if (result) result = { ...result, plan: json.plan, usage: json.usage };
     });
   }
+
+  await test('anonymous config carries no plan limits or storage use', async () => {
+    const { res, json } = await GET(CONFIG_URL);
+    assertStatus(res, json, 200);
+    assert(json.usage === undefined, 'usage leaked to an anonymous visitor');
+    assert(Array.isArray(json.plan?.features), 'the nav needs plan.features');
+    assert(json.plan.limits === undefined && json.plan.key === undefined, 'plan details leaked');
+  });
 
   await test('unauthenticated config reports role null', async () => {
     const { res, json } = await GET(CONFIG_URL);
@@ -177,6 +196,7 @@ async function testPrivacy(slug, config) {
     ['GET song-logs',          `/api/${slug}/song-logs`,          401],
     ['GET gigs',               `/api/${slug}/gigs`,               catalogue ? 200 : 401],
     ['GET gigs?format=ics',    `/api/${slug}/gigs?format=ics`,    catalogue ? 200 : 401],
+    ['GET gigs?slim=1',        `/api/${slug}/gigs?slim=1`,        401],
     ['GET setlists',           `/api/${slug}/setlists`,           401],
     ['GET setlists/:id',       `/api/${slug}/setlists/999999999`, stage ? 404 : 401],
     ['GET venues',             `/api/${slug}/venues`,             401],
@@ -435,6 +455,21 @@ async function testGigs(slug) {
       assert('organizer' in json.refs, 'missing refs.organizer');
     });
   }
+
+  // Pickers and filters: every gig, unpaged (the paged list stops at 200).
+  await test('GET ?slim=1 returns every gig as a plain array', async () => {
+    const [{ res, json }, paged] = await Promise.all([
+      GET(`/api/${slug}/gigs?slim=1`, AUTH),
+      GET(`/api/${slug}/gigs?limit=1`, AUTH),
+    ]);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json), 'slim should return a plain array');
+    assert(json.length === paged.json.total, `expected ${paged.json.total} gigs, got ${json.length}`);
+    for (const g of json.slice(0, 5)) {
+      assert(typeof g.deleted === 'boolean', 'each gig says whether it is deleted');
+      assert(!('comment' in g), 'slim rows carry no comment');
+    }
+  });
 
   await test('GET /:id with id=0 → 400', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs?id=0`, AUTH);
@@ -850,8 +885,6 @@ async function testMultiUserAuth(slug, token) {
     assertStatus(res, json, 400);
   });
 
-  skip('POST change-password success path', 'needs a named-user token; invite flow is email-gated locally');
-
   // POST login with email — wrong password → 401
   await test('POST email login rejects bad credentials → 401', async () => {
     const { res, json } = await POST(`/api/${slug}/members`,
@@ -907,6 +940,126 @@ async function testMultiUserAuth(slug, token) {
       assertStatus(res, json, 200);
     });
   }
+}
+
+// The feed calendar apps subscribe to: a timed and an all-day gig, dates in
+// the iCalendar form (YYYYMMDD), text escaped.
+async function testIcsFeed(slug, token) {
+  console.log(B('\niCalendar feed'));
+  const made = [];
+  await test('GET ?format=ics lists upcoming gigs with iCalendar dates', async () => {
+    for (const body of [
+      { title: '[TEST] Club, Night; late', date: '2099-12-31', time_start: '20:30' },
+      { title: '[TEST] All day', date: '2099-12-31' },
+    ]) {
+      const { res, json } = await POST(`/api/${slug}/gigs`, body, { token });
+      assertStatus(res, json, 201);
+      made.push(json.id);
+    }
+    const res = await fetch(`${BASE_URL}/api/${slug}/gigs?format=ics`,
+      { headers: { ...BYPASS, Authorization: `Bearer ${token}` } });
+    const ics = await res.text();
+    const event = id => (ics.split('BEGIN:VEVENT').find(e => e.includes(`UID:gig-${id}@`)) || '');
+    const [timed, allDay] = made.map(event);
+    assert(timed.includes('DTSTART:20991231T203000\r\n'), `timed start: ${timed.slice(0, 120)}`);
+    assert(timed.includes('DTEND:20991231T223000\r\n'), 'timed end is two hours later');
+    assert(timed.includes('SUMMARY:[TEST] Club\\, Night\\; late'), 'summary not escaped');
+    assert(allDay.includes('DTSTART;VALUE=DATE:20991231\r\n'), `all-day start: ${allDay.slice(0, 120)}`);
+    assert(allDay.includes('DTEND;VALUE=DATE:21000101\r\n'), 'all-day end is the next day');
+  });
+  for (const id of made)
+    await DELETE(`/api/${slug}/gigs?id=${id}`, { body: { hard: true }, token });
+}
+
+// ── Sessions, roles and tenancy on the real database ──────────────────────────
+// The unit suites stub the membership query; these run it. They need a second
+// person with a password, so they invite one — which takes the mailed link, so
+// only on the local stack (outbox). Never the admin the suite signs in as: the
+// last steps end every session of the account.
+async function testSessions(slug, adminToken) {
+  console.log(B('\nSessions, roles and tenancy'));
+
+  const email = `[test]member_${Date.now()}@example.test`;
+  if (!await outbox(email)) return skip('sessions, roles and tenancy', 'needs the local stack\'s mail outbox');
+
+  const pw1 = 'first-password-1', pw2 = 'second-password-2';
+  const songs = t => GET(`/api/${slug}/songs`, { token: t });
+  const login = password => POST('/api/login', { email, password });
+  let userId, first, second;
+
+  await test('an invited member accepts the mailed link and is signed in', async () => {
+    const inv = await POST(`/api/${slug}/members/invite`, { email, role: 'member' }, { token: adminToken });
+    assertStatus(inv.res, inv.json, 201);
+    userId = inv.json.user.id;
+    const [mail] = await outbox(email);
+    const link = /#invite=([\w-]+)/.exec(mail?.html || '');
+    assert(link, 'no invite link in the mail');
+    const { res, json } = await POST(`/api/${slug}/members/accept-invite`, { token: link[1], password: pw1 });
+    assertStatus(res, json, 200);
+    first = json.token;
+    const r = await songs(first);
+    assertStatus(r.res, r.json, 200);
+  });
+  if (!first) return;
+
+  await test('a member is refused the admin endpoints → 403', async () => {
+    const users = await GET(`/api/${slug}/members`, { token: first });
+    assertStatus(users.res, users.json, 403);
+    const cfg = await PATCH(CONFIG_URL, { config: { _test: null } }, { token: first });
+    assertStatus(cfg.res, cfg.json, 403);
+  });
+
+  await test('the role comes from the database, not the token', async () => {
+    const down = await PUT(`/api/${slug}/members`, { userId, role: 'viewer' }, { token: adminToken });
+    assertStatus(down.res, down.json, 200);
+    const { res, json } = await POST(`/api/${slug}/songs`, { title: '[TEST] viewer write' }, { token: first });
+    const up = await PUT(`/api/${slug}/members`, { userId, role: 'member' }, { token: adminToken });
+    assertStatus(res, json, 403);
+    assertStatus(up.res, up.json, 200);
+  });
+
+  const other = process.env.DEMO_ARTIST_SLUG || 'demo';
+  if ((await GET(`/api/config?slug=${other}`)).json?.slug !== other) {
+    skip('sessions of one band open no other band', `no band "${other}" here`);
+  } else {
+    await test('sessions of one band open no other band → 401', async () => {
+      for (const t of [first, adminToken]) {
+        const read = await GET(`/api/${other}/songs`, { token: t });
+        assertStatus(read.res, read.json, 401);
+        const write = await POST(`/api/${other}/songs`, { title: '[TEST] cross-band' }, { token: t });
+        assertStatus(write.res, write.json, 401);
+      }
+    });
+  }
+
+  await test('a password change ends the old session and the old password', async () => {
+    const { res, json } = await POST(`/api/${slug}/members/change-password`,
+      { currentPassword: pw1, newPassword: pw2 }, { token: first });
+    assertStatus(res, json, 200);
+    second = json.token;
+    assertStatus((await songs(first)).res, null, 401);
+    assertStatus((await songs(second)).res, null, 200);
+    assertStatus((await login(pw1)).res, null, 401);
+  });
+
+  await test('log out everywhere ends every session, a new sign-in works', async () => {
+    const signedIn = await login(pw2);
+    assertStatus(signedIn.res, signedIn.json, 200);
+    const { res, json } = await POST('/api/config', { action: 'logout-everywhere' }, { token: second });
+    assertStatus(res, json, 200);
+    assertStatus((await songs(second)).res, null, 401);
+    assertStatus((await songs(signedIn.json.token)).res, null, 401);
+    const again = await login(pw2);
+    assertStatus(again.res, again.json, 200);
+    second = again.json.token;
+    assertStatus((await songs(second)).res, null, 200);
+  });
+
+  await test('a removed member\'s session opens nothing → 401', async () => {
+    const { res, json } = await DELETE(`/api/${slug}/members`, { body: { userId }, token: adminToken });
+    assertStatus(res, json, 200);
+    assertStatus((await songs(second)).res, null, 401);
+  });
 }
 
 // ── File endpoint tests ───────────────────────────────────────────────────────
@@ -1249,6 +1402,17 @@ async function testSetlistShareValidation(slug, token, setlistId) {
       { email: 'test@example.com' }, { token });
     assertStatus(res, json, 404);
   });
+
+  if (!await outbox('share@example.test')) return skip('setlist share mail', 'mail is sent for real here');
+  await test('POST /setlists/:id/share mails the setlist as a PDF → 200', async () => {
+    const { res, json } = await POST(`/api/${slug}/setlists/${setlistId}/share`,
+      { email: 'share@example.test' }, { token });
+    assertStatus(res, json, 200);
+    const [mail] = (await outbox('share@example.test')).slice(-1);
+    const pdf = Buffer.from(mail?.attachments?.[0]?.content || '', 'base64');
+    assert(pdf.subarray(0, 5).toString() === '%PDF-', 'attachment is not a PDF');
+    assert(/^1\. /m.test(mail.text), 'mail text does not list the songs');
+  });
 }
 
 // CSV import: a file is only checked; a commit is refused while a row needs
@@ -1455,6 +1619,32 @@ async function testWrite(slug, token, firstSong, config) {
     const { res, json } = await PATCH(CONFIG_URL, { config: { _test: null } }, { token });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
+  });
+
+  // Private song notes stay private in a public catalogue: every anonymous
+  // read of a song (list, /api/config, one song) leaves `comment` out. The
+  // switch is restored whatever happens; cache-busting query strings keep a
+  // CDN copy of the private variant out of the way on a preview.
+  await test('public catalogue never shows a song comment', async () => {
+    const before = (await GET(CONFIG_URL, { token })).json?.config?.publicCatalogue === true;
+    const { res: cr, json: song } = await POST(`/api/${slug}/songs`,
+      { title: '[TEST] public notes', comment: '[TEST] private note', active: true }, { token });
+    if (cr.status === 402) return;   // a free band at its song limit
+    assertStatus(cr, song, 201);
+    try {
+      await PATCH(CONFIG_URL, { config: { publicCatalogue: true } }, { token });
+      const bust = `_t=${Date.now()}`;
+      const list = await GET(`/api/${slug}/songs?limit=30&${bust}`);
+      assertStatus(list.res, list.json, 200);
+      const cfg  = await GET(`${CONFIG_URL}&${bust}`);
+      const one  = await GET(`/api/${slug}/songs/${song.id}?${bust}`);
+      assertStatus(one.res, one.json, 200);
+      for (const [label, body] of [['list', list.json], ['config', cfg.json], ['song', one.json]])
+        assert(!JSON.stringify(body).includes('[TEST] private note'), `comment leaked in anonymous ${label}`);
+    } finally {
+      await PATCH(CONFIG_URL, { config: { publicCatalogue: before } }, { token });
+      await DELETE(`/api/${slug}/songs/${song.id}`, { token });
+    }
   });
 
   // Export
@@ -1689,7 +1879,9 @@ async function main() {
       badUpdate:   { date: '2099-13-45' },
       linkField:   'additional_link',
     });
+    await testIcsFeed(slug, TOKEN);
     await testMultiUserAuth(slug, TOKEN);
+    await testSessions(slug, TOKEN);
   }
 
   printSummary();

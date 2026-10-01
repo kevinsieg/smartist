@@ -1,6 +1,6 @@
-const { getDb, getSlug, parsePage } = require('../_db');
+const { getDb, getSlug, parsePage, trimSongLogs } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
-const { validateStr, validateNum } = require('../_validate');
+const { validateStr, validateNum, jsonBytes } = require('../_validate');
 const { wrap } = require('../_handler');
 const { checkRateLimit } = require('../_ratelimit');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
@@ -8,7 +8,7 @@ const { keyFromUrl } = require('../_r2');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
-  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys,
+  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong,
 } = require('../_domain/songs');
 const { songImport } = require('../_domain/song_import');
 
@@ -33,9 +33,11 @@ async function tagsOf(sql, artistId) {
 // own bucket may only be the one the upload flow already stored on this song:
 // otherwise a band could point its song at another band's file and have it
 // deleted by the next media replace, media delete or account deletion.
+const EXTRA_MAX_BYTES = 32 * 1024;
 function extraError(extra, current = {}) {
   if (extra == null) return null;
   if (typeof extra !== 'object' || Array.isArray(extra)) return 'extra must be an object';
+  if (jsonBytes(extra) > EXTRA_MAX_BYTES) return 'extra is too large';
   for (const [k, v] of Object.entries(extra)) {
     if (!/Url$/.test(k) || v == null || v === '') continue;
     if (typeof v !== 'string' || !/^https?:\/\//i.test(v)) return `${k} must be an http(s) URL`;
@@ -104,7 +106,7 @@ module.exports = wrap(async function handler(req, res) {
       const total = Number(rows[0]?.total ?? 0);
       res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
       return res.json({
-        rows: rows.map(({ total: _, ...row }) => row),
+        rows: rows.map(({ total: _, ...row }) => publicSong(row)),
         total,
         limit,
         offset,
@@ -327,6 +329,7 @@ module.exports = wrap(async function handler(req, res) {
       `;
       const done = new Set(updated.map(r => r.id));
       applied = done.size;
+      if (applied) await trimSongLogs(sql, band.id);
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
     return res.json({ ok: true, count: applied, rejected });

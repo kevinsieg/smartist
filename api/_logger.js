@@ -47,22 +47,30 @@ const TRANSPORT = {
 const { AsyncLocalStorage } = require('async_hooks');
 const crypto = require('crypto');
 
-// Per-request context (the request id from api/_handler.js), added to every
-// entry written while that request runs.
+// Per-request context: { fields, buffer }. fields (the request id from
+// api/_handler.js) are added to every entry written while that request runs.
+/** @type {AsyncLocalStorage<{ fields: object, buffer: object[] }>} */
 const context = new AsyncLocalStorage();
 
 // Production entries are buffered and sent in one POST when the request is
-// done (flush, called by wrap() after the response): an awaited HTTPS call per
-// log line added the provider's latency to requests, several times over for
-// some of them.
+// done (flush, called by wrap()): an awaited HTTPS call per log line added the
+// provider's latency to requests, several times over for some of them. Each
+// request keeps its own buffer, so with several requests in flight on one
+// instance a flush sends only its own request's lines. Entries written outside
+// any request (module load) go to the instance buffer and ride along with the
+// next flush.
 let buffer = [];
+
+// The send runs after the response (waitUntil), so it no longer delays
+// requests; the timeout bounds how long it keeps the instance busy.
+const SEND_TIMEOUT_MS = 2000;
 
 async function sendToCloud(entries) {
   const token = process.env[TRANSPORT.envVar];
   if (!token || !entries.length) return;
   try {
     const ac  = new AbortController();
-    const t   = setTimeout(() => ac.abort(), 5000);
+    const t   = setTimeout(() => ac.abort(), SEND_TIMEOUT_MS);
     const res = await fetch(TRANSPORT.url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': TRANSPORT.auth(token) },
@@ -96,27 +104,30 @@ function redact(value) {
 }
 
 async function write(level, event, data) {
-  const entry = redact({ ts: new Date().toISOString(), level, event, ...context.getStore(), ...data });
+  const store = context.getStore();
+  const entry = redact({ ts: new Date().toISOString(), level, event, ...store?.fields, ...data });
   console.log(JSON.stringify(entry));
   if (IS_LOCAL) {
     writeToFile(JSON.stringify(entry));
   } else if (IS_PROD) {
-    buffer.push(entry);
+    (store ? store.buffer : buffer).push(entry);
   }
   // preview: stdout only — logs visible in Vercel function dashboard
 }
 
-// Sends what this instance has buffered. Called once per request by wrap().
+// Sends the current request's buffered entries, plus any written outside a
+// request. Called once per request by wrap(), inside withContext.
 async function flush() {
-  if (!buffer.length) return;
-  const entries = buffer;
-  buffer = [];
+  const store = context.getStore();
+  const entries = store ? store.buffer.splice(0) : [];
+  if (buffer.length) entries.unshift(...buffer.splice(0));
+  if (!entries.length) return;
   await sendToCloud(entries);
 }
 
 // Runs fn with ctx (e.g. { requestId }) attached to every entry it logs.
 function withContext(ctx, fn) {
-  return context.run(ctx, fn);
+  return context.run({ fields: ctx, buffer: [] }, fn);
 }
 
 module.exports = {

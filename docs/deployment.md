@@ -128,7 +128,8 @@ Two checks per production deployment, both in Better Stack:
   response) as well as the deployment being down.
 
 The health check itself cannot tell whether logs arrive: the send happens after
-the handler returns, in a function instance that may be frozen right after.
+the response, handed to Vercel's `waitUntil` (`api/_handler.js`), so the request
+never waits for the log service.
 
 ## Backups
 
