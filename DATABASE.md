@@ -210,7 +210,7 @@ A performance event. Setlists can be linked to a gig but the link is optional.
 
 `ON DELETE RESTRICT` on `venue_id` and `organizer_id` means you must clear or reassign those FKs before hard-deleting a venue or organizer.
 
-**Indexes:** `gigs_artist_id_idx`
+**Indexes:** `gigs_artist_date_idx` (artist_id, date DESC NULLS LAST, id DESC)
 
 ---
 
@@ -227,7 +227,7 @@ A saved setlist. Songs are stored in `setlist_songs`.
 | `comment` | text | |
 | `created_at` | timestamptz DEFAULT NOW() | |
 
-**Indexes:** `setlists_artist_id_idx`
+**Indexes:** `setlists_artist_created_idx` (artist_id, created_at DESC)
 
 ---
 
@@ -354,6 +354,8 @@ Sliding-window rate limiting: login, failed band-password bearers, password rese
 | `key` PK | `<purpose>:<ip \| address \| band id>`, e.g. `auth:1.2.3.4`, `reset:you@example.com`, `invite:12` |
 | `window_start` timestamptz | Start of current window |
 | `count` integer | Hits in current window |
+
+**Indexes:** `rate_limits_window_start_idx` (window_start), for the sweep in `api/_ratelimit.js` that deletes rows idle for a day.
 
 ---
 

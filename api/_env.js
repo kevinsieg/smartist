@@ -31,7 +31,7 @@ const PAIRS = [
 
 // The newest migration block in scripts/schema.sql. Health reports whether
 // the database has it; tests/unit/env.js keeps the two in step.
-const SCHEMA_VERSION = '2026-10-04';
+const SCHEMA_VERSION = '2026-10-05';
 
 const isSet = name => typeof process.env[name] === 'string' && process.env[name].trim() !== '';
 
