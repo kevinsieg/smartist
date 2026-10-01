@@ -499,3 +499,11 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-03') ON CONFLICT DO NOTHING;
 -- refused (api/_token.js sessionValid); set on every row of the address.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_after TIMESTAMPTZ;
 INSERT INTO schema_migrations (id) VALUES ('2026-10-04') ON CONFLICT DO NOTHING;
+
+-- 2026-10-05: venues.subgenres was never read or written. Delete snapshots
+-- from before songs.language and the lyrics table (tempo, extra.language,
+-- extra.lyrics); the restore no longer converts them.
+ALTER TABLE venues DROP COLUMN IF EXISTS subgenres;
+DELETE FROM song_logs
+WHERE song_data ? 'tempo' OR song_data->'extra' ? 'lyrics' OR song_data->'extra' ? 'language';
+INSERT INTO schema_migrations (id) VALUES ('2026-10-05') ON CONFLICT DO NOTHING;
