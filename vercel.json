@@ -19,7 +19,6 @@
     { "source": "/workspaces",      "destination": "/app/workspaces.html" },
     { "source": "/profile",         "destination": "/app/profile.html" },
     { "source": "/confirm-email",  "destination": "/app/confirm-email.html" },
-    { "source": "/home",            "destination": "/app/workspaces.html" },
     { "source": "/admin",           "destination": "/app/admin.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
     { "source": "/contact",         "destination": "/app/contact.html" },
@@ -36,11 +35,9 @@
     { "source": "/:slug/organizers",       "destination": "/app/organizers.html" },
     { "source": "/:slug/hub",              "destination": "/app/hub.html" },
     { "source": "/:slug/pro-import",       "destination": "/app/pro-import.html" },
-    { "source": "/:slug/gema-import",      "destination": "/app/pro-import.html" },
     { "source": "/:slug/song-import",      "destination": "/app/song-import.html" },
     { "source": "/:slug/profile",          "destination": "/app/profile.html" },
     { "source": "/:slug/settings",         "destination": "/app/settings.html" },
-    { "source": "/:slug/users",            "destination": "/app/settings.html" },
     { "source": "/:slug/stage",            "destination": "/app/stage.html" },
     { "source": "/:slug/contact",          "destination": "/app/contact.html" },
 
@@ -58,7 +55,7 @@
         { "key": "Strict-Transport-Security", "value": "max-age=63072000" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), camera=()" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@scalar/api-reference; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; frame-src https:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.3/dist/browser/standalone.js; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; frame-src https:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" }
       ]
     },
     {
@@ -82,7 +79,7 @@
     {
       "source": "/app/js/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {

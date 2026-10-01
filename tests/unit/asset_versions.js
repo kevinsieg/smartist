@@ -35,6 +35,20 @@ function run(r) {
   }
   test('i18n.js ?v= matches I18N_VERSION', () =>
     assertEq(distinct('i18n.js')[0], I18N_VERSION));
+
+  // /app/js and /app/css are served immutable for a year (vercel.json): a
+  // reference without ?v= would keep the first copy a browser saw. Page scripts
+  // are bumped by hand when they change, like the shared ones.
+  test('every /app/js and /app/css reference carries ?v=', () => {
+    const missing = [];
+    for (const f of fs.readdirSync(APP_DIR).filter(f => f.endsWith('.html'))) {
+      const html = fs.readFileSync(path.join(APP_DIR, f), 'utf8');
+      const re = /(?:src|href)="(\/app\/(?:js|css)\/[^"]+)"/g;
+      let m;
+      while ((m = re.exec(html)) !== null) if (!/\?v=\d+/.test(m[1])) missing.push(`${f}: ${m[1]}`);
+    }
+    assert(missing.length === 0, `unversioned: ${missing.join(', ')}`);
+  });
 }
 
 module.exports = run;

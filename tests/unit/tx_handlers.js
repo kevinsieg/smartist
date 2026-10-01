@@ -51,7 +51,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
       getDb: () => sql,
       getArtist: async () => ARTIST,
       getSlug: req => req.query?.artist || 'test',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
     },
   };
   require.cache[authPath] = {

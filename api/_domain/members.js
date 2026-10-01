@@ -5,7 +5,7 @@ const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const { sendEmail } = require('../_email');
 const { escHtml } = require('../_html');
-const { checkRateLimit } = require('../_ratelimit');
+const { checkRateLimit, outboundMailLimited } = require('../_ratelimit');
 const { validateStr, validateEmail } = require('../_validate');
 const logger = require('../_logger');
 const { ok, reply, fail } = require('./http');
@@ -34,10 +34,12 @@ function linkToken() {
 function oneLine(s) { return String(s ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200); }
 
 // Invites send mail to any address with the band's name in it, so they are
-// capped per band and per IP — an admin session must not be a mail relay.
-async function inviteLimited(band, ip) {
+// capped per band, per IP, per sender and overall — an admin session must not
+// be a mail relay.
+async function inviteLimited(band, ip, user) {
   return (await checkRateLimit(`invite:${band.id}`, 20, 3600))
-      || (await checkRateLimit(`invite-ip:${ip}`, 30, 3600));
+      || (await checkRateLimit(`invite-ip:${ip}`, 30, 3600))
+      || (await outboundMailLimited(user.email || `user:${user.id}`));
 }
 
 // The caller's own row, when currentPassword is its password; else null.
@@ -49,7 +51,7 @@ async function ownRow(sql, user, currentPassword) {
 
 // ── Public: the links in the emails ───────────────────────────────────────────
 
-// POST ?action=accept-invite — the invite link sets the first password.
+// POST /members/accept-invite — the invite link sets the first password.
 async function acceptInvite({ band, body }) {
   const { token, password } = body ?? {};
   if (!token || !password)            return fail(400, 'token and password required');
@@ -83,7 +85,7 @@ async function acceptInvite({ band, body }) {
   return ok({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
 }
 
-// POST ?action=confirm-email-change — the link is clicked from an inbox, so
+// POST /members/confirm-email-change — the link is clicked from an inbox, so
 // there is no session. Without `confirm` it previews the change (new address
 // and every band affected); with `confirm: true` it applies it.
 async function confirmEmailChange({ body, ip, slug }) {
@@ -169,7 +171,7 @@ async function listMembers({ band }) {
   return ok({ users });
 }
 
-// POST ?action=invite
+// POST /members/invite
 async function invite({ band, user, body, ip, origin, slug }) {
   const { email, role } = body ?? {};
   const rawEmail = validateStr(email, 200);
@@ -181,7 +183,7 @@ async function invite({ band, user, body, ip, origin, slug }) {
   const sql = getDb();
   const [existing] = await sql`SELECT id FROM users WHERE artist_id = ${band.id} AND email = ${cleanEmail.toLowerCase()}`;
   if (existing) return fail(409, 'User already exists');
-  if (await inviteLimited(band, ip)) return fail(429, 'Too many invites — try again later');
+  if (await inviteLimited(band, ip, user)) return fail(429, 'Too many invites — try again later');
 
   const token   = linkToken();
   const expires = new Date(Date.now() + INVITE_TTL_MS);
@@ -208,8 +210,8 @@ async function invite({ band, user, body, ip, origin, slug }) {
   return reply(201, { ok: true, user: newUser });
 }
 
-// POST ?action=resend-invite — a fresh link for an invite not yet accepted.
-async function resendInvite({ band, body, ip, origin, slug }) {
+// POST /members/resend-invite — a fresh link for an invite not yet accepted.
+async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
   const { userId } = body ?? {};
   if (!userId) return fail(400, 'userId required');
 
@@ -218,7 +220,7 @@ async function resendInvite({ band, body, ip, origin, slug }) {
     SELECT * FROM users WHERE id = ${Number(userId)} AND artist_id = ${band.id} AND password_hash IS NULL
   `;
   if (!user) return fail(404, 'Pending invite not found');
-  if (await inviteLimited(band, ip)) return fail(429, 'Too many invites — try again later');
+  if (await inviteLimited(band, ip, sender)) return fail(429, 'Too many invites — try again later');
 
   const token   = linkToken();
   const expires = new Date(Date.now() + INVITE_TTL_MS);
@@ -274,7 +276,7 @@ async function removeMember({ band, user, body }) {
 
 // ── Anyone signed in: their own account ───────────────────────────────────────
 
-// POST ?action=change-password
+// POST /members/change-password
 async function changePassword({ user, body, ip }) {
   const { currentPassword, newPassword, rememberMe } = body ?? {};
   if (!currentPassword || !newPassword) return fail(400, 'currentPassword and newPassword required');
@@ -298,7 +300,7 @@ async function changePassword({ user, body, ip }) {
   return ok({ ok: true, token });
 }
 
-// POST ?action=request-email-change — nothing changes until the link sent to
+// POST /members/request-email-change — nothing changes until the link sent to
 // the NEW address is confirmed: email is the cross-workspace identity, so it
 // must be proven, not asserted.
 async function requestEmailChange({ user, body, ip, origin, slug }) {

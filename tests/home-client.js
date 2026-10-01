@@ -120,6 +120,9 @@ function makeContext(fetchImpl) {
     ['/\t/evil.example', ''],
     ['https://evil.example/x', ''],
     ['javascript:alert(1)', ''],
+    ['/.//evil.example', ''],
+    ['/x/..//evil.example', ''],
+    ['https://app.example//evil.example', ''],
   ]) {
     await test(`next=${JSON.stringify(next)} → ${JSON.stringify(want)}`, async () => {
       const ctx = makeContext(async () => ({ ok: false }));

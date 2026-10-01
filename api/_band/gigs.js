@@ -6,6 +6,7 @@ const { parseFields } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
 const { ownsVenue, ownsOrganizer } = require('../_ownership');
+const { presignLimited } = require('../_ratelimit');
 
 // venue_id / organizer_id come from the body; both must be this artist's rows.
 async function refsOwned(sql, artistId, body) {
@@ -116,6 +117,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       const okSize = n => Number.isInteger(n) && n > 0 && n <= POSTER_MAX_BYTES;
       if (!okSize(posterSize) || !okSize(thumbSize))
         return res.status(400).json({ error: `posterSize and thumbSize required, max ${POSTER_MAX_BYTES / 1024 / 1024} MB` });
+      if (await presignLimited(artist.id))
+        return res.status(429).json({ error: 'Too many uploads — try again later' });
       const uuid      = crypto.randomUUID();
       const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
       const thumbKey  = `gigs/${artist.slug}/${gigId}-${uuid}-thumb.jpg`;
@@ -232,6 +235,25 @@ module.exports = wrap(async function handler(req, res) {
     if (!user && !canBrowseCatalogue(artist))
       return res.status(401).json({ error: 'Sign in to view this' });
 
+    // ?slim=1: every gig of the band, unpaged, with only what a picker or a
+    // filter shows. The paged list stops at 200 rows, and a picker built from
+    // it dropped older gigs — saving a setlist then unlinked its gig. Deleted
+    // gigs are included (flagged) so a setlist linked to one keeps its gig.
+    if (req.query.slim) {
+      if (!user) return res.status(401).json({ error: 'Sign in to view this' });
+      const gigs = await sql`
+        SELECT g.id, g.title, g.date, g.deleted,
+               g.venue_id, v.name AS venue_name, v.city AS venue_city,
+               g.organizer_id, o.name AS organizer_name
+        FROM gigs g
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
+        WHERE g.artist_id = ${artist.id}
+        ORDER BY g.date DESC NULLS LAST, g.id DESC
+      `;
+      return res.json(gigs);
+    }
+
     if (req.query.format === 'ics') {
       const today = new Date().toISOString().slice(0, 10);
       const gigs = await sql`
@@ -246,8 +268,10 @@ module.exports = wrap(async function handler(req, res) {
       function esc(s) {
         return (s || '').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
       }
+      // postgres.js hands a DATE back as a Date at UTC midnight, not as text.
+      const ymd = t => new Date(t).toISOString().slice(0, 10).replace(/-/g, '');
       const events = gigs.map(g => {
-        const d = String(g.date).slice(0, 10).replace(/-/g, '');
+        const d = ymd(g.date);
         let dtstart, dtend;
         if (g.time_start) {
           const ts = g.time_start.slice(0, 5).replace(':', '');
@@ -259,9 +283,8 @@ module.exports = wrap(async function handler(req, res) {
             dtend = `DTEND:${d}T${String(h).padStart(2,'0')}${ts.slice(2)}00`;
           }
         } else {
-          const next = new Date(g.date); next.setDate(next.getDate() + 1);
           dtstart = `DTSTART;VALUE=DATE:${d}`;
-          dtend   = `DTEND;VALUE=DATE:${next.toISOString().slice(0,10).replace(/-/g,'')}`;
+          dtend   = `DTEND;VALUE=DATE:${ymd(new Date(g.date).getTime() + 86400000)}`;
         }
         const loc  = [g.venue_name, g.venue_city].filter(Boolean).join(', ');
         // No comments here: the feed URL is guessable (webcal can't auth),

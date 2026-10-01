@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
   <link rel="stylesheet" href="/app/css/app.css?v=47">
-  <script src="/app/js/i18n.js?v=53"></script>
+  <script src="/app/js/i18n.js?v=54"></script>
   <style>
     /* One policy per language; i18n.js sets <html lang> before the body renders. */
     .pp-wrap { max-width: 720px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; line-height: 1.6; }
@@ -50,7 +50,8 @@
   <ul>
     <li><strong>Vercel</strong>: hosting; our server functions run in Frankfurt.</li>
     <li><strong>Neon</strong>: the database.</li>
-    <li><strong>Cloudflare R2</strong>: uploaded files such as recordings, sheets, posters and logos.</li>
+    <li><strong>Cloudflare R2</strong>: uploaded files such as recordings, sheets, posters and logos, and the encrypted backups.</li>
+    <li><strong>GitHub</strong>: runs the nightly backup job, which encrypts the data before storing it.</li>
     <li><strong>Resend</strong>: sending sign-in, invitation and confirmation emails.</li>
     <li><strong>Better Stack</strong>: error and request logs, with emails hashed.</li>
     <li><strong>Google Gemini</strong>: when you ask for lyrics suggestions, only the song title, artist name, language and genre are sent.</li>
@@ -64,6 +65,7 @@
     <li>Demo and sign-up records: 24 months, or until you ask us to remove them.</li>
     <li>Brute-force counters: at most one day.</li>
     <li>Logs: at most 30 days.</li>
+    <li>Backups: encrypted, deleted after at most 30 days. Deleted data leaves them within that time.</li>
   </ul>
 
   <h2>Your rights</h2>
@@ -94,7 +96,8 @@
   <ul>
     <li><strong>Vercel</strong> : hébergement ; nos fonctions serveur s'exécutent à Francfort.</li>
     <li><strong>Neon</strong> : base de données.</li>
-    <li><strong>Cloudflare R2</strong> : fichiers envoyés (enregistrements, partitions, affiches, logos).</li>
+    <li><strong>Cloudflare R2</strong> : fichiers envoyés (enregistrements, partitions, affiches, logos) et sauvegardes chiffrées.</li>
+    <li><strong>GitHub</strong> : exécute la sauvegarde nocturne, qui chiffre les données avant de les stocker.</li>
     <li><strong>Resend</strong> : envoi des e-mails de connexion, d'invitation et de confirmation.</li>
     <li><strong>Better Stack</strong> : journaux d'erreurs et de requêtes, e-mails remplacés par une empreinte.</li>
     <li><strong>Google Gemini</strong> : lorsque vous demandez une suggestion de paroles, seuls le titre, le nom de l'artiste, la langue et le genre sont envoyés.</li>
@@ -108,6 +111,7 @@
     <li>Inscriptions à la démo et au compte : 24 mois, ou jusqu'à votre demande de suppression.</li>
     <li>Compteurs anti-force brute : un jour au plus.</li>
     <li>Journaux : 30 jours au plus.</li>
+    <li>Sauvegardes : chiffrées, supprimées au plus tard après 30 jours. Les données effacées en disparaissent dans ce délai.</li>
   </ul>
 
   <h2>Vos droits</h2>
@@ -138,7 +142,8 @@
   <ul>
     <li><strong>Vercel</strong>: Hosting; unsere Serverfunktionen laufen in Frankfurt.</li>
     <li><strong>Neon</strong>: Datenbank.</li>
-    <li><strong>Cloudflare R2</strong>: hochgeladene Dateien wie Aufnahmen, Noten, Plakate und Logos.</li>
+    <li><strong>Cloudflare R2</strong>: hochgeladene Dateien wie Aufnahmen, Noten, Plakate und Logos sowie die verschlüsselten Sicherungskopien.</li>
+    <li><strong>GitHub</strong>: führt die nächtliche Sicherung aus, die die Daten vor dem Speichern verschlüsselt.</li>
     <li><strong>Resend</strong>: Versand von Anmelde-, Einladungs- und Bestätigungs-E-Mails.</li>
     <li><strong>Better Stack</strong>: Fehler- und Anfrageprotokolle, E-Mails gehasht.</li>
     <li><strong>Google Gemini</strong>: Wenn du Songtext-Vorschläge anforderst, werden nur Songtitel, Künstlername, Sprache und Genre übermittelt.</li>
@@ -152,6 +157,7 @@
     <li>Demo- und Registrierungseinträge: 24 Monate oder bis du die Löschung verlangst.</li>
     <li>Brute-Force-Zähler: höchstens einen Tag.</li>
     <li>Protokolle: höchstens 30 Tage.</li>
+    <li>Sicherungskopien: verschlüsselt, spätestens nach 30 Tagen gelöscht. Gelöschte Daten verschwinden innerhalb dieser Frist auch daraus.</li>
   </ul>
 
   <h2>Deine Rechte</h2>
@@ -161,8 +167,8 @@
 </div>
 </main>
 <script src="/app/js/footer.js?v=3"></script>
-<script src="/app/js/core.js?v=9"></script>
-<script src="/app/js/session.js?v=9"></script>
+<script src="/app/js/core.js?v=10"></script>
+<script src="/app/js/session.js?v=10"></script>
 <script src="/app/js/ui.js?v=9"></script>
 <script src="/app/js/shell.js?v=10"></script>
 </body>

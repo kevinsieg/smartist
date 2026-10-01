@@ -60,7 +60,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
   };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
@@ -68,7 +68,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
       getDb: () => sql,
       getArtist: async slug => ({ id: 1, slug, name: 'Test', config: {} }),
       getSlug: () => '',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
     },
   };
   require.cache[emailPath] = {

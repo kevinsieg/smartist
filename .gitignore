@@ -12,6 +12,7 @@ logs/
 !.claude/hooks/
 !.claude/skills/
 data/
+backups/
 .superpowers/
 
 # docs/ holds published documentation only — the repository is public.
@@ -21,6 +22,7 @@ data/
 docs/*
 !docs/agents.md
 !docs/architecture.md
+!docs/backup-restore.md
 !docs/ci-cd.md
 !docs/deployment.md
 !docs/oauth-setup.md

@@ -33,7 +33,7 @@ node tests/history-client.js
 | `tests/unit/pdf.js` | `api/_pdf.js` | `setlistTitle` |
 | `tests/unit/r2.js` | `api/_r2.js` | `keyFromUrl`, `filenameFromUrl` |
 | `tests/unit/lyrics.js` | `api/_lyrics.js` | `LYRICS_SOURCES`, `plainFromSynced` |
-| `tests/unit/ratelimit.js` | `api/_ratelimit.js` | `clientIp`, `isMissingRateLimitTable` |
+| `tests/unit/ratelimit.js` | `api/_ratelimit.js` | `clientIp` |
 | `tests/unit/gema.js` | `api/_domain/gema.js` | CSV parsers, GEMA normalizers |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
@@ -64,6 +64,10 @@ npm run test:all     # unit + api + smoke
 npm run dev:up       # just start it and print the env; npm run dev:down stops it
 npm run dev:restart  # after changing api/ code
 ```
+
+The server keeps outgoing mail in an outbox instead of sending it (unless
+`RESEND_API_KEY` is set), so flows that mail a link run end to end; tests read
+it at `GET /__outbox?to=<address>`.
 
 Needs Postgres binaries (`initdb`, `pg_ctl`) and, for the smoke test,
 `npm i -g playwright && npx playwright install chromium`. Claude Code on the web
@@ -118,6 +122,8 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | File upload validation | extension, MIME type, size, presigned URL prefix checks (keys are `audio|sheets|playback/<artist id>/…`) |
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
 | `GET /api/:artist/export` | 200, a `.zip` attachment holding `artist.csv`, `songs.csv`, … |
+| Setlist share | the mailed attachment is a PDF (local stack only) |
+| Sessions, roles, tenancy | local stack only: an invited `[TEST]` member signs in from the mailed link; admin endpoints → 403; a role change applies to a live session; neither session opens another band; a password change and "log out everywhere" end the old sessions; removal ends access |
 
 > **Note:** write tests create `[TEST]` rows (songs, setlists, venues, organizers, gigs, a user) and delete them again at the end. An interrupted run can leave some behind — remove them from the matching page.
 

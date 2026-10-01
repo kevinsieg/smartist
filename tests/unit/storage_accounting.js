@@ -72,7 +72,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
   };
 
   require.cache[rlPath]    = { id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false } };
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' } };
   require.cache[emailPath] = { id: emailPath, filename: emailPath, loaded: true, exports: { sendEmail: async () => {} } };
   require.cache[aiPath]    = { id: aiPath, filename: aiPath, loaded: true,
     exports: { suggestLyricsWithAI: async () => ({ lyrics: null, skipped: true }) } };
@@ -89,7 +89,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
       getDb: () => sql,
       getArtist: async slug => (slug === ARTIST.slug ? ARTIST : null),
       getSlug: req => req.query?.artist || ARTIST.slug,
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     } };
 

@@ -1,12 +1,12 @@
 const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr } = require('./_validate');
-const { checkRateLimit, clientIp } = require('./_ratelimit');
+const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, sessionValid } = require('./_token');
 const { isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
-const { configSongs } = require('./_domain/songs');
+const { configSongs, publicSong } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const { envReport, SCHEMA_VERSION } = require('./_env');
 const admin = require('./_domain/admin');
@@ -219,6 +219,7 @@ async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) 
   const size = Number(req.query.size);
   if (!Number.isInteger(size) || size <= 0 || size > IMAGE_MAX_BYTES)
     return res.status(400).json({ error: `size required, max ${IMAGE_MAX_BYTES / 1024 / 1024} MB` });
+  if (await presignLimited(band.id)) return res.status(429).json({ error: 'Too many uploads — try again later' });
   const key = `bands/${band.slug}/${kind}`;
   const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType, size);
   return res.json({ uploadUrl, publicUrl });
@@ -277,13 +278,15 @@ async function publicConfig(req, res, slugParam) {
     // client must read this instead of decoding the token). The demo gate's
     // session reports 'member'; no session reports null.
     role:          user ? user.role : null,
-    songs:         light ? undefined : songs,
+    songs:         light ? undefined : (user ? songs : songs.map(publicSong)),
     counts,
-    plan:          planSummary(band),
-    usage:         {
+    // Visitors get the feature list the nav needs, not the plan, limits or
+    // storage use.
+    plan:          user ? planSummary(band) : { features: planSummary(band).features },
+    usage:         user ? {
       storageUsedBytes: Number(band.storage_used_bytes || 0),
       songs: (counts && counts.songs != null) ? counts.songs : null,
-    },
+    } : undefined,
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
     singleTenant:  !!process.env.ARTIST_SLUG,

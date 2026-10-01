@@ -5,7 +5,7 @@ const { sendEmail } = require('../_email');
 const { generateMagicToken, generateUserToken, TTL_8H } = require('../_token');
 const logger = require('../_logger');
 const { isSlugAvailable } = require('./artist');
-const { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken, checkEmailDeliverable } = require('./registration');
+const { createSignupToken, verifySignupToken, redeemSignupToken, checkEmailDeliverable } = require('./registration');
 const { reply, ok, fail } = require('./http');
 
 // POST ?action=signup-link — emails a workspace-setup link (or a login link if
@@ -106,11 +106,19 @@ async function signup({ body, ip }) {
   if (!verified) return fail(400, 'Invalid or expired link');
   const available = await isSlugAvailable(slug, sql);
   if (!available) return fail(409, 'That URL is already taken');
-  const { userId } = await createArtistAndAdmin(bandName, slug, verified.email, sql);
-  await clearSignupToken(verified.email, sql);
-  const sessionToken = generateUserToken(userId, 'admin', TTL_8H);
-  await logger.info('signup_complete', { slug, email: verified.email });
-  return reply(201, { ok: true, token: sessionToken, slug, role: 'admin', email: verified.email });
+  // The checks above answer the common mistakes early; the redemption is what
+  // decides: it spends the link and creates the workspace together.
+  let created;
+  try {
+    created = await redeemSignupToken(String(token), bandName, slug, sql);
+  } catch (err) {
+    if (err.code === '23505') return fail(409, 'That URL is already taken');
+    throw err;
+  }
+  if (!created) return fail(400, 'Invalid or expired link');
+  const sessionToken = generateUserToken(created.userId, 'admin', TTL_8H);
+  await logger.info('signup_complete', { slug, email: created.email });
+  return reply(201, { ok: true, token: sessionToken, slug, role: 'admin', email: created.email });
 }
 
 module.exports = { signupLink, verifySignup, signup };

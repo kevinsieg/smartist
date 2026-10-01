@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Band Tools — Song importer
+ * smartist — song importer (JSON; the app imports CSV at /:slug/song-import)
  *
  * Imports songs from a JSON file into the database for a given artist.
  * Run setup.js first to create the artist if it does not exist yet.

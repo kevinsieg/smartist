@@ -36,6 +36,7 @@ const suites = [
   require('./unit/organizer_handlers'),
   require('./unit/song_handlers'),
   require('./unit/song_import'),
+  require('./unit/song_logs_trim'),
   require('./unit/gig_handlers'),
   require('./unit/plans'),
   require('./unit/asset_versions'),
@@ -53,6 +54,7 @@ const suites = [
   require('./unit/http_adapter'),
   require('./unit/csp'),
   require('./unit/inline_handlers'),
+  require('./unit/backup'),
 ];
 
 (async () => {
