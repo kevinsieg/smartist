@@ -15,7 +15,7 @@
   }
 
   async function post(body) {
-    return await fetch('/api/' + encodeURIComponent(slug) + '/auth?action=confirm-email-change', {
+    return await fetch('/api/' + encodeURIComponent(slug) + '/members/confirm-email-change', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

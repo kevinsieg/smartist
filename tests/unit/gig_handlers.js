@@ -123,6 +123,14 @@ async function run(r) {
     assert(calls.some(c => c.text.startsWith('INSERT INTO gigs')), 'no INSERT issued');
   });
 
+  await testAsync('an unknown gig sub-resource is a 404, a wrong method a 405', async () => {
+    const { handler, calls } = loadHandler(() => [GIG]);
+    assertEq((await call(handler, 'GET', '/api/test/gigs/7/nothing')).statusCode, 404);
+    assertEq((await call(handler, 'GET', '/api/test/gigs/7/poster')).statusCode, 405);
+    assertEq((await call(handler, 'PUT', '/api/test/gigs/7/poster-url', { body: {} })).statusCode, 405);
+    assertEq(calls.length, 0);
+  });
+
   await testAsync('DELETE soft-deletes the gig', async () => {
     const { handler, calls } = loadHandler(text =>
       (text.startsWith('SELECT * FROM gigs') ? [GIG] : [{ id: 7 }]));
@@ -131,10 +139,10 @@ async function run(r) {
     assert(calls.some(c => /UPDATE gigs SET deleted/.test(c.text)), 'no soft delete issued');
   });
 
-  await testAsync('poster upload URL is still reachable on the merged route', async () => {
+  await testAsync('POST /gigs/:id/poster-url returns upload URLs', async () => {
     const { handler } = loadHandler(text => (text.startsWith('SELECT * FROM gigs') ? [GIG] : []));
-    const res = await call(handler, 'POST', '/api/test/gigs?id=7&action=poster-url',
-      { query: { id: '7', action: 'poster-url' }, body: { contentType: 'image/jpeg', posterSize: 200000, thumbSize: 20000 } });
+    const res = await call(handler, 'POST', '/api/test/gigs/7/poster-url',
+      { body: { contentType: 'image/jpeg', posterSize: 200000, thumbSize: 20000 } });
     assertEq(res.statusCode, 200);
     assert(res.body?.posterUploadUrl || res.body?.uploadUrl, 'no upload url returned');
   });
@@ -144,8 +152,7 @@ async function run(r) {
   await testAsync('poster upload URL needs both sizes, at most 5 MB', async () => {
     const { handler } = loadHandler(text => (text.startsWith('SELECT * FROM gigs') ? [GIG] : []));
     for (const body of [{ contentType: 'image/jpeg' }, { contentType: 'image/jpeg', posterSize: 6 * 1024 * 1024, thumbSize: 10 }]) {
-      const res = await call(handler, 'POST', '/api/test/gigs?id=7&action=poster-url',
-        { query: { id: '7', action: 'poster-url' }, body });
+      const res = await call(handler, 'POST', '/api/test/gigs/7/poster-url', { body });
       assertEq(res.statusCode, 400);
     }
   });

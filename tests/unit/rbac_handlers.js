@@ -150,18 +150,18 @@ async function run(r) {
   });
 
   await testAsync('member is blocked from admin user listing', async () => {
-    const { handler, token } = loadHandler('api/_band/auth.js', { role: 'member' });
-    const res = await call(handler, mockReq('GET', `/api/${ARTIST.slug}/auth`, { token }));
+    const { handler, token } = loadHandler('api/_band/members.js', { role: 'member' });
+    const res = await call(handler, mockReq('GET', `/api/${ARTIST.slug}/members`, { token }));
     assertEq(res.statusCode, 403);
     assertEq(res.body?.error, 'Forbidden');
   });
 
-  await testAsync('admin can list users through the auth handler', async () => {
-    const { handler, token } = loadHandler('api/_band/auth.js', {
+  await testAsync('admin can list users through the members handler', async () => {
+    const { handler, token } = loadHandler('api/_band/members.js', {
       role: 'admin',
       rows: text => (text.includes('FROM users WHERE artist_id') ? [{ id: 7, email: 'admin@example.com', role: 'admin' }] : []),
     });
-    const res = await call(handler, mockReq('GET', `/api/${ARTIST.slug}/auth`, { token }));
+    const res = await call(handler, mockReq('GET', `/api/${ARTIST.slug}/members`, { token }));
     assertEq(res.statusCode, 200);
     assertEq(res.body?.users?.[0]?.role, 'admin');
   });

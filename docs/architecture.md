@@ -15,7 +15,7 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   `{ body, query, headers, ip, origin }` and return `{ status, body }` (or
   `{ status, redirect, headers }`), and `api/_domain/http.js` (`toInput`,
   `send`, `handle`) is the only code that turns a request into input and a
-  result into a reply. Most of `api/_config.js` and all of `api/_band/auth.js`
+  result into a reply. Most of `api/_config.js` and all of `api/_band/members.js`
   are routers into these modules. The band resources (songs, setlists, gigs,
   venues, organizers) keep their validation and SQL in the handler, with the
   shared parts in `_domain/songs.js`, `setlists.js`, `records.js`: they are
