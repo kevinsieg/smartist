@@ -5,7 +5,7 @@ const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const { sendEmail } = require('../_email');
 const { escHtml } = require('../_html');
-const { checkRateLimit } = require('../_ratelimit');
+const { checkRateLimit, outboundMailLimited } = require('../_ratelimit');
 const { validateStr, validateEmail } = require('../_validate');
 const logger = require('../_logger');
 const { ok, reply, fail } = require('./http');
@@ -34,10 +34,12 @@ function linkToken() {
 function oneLine(s) { return String(s ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200); }
 
 // Invites send mail to any address with the band's name in it, so they are
-// capped per band and per IP — an admin session must not be a mail relay.
-async function inviteLimited(band, ip) {
+// capped per band, per IP, per sender and overall — an admin session must not
+// be a mail relay.
+async function inviteLimited(band, ip, user) {
   return (await checkRateLimit(`invite:${band.id}`, 20, 3600))
-      || (await checkRateLimit(`invite-ip:${ip}`, 30, 3600));
+      || (await checkRateLimit(`invite-ip:${ip}`, 30, 3600))
+      || (await outboundMailLimited(user.email || `user:${user.id}`));
 }
 
 // The caller's own row, when currentPassword is its password; else null.
@@ -181,7 +183,7 @@ async function invite({ band, user, body, ip, origin, slug }) {
   const sql = getDb();
   const [existing] = await sql`SELECT id FROM users WHERE artist_id = ${band.id} AND email = ${cleanEmail.toLowerCase()}`;
   if (existing) return fail(409, 'User already exists');
-  if (await inviteLimited(band, ip)) return fail(429, 'Too many invites — try again later');
+  if (await inviteLimited(band, ip, user)) return fail(429, 'Too many invites — try again later');
 
   const token   = linkToken();
   const expires = new Date(Date.now() + INVITE_TTL_MS);
@@ -209,7 +211,7 @@ async function invite({ band, user, body, ip, origin, slug }) {
 }
 
 // POST /members/resend-invite — a fresh link for an invite not yet accepted.
-async function resendInvite({ band, body, ip, origin, slug }) {
+async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
   const { userId } = body ?? {};
   if (!userId) return fail(400, 'userId required');
 
@@ -218,7 +220,7 @@ async function resendInvite({ band, body, ip, origin, slug }) {
     SELECT * FROM users WHERE id = ${Number(userId)} AND artist_id = ${band.id} AND password_hash IS NULL
   `;
   if (!user) return fail(404, 'Pending invite not found');
-  if (await inviteLimited(band, ip)) return fail(429, 'Too many invites — try again later');
+  if (await inviteLimited(band, ip, sender)) return fail(429, 'Too many invites — try again later');
 
   const token   = linkToken();
   const expires = new Date(Date.now() + INVITE_TTL_MS);

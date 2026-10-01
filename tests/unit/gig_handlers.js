@@ -66,6 +66,11 @@ function loadHandler(route) {
       keyFromUrl: () => 'k', filenameFromUrl: () => 'f',
     },
   };
+  const rlPath = mp('api/_ratelimit');
+  require.cache[rlPath] = {
+    id: rlPath, filename: rlPath, loaded: true,
+    exports: { ...require(rlPath), presignLimited: async () => false },
+  };
   return { handler: viaRouter(path.join(__dirname, '../..', 'api/_band/gigs.js')), calls };
 }
 

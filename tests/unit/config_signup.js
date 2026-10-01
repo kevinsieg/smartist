@@ -236,6 +236,7 @@ async function run(r) {
       const q = String(strings[0]);
       if (q.includes('SELECT email'))       return [{ email: 'u@t.com', signup_token_hash: hash, signup_token_expires: expires }];
       if (q.includes('EXISTS'))             return [{ exists: false }];  // slug available
+      if (q.includes('UPDATE subscribers')) return [{ email: 'u@t.com' }];  // link spent here
       if (q.includes('INSERT INTO artists')) return [{ id: 10 }];
       if (q.includes('INSERT INTO users'))   return [{ id: 20 }];
       return [];
@@ -248,6 +249,27 @@ async function run(r) {
     assertEq(res._body && res._body.ok, true);
     assertEq(res._body && res._body.slug, 'my-band');
     assert(typeof (res._body && res._body.token) === 'string', 'expected session token string');
+  });
+
+  await testAsync('a link spent by a racing request creates nothing → 400', async () => {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hash     = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expires  = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    let inserted = false;
+    const sql = async function(strings) {
+      const q = String(strings[0]);
+      if (q.includes('SELECT email'))       return [{ email: 'u@t.com', signup_token_hash: hash, signup_token_expires: expires }];
+      if (q.includes('EXISTS'))             return [{ exists: false }];
+      if (q.includes('UPDATE subscribers')) return [];   // the other request spent it first
+      if (q.includes('INSERT')) inserted = true;
+      return [];
+    };
+    sql.begin = async fn => fn(sql);
+    const handler = makeHandler(sql);
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'signup', token: rawToken, name: 'My Band', slug: 'my-band' }, headers: {} }, res);
+    assertEq(res._status, 400);
+    assert(!inserted, 'no workspace may be created from a spent link');
   });
 
   // ── GET ?action=check-slug ──────────────────────────────────────────────────
