@@ -4,8 +4,41 @@ function _setAudioSpeed(btn, rate) {
   var wrap = btn.closest('.song-stage-rec');
   var audio = wrap && wrap.querySelector('audio');
   if (audio) audio.playbackRate = rate;
-  btn.parentNode.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+  btn.parentNode.querySelectorAll('button').forEach(function(b) {
+    b.classList.remove('active');
+    b.setAttribute('aria-pressed', 'false');
+  });
   btn.classList.add('active');
+  btn.setAttribute('aria-pressed', 'true');
+}
+
+// Screen readers hear status changes (copied, sent) through one polite live region.
+function _stageAnnounce(msg) {
+  var live = document.getElementById('stage-live');
+  if (!live) return;
+  live.textContent = '';
+  setTimeout(function() { live.textContent = msg; }, 50);
+}
+
+// Keep the screen on while the stage view is visible: a phone that locks
+// after 30 s would hide the lyrics mid-song. The lock is released by the
+// browser whenever the tab is hidden, so it is taken again on return.
+var _stageWakeLock = null;
+function _stageKeepAwake() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  if (_stageWakeLock && !_stageWakeLock.released) return;
+  navigator.wakeLock.request('screen').then(function(lock) { _stageWakeLock = lock; }).catch(function() {});
+}
+document.addEventListener('visibilitychange', _stageKeepAwake);
+// Some browsers refuse the lock before the first user interaction.
+document.addEventListener('pointerdown', _stageKeepAwake);
+_stageKeepAwake();
+
+function _speedBtns(label) {
+  return '<div class="audio-speed-btns" role="group" aria-label="' + label + ' speed">' +
+    [0.7, 0.8, 0.9].map(function(r) {
+      return '<button aria-pressed="false" data-onclick="_setAudioSpeed(this,' + r + ')">' + r + '×</button>';
+    }).join('') + '</div>';
 }
 
 var _shareSlug      = null;
@@ -60,8 +93,8 @@ function stageFitLyrics() {
   el.style.fontSize = _stageLyricsPx + 'px';
 }
 
-var _SUN_ICON  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
-var _MOON_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+var _SUN_ICON  = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+var _MOON_ICON = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 
 // Stage totals: blank for none and no zero-padded minutes ("7:30"), unlike
 // formatLength in core.js, which the song lists use.
@@ -76,12 +109,12 @@ function _shareHtml(navHtml) {
   var light = document.body.classList.contains('stage-light');
   return `<div class="stage-header-btns">
     ${navHtml || ''}
-    <button class="stage-invert-btn" id="stage-invert-btn" data-onclick="toggleStageInvert()" title="${light ? 'Switch to dark mode' : 'Switch to light mode'}">${light ? _MOON_ICON : _SUN_ICON}</button>
-    <button class="stage-share-btn" id="stage-share-btn" data-onclick="toggleStageShareMenu(event)" title="Share"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+    <button class="stage-invert-btn" id="stage-invert-btn" data-onclick="toggleStageInvert()" aria-label="Light mode" aria-pressed="${light}" title="${light ? 'Switch to dark mode' : 'Switch to light mode'}">${light ? _MOON_ICON : _SUN_ICON}</button>
+    <button class="stage-share-btn" id="stage-share-btn" data-onclick="toggleStageShareMenu(event)" aria-label="Share" aria-expanded="false" aria-controls="stage-share-menu" title="Share"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
     <div class="stage-share-menu" id="stage-share-menu" style="display:none">
-      <button class="stage-share-item" data-onclick="stageSharePrint()"><span class="stage-share-icon">⎙</span>Print / Export PDF</button>
-      <button class="stage-share-item" data-onclick="stageShareCopyLink()"><span class="stage-share-icon">⧉</span><span id="stage-copy-label">Copy link</span></button>
-      <button class="stage-share-item" data-onclick="stageShareEmail()"><span class="stage-share-icon">✉</span>Share via email</button>
+      <button class="stage-share-item" data-onclick="stageSharePrint()"><span class="stage-share-icon" aria-hidden="true">⎙</span>Print / Export PDF</button>
+      <button class="stage-share-item" data-onclick="stageShareCopyLink()"><span class="stage-share-icon" aria-hidden="true">⧉</span><span id="stage-copy-label">Copy link</span></button>
+      <button class="stage-share-item" data-onclick="stageShareEmail()"><span class="stage-share-icon" aria-hidden="true">✉</span>Share via email</button>
     </div>
   </div>`;
 }
@@ -89,18 +122,19 @@ function _shareHtml(navHtml) {
 function _navHtml(setlistId, songs, idx) {
   var prevSong = idx > 0 ? songs[idx - 1] : null;
   var nextSong = idx < songs.length - 1 ? songs[idx + 1] : null;
-  var listIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
-  var prevIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="15 18 9 12 15 6"/></svg>';
-  var nextIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="9 18 15 12 9 6"/></svg>';
+  var listIcon = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+  var prevIcon = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="15 18 9 12 15 6"/></svg>';
+  var nextIcon = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="9 18 15 12 9 6"/></svg>';
   var base    = '/' + _shareSlug + '/stage';
-  var backBtn = `<a class="stage-share-btn" href="${base}?id=${setlistId}" title="Back to setlist">${listIcon}</a>`;
+  var backBtn = `<a class="stage-share-btn" href="${base}?id=${setlistId}" aria-label="Back to setlist" title="Back to setlist">${listIcon}</a>`;
+  // id="stage-prev"/"stage-next": the arrow keys (and page-turner pedals) follow them.
   var prevBtn = prevSong
-    ? `<a class="stage-share-btn" href="${base}?song=${prevSong.id}&from=${setlistId}" title="${escHtml(prevSong.title)}">${prevIcon}</a>`
-    : `<button class="stage-share-btn" disabled title="No previous song">${prevIcon}</button>`;
+    ? `<a class="stage-share-btn" id="stage-prev" href="${base}?song=${prevSong.id}&from=${setlistId}" aria-label="Previous song: ${escHtml(prevSong.title)}" title="${escHtml(prevSong.title)}">${prevIcon}</a>`
+    : `<button class="stage-share-btn" disabled aria-label="No previous song" title="No previous song">${prevIcon}</button>`;
   var nextBtn = nextSong
-    ? `<a class="stage-share-btn" href="${base}?song=${nextSong.id}&from=${setlistId}" title="${escHtml(nextSong.title)}">${nextIcon}</a>`
-    : `<button class="stage-share-btn" disabled title="No next song">${nextIcon}</button>`;
-  return `${backBtn}${prevBtn}${nextBtn}<span class="stage-nav-sep"></span>`;
+    ? `<a class="stage-share-btn" id="stage-next" href="${base}?song=${nextSong.id}&from=${setlistId}" aria-label="Next song: ${escHtml(nextSong.title)}" title="${escHtml(nextSong.title)}">${nextIcon}</a>`
+    : `<button class="stage-share-btn" disabled aria-label="No next song" title="No next song">${nextIcon}</button>`;
+  return `${backBtn}${prevBtn}${nextBtn}<span class="stage-nav-sep" aria-hidden="true"></span>`;
 }
 
 function applyStageTheme(light) {
@@ -119,6 +153,7 @@ function toggleStageInvert() {
   var btn = document.getElementById('stage-invert-btn');
   if (btn) {
     btn.title = light ? 'Switch to dark mode' : 'Switch to light mode';
+    btn.setAttribute('aria-pressed', String(light));
     btn.innerHTML = light ? _MOON_ICON : _SUN_ICON;
   }
 }
@@ -185,13 +220,16 @@ async function initSetlist(params, el, cfg) {
     totalMin += song.length_min || 0;
     const gitCapo = song.extra && song.extra.gitCapo != null && !songFieldHidden(cfg.config, 'extra.gitCapo') ? song.extra.gitCapo : null;
     const bjCapo  = song.extra && song.extra.banjoCapo != null && !songFieldHidden(cfg.config, 'extra.banjoCapo') ? song.extra.banjoCapo : null;
+    const badges = [
+      song.key ? `<span class="stage-key"><span class="sr-only">Key </span>${escHtml(song.key)}</span>` : '',
+      gitCapo !== null ? `<span class="stage-capo">Git: ${escHtml(String(gitCapo))}</span>` : '',
+      bjCapo  !== null ? `<span class="stage-capo">Bj: ${escHtml(String(bjCapo))}</span>`  : '',
+      song.extra && song.extra.aCapella && !songFieldHidden(cfg.config, 'extra.aCapella') ? `<span class="stage-capo">A cappella</span>` : '',
+    ].join('');
     return `<li class="stage-song">
       <span class="stage-num">${i + 1}.</span>
       <a class="stage-song-title stage-song-link" href="/${cfg.slug}/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
-      ${song.key     ? `<span class="stage-key">${escHtml(song.key)}</span>`    : ''}
-      ${gitCapo !== null ? `<span class="stage-capo">Git: ${gitCapo}</span>` : ''}
-      ${bjCapo  !== null ? `<span class="stage-capo">Bj: ${bjCapo}</span>`   : ''}
-      ${song.extra && song.extra.aCapella && !songFieldHidden(cfg.config, 'extra.aCapella') ? `<span class="stage-capo">A cappella</span>` : ''}
+      ${badges ? `<span class="stage-badges">${badges}</span>` : ''}
     </li>`;
   }).join('');
 
@@ -266,7 +304,7 @@ async function initSong(params, el, cfg) {
 
   // Meta badges — reuse .stage-key / .stage-capo from the setlist view
   const metaBadges = [
-    song.key         ? `<span class="stage-key">${escHtml(song.key)}</span>`          : '',
+    song.key         ? `<span class="stage-key"><span class="sr-only">Key </span>${escHtml(song.key)}</span>`          : '',
     gitCapo !== null ? `<span class="stage-capo">Git: ${escHtml(String(gitCapo))}</span>` : '',
     bjCapo  !== null ? `<span class="stage-capo">Bj: ${escHtml(String(bjCapo))}</span>`  : '',
     extra.lead && !songFieldHidden(cfg.config, 'extra.lead') ? `<span class="stage-capo">${escHtml(extra.lead)}</span>`        : '',
@@ -280,12 +318,12 @@ async function initSong(params, el, cfg) {
   let recItems = [];
   if (extra.listenUrl) {
     recItems.push(audioRe.test(extra.listenUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9654; Listen</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.listenUrl))}"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label"><span aria-hidden="true">&#9654; </span>Listen</span><audio class="song-stage-audio" controls aria-label="Listen" src="${escHtml(safeUrl(extra.listenUrl))}"></audio>${_speedBtns('Listen')}</div>`
       : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.listenUrl))}" target="_blank" rel="noopener">&#9654; Listen</a>`);
   }
   if (extra.playbackUrl) {
     recItems.push(audioRe.test(extra.playbackUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label">&#9655; Playback</span><audio class="song-stage-audio" controls src="${escHtml(safeUrl(extra.playbackUrl))}"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`
+      ? `<div class="song-stage-rec"><span class="song-stage-rec-label"><span aria-hidden="true">&#9655; </span>Playback</span><audio class="song-stage-audio" controls aria-label="Playback" src="${escHtml(safeUrl(extra.playbackUrl))}"></audio>${_speedBtns('Playback')}</div>`
       : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.playbackUrl))}" target="_blank" rel="noopener">&#9655; Playback</a>`);
   }
   const recHtml = recItems.length ? `<div class="song-stage-section">${recItems.join('')}</div>` : '';
@@ -296,25 +334,25 @@ async function initSong(params, el, cfg) {
     extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.referenceUrl))}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
     extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.songinfoUrl))}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
     activeArr
-      ? `<button class="stage-chart-btn" data-onclick="_openActiveArrPopup()" title="Show arrangement chart">` +
-        `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>` +
+      ? `<button class="stage-chart-btn" data-onclick="_openActiveArrPopup()" aria-haspopup="dialog" title="Show arrangement chart">` +
+        `<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>` +
         `<span style="font-size:11px">ARRANGEMENT</span></button>`
       : '',
   ].filter(Boolean);
   const linksHtml = linkItems.length ? `<div class="song-stage-section song-stage-links">${linkItems.join('')}</div>` : '';
 
-  var _FIT_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>';
+  var _FIT_ICON = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>';
   const lyricsHtml = lyrics
     ? `<div class="song-stage-lyrics" id="_stage_lyrics"></div>
-       <div class="lyrics-size-bar">
-         <button class="stage-share-btn" data-onclick="stageFontDown()" title="Smaller text"><span style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
-         <button class="stage-share-btn" data-onclick="stageFitLyrics()" title="Fit to screen">${_FIT_ICON}</button>
-         <button class="stage-share-btn" data-onclick="stageFontUp()" title="Larger text"><span style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
+       <div class="lyrics-size-bar" role="group" aria-label="Lyrics size">
+         <button class="stage-share-btn" data-onclick="stageFontDown()" aria-label="Smaller text" title="Smaller text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
+         <button class="stage-share-btn" data-onclick="stageFitLyrics()" aria-label="Fit lyrics to screen" title="Fit to screen">${_FIT_ICON}</button>
+         <button class="stage-share-btn" data-onclick="stageFontUp()" aria-label="Larger text" title="Larger text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
        </div>`
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
   el.innerHTML = `
-    <div class="stage-header"${navHtml ? ' style="padding-right:13rem"' : ''}>
+    <div class="stage-header${navHtml ? ' stage-header--nav' : ''}">
       <div class="stage-band">${escHtml(cfg.name)}</div>
       <h1 class="stage-title">${escHtml(song.title)}</h1>
       ${subtitle}
@@ -367,30 +405,39 @@ window.addEventListener('afterprint', function() {
 
 // --- Share menu ---
 
+function _stageMenuOpen() {
+  var menu = document.getElementById('stage-share-menu');
+  return !!menu && menu.style.display !== 'none';
+}
+
+function _setStageMenu(open, focusButton) {
+  var menu = document.getElementById('stage-share-menu');
+  var btn  = document.getElementById('stage-share-btn');
+  if (!menu) return;
+  menu.style.display = open ? 'block' : 'none';
+  if (btn) btn.setAttribute('aria-expanded', String(open));
+  if (open) {
+    document.addEventListener('click', _closeStageMenu);
+    var first = menu.querySelector('button');
+    if (first) first.focus();
+  } else {
+    document.removeEventListener('click', _closeStageMenu);
+    if (focusButton && btn) btn.focus();
+  }
+}
+
 function _closeStageMenu(e) {
   var menu = document.getElementById('stage-share-menu');
-  if (menu && !menu.contains(e.target)) {
-    menu.style.display = 'none';
-    document.removeEventListener('click', _closeStageMenu);
-  }
+  if (menu && !menu.contains(e.target)) _setStageMenu(false);
 }
 
 function toggleStageShareMenu(e) {
   e.stopPropagation();
-  var menu = document.getElementById('stage-share-menu');
-  if (!menu) return;
-  if (menu.style.display === 'none') {
-    menu.style.display = 'block';
-    document.addEventListener('click', _closeStageMenu);
-  } else {
-    menu.style.display = 'none';
-    document.removeEventListener('click', _closeStageMenu);
-  }
+  _setStageMenu(!_stageMenuOpen());
 }
 
 function stageSharePrint() {
-  document.getElementById('stage-share-menu').style.display = 'none';
-  document.removeEventListener('click', _closeStageMenu);
+  _setStageMenu(false);
   window.print();
 }
 
@@ -401,12 +448,19 @@ function stageShareCopyLink() {
       label.textContent = 'Copied!';
       setTimeout(function() { label.textContent = 'Copy link'; }, 1500);
     }
+    _stageAnnounce('Link copied');
   });
 }
 
+// --- Email dialog ---
+
+function _stageEmailOpen() {
+  var modal = document.getElementById('stage-share-modal');
+  return !!modal && modal.style.display !== 'none';
+}
+
 function stageShareEmail() {
-  document.getElementById('stage-share-menu').style.display = 'none';
-  document.removeEventListener('click', _closeStageMenu);
+  _setStageMenu(false);
   var hasToken = !!_stageToken();
   var pwField = document.getElementById('stage-modal-pw-field');
   if (pwField) pwField.style.display = hasToken ? 'none' : '';
@@ -422,6 +476,29 @@ function stageShareEmail() {
     var el = document.getElementById(focusId);
     if (el) el.focus();
   }, 50);
+}
+
+// Focus goes back to the share button the dialog was opened from.
+function stageCloseEmail() {
+  document.getElementById('stage-share-modal').style.display = 'none';
+  var btn = document.getElementById('stage-share-btn');
+  if (btn) btn.focus();
+}
+
+function stageEmailBackdrop(e, overlay) {
+  if (e.target === overlay) stageCloseEmail();
+}
+
+// Tab stays inside the dialog while it is open.
+function _trapStageDialog(e) {
+  var modal = document.querySelector('#stage-share-modal .stage-modal');
+  var items = [].filter.call(modal.querySelectorAll('a[href], button, input'), function(el) {
+    return !el.disabled && el.offsetParent !== null;
+  });
+  if (!items.length) return;
+  var first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 }
 
 async function stageSendEmail() {
@@ -448,10 +525,10 @@ async function stageSendEmail() {
   var result = await sendSetlistEmail(_shareSlug, _shareSetlistId, email, token);
 
   if (result.ok) {
-    status.textContent = 'Sent to ' + escHtml(email);
+    status.textContent = 'Sent to ' + email;
     btn.disabled = true;
     setTimeout(function() {
-      document.getElementById('stage-share-modal').style.display = 'none';
+      if (_stageEmailOpen()) stageCloseEmail();
     }, 1800);
   } else {
     status.textContent = result.error;
@@ -459,3 +536,25 @@ async function stageSendEmail() {
     btn.textContent = 'Send PDF';
   }
 }
+
+// --- Keyboard and page-turner pedals ---
+// Escape closes the open layer. ← / → go to the previous / next song of the
+// setlist (Bluetooth pedals send arrow keys); Page Up / Down keep scrolling.
+document.addEventListener('keydown', function(e) {
+  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.key === 'Escape') {
+    if (_stageEmailOpen()) { e.preventDefault(); stageCloseEmail(); return; }
+    if (_stageMenuOpen())  { e.preventDefault(); _setStageMenu(false, true); return; }
+    return;
+  }
+  if (e.key === 'Tab' && _stageEmailOpen()) { _trapStageDialog(e); return; }
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (_stageEmailOpen() || _stageMenuOpen()) return;
+  if (document.querySelector('.arr-stage-modal-overlay.open')) return;
+  var t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|AUDIO|VIDEO)$/.test(t.tagName))) return;
+  var link = document.getElementById(e.key === 'ArrowLeft' ? 'stage-prev' : 'stage-next');
+  if (!link) return;
+  e.preventDefault();
+  window.location.href = link.href;
+});

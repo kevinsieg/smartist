@@ -7,11 +7,7 @@ const { requireFeature } = require('../../_plans');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
-  // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
-  const pathParts = Array.isArray(req.query.path) && req.query.path.length
-    ? req.query.path
-    : req.url.split('?')[0].split('/organizers/')[1]?.split('/') ?? [];
-  const id = Number(pathParts[0]);
+  const id = Number(req.query.path?.[0]);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid organizer id' });
   const sql = getDb();
 

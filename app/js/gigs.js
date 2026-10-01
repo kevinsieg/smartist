@@ -84,7 +84,7 @@ async function uploadPoster(gigId, file) {
       generateThumbBlob(file),
     ]);
     setStatus('gm-poster-status', t('gigs.uploading'));
-    var r1 = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&action=poster-url', 'POST', {
+    var r1 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '/poster-url', 'POST', {
       contentType: 'image/jpeg', posterSize: posterBlob.size, thumbSize: thumbBlob.size,
     });
     if (!r1.ok) {
@@ -97,7 +97,7 @@ async function uploadPoster(gigId, file) {
       fetch(urls.thumbUploadUrl,  { method: 'PUT', body: thumbBlob,  headers: { 'Content-Type': 'image/jpeg' } }),
     ]);
     if (!pr.ok || !tr.ok) throw new Error(t('gigs.uploadStorageFailed', { status: !pr.ok ? pr.status : tr.status }));
-    var r2 = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&action=poster', 'PUT', {
+    var r2 = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '/poster', 'PUT', {
       posterUrl: urls.posterPublicUrl,
       thumbUrl:  urls.thumbPublicUrl,
     });
@@ -118,7 +118,7 @@ async function uploadPoster(gigId, file) {
 async function removePoster(gigId) {
   setStatus('gm-poster-status', t('gigs.removing'));
   try {
-    var r = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&action=poster', 'DELETE');
+    var r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '/poster', 'DELETE');
     if (!r.ok) {
       var e = await r.json();
       throw new Error(e.error || t('gigs.couldNotRemovePoster'));

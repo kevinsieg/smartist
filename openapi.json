@@ -3,7 +3,7 @@
   "info": {
     "title": "Smartist API",
     "version": "1.1.0",
-    "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/{band}/auth` (email + password) or from Google sign-in. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
+    "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/login` (email + password) or from Google sign-in. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
     "license": {
       "name": "AGPL-3.0-or-later",
       "url": "https://www.gnu.org/licenses/agpl-3.0.html"
@@ -2736,7 +2736,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Member role. `?action=poster` confirms an uploaded poster (`POST ?action=poster-url` presigns it; `DELETE ?action=poster` removes it).",
+        "description": "Member role. The poster is a sub-resource: `POST /gigs/{id}/poster-url` presigns an upload, `PUT /gigs/{id}/poster` confirms it, `DELETE /gigs/{id}/poster` removes it.",
         "requestBody": {
           "required": true,
           "content": {

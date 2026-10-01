@@ -66,7 +66,7 @@
     var btn = document.getElementById('pw-save-btn');
     btn.disabled = true; msg.textContent = t('profile.saving');
     try {
-      var r = await apiFetch('/api/' + _slug + '/auth?action=change-password', 'POST',
+      var r = await apiFetch('/api/' + _slug + '/members/change-password', 'POST',
         { currentPassword: cur, newPassword: nw, rememberMe: !!localStorage.getItem(AUTH_TOKEN_KEY) });
       var data = await r.json();
       if (!r.ok) { msg.textContent = data.error || t('profile.failed'); msg.className = 'save-msg err'; return; }
@@ -94,7 +94,7 @@
     var btn = document.getElementById('em-save-btn');
     btn.disabled = true; msg.textContent = t('profile.saving');
     try {
-      var r = await apiFetch('/api/' + _slug + '/auth?action=request-email-change', 'POST',
+      var r = await apiFetch('/api/' + _slug + '/members/request-email-change', 'POST',
         { currentPassword: cur, newEmail: nw });
       var data = await r.json();
       if (!r.ok) { msg.textContent = data.error || t('profile.failed'); msg.className = 'save-msg err'; return; }
@@ -148,7 +148,7 @@
   // execute JS; if the load itself deleted, every one of those would destroy an
   // account nobody clicked on. Nothing is deleted until _confirmAccountDeletion
   // below, which only a click reaches. Same two-phase shape as
-  // confirm-email-change (api/[artist]/auth.js).
+  // confirm-email-change (api/_band/members.js).
   //
   // No session required — the token authenticates it — so this uses apiFetch
   // only to keep the guard happy, not because a token is needed. Runs before
