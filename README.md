@@ -419,6 +419,8 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | `scripts/import_gema.js`      | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/delete_artist.js`    | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
 | `scripts/demo_reset.js`       | Snapshot / restore the public demo band (`scripts/demo_seed.json`)       |
+| `scripts/db_backup.js`        | Dump a database with a manifest; nightly for production (`docs/backup-restore.md`) |
+| `scripts/db_restore.js`       | Restore a dump into an empty database and check it against its manifest  |
 | `scripts/schema.sql`          | The schema, idempotent — apply with `apply_schema.js`                    |
 
 ---

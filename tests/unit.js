@@ -52,6 +52,7 @@ const suites = [
   require('./unit/http_adapter'),
   require('./unit/csp'),
   require('./unit/inline_handlers'),
+  require('./unit/backup'),
 ];
 
 (async () => {

@@ -70,6 +70,13 @@ jobs:
           node scripts/apply_schema.js --check
       - name: Seed the test band
         run: node tests/harness/seed.js
+      # The nightly backup's own path (scripts/db_backup.js --verify): dump,
+      # restore into an empty database, compare row counts and sequences.
+      - name: Back up and restore-check the test database
+        run: |
+          psql "$DATABASE_URL" -qc 'CREATE DATABASE restore_check'
+          node scripts/db_backup.js --yes --label ci --out "$RUNNER_TEMP/backup" \
+            --verify postgres://postgres:postgres@localhost:5432/restore_check
       - name: Start the API
         run: |
           node tests/harness/server.js > server.log 2>&1 &
