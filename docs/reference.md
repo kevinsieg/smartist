@@ -22,11 +22,11 @@ in [DATABASE.md](../DATABASE.md).
 | `/organizers` | `app/js/organizers.js` |
 | `/hub` | `app/js/hub.js` |
 | `/profile` | `app/js/profile.js` — personal (email, change password) |
-| `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
+| `/settings` | `app/js/settings.js` — admin only: band, app settings, members, instruments |
 | `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav**. Keeps the screen awake (Wake Lock) while visible; ←/→ (and page-turner pedals) go to the previous/next song, Escape closes the share menu and dialogs |
 | `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, none of the shared scripts, English-only |
 | `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
-| `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
+| `/workspaces` | `app/js/workspaces.js` — the signed-in user's bands |
 | `/contact`, `/confirm-email`, `/demo` | `app/js/contact.js`, `app/js/confirm-email.js`, `app/js/demo.js` |
 
 Every app page loads the four shared scripts in this order, after `footer.js`: `core.js` (escaping, `safeUrl`, `formatDate`/`formatTime`, `formatLength`, `songFieldHidden` — no session, no DOM shell), `session.js` (slug, token, `apiFetch`, `loadConfig`), `ui.js` (lists, typeahead, modals, `withBusy`, hard delete) and `shell.js` (header/nav, auth menu, `initPage`, SPA `navigate()`; its IIFEs run at load, so it comes last). SPA navigation keeps these four loaded and re-runs only page scripts. `stage.html` loads `core.js` only. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `shell.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()`. Bump the `?v=` of all four together (`tests/unit/asset_versions.js`).
@@ -80,7 +80,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `_domain/gema.js` | GEMA CSV parsers and `importWorks` / `importRightholders` — used by the pro-import route and `scripts/import_gema.js` |
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
-| `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
+| `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack, one send per request after the response (`waitUntil` in `_handler.js`), lines buffered per request; swap via `TRANSPORT` block |
 | `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint and the issue time: changing a password, or `users.sessions_valid_after` ("log out everywhere", `_domain/login.js` `logoutEverywhere`), revokes older sessions (`sessionValid`). |
 | `_ownership.js` | `ownsSongs/ownsGig/ownsVenue/ownsOrganizer` — **every foreign id from a request body must pass one** (ids are one sequence across tenants); `isOwnMediaUrl` gates R2 deletes |
 
@@ -254,6 +254,11 @@ node scripts/create_user.js --artist <slug> --email <addr> --set-password
                                                           # change an existing account's password (no email needed)
 node scripts/demo_reset.js --export                      # snapshot the demo band to scripts/demo_seed.json
 node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nightly via .github/workflows/demo-reset.yml
+node scripts/db_backup.js [--label <l>] [--out <dir>] [--verify <local url>] [--recipient age1…]
+                                                          # pg_dump + manifest; nightly via .github/workflows/backup.yml
+node scripts/db_restore.js --dump <file> [--identity <key>] # into an EMPTY database, checked against the manifest
 ```
+
+**Backups** (`docs/backup-restore.md`): Neon point-in-time restore first; `.github/workflows/backup.yml` dumps every production database nightly (restored into a scratch Postgres and compared before it is kept, then age-encrypted to R2) and mirrors every upload bucket, keeping deleted objects 30 days. `scripts/_backup.js` holds the shared pieces; the libpq password travels in the environment, never argv.
 
 `ARTIST_SLUG` env var targets the artist; falls back to the first artist in the DB.

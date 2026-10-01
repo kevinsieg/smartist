@@ -6,7 +6,7 @@ const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, sessionValid } = require('./_token');
 const { isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
-const { configSongs } = require('./_domain/songs');
+const { configSongs, publicSong } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const { envReport, SCHEMA_VERSION } = require('./_env');
 const admin = require('./_domain/admin');
@@ -277,7 +277,7 @@ async function publicConfig(req, res, slugParam) {
     // client must read this instead of decoding the token). The demo gate's
     // session reports 'member'; no session reports null.
     role:          user ? user.role : null,
-    songs:         light ? undefined : songs,
+    songs:         light ? undefined : (user ? songs : songs.map(publicSong)),
     counts,
     plan:          planSummary(band),
     usage:         {

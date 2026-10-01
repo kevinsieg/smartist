@@ -27,6 +27,20 @@ function matchRewrite(p) {
   return null;
 }
 
+// Mail goes to an outbox here instead of to the provider, so the flows that mail
+// a link (invites, resets, shares) run end to end. Tests read it at
+// GET /__outbox?to=<address>. A real RESEND_API_KEY in the env turns this off.
+const outbox = [];
+if (!process.env.RESEND_API_KEY) {
+  process.env.RESEND_API_KEY = 'local-outbox';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url) !== 'https://api.resend.com/emails') return realFetch(url, opts);
+    outbox.push(JSON.parse(String(opts?.body)));
+    return new Response(JSON.stringify({ id: `local-${outbox.length}` }), { status: 200 });
+  };
+}
+
 // The function lives at /api only; any other /api/* path is Vercel's 404
 // unless a rewrite sent it there.
 function resolve(p) {
@@ -38,6 +52,11 @@ http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
   let p = u.pathname;
   let extra = new URLSearchParams();
+  if (u.pathname === '/__outbox') {
+    const to = u.searchParams.get('to');
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ outbox: outbox.filter(m => [].concat(m.to).includes(to)) }));
+  }
   const rw = matchRewrite(p);
   if (rw) { const d = new URL(rw, 'http://localhost'); p = d.pathname; extra = d.searchParams; }
   if (!p.startsWith('/api')) {

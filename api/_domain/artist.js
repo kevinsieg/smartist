@@ -1,6 +1,8 @@
 const RESERVED_SLUGS = new Set([
   'login', 'signup', 'onboarding', 'home', 'demo', 'impressum', 'api', 'app',
   'auth', 'callback', 'static', 'favicon_io', 'stage', 'contact', 'privacy',
+  // Global pages: vercel.json serves these paths before /:slug.
+  'workspaces', 'profile', 'admin', 'confirm-email',
 ]);
 
 async function isSlugAvailable(slug, sql) {

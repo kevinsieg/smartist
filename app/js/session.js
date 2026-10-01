@@ -3,7 +3,7 @@
 
 const AUTH_TOKEN_KEY = 'smartist_token';
 
-var _GLOBAL_PAGES = new Set(['login','signup','onboarding','home','workspaces','demo','impressum','contact','profile']);
+var _GLOBAL_PAGES = new Set(['login','signup','onboarding','workspaces','demo','contact','profile']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
 // artist's dashboard).

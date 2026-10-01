@@ -1,6 +1,5 @@
 'use strict';
 const { getDb } = require('./_db');
-const logger = require('./_logger');
 
 // Keys carry an IP, an address or a song id, so most are used once and never
 // again: their rows would pile up forever. About one call in SWEEP_EVERY also
@@ -14,32 +13,24 @@ const SWEEP_EVERY = 200;
 async function checkRateLimit(key, maxRequests, windowSecs) {
   const sql = getDb();
   const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
-  try {
-    const sweep = Math.random() < 1 / SWEEP_EVERY
-      ? Promise.resolve(sql`DELETE FROM rate_limits WHERE window_start < now() - interval '1 day'`).catch(() => null)
-      : null;
-    const [[row]] = await Promise.all([sql`
-      INSERT INTO rate_limits (key, window_start, count)
-      VALUES (${key}, NOW(), 1)
-      ON CONFLICT (key) DO UPDATE SET
-        window_start = CASE
-          WHEN rate_limits.window_start < ${windowStart} THEN NOW()
-          ELSE rate_limits.window_start
-        END,
-        count = CASE
-          WHEN rate_limits.window_start < ${windowStart} THEN 1
-          ELSE rate_limits.count + 1
-        END
-      RETURNING count
-    `, sweep]);
-    return row.count > maxRequests;
-  } catch (err) {
-    if (isMissingRateLimitTable(err)) {
-      await logger.warn('rate_limit_unavailable', { key, code: err.code, error: err.message });
-      return false;
-    }
-    throw err;
-  }
+  const sweep = Math.random() < 1 / SWEEP_EVERY
+    ? Promise.resolve(sql`DELETE FROM rate_limits WHERE window_start < now() - interval '1 day'`).catch(() => null)
+    : null;
+  const [[row]] = await Promise.all([sql`
+    INSERT INTO rate_limits (key, window_start, count)
+    VALUES (${key}, NOW(), 1)
+    ON CONFLICT (key) DO UPDATE SET
+      window_start = CASE
+        WHEN rate_limits.window_start < ${windowStart} THEN NOW()
+        ELSE rate_limits.window_start
+      END,
+      count = CASE
+        WHEN rate_limits.window_start < ${windowStart} THEN 1
+        ELSE rate_limits.count + 1
+      END
+    RETURNING count
+  `, sweep]);
+  return row.count > maxRequests;
 }
 
 // Read-only: is this key already over its limit? Does not count a hit — for
@@ -48,15 +39,10 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
 async function isRateLimited(key, maxRequests, windowSecs) {
   const sql = getDb();
   const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
-  try {
-    const [row] = await sql`
-      SELECT count FROM rate_limits WHERE key = ${key} AND window_start >= ${windowStart}
-    `;
-    return !!row && row.count >= maxRequests;
-  } catch (err) {
-    if (isMissingRateLimitTable(err)) return false;
-    throw err;
-  }
+  const [row] = await sql`
+    SELECT count FROM rate_limits WHERE key = ${key} AND window_start >= ${windowStart}
+  `;
+  return !!row && row.count >= maxRequests;
 }
 
 // Failed sign-ins per account. The per-IP limit alone let a botnet try one
@@ -73,11 +59,6 @@ async function countLoginFailure(email) {
   await checkRateLimit(loginFailKey(email), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW);
 }
 
-function isMissingRateLimitTable(err) {
-  return err?.code === '42P01'
-    || /relation ["']?rate_limits["']? does not exist/i.test(err?.message || '');
-}
-
 function clientIp(req) {
   if (req.headers['x-real-ip']) return req.headers['x-real-ip'].trim();
   const fwd = req.headers['x-forwarded-for'];
@@ -85,4 +66,4 @@ function clientIp(req) {
   return 'unknown';
 }
 
-module.exports = { checkRateLimit, isRateLimited, clientIp, isMissingRateLimitTable, loginLocked, countLoginFailure };
+module.exports = { checkRateLimit, isRateLimited, clientIp, loginLocked, countLoginFailure };
