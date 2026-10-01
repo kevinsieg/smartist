@@ -49,7 +49,7 @@ All write tests clean up after themselves:
 | Venues | `DELETE /api/:artist/venues/:id { hard: true }` |
 | Organizers | `DELETE /api/:artist/organizers/:id { hard: true }` |
 | Gigs | `DELETE /api/:artist/gigs/:id { hard: true }` |
-| Users | `DELETE /api/:artist/auth` at end of multi-user auth tests |
+| Users | `DELETE /api/:artist/members` at end of multi-user auth tests |
 
 If a test run is interrupted mid-way, any `[TEST]` records left in the dev DB can be removed manually:
 - Setlists → `/setlist-history`

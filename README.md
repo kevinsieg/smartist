@@ -356,7 +356,7 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | GET    | `/api/config?action=google-url`   | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
 | POST   | `/api/config` `request-reset`     | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
 | POST   | `/api/config` `logout-everywhere` | ✓    | End every session of the signed-in address, on all devices and workspaces                    |
-| POST   | `/api/:artist/auth`               | ✓    | Admins invite and manage members; members change their password or address                   |
+| POST   | `/api/:artist/members/…`          | ✓    | Admins invite and manage members; members change their password or address                   |
 | GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
 | POST   | `/api/:artist/songs`              | ✓    | Create song                                                                                  |
 | POST   | `/api/:artist/songs/import`       | ✓    | CSV import: `{csv}` or `{rows}` is checked, `{rows, commit: true}` imports                   |

@@ -1,6 +1,23 @@
 // Shared widgets: sortable lists, typeahead, modals, busy buttons, the heart
 // toggle, CSV export and printing, the resizable side panel, hard-delete dialog.
 
+// Tell screen readers about a change that has no visible focus of its own
+// (a song moved, a row removed). One polite live region per page.
+function announce(msg) {
+  var live = document.getElementById('app-live');
+  if (!live) {
+    live = document.createElement('div');
+    live.id = 'app-live';
+    live.className = 'sr-only';
+    live.setAttribute('role', 'status');
+    live.setAttribute('aria-live', 'polite');
+    document.body.appendChild(live);
+  }
+  // Clearing first makes the same text announced twice in a row.
+  live.textContent = '';
+  setTimeout(function() { live.textContent = msg; }, 50);
+}
+
 // Favourite heart for list rows (songs, venues, organizers). onclick is a JS expression.
 function heartButtonHtml(on, onclick, title, readOnly) {
   var cls = 'heart-btn' + (on ? ' heart-btn--on' : '');

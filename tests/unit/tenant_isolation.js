@@ -6,7 +6,7 @@
 
 const path = require('path');
 const crypto = require('crypto');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 process.env.APP_SECRET = process.env.APP_SECRET || 'test-secret-exactly-32-bytes-ok!';
@@ -68,7 +68,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
       keyFromUrl: u => (String(u).startsWith('https://media.example.test/') ? String(u).slice(27) : null),
     },
   };
-  return { handler: require(handlerPath), sql };
+  return { handler: viaRouter(handlerPath), sql };
 }
 
 // Songs 10 and 11 belong to this band; anything else belongs to someone else.

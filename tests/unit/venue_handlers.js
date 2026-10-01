@@ -3,7 +3,7 @@
 // Venue POST/PUT handling of the phone and contact_name fields.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -61,7 +61,7 @@ function loadHandler(rel, route, opts) {
   };
   const began = { value: false };
   sql.begin = async fn => { began.value = true; return fn(sql); };
-  return { handler: require(path.join(__dirname, '../..', rel)), calls, began };
+  return { handler: viaRouter(path.join(__dirname, '../..', rel)), calls, began };
 }
 
 async function call(handler, method, url, body) {
@@ -176,8 +176,7 @@ async function run(r) {
   await testAsync('GET sorts by a whitelisted column', async () => {
     const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', sort: 'last_communication', dir: 'desc' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?sort=last_communication&dir=desc', headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(JSON.stringify(select.values).includes('last_communication'), 'sort column not used in ORDER BY');
     assert(JSON.stringify(select.values).includes('DESC'), 'sort direction not applied');
@@ -186,8 +185,7 @@ async function run(r) {
   await testAsync('GET ignores an unknown sort column (no SQL injection)', async () => {
     const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', sort: 'name; DROP TABLE venues' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?sort=' + encodeURIComponent('name; DROP TABLE venues'), headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(!select.text.includes('DROP TABLE'), 'raw sort value reached the query');
     assert(!JSON.stringify(select.values).includes('DROP TABLE'), 'raw sort value passed into the query');
@@ -197,8 +195,7 @@ async function run(r) {
   await testAsync('GET filters by letter for the A-Z jump', async () => {
     const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', letter: 'K' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?letter=K', headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(select.values.includes('K%'), 'letter filter not applied');
   });
@@ -206,8 +203,7 @@ async function run(r) {
   await testAsync('GET ignores a letter that is not a single character', async () => {
     const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', letter: 'Kon' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?letter=Kon', headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(!select.values.includes('Kon%'), 'multi-character letter should be ignored');
   });

@@ -15,7 +15,7 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   `{ body, query, headers, ip, origin }` and return `{ status, body }` (or
   `{ status, redirect, headers }`), and `api/_domain/http.js` (`toInput`,
   `send`, `handle`) is the only code that turns a request into input and a
-  result into a reply. Most of `api/_config.js` and all of `api/_band/auth.js`
+  result into a reply. Most of `api/_config.js` and all of `api/_band/members.js`
   are routers into these modules. The band resources (songs, setlists, gigs,
   venues, organizers) keep their validation and SQL in the handler, with the
   shared parts in `_domain/songs.js`, `setlists.js`, `records.js`: they are
@@ -28,7 +28,7 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   limits). Each swappable provider sits behind one block at the top of its file.
 - **`app/js/services/`**: API client wrappers used by the standalone pages.
 
-The whole API is one serverless function, `api/[...route].js`: a table of
+The whole API is one serverless function, `api/index.js`: a table of
 paths, each sent to a handler in `api/_config.js` or `api/_band/`. Files and
 directories starting with `_` are not functions, so an endpoint costs a line in
 that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
