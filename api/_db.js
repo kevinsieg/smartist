@@ -57,6 +57,33 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
   } catch (err) {
     console.error('[audit] failed to log:', err.message);
   }
+  await trimSongLogs(sql, artistId);
+}
+
+// Each entry is a full snapshot of the song, so the history would grow with
+// every edit forever. A song keeps its newest SONG_LOG_KEEP entries: the last
+// one is what restore reads, and the list shows 20 at most. Entries of songs
+// that no longer exist (song_id NULL) are left alone. About one logged write
+// in TRIM_EVERY trims the whole band, like the rate_limits sweep; a failed
+// trim never fails the request.
+const SONG_LOG_KEEP = 20;
+const TRIM_EVERY = 10;
+async function trimSongLogs(sql, artistId, { always = false } = {}) {
+  if (!always && Math.random() >= 1 / TRIM_EVERY) return;
+  try {
+    await sql`
+      DELETE FROM song_logs WHERE id IN (
+        SELECT id FROM (
+          SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
+          FROM song_logs
+          WHERE artist_id = ${artistId} AND song_id IS NOT NULL
+        ) ranked
+        WHERE n > ${SONG_LOG_KEEP}
+      )
+    `;
+  } catch (err) {
+    console.error('[audit] failed to trim:', err.message);
+  }
 }
 
 // The band's slug, set by the router from /api/:artist/….
@@ -70,4 +97,4 @@ function parsePage(req) {
   return { limit, offset };
 }
 
-module.exports = { getDb, getArtist, insertAuditLog, getSlug, parsePage };
+module.exports = { getDb, getArtist, insertAuditLog, trimSongLogs, SONG_LOG_KEEP, getSlug, parsePage };

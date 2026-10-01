@@ -1,4 +1,4 @@
-const { getDb, getSlug } = require('../../_db');
+const { getDb, getSlug, trimSongLogs } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
@@ -56,6 +56,7 @@ module.exports = wrap(async function handler(req, res) {
     const song = await writeLyrics(sql, band.id, songId, text,
       req.method === 'PUT' ? 'lyrics_update' : 'lyrics_delete');
     if (!song) return res.status(404).json({ error: 'Song not found' });
+    await trimSongLogs(sql, band.id);
     return res.json({ ok: true });
   }
 

@@ -67,7 +67,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 
 | Module | Key exports / notes |
 |--------|---------------------|
-| `_db.js` | `getDb()` singleton, `getArtist(slug)` → null if not found, `insertAuditLog` silently swallows errors by design |
+| `_db.js` | `getDb()` singleton, `getArtist(slug)` → null if not found, `insertAuditLog` silently swallows errors by design; `trimSongLogs` keeps each song's newest 20 history entries |
 | `_auth.js` | `requireAuth(req, res, slug)` → artist object or writes 401/404 and returns null |
 | `_handler.js` | `wrap(handler)` — **required on every handler**; catches unhandled errors → 500 |
 | `_validate.js` | returns `null` (missing/empty), validated value, or `false` (invalid) |

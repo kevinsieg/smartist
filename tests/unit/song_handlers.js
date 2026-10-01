@@ -39,7 +39,7 @@ function loadHandler(route) {
       getDb: () => sql,
       getArtist: async () => ARTIST,
       getSlug: () => 'test',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };
