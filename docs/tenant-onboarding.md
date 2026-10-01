@@ -287,6 +287,10 @@ dev              →    Preview               →    dev            →    auto 
 (any PR branch)  →    Preview               →    dev            →    auto *.vercel.app
 ```
 
+Only one project needs to build PR branches. On every other project set
+`SKIP_PREVIEW_BUILDS=1` (all environments): `ignoreCommand` in `vercel.json`
+then skips every branch except `dev` and `main`.
+
 Push to `dev` freely. Merge to `main` via PR only.
 
 ---

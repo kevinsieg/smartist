@@ -86,6 +86,7 @@ vercel env ls production --project <name>    # what that one actually has
 | `DEMO_ARTIST_SLUG` | optional | no | Band the `/demo` gate opens; default `demo`. |
 | `FACEBOOK_TRUST_EMAIL` | optional | optional | Only with Facebook sign-in; see `oauth-setup.md`. |
 | `BETTERSTACK_TOKEN` | production only | production only | |
+| `SKIP_PREVIEW_BUILDS` | no | `1` | Read only by `ignoreCommand` in `vercel.json`: with `1` the project builds `dev` and `main` and skips every other branch. Vercel Hobby allows 100 deployments a day; one project building PR previews is enough. |
 
 **Variables only reach new builds.** Adding one to a live deployment changes
 nothing until it is rebuilt: `vercel ls <project>`, then `vercel redeploy <the
