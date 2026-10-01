@@ -10,8 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=46">
-  <script src="/app/js/i18n.js?v=53"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=47">
+  <script src="/app/js/i18n.js?v=54"></script>
   <style>
     .settings-wrap { max-width: 680px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .invite-bar { display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.5rem;padding:1rem 1.1rem;background:var(--surface-color);border:1px solid var(--border-color);border-radius:4px; }
@@ -232,8 +232,8 @@
     .member-inst-chip.on { background:var(--secondary-color); border-color:var(--secondary-color); color:var(--white); }
     .member-inst-empty { font-size:0.72rem; color:var(--third-color); }
     .member-account-row { display:flex; align-items:center; gap:0.5rem; margin-top:0.45rem; }
-    .member-account-row label { font-size:0.65rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--third-color); }
-    .member-account-select { padding:0.2rem 0.4rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.78rem; font-family:inherit; background:var(--bg-color); }
+    .member-account-row label { display:flex; align-items:center; gap:0.5rem; font-size:0.65rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--third-color); }
+    .member-account-select { text-transform:none; letter-spacing:normal; color:var(--black); padding:0.2rem 0.4rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:0.78rem; font-family:inherit; background:var(--bg-color); }
   </style>
   <link rel="stylesheet" href="/app/css/footer.css?v=4">
 </head>
@@ -291,8 +291,8 @@
 
       <!-- Slug (read-only) -->
       <div class="profile-section">
-        <label data-i18n="settings.slugLabel">Slug (URL identifier)</label>
-        <div class="slug-value" id="slug-value"></div>
+        <label id="slug-label" data-i18n="settings.slugLabel">Slug (URL identifier)</label>
+        <div class="slug-value" id="slug-value" aria-labelledby="slug-label"></div>
       </div>
     </section>
 
@@ -300,8 +300,8 @@
       <h2 class="settings-card-title" data-i18n="settings.sectionAppSettings">App settings</h2>
 
       <!-- Privacy -->
-      <div class="profile-section">
-        <label data-i18n="settings.privacyLabel">Privacy</label>
+      <div class="profile-section" role="group" aria-labelledby="privacy-label">
+        <label id="privacy-label" data-i18n="settings.privacyLabel">Privacy</label>
         <p class="auth-hint" style="margin-top:0.3rem" data-i18n="settings.privacyIntro">Your workspace is private. Venues, organizers, setlists and GEMA data always need a login — these two settings are the only exceptions.</p>
         <label class="config-check-row" style="margin-top:0.4rem;">
           <input type="checkbox" id="public-catalogue-toggle" disabled>
@@ -316,8 +316,8 @@
       </div>
 
       <!-- Hidden instrument fields -->
-      <div class="profile-section">
-        <label data-i18n="settings.hiddenSongFieldsLabel">Hidden song fields</label>
+      <div class="profile-section" role="group" aria-labelledby="hidden-fields-label">
+        <label id="hidden-fields-label" data-i18n="settings.hiddenSongFieldsLabel">Hidden song fields</label>
         <p class="auth-hint" style="margin-top:0.3rem" data-i18n="settings.hiddenSongFieldsHint">Ticked fields disappear from songs, setlists, printouts and stage view. Existing values are kept.</p>
         <div id="hidden-song-fields"></div>
         <span class="save-msg" id="hidden-song-fields-msg"></span>
@@ -326,10 +326,10 @@
       <!-- Song table fields -->
       <div class="profile-section" id="display-fields-section" style="display:none;">
         <div class="config-section-header">
-          <label data-i18n="settings.songTableColumnsLabel">Song table columns</label>
+          <label id="display-fields-label" data-i18n="settings.songTableColumnsLabel">Song table columns</label>
           <button class="config-edit-btn auth-action" disabled data-onclick="openDisplayFieldsEditor()" data-i18n="songs.edit">Edit</button>
         </div>
-        <div class="config-tags" id="display-fields-tags"></div>
+        <div class="config-tags" id="display-fields-tags" role="group" aria-labelledby="display-fields-label"></div>
         <div id="display-fields-editor" style="display:none;"></div>
         <div class="config-hint"><span data-i18n="settings.displayFieldsHint">Controls which columns appear in the songs table</span> — <code>displayFields</code></div>
       </div>
@@ -337,10 +337,10 @@
       <!-- Setlist filter fields -->
       <div class="profile-section" id="filter-fields-section" style="display:none;">
         <div class="config-section-header">
-          <label data-i18n="settings.setlistFilterBtnsLabel">Setlist filter buttons</label>
+          <label id="filter-fields-label" data-i18n="settings.setlistFilterBtnsLabel">Setlist filter buttons</label>
           <button class="config-edit-btn auth-action" disabled data-onclick="openFilterFieldsEditor()" data-i18n="songs.edit">Edit</button>
         </div>
-        <div class="config-tags" id="filter-fields-tags"></div>
+        <div class="config-tags" id="filter-fields-tags" role="group" aria-labelledby="filter-fields-label"></div>
         <div id="filter-fields-editor" style="display:none;"></div>
         <div class="config-hint"><span data-i18n="settings.filterFieldsHint">Controls which filter buttons appear in the setlist generator</span> — <code>filterFields</code></div>
       </div>
@@ -388,12 +388,12 @@
       <h2 class="settings-card-title" data-i18n="settings.sectionInstruments">Instruments</h2>
       <!-- Arrangement config -->
       <div class="profile-section" id="arrangement-section">
-        <label data-i18n="settings.instrumentsAndTechniquesLabel">Instruments &amp; Techniques</label>
-        <div id="arr-instruments-list" class="arr-cfg-list"></div>
+        <label id="arr-instruments-label" data-i18n="settings.instrumentsAndTechniquesLabel">Instruments &amp; Techniques</label>
+        <div id="arr-instruments-list" class="arr-cfg-list" role="group" aria-labelledby="arr-instruments-label"></div>
         <button class="btn arr-cfg-add-btn auth-action" disabled data-onclick="arrAddInstrument()" data-i18n="settings.addInstrumentBtn">+ Add instrument</button>
 
-        <label style="margin-top:1.25rem;" data-i18n="settings.bandMembersLabel">Band members</label>
-        <div id="arr-members-list" class="arr-cfg-list"></div>
+        <label id="arr-members-label" style="margin-top:1.25rem;" data-i18n="settings.bandMembersLabel">Band members</label>
+        <div id="arr-members-list" class="arr-cfg-list" role="group" aria-labelledby="arr-members-label"></div>
         <button class="btn arr-cfg-add-btn auth-action" disabled data-onclick="arrAddMember()" data-i18n="settings.addMemberBtn">+ Add member</button>
 
         <div class="arr-save-row">

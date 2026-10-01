@@ -413,7 +413,7 @@ function renderControls() {
           <input type="checkbox" id="group-by-tag">
           ${t('setlist.groupByTag')}
         </label>` : ''}
-        <span class="active-toggle"${songFieldHidden(bandConfig, 'extra.banjoCapo') && songFieldHidden(bandConfig, 'extra.gitCapo') ? ' hidden' : ''}>
+        <span class="active-toggle" role="group" aria-label="${escHtml(t('setlist.minimizeCapo').replace(/:\s*$/, ''))}"${songFieldHidden(bandConfig, 'extra.banjoCapo') && songFieldHidden(bandConfig, 'extra.gitCapo') ? ' hidden' : ''}>
           ${t('setlist.minimizeCapo')}
           ${songFieldHidden(bandConfig, 'extra.banjoCapo') ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>`}
           ${songFieldHidden(bandConfig, 'extra.gitCapo')   ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> ${t('setlist.capoGuitar')}</label>`}

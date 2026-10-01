@@ -40,6 +40,7 @@ const suites = [
   require('./unit/gig_handlers'),
   require('./unit/plans'),
   require('./unit/asset_versions'),
+  require('./unit/labels'),
   require('./unit/page_scripts'),
   require('./unit/storage_accounting'),
   require('./unit/export'),
