@@ -82,7 +82,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack, one send per request after the response (`waitUntil` in `_handler.js`), lines buffered per request; swap via `TRANSPORT` block |
 | `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint and the issue time: changing a password, or `users.sessions_valid_after` ("log out everywhere", `_domain/login.js` `logoutEverywhere`), revokes older sessions (`sessionValid`). |
-| `_ownership.js` | `ownsSongs/ownsGig/ownsVenue/ownsOrganizer` — **every foreign id from a request body must pass one** (ids are one sequence across tenants); `isOwnMediaUrl` gates R2 deletes |
+| `_ownership.js` | `ownsRefs` — **every foreign id from a request body must pass it** (ids are one sequence across tenants); songs, gig, venue and organizer in one statement; `isOwnMediaUrl` gates R2 deletes |
 
 ---
 

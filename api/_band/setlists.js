@@ -1,7 +1,7 @@
 const { getDb, getSlug } = require('../_db');
 const { requireAuth, getAccess } = require('../_auth');
 const { validateSongIds, validateStr } = require('../_validate');
-const { ownsSongs, ownsGig } = require('../_ownership');
+const { ownsRefs } = require('../_ownership');
 const { wrap } = require('../_handler');
 
 module.exports = wrap(async function handler(req, res) {
@@ -67,12 +67,9 @@ module.exports = wrap(async function handler(req, res) {
     const gigId = rawGigId != null ? Number(rawGigId) : null;
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
-    const [songsOk, gigOk] = await Promise.all([
-      ownsSongs(sql, band.id, validIds),
-      ownsGig(sql, band.id, gigId),
-    ]);
-    if (!songsOk) return res.status(400).json({ error: 'Invalid song_ids' });
-    if (!gigOk)   return res.status(400).json({ error: 'Invalid gig_id' });
+    const owned = await ownsRefs(sql, band.id, { songIds: validIds, gigId });
+    if (!owned.songs) return res.status(400).json({ error: 'Invalid song_ids' });
+    if (!owned.gig)   return res.status(400).json({ error: 'Invalid gig_id' });
 
     // Setlist, its songs and the list row the client shows — one statement,
     // so a failure never leaves a setlist without its songs.

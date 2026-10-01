@@ -1582,6 +1582,31 @@ async function testWrite(slug, token, firstSong, config) {
         assert(json.title === '[TEST] updated', 'title not updated');
       });
 
+      // A gig's refs come from the gig's own statement (setlists and their
+      // songs as JSON): link this setlist to a test gig and read them back.
+      await test('GET /gigs/:id?refs=1 lists the linked setlist and its songs', async () => {
+        const gig = await POST(`/api/${slug}/gigs`, { title: '[TEST] refs', date: '2099-12-31' }, { token });
+        if (gig.res.status === 402) return; // plan without gigs
+        assertStatus(gig.res, gig.json, 201);
+        try {
+          const put = await PUT(`/api/${slug}/setlists/${setlist.id}`,
+            { title: '[TEST] updated', gig_id: gig.json.id, song_ids: [firstSong.id] }, { token });
+          assertStatus(put.res, put.json, 200);
+          const { res, json } = await GET(`/api/${slug}/gigs?id=${gig.json.id}&refs=1`, { token });
+          assertStatus(res, json, 200);
+          const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+          assert(same(json.refs.setlists, [{ id: setlist.id, title: '[TEST] updated' }]),
+            `refs.setlists — got ${JSON.stringify(json.refs.setlists)}`);
+          assert(same(json.refs.setlistSongs, [{ setlist_id: setlist.id, position: 0, title: firstSong.title }]),
+            `refs.setlistSongs — got ${JSON.stringify(json.refs.setlistSongs)}`);
+          assert(!Object.keys(json.gig).some(k => k.startsWith('ref_')), 'gig carries no ref_ columns');
+        } finally {
+          await PUT(`/api/${slug}/setlists/${setlist.id}`,
+            { title: '[TEST] updated', gig_id: null, song_ids: [firstSong.id] }, { token });
+          await DELETE(`/api/${slug}/gigs?id=${gig.json.id}`, { token, body: { hard: true } });
+        }
+      });
+
       await test('POST /setlists/:id/duplicate → 201 with new id and copied songs', async () => {
         const { res, json } = await POST(`/api/${slug}/setlists/${setlist.id}/duplicate`, undefined, { token });
         assertStatus(res, json, 201);

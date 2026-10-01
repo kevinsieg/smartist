@@ -14,18 +14,17 @@ const { songImport } = require('../_domain/song_import');
 
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
-async function genresOf(sql, artistId) {
-  const rows = await sql`
-    SELECT DISTINCT genre FROM songs
-    WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> ''`;
-  return rows.map(r => r.genre);
-}
-
-async function tagsOf(sql, artistId) {
-  const rows = await sql`
-    SELECT DISTINCT unnest(tags) AS tag FROM songs
-    WHERE artist_id = ${artistId} AND NOT deleted`;
-  return rows.map(r => r.tag);
+// What a new song is checked against: the band's live song count (plan
+// limit), genres (spelling) and tags (casing), in one statement.
+async function songValues(sql, artistId) {
+  const [row] = await sql`
+    SELECT
+      (SELECT count(*)::int FROM songs WHERE artist_id = ${artistId} AND NOT deleted) AS count,
+      ARRAY(SELECT DISTINCT genre FROM songs
+            WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> '') AS genres,
+      ARRAY(SELECT DISTINCT unnest(tags) FROM songs
+            WHERE artist_id = ${artistId} AND NOT deleted) AS tags`;
+  return { count: row?.count ?? 0, genres: row?.genres ?? [], tags: row?.tags ?? [] };
 }
 
 // `extra` is free-form, but its *Url keys end up in href/src attributes on the
@@ -135,14 +134,8 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const _max = songLimit(band);
-    const [countRows, knownGenres, knownTags] = await Promise.all([
-      _max != null
-        ? sql`SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`
-        : null,
-      genresOf(sql, band.id),
-      tagsOf(sql, band.id),
-    ]);
-    if (countRows && countRows[0].count >= _max)
+    const { count, genres: knownGenres, tags: knownTags } = await songValues(sql, band.id);
+    if (_max != null && count >= _max)
       return res.status(402).json({ error: 'song_limit', limit: _max });
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
@@ -226,14 +219,20 @@ module.exports = wrap(async function handler(req, res) {
     const NUM_FIELDS = ['bpm', 'length_min'];
 
     const ids = updates.map(u => Number(u?.id)).filter(n => Number.isInteger(n) && n > 0);
-    const [storedRows, knownGenres, knownTags] = await Promise.all([
-      ids.length
-        ? sql`SELECT * FROM songs WHERE artist_id = ${band.id} AND id = ANY(${ids}::int[]) AND deleted = false`
-        : [],
-      updates.some(u => u && 'genre' in u) ? genresOf(sql, band.id) : [],
-      updates.some(u => u && 'tags' in u) ? tagsOf(sql, band.id) : [],
-    ]);
-    const stored = new Map(storedRows.map(row => [row.id, row]));
+    // The stored rows, with the band's genres and tags on each (one statement;
+    // the two lists are uncorrelated subqueries, computed once).
+    const storedRows = ids.length ? await sql`
+      SELECT s.*,
+        ARRAY(SELECT DISTINCT genre FROM songs
+              WHERE artist_id = ${band.id} AND NOT deleted AND genre IS NOT NULL AND genre <> '') AS known_genres,
+        ARRAY(SELECT DISTINCT unnest(tags) FROM songs
+              WHERE artist_id = ${band.id} AND NOT deleted) AS known_tags
+      FROM songs s
+      WHERE s.artist_id = ${band.id} AND s.id = ANY(${ids}::int[]) AND s.deleted = false
+    ` : [];
+    const knownGenres = storedRows[0]?.known_genres ?? [];
+    const knownTags = storedRows[0]?.known_tags ?? [];
+    const stored = new Map(storedRows.map(({ known_genres: _g, known_tags: _t, ...row }) => [row.id, row]));
 
     const rejected = [];
     const accepted = new Map(); // id → row; a repeated id keeps the last update
