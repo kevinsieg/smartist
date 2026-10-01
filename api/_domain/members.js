@@ -49,7 +49,7 @@ async function ownRow(sql, user, currentPassword) {
 
 // ── Public: the links in the emails ───────────────────────────────────────────
 
-// POST ?action=accept-invite — the invite link sets the first password.
+// POST /members/accept-invite — the invite link sets the first password.
 async function acceptInvite({ band, body }) {
   const { token, password } = body ?? {};
   if (!token || !password)            return fail(400, 'token and password required');
@@ -83,7 +83,7 @@ async function acceptInvite({ band, body }) {
   return ok({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
 }
 
-// POST ?action=confirm-email-change — the link is clicked from an inbox, so
+// POST /members/confirm-email-change — the link is clicked from an inbox, so
 // there is no session. Without `confirm` it previews the change (new address
 // and every band affected); with `confirm: true` it applies it.
 async function confirmEmailChange({ body, ip, slug }) {
@@ -169,7 +169,7 @@ async function listMembers({ band }) {
   return ok({ users });
 }
 
-// POST ?action=invite
+// POST /members/invite
 async function invite({ band, user, body, ip, origin, slug }) {
   const { email, role } = body ?? {};
   const rawEmail = validateStr(email, 200);
@@ -208,7 +208,7 @@ async function invite({ band, user, body, ip, origin, slug }) {
   return reply(201, { ok: true, user: newUser });
 }
 
-// POST ?action=resend-invite — a fresh link for an invite not yet accepted.
+// POST /members/resend-invite — a fresh link for an invite not yet accepted.
 async function resendInvite({ band, body, ip, origin, slug }) {
   const { userId } = body ?? {};
   if (!userId) return fail(400, 'userId required');
@@ -274,7 +274,7 @@ async function removeMember({ band, user, body }) {
 
 // ── Anyone signed in: their own account ───────────────────────────────────────
 
-// POST ?action=change-password
+// POST /members/change-password
 async function changePassword({ user, body, ip }) {
   const { currentPassword, newPassword, rememberMe } = body ?? {};
   if (!currentPassword || !newPassword) return fail(400, 'currentPassword and newPassword required');
@@ -298,7 +298,7 @@ async function changePassword({ user, body, ip }) {
   return ok({ ok: true, token });
 }
 
-// POST ?action=request-email-change — nothing changes until the link sent to
+// POST /members/request-email-change — nothing changes until the link sent to
 // the NEW address is confirmed: email is the cross-workspace identity, so it
 // must be proven, not asserted.
 async function requestEmailChange({ user, body, ip, origin, slug }) {

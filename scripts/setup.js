@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Artist Tools — Setup Wizard
+ * smartist — setup wizard
  *
  * Guides through first-time setup or artist reconfiguration:
  *   1. Verify (and optionally apply) the database schema
@@ -330,7 +330,7 @@ async function stepReview(sql, artist, { displayFields, filterFields, logoUrl })
 async function main() {
   console.log('');
   console.log(B('┌──────────────────────────────────────────┐'));
-  console.log(B('│   Artist Tools — Setup Wizard             │'));
+  console.log(B('│   smartist — setup wizard                 │'));
   console.log(B('└──────────────────────────────────────────┘'));
 
   if (!process.env.DATABASE_URL) {

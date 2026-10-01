@@ -607,9 +607,9 @@ async function testAuth(slug) {
     assertStatus(res, json, 400);
   });
 
-  // Signing in goes through /api/login alone; the band's auth endpoint only
+  // Signing in goes through /api/login alone; the band's members endpoint only
   // manages its members.
-  await test('POST /auth without an action is not a login → 401', async () => {
+  await test('POST /members without an action is not a login → 401', async () => {
     const { res, json } = await POST(`/api/${slug}/members`, { email: 'nobody@example.test', password: '__wrong__' });
     assertStatus(res, json, 401);
   });
@@ -753,15 +753,15 @@ async function testMultiUserAuth(slug, token) {
   const TEST_EMAIL = '[TEST]user_' + Date.now() + '@example.com';
   let _testUserId = null;
 
-  // GET /auth — list users (bootstrap admin can access)
-  await test('GET /auth lists users', async () => {
+  // GET /members — list users (bootstrap admin can access)
+  await test('GET /members lists users', async () => {
     const { res, json } = await GET(`/api/${slug}/members`, { token });
     assertStatus(res, json, 200);
     assert(Array.isArray(json.users), 'users is an array');
   });
 
-  // POST ?action=invite — create pending user
-  await test('POST ?action=invite creates pending user → 201', async () => {
+  // POST /members/invite — create pending user
+  await test('POST /members/invite creates pending user → 201', async () => {
     const { res, json } = await POST(`/api/${slug}/members/invite`,
       { email: TEST_EMAIL, role: 'member' }, { token });
     // 500 "Failed to send invite email" = email not configured locally; user is rolled back
@@ -796,7 +796,7 @@ async function testMultiUserAuth(slug, token) {
   });
 
   // accept-invite with garbage token → 400
-  await test('POST ?action=accept-invite with garbage token → 400', async () => {
+  await test('POST /members/accept-invite with garbage token → 400', async () => {
     const { res, json } = await POST(`/api/${slug}/members/accept-invite`,
       { token: 'garbage', password: 'somepassword' });
     assertStatus(res, json, 400);
@@ -831,7 +831,7 @@ async function testMultiUserAuth(slug, token) {
     assertStatus(res, json, 400);
   });
 
-  // POST ?action=change-password
+  // POST /members/change-password
   await test('POST change-password without token → 401', async () => {
     const { res, json } = await POST(`/api/${slug}/members/change-password`,
       { currentPassword: 'a'.repeat(8), newPassword: 'b'.repeat(8) });
@@ -864,7 +864,7 @@ async function testMultiUserAuth(slug, token) {
     assertStatus(res, json, 400);
   });
 
-  await test('GET /auth without token → 401', async () => {
+  await test('GET /members without token → 401', async () => {
     const { res, json } = await GET(`/api/${slug}/members`);
     assertStatus(res, json, 401);
   });
@@ -1596,7 +1596,7 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(B('Band Tools — API Tests'));
+  console.log(B('smartist — API tests'));
   console.log(D(`${BASE_URL}`));
   if (!R2_BASE) console.log(Y('  R2_PUBLIC_URL not set — R2-dependent tests will be skipped'));
 

@@ -99,16 +99,6 @@ Inserts:
 ---
 
 
-## import_venues.js — bulk venue import
-
-Imports venues from a CSV file. Columns: `NOM LIEU, ADRESSE, CP, MAIL, TEL, REMARQUES`. Fuzzy duplicate detection prompts `[s]kip / [i]nsert / [m]erge` for each potential match.
-
-```bash
-node scripts/import_venues.js --artist <slug> venues.csv
-```
-
----
-
 ## import_songs.js — bulk import
 
 ```bash
