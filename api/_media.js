@@ -55,6 +55,9 @@ async function presignMedia(sql, band, songId, config, { filename, contentType, 
 
   const [song] = await sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
   if (!song) return out(404, { error: 'Song not found' });
+  // Counted only for a request that would get a URL, so a rejected one costs
+  // the band nothing.
+  if (await presignLimited(band.id)) return out(429, { error: 'Too many uploads — try again later' });
 
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
   // The band id in the key is what confirmMedia checks.
@@ -183,9 +186,7 @@ function makeMediaFn(config) {
     const sql = getDb();
 
     let result;
-    if (req.method === 'POST')        result = await presignLimited(band.id)
-      ? out(429, { error: 'Too many uploads — try again later' })
-      : await presignMedia(sql, band, songId, config, req.body ?? {});
+    if (req.method === 'POST')        result = await presignMedia(sql, band, songId, config, req.body ?? {});
     else if (req.method === 'PUT')    result = await confirmMedia(sql, band, songId, config, req.body?.publicUrl);
     else if (req.method === 'DELETE') result = await deleteMedia(sql, band, songId, config);
     else                              result = out(405, { error: 'Method not allowed' });
