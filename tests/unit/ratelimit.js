@@ -85,6 +85,32 @@ async function runAbuseLimits(r) {
   } finally {
     Math.random = realRandom;
   }
+
+  await testAsync('a rejected media presign costs the band nothing', async () => {
+    const res = rel => require.resolve(path.join(__dirname, '../../api', rel));
+    const paths = { rl: rlPath, media: res('_media'), auth: res('_auth'), db: res('_db') };
+    const saved = Object.fromEntries(Object.entries(paths).map(([k, p]) => [k, require.cache[p]]));
+    const stub = (p, exports) => { require.cache[p] = { id: p, filename: p, loaded: true, exports }; };
+    let counted = 0;
+    stub(paths.rl,   { ...require(rlPath), presignLimited: async () => { counted++; return false; } });
+    stub(paths.auth, { ...require(paths.auth), requireAuth: async () => ({ id: 1 }), refuseDemo: () => false });
+    stub(paths.db,   { ...require(paths.db), getDb: () => async () => [{ id: 1 }], getSlug: () => 'band' });
+    delete require.cache[paths.media];
+    try {
+      const { makeMediaFn, MEDIA_CONFIGS } = require(paths.media);
+      const handler = makeMediaFn(MEDIA_CONFIGS.audio);
+      for (const body of [{}, { filename: 'a.exe', contentType: 'audio/mpeg', size: 10 }, { filename: 'a.mp3', contentType: 'audio/mpeg' }]) {
+        let status = null;
+        await handler({ method: 'POST', query: { id: '1' }, body }, { status: s => { status = s; return { json: () => {} }; } });
+        assertEq(status, 400);
+      }
+      assertEq(counted, 0);
+    } finally {
+      for (const [k, p] of Object.entries(paths)) {
+        if (saved[k]) require.cache[p] = saved[k]; else delete require.cache[p];
+      }
+    }
+  });
 }
 
 if (require.main === module) {
