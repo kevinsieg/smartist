@@ -163,6 +163,8 @@ A stage link carries no token and ids are sequential, so with `publicStage` on a
 
 **Abuse limits** (`api/_ratelimit.js`): mail to an address the caller chooses (invites, setlist shares) is capped per band and IP at the call site, and by `outboundMailLimited` per sender address and overall per day. Presigned uploads are capped per band per hour (`presignLimited`) — storage is only counted on confirm. AI lyrics suggestions are capped per band and overall per day (`api/_lyrics.js`).
 
+**Free-form JSON** is capped by serialized size: song `extra` 32 KB per request, venue/organizer `social_links` and `extra` 16 KB (`F.object({ maxBytes })`), arrangement `rows` 128 KB. Anonymous `GET /api/config` carries only `plan.features` (the nav needs them), no limits or `usage`. A malformed `%` escape in an `/api` path answers 400.
+
 **Song `extra.*Url` values** must be http(s); a URL into our bucket is only accepted when it is the one already stored (uploads go through presign → confirm). New media keys are `audio|sheets|playback/<artist id>/<uuid>-<name>`, and confirm checks that prefix.
 
 Venues and organizers are CRM-style reference tables linked to gigs via `venue_id`/`organizer_id` (FK `ON DELETE RESTRICT`). Both support soft-delete (`deleted` flag).

@@ -158,8 +158,18 @@ async function testConfig() {
       const { res, json } = await GET(CONFIG_URL, AUTH);
       assertStatus(res, json, 200);
       assert(Array.isArray(json.songs), 'songs not an array');
+      // Limits and usage come with a session only; the write tests need them.
+      if (result) result = { ...result, plan: json.plan, usage: json.usage };
     });
   }
+
+  await test('anonymous config carries no plan limits or storage use', async () => {
+    const { res, json } = await GET(CONFIG_URL);
+    assertStatus(res, json, 200);
+    assert(json.usage === undefined, 'usage leaked to an anonymous visitor');
+    assert(Array.isArray(json.plan?.features), 'the nav needs plan.features');
+    assert(json.plan.limits === undefined && json.plan.key === undefined, 'plan details leaked');
+  });
 
   await test('unauthenticated config reports role null', async () => {
     const { res, json } = await GET(CONFIG_URL);

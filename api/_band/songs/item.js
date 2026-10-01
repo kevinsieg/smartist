@@ -2,13 +2,22 @@ const { getDb, getSlug, trimSongLogs } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
-const { validateStr } = require('../../_validate');
+const { validateStr, jsonBytes } = require('../../_validate');
 const { energyToScale } = require('../../_song_values');
 const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
 const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
+
+// An arrangement's rows and hidden instruments are stored as sent; cap them so
+// one request cannot park megabytes that every stage view then loads.
+const ARRANGEMENT_MAX_BYTES = 128 * 1024;
+function arrangementError(rows, hidden) {
+  if (rows !== undefined && jsonBytes(rows) > ARRANGEMENT_MAX_BYTES) return 'rows is too large';
+  if (hidden !== undefined && jsonBytes(hidden) > 4 * 1024) return 'hidden_instruments is too large';
+  return null;
+}
 
 const MEDIA = {
   audio:    makeMediaFn(MEDIA_CONFIGS.audio),
@@ -88,6 +97,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     const sql = getDb();
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
+    const tooBig = arrangementError(rows, hidden_instruments);
+    if (tooBig) return res.status(400).json({ error: tooBig });
     const [[song], [src]] = await Promise.all([
       sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
       copy_from
@@ -119,6 +130,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
     const { name, rows, hidden_instruments } = req.body ?? {};
+    const tooBig = arrangementError(rows, hidden_instruments);
+    if (tooBig) return res.status(400).json({ error: tooBig });
     const updates = {};
     if (name !== undefined) {
       const validatedName = validateStr(name, 200);
