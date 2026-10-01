@@ -152,7 +152,6 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `comment` | text | |
 | `deadline` | date | |
 | `main_genre` | text | Primary genre this venue books |
-| `subgenres` | text[] | |
 | `size` | integer | Capacity |
 | `language` | text | |
 | `last_updated` | timestamptz DEFAULT NOW() | |

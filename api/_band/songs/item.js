@@ -289,11 +289,11 @@ module.exports = wrap(async function handler(req, res) {
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            bpm, length_min, interpret, reference_interpret, comment, language, extra)
         VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.heart ?? false}, ${d.key ?? null},
-                ${d.genre ?? null}, ${energyToScale(d.energy ?? d.tempo) ?? null}, ${d.time_signature ?? null},
+                ${d.genre ?? null}, ${energyToScale(d.energy) ?? null}, ${d.time_signature ?? null},
                 ${d.bpm ?? null}, ${d.length_min ?? null},
                 ${d.interpret ?? null}, ${d.reference_interpret ?? null},
-                ${d.comment ?? null}, ${d.language ?? d.extra?.language ?? null},
-                ${(({ lyrics: _l, language: _g, ...rest }) => rest)(d.extra ?? {})})
+                ${d.comment ?? null}, ${d.language ?? null},
+                ${d.extra ?? {}})
         RETURNING *
       ), logged AS (
         INSERT INTO song_logs (artist_id, song_id, action, song_data)

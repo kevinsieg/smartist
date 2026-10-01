@@ -510,3 +510,11 @@ CREATE INDEX IF NOT EXISTS setlists_artist_created_idx ON setlists(artist_id, cr
 DROP INDEX IF EXISTS setlists_artist_id_idx;
 CREATE INDEX IF NOT EXISTS rate_limits_window_start_idx ON rate_limits(window_start);
 INSERT INTO schema_migrations (id) VALUES ('2026-10-05') ON CONFLICT DO NOTHING;
+
+-- 2026-10-06: venues.subgenres was never read or written. Delete snapshots
+-- from before songs.language and the lyrics table (tempo, extra.language,
+-- extra.lyrics); the restore no longer converts them.
+ALTER TABLE venues DROP COLUMN IF EXISTS subgenres;
+DELETE FROM song_logs
+WHERE song_data ? 'tempo' OR song_data->'extra' ? 'lyrics' OR song_data->'extra' ? 'language';
+INSERT INTO schema_migrations (id) VALUES ('2026-10-06') ON CONFLICT DO NOTHING;
