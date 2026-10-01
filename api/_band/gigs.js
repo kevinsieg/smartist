@@ -137,17 +137,19 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       const { posterUrl, thumbUrl } = req.body ?? {};
       if (!posterUrl || !thumbUrl)
         return res.status(400).json({ error: 'posterUrl and thumbUrl are required' });
+      // This gig's own keys first: asking storage about any other key would
+      // tell the caller whether that file exists.
+      const expectedPrefix = `gigs/${artist.slug}/${gigId}-`;
+      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix))
+        return res.status(400).json({ error: 'Invalid poster URL' });
+      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix))
+        return res.status(400).json({ error: 'Invalid thumb URL' });
       const [posterOk, thumbOk] = await Promise.all([
         verifyUpload(keyFromUrl(posterUrl)),
         verifyUpload(keyFromUrl(thumbUrl)),
       ]);
       if (!posterOk) return res.status(400).json({ error: 'Poster file not found in storage' });
       if (!thumbOk)  return res.status(400).json({ error: 'Thumbnail file not found in storage' });
-      const expectedPrefix = `gigs/${artist.slug}/${gigId}-`;
-      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix))
-        return res.status(400).json({ error: 'Invalid poster URL' });
-      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix))
-        return res.status(400).json({ error: 'Invalid thumb URL' });
       if (posterOk.contentType !== 'image/jpeg')
         return res.status(400).json({ error: 'Poster must be a JPEG image' });
       if (thumbOk.contentType !== 'image/jpeg')

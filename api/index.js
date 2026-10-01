@@ -88,7 +88,15 @@ module.exports = async function route(req, res) {
   // Vercel keeps the original URL on req.url after a rewrite; `__path` from the
   // rewrite's destination covers a runtime that passes the destination instead.
   const rewritten = req.query?.__path;
-  const found = match(typeof rewritten === 'string' && url.pathname === '/api' ? rewritten : url.pathname);
+  let found;
+  try {
+    found = match(typeof rewritten === 'string' && url.pathname === '/api' ? rewritten : url.pathname);
+  } catch (e) {
+    // decodeURIComponent on a malformed escape (/api/x/songs/%E0%A4%A): this
+    // runs before any handler's wrap(), so a throw would be an unlogged crash.
+    if (e instanceof URIError) return res.status(400).json({ error: 'Malformed URL' });
+    throw e;
+  }
   if (!found) return res.status(404).json({ error: 'Not found' });
   const query = Object.fromEntries(url.searchParams);
   delete query.__path;

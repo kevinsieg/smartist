@@ -86,6 +86,19 @@ async function run(r) {
     }
   })();
 
+  test('a malformed escape in the path is a 400, not a crash', () => {
+    const route = require(path.join(ROOT, 'api', 'index.js'));
+    for (const req of [
+      { url: '/api/band/songs/%E0%A4%A', query: {} },
+      { url: '/api?__path=x', query: { __path: '/api/%ZZ/songs' } },
+    ]) {
+      let status = null, body = null;
+      route(req, { status: s => { status = s; return { json: b => { body = b; } }; } });
+      assertEq(status, 400);
+      assertEq(body, { error: 'Malformed URL' });
+    }
+  });
+
   test('every route names a handler that loads', () => {
     const src = fs.readFileSync(path.join(ROOT, 'api', 'index.js'), 'utf8');
     for (const [, file] of src.matchAll(/require\('(\.\/[^']+)'\)/g))
