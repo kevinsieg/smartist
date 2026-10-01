@@ -31,7 +31,7 @@ function _usersStatus(msg, isError) {
 
 async function loadUsers() {
   try {
-    const r = await apiFetch('/api/' + _settingsSlug + '/auth');
+    const r = await apiFetch('/api/' + _settingsSlug + '/members');
     if (!r.ok) { _usersStatus(t('settings.accessDenied'), true); return; }
     const { users } = await r.json();
     _allUsers = users;
@@ -121,7 +121,7 @@ async function sendInvite() {
   var btn = document.getElementById('invite-btn');
   btn.disabled = true; btn.textContent = '…'; _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth?action=invite', 'POST', { email, role });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members/invite', 'POST', { email, role });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToSendInvite'), true); return; }
     _usersStatus(t('settings.inviteSentTo', { email: email }));
@@ -137,7 +137,7 @@ async function sendInvite() {
 async function _changeRole(userId, role) {
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'PUT', { userId, role });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members', 'PUT', { userId, role });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToUpdateRole'), true); loadUsers(); }
   } catch {}
@@ -148,7 +148,7 @@ async function _removeUser(userId) {
   if (!confirm(t('settings.confirmRemoveUser', { email: email }))) return;
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'DELETE', { userId });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members', 'DELETE', { userId });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToRemoveUser'), true); return; }
     _usersStatus(t('settings.userRemoved', { email: email }));
@@ -161,7 +161,7 @@ async function _revokeInvite(userId) {
   if (!confirm(t('settings.confirmRevokeInvite', { email: email }))) return;
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'DELETE', { userId });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members', 'DELETE', { userId });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToRevokeInvite'), true); return; }
     _usersStatus(t('settings.inviteRevoked'));
@@ -172,7 +172,7 @@ async function _revokeInvite(userId) {
 async function _resendInvite(userId) {
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth?action=resend-invite', 'POST', { userId });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members/resend-invite', 'POST', { userId });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToResendInvite'), true); return; }
     _usersStatus(t('settings.inviteResent'));

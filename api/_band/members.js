@@ -4,7 +4,7 @@ const { toInput, send } = require('../_domain/http');
 const { wrap } = require('../_handler');
 const members = require('../_domain/members');
 
-// /api/:artist/auth — a band's members (api/_domain/members.js). This file only
+// /api/:artist/members — a band's members (api/_domain/members.js). This file only
 // decides who may call what: the two email links are public, everything else
 // needs a session, and managing other members needs the admin role.
 
@@ -20,7 +20,7 @@ const ADMIN = { 'invite': members.invite, 'resend-invite': members.resendInvite 
 
 module.exports = wrap(async function handler(req, res) {
   const slug   = getSlug(req);
-  const action = req.query.action || '';
+  const [action = ''] = req.query.path || [];   // POST /members/:action
   /** @type {Record<string, any>} */
   const ctx    = { ...toInput(req), slug };
 

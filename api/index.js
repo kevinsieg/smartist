@@ -17,7 +17,7 @@
 
 const HANDLERS = {
   config:     () => require('./_config'),
-  auth:       () => require('./_band/auth'),
+  members:    () => require('./_band/members'),
   songs:      () => require('./_band/songs'),
   song:       () => require('./_band/songs/item'),
   setlists:   () => require('./_band/setlists'),
@@ -44,7 +44,8 @@ const TABLE = [
   // The OAuth provider returns to /auth/callback, rewritten here by vercel.json.
   ['/auth/callback',                                       'config', { action: 'oauth-callback' }],
 
-  ['/api/:artist/auth',                                    'auth'],
+  ['/api/:artist/members',                                 'members'],
+  ['/api/:artist/members/*',                               'members'],
   ['/api/:artist/songs',                                   'songs'],
   ['/api/:artist/song-logs',                               'songs', { action: 'logs' }],
   ['/api/:artist/songs/import',                            'songs', { action: 'import' }],
@@ -55,6 +56,7 @@ const TABLE = [
   ['/api/:artist/export',                                  'export'],
   ['/api/:artist/gigs',                                    'gigs'],
   ['/api/:artist/gigs/:id',                                'gigs'],
+  ['/api/:artist/gigs/:id/:sub',                           'gigs'],
   ['/api/:artist/venues',                                  'venues'],
   ['/api/:artist/venues/*',                                'venue'],
   ['/api/:artist/organizers',                              'organizers'],
