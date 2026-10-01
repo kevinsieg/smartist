@@ -1073,6 +1073,7 @@
   "settings.hiddenSongFieldsLabel": "Hidden song fields",
   "settings.hiddenSongFieldsHint": "Ticked fields disappear from songs, setlists, printouts and stage view. Existing values are kept.",
   "home.emailRequired": "Enter your email address.",
+  "nav.skipToContent": "Skip to content",
   "setlist.addSongLabel": "Add a song",
   "setlist.capoChangedShort": "capo changes",
   "setlist.movedTo": "{title} moved to position {pos} of {total}",

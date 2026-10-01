@@ -6,6 +6,9 @@
 
 const { F } = require('../_validate');
 
+// Free-form JSON (social links, extra) per record.
+const JSON_MAX = 16 * 1024;
+
 const link = () => F.url(500, { addScheme: true });
 
 const VENUE_FIELDS = {
@@ -23,7 +26,7 @@ const VENUE_FIELDS = {
   contact_name:            F.text(200),
   generic_email:           F.text(254),
   website:                 link(),
-  social_links:            F.object({ nullable: false }),
+  social_links:            F.object({ nullable: false, maxBytes: JSON_MAX }),
   alive:                   F.bool(),
   activated:               F.bool(),
   declined:                F.bool(),
@@ -50,12 +53,12 @@ const ORGANIZER_FIELDS = {
   email:              F.text(254),
   phone:              F.text(100),
   website:            link(),
-  social_links:       F.object({ nullable: false }),
+  social_links:       F.object({ nullable: false, maxBytes: JSON_MAX }),
   city:               F.text(200),
   country:            F.text(100),
   last_communication: F.date(),
   comment:            F.text(2000),
-  extra:              F.object({ nullable: false }),
+  extra:              F.object({ nullable: false, maxBytes: JSON_MAX }),
   heart:              F.bool(),
 };
 

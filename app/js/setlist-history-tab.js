@@ -123,12 +123,16 @@ async function _renderHistoryTab() {
 
   if (!_histLoaded) {
     try {
-      var setsRes = await apiFetch('/api/' + artistSlug + '/setlists');
-      var gigsRes = await apiFetch('/api/' + artistSlug + '/gigs?limit=500');
-      _histSets = await setsRes.json();
+      // Both at once. Every gig of the band (?slim=1 is unpaged): the filters
+      // and the edit panel's picker must know the gig of every setlist.
+      var both = await Promise.all([
+        apiFetch('/api/' + artistSlug + '/setlists'),
+        apiFetch('/api/' + artistSlug + '/gigs?slim=1'),
+      ]);
+      _histSets = await both[0].json();
       if (!Array.isArray(_histSets)) _histSets = [];
-      var gigsData = await gigsRes.json();
-      _histGigs = gigsData.rows || [];
+      _histGigs = await both[1].json();
+      if (!Array.isArray(_histGigs)) _histGigs = [];
       _histGigMap = {};
       _histGigs.forEach(function(g) { _histGigMap[g.id] = g; });
       _histLoaded = true;
@@ -423,7 +427,10 @@ async function _histEdit(sid) {
   _editSongs = (_histLoadedSongs[sid] || []).slice();
 
   var gigOptions = '<option value="">' + t('setlist.noGig') + '</option>' +
-    _histGigs.map(function(g) {
+    _histGigs.filter(function(g) {
+      // A deleted gig is offered only while this setlist is linked to it.
+      return !g.deleted || String(g.id) === String(s.gig_id);
+    }).map(function(g) {
       var sel = String(g.id) === String(s.gig_id) ? ' selected' : '';
       var label = escHtml(g.title || '') + (g.date ? ' — ' + formatDate(g.date) : '');
       return '<option value="' + g.id + '"' + sel + '>' + label + '</option>';

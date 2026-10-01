@@ -1,5 +1,5 @@
 const path = require('path');
-const { validateSongIds, validateStr, validateNum, validateEmail } =
+const { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields } =
   require(path.join(__dirname, '../../api/_validate'));
 
 function run(r) {
@@ -159,6 +159,15 @@ function run(r) {
   });
   test('space in domain → false', () => {
     assertEq(validateEmail('user@do main.com'), false);
+  });
+
+  console.log(B('\nF.object maxBytes'));
+  const SPEC = { links: F.object({ maxBytes: 100 }) };
+  test('an object under the cap passes', () => {
+    assertEq(parseFields({ links: { a: 'x' } }, SPEC).value, { links: { a: 'x' } });
+  });
+  test('an object over the cap is refused', () => {
+    assertEq(parseFields({ links: { a: 'x'.repeat(200) } }, SPEC).error, 'links is too large');
   });
 }
 

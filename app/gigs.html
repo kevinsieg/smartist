@@ -10,8 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=46">
-  <script src="/app/js/i18n.js?v=53"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=47">
+  <script src="/app/js/i18n.js?v=54"></script>
   <style>
     .gigs-wrap { max-width: 1000px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
     .gigs-section-title { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--third-color); margin: 1.75rem 0 0.75rem; }
@@ -143,15 +143,15 @@
   <div class="modal" style="max-width:460px;">
     <h2 id="gig-modal-title" data-i18n="gigs.addGig">Add gig</h2>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldTitle">Title *</label>
+      <label for="gm-title" data-i18n="gigs.fieldTitle">Title *</label>
       <input type="text" id="gm-title" placeholder="Gig title" data-i18n-attr="placeholder:gigs.fieldTitlePlaceholder">
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldDate">Date</label>
+      <label for="gm-date" data-i18n="gigs.fieldDate">Date</label>
       <input type="date" id="gm-date">
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldType">Type</label>
+      <label for="gm-type" data-i18n="gigs.fieldType">Type</label>
       <select id="gm-type">
         <option value="">—</option>
         <option value="concert" data-i18n="gigs.typeConcert">Concert</option>
@@ -162,7 +162,7 @@
       </select>
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldVenue">Venue</label>
+      <label for="gm-venue-input" data-i18n="gigs.fieldVenue">Venue</label>
       <div class="typeahead-wrap">
         <input type="text" id="gm-venue-input" placeholder="Search venue…" autocomplete="off" data-i18n-attr="placeholder:gigs.searchVenuePlaceholder">
         <input type="hidden" id="gm-venue-id">
@@ -180,11 +180,11 @@
       </div>
     </div>
     <div class="modal-field">
-      <label><span data-i18n="gigs.fieldLocation">Location</span> <span style="font-weight:normal;color:var(--third-color);font-size:0.8rem;" data-i18n="gigs.locationHint">(city / address — when no venue)</span></label>
+      <label for="gm-location"><span data-i18n="gigs.fieldLocation">Location</span> <span style="font-weight:normal;color:var(--third-color);font-size:0.8rem;" data-i18n="gigs.locationHint">(city / address — when no venue)</span></label>
       <input type="text" id="gm-location" placeholder="Paris" data-i18n-attr="placeholder:gigs.locationPlaceholder">
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldOrganizer">Organizer</label>
+      <label for="gm-organizer-input" data-i18n="gigs.fieldOrganizer">Organizer</label>
       <div class="typeahead-wrap">
         <input type="text" id="gm-organizer-input" placeholder="Search organizer…" autocomplete="off" data-i18n-attr="placeholder:gigs.searchOrganizerPlaceholder">
         <input type="hidden" id="gm-organizer-id">
@@ -202,26 +202,26 @@
       </div>
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldTimeStart">Start time</label>
+      <label for="gm-time-start" data-i18n="gigs.fieldTimeStart">Start time</label>
       <input type="time" id="gm-time-start">
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldTimeEnd">End time</label>
+      <label for="gm-time-end" data-i18n="gigs.fieldTimeEnd">End time</label>
       <input type="time" id="gm-time-end">
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldLink">Link</label>
+      <label for="gm-link" data-i18n="gigs.fieldLink">Link</label>
       <input type="url" id="gm-link" placeholder="https://…">
     </div>
     <div class="modal-field">
-      <label data-i18n="gigs.fieldComment">Comment</label>
+      <label for="gm-comment" data-i18n="gigs.fieldComment">Comment</label>
       <textarea id="gm-comment" rows="2" placeholder="Notes…" data-i18n-attr="placeholder:gigs.commentPlaceholder"></textarea>
     </div>
     <input type="file" id="gm-poster-input" accept="image/jpeg,image/png,image/webp"
            style="display:none" data-onchange="handlePosterSelect(this.files[0])">
-    <div id="gm-poster-section" style="display:none">
+    <div id="gm-poster-section" style="display:none" role="group" aria-labelledby="gm-poster-label">
       <hr style="border:none;border-top:1px solid var(--border-color);margin:0.9rem 0 0.75rem">
-      <label style="display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color);margin-bottom:0.5rem;" data-i18n="gigs.posterLabel">Poster / Flyer</label>
+      <label id="gm-poster-label" style="display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--third-color);margin-bottom:0.5rem;" data-i18n="gigs.posterLabel">Poster / Flyer</label>
       <div id="gm-poster-row"></div>
       <div class="status-msg" id="gm-poster-status"></div>
     </div>
@@ -254,6 +254,6 @@
 <script src="/app/js/session.js?v=10"></script>
 <script src="/app/js/ui.js?v=9"></script>
 <script src="/app/js/shell.js?v=10"></script>
-<script src="/app/js/gigs.js?v=13"></script>
+<script src="/app/js/gigs.js?v=15"></script>
 </body>
 </html>

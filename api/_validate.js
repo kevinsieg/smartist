@@ -55,6 +55,12 @@ const F = {
   object: (opts = {}) => ({ type: 'object', ...opts }),
 };
 
+// Serialized size of a JSON value: free-form fields are capped by it so one
+// request cannot park megabytes in a row that every list then ships.
+function jsonBytes(v) {
+  return Buffer.byteLength(JSON.stringify(v ?? null), 'utf8');
+}
+
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
 
@@ -106,7 +112,9 @@ function parseField(name, f, raw) {
       return m ? { value: `${m[1]}:${m[2]}:${m[3] || '00'}` } : { error: `${name} must be a time (HH:MM)` };
     }
     case 'object':
-      return typeof raw === 'object' && !Array.isArray(raw) ? { value: raw } : { error: `${name} must be an object` };
+      if (typeof raw !== 'object' || Array.isArray(raw)) return { error: `${name} must be an object` };
+      if (f.maxBytes && jsonBytes(raw) > f.maxBytes) return { error: `${name} is too large` };
+      return { value: raw };
     default:
       return { error: `${name}: unknown field type` };
   }
@@ -129,4 +137,4 @@ function parseFields(body, spec, { partial = false } = {}) {
   return { value };
 }
 
-module.exports = { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields };
+module.exports = { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };

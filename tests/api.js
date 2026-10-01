@@ -158,8 +158,18 @@ async function testConfig() {
       const { res, json } = await GET(CONFIG_URL, AUTH);
       assertStatus(res, json, 200);
       assert(Array.isArray(json.songs), 'songs not an array');
+      // Limits and usage come with a session only; the write tests need them.
+      if (result) result = { ...result, plan: json.plan, usage: json.usage };
     });
   }
+
+  await test('anonymous config carries no plan limits or storage use', async () => {
+    const { res, json } = await GET(CONFIG_URL);
+    assertStatus(res, json, 200);
+    assert(json.usage === undefined, 'usage leaked to an anonymous visitor');
+    assert(Array.isArray(json.plan?.features), 'the nav needs plan.features');
+    assert(json.plan.limits === undefined && json.plan.key === undefined, 'plan details leaked');
+  });
 
   await test('unauthenticated config reports role null', async () => {
     const { res, json } = await GET(CONFIG_URL);
@@ -186,6 +196,7 @@ async function testPrivacy(slug, config) {
     ['GET song-logs',          `/api/${slug}/song-logs`,          401],
     ['GET gigs',               `/api/${slug}/gigs`,               catalogue ? 200 : 401],
     ['GET gigs?format=ics',    `/api/${slug}/gigs?format=ics`,    catalogue ? 200 : 401],
+    ['GET gigs?slim=1',        `/api/${slug}/gigs?slim=1`,        401],
     ['GET setlists',           `/api/${slug}/setlists`,           401],
     ['GET setlists/:id',       `/api/${slug}/setlists/999999999`, stage ? 404 : 401],
     ['GET venues',             `/api/${slug}/venues`,             401],
@@ -444,6 +455,21 @@ async function testGigs(slug) {
       assert('organizer' in json.refs, 'missing refs.organizer');
     });
   }
+
+  // Pickers and filters: every gig, unpaged (the paged list stops at 200).
+  await test('GET ?slim=1 returns every gig as a plain array', async () => {
+    const [{ res, json }, paged] = await Promise.all([
+      GET(`/api/${slug}/gigs?slim=1`, AUTH),
+      GET(`/api/${slug}/gigs?limit=1`, AUTH),
+    ]);
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json), 'slim should return a plain array');
+    assert(json.length === paged.json.total, `expected ${paged.json.total} gigs, got ${json.length}`);
+    for (const g of json.slice(0, 5)) {
+      assert(typeof g.deleted === 'boolean', 'each gig says whether it is deleted');
+      assert(!('comment' in g), 'slim rows carry no comment');
+    }
+  });
 
   await test('GET /:id with id=0 → 400', async () => {
     const { res, json } = await GET(`/api/${slug}/gigs?id=0`, AUTH);

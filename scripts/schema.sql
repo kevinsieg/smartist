@@ -499,3 +499,22 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-03') ON CONFLICT DO NOTHING;
 -- refused (api/_token.js sessionValid); set on every row of the address.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_after TIMESTAMPTZ;
 INSERT INTO schema_migrations (id) VALUES ('2026-10-04') ON CONFLICT DO NOTHING;
+
+-- 2026-10-05: indexes for the band-scoped list orderings. GET /gigs and the
+-- ICS feed sort a band's gigs by date, GET /setlists by creation time, and the
+-- rate-limit sweep deletes by window_start; each scanned and sorted without
+-- these. gigs_artist_id_idx is covered by the new gigs index.
+CREATE INDEX IF NOT EXISTS gigs_artist_date_idx ON gigs(artist_id, date DESC NULLS LAST, id DESC);
+DROP INDEX IF EXISTS gigs_artist_id_idx;
+CREATE INDEX IF NOT EXISTS setlists_artist_created_idx ON setlists(artist_id, created_at DESC);
+DROP INDEX IF EXISTS setlists_artist_id_idx;
+CREATE INDEX IF NOT EXISTS rate_limits_window_start_idx ON rate_limits(window_start);
+INSERT INTO schema_migrations (id) VALUES ('2026-10-05') ON CONFLICT DO NOTHING;
+
+-- 2026-10-06: venues.subgenres was never read or written. Delete snapshots
+-- from before songs.language and the lyrics table (tempo, extra.language,
+-- extra.lyrics); the restore no longer converts them.
+ALTER TABLE venues DROP COLUMN IF EXISTS subgenres;
+DELETE FROM song_logs
+WHERE song_data ? 'tempo' OR song_data->'extra' ? 'lyrics' OR song_data->'extra' ? 'language';
+INSERT INTO schema_migrations (id) VALUES ('2026-10-06') ON CONFLICT DO NOTHING;

@@ -91,11 +91,10 @@ module.exports = async function route(req, res) {
   let found;
   try {
     found = match(typeof rewritten === 'string' && url.pathname === '/api' ? rewritten : url.pathname);
-  } catch (e) {
-    // decodeURIComponent on a malformed escape (/api/x/songs/%E0%A4%A): this
-    // runs before any handler's wrap(), so a throw would be an unlogged crash.
-    if (e instanceof URIError) return res.status(400).json({ error: 'Malformed URL' });
-    throw e;
+  } catch (err) {
+    // A malformed escape (`%E0%A4%A`) is the client's mistake, not a crash.
+    if (err instanceof URIError) return res.status(400).json({ error: 'Bad request' });
+    throw err;
   }
   if (!found) return res.status(404).json({ error: 'Not found' });
   const query = Object.fromEntries(url.searchParams);
