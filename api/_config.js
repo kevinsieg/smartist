@@ -280,11 +280,13 @@ async function publicConfig(req, res, slugParam) {
     role:          user ? user.role : null,
     songs:         light ? undefined : (user ? songs : songs.map(publicSong)),
     counts,
-    plan:          planSummary(band),
-    usage:         {
+    // Visitors get the feature list the nav needs, not the plan, limits or
+    // storage use.
+    plan:          user ? planSummary(band) : { features: planSummary(band).features },
+    usage:         user ? {
       storageUsedBytes: Number(band.storage_used_bytes || 0),
       songs: (counts && counts.songs != null) ? counts.songs : null,
-    },
+    } : undefined,
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
     singleTenant:  !!process.env.ARTIST_SLUG,
