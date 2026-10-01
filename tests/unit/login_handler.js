@@ -132,6 +132,16 @@ async function run(r) {
       'an invited-but-not-accepted row has a null hash and must be excluded');
   });
 
+  await testAsync('rows sharing a hash are compared once', async () => {
+    const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
+    await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
+    const q = queries.find(x => /FROM users/.test(x.text));
+    assert(/DISTINCT ON \(password_hash\)/.test(q.text),
+      'one password is written to every row of an address; a bcrypt round per band made sign-in seconds slow');
+    assert(/ORDER BY password_hash, id \) first_per_hash ORDER BY id/.test(q.text),
+      'the lowest row id of each hash, then by id, so the same row wins as before');
+  });
+
   await testAsync('too many attempts → 429, before any lookup', async () => {
     const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }], { rateLimited: true });
     const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' });

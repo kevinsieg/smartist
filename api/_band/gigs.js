@@ -235,6 +235,25 @@ module.exports = wrap(async function handler(req, res) {
     if (!user && !canBrowseCatalogue(artist))
       return res.status(401).json({ error: 'Sign in to view this' });
 
+    // ?slim=1: every gig of the band, unpaged, with only what a picker or a
+    // filter shows. The paged list stops at 200 rows, and a picker built from
+    // it dropped older gigs — saving a setlist then unlinked its gig. Deleted
+    // gigs are included (flagged) so a setlist linked to one keeps its gig.
+    if (req.query.slim) {
+      if (!user) return res.status(401).json({ error: 'Sign in to view this' });
+      const gigs = await sql`
+        SELECT g.id, g.title, g.date, g.deleted,
+               g.venue_id, v.name AS venue_name, v.city AS venue_city,
+               g.organizer_id, o.name AS organizer_name
+        FROM gigs g
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
+        WHERE g.artist_id = ${artist.id}
+        ORDER BY g.date DESC NULLS LAST, g.id DESC
+      `;
+      return res.json(gigs);
+    }
+
     if (req.query.format === 'ics') {
       const today = new Date().toISOString().slice(0, 10);
       const gigs = await sql`

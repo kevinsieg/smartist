@@ -38,7 +38,9 @@ function toggleBulkEdit() {
 
 var _configPromise = null;
 function getConfig() {
-  if (!_configPromise) _configPromise = loadConfig();
+  // Light: the songs come from GET /songs below. The full config would ship
+  // the whole catalogue a second time.
+  if (!_configPromise) _configPromise = loadConfig(undefined, { light: true });
   return _configPromise;
 }
 
