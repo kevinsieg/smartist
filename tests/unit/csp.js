@@ -26,7 +26,7 @@ function csp() {
 }
 
 function externalAssets() {
-  const scripts = new Set(), styles = new Set();
+  const scripts = new Set(), styles = new Set(), tags = [];
   const app = path.join(ROOT, 'app');
   const files = [
     ...fs.readdirSync(app).filter(f => f.endsWith('.html')).map(f => path.join(app, f)),
@@ -35,17 +35,18 @@ function externalAssets() {
   for (const f of files) {
     const src = fs.readFileSync(f, 'utf8');
     for (const m of src.matchAll(/<script[^>]+src="(https:[^"]+)"/g)) scripts.add(m[1]);
+    for (const m of src.matchAll(/<script[^>]+src="https:[^>]*>/g)) tags.push(m[0]);
     for (const m of src.matchAll(/\.src\s*=\s*'(https:[^']+\.js)'/g)) scripts.add(m[1]);
     for (const m of src.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="(https:[^"]+)"/g)) styles.add(m[1]);
   }
-  return { scripts, styles };
+  return { scripts, styles, tags };
 }
 
 function run(r) {
   const { test, assert, B } = r;
   console.log(B('\ncontent security policy'));
   const policy = csp();
-  const { scripts, styles } = externalAssets();
+  const { scripts, styles, tags } = externalAssets();
 
   test('vercel.json sets a Content-Security-Policy', () => assert(policy, 'no CSP header'));
   test("script-src allows no inline script and no eval", () => {
@@ -59,6 +60,12 @@ function run(r) {
   test('every external script the app loads is listed exactly', () => {
     const missing = [...scripts].filter(u => !policy['script-src'].includes(u));
     assert(missing.length === 0, `not in script-src: ${missing.join(', ')}`);
+  });
+  // Pages share their origin with the session token: a script that changes
+  // under an unversioned URL runs with the power to read it.
+  test('every external script names an exact version and carries a hash', () => {
+    const loose = tags.filter(t => !/@\d+\.\d+\.\d+\//.test(t) || !/integrity="sha(384|512)-/.test(t));
+    assert(loose.length === 0, `unpinned or without integrity: ${loose.join(' | ')}`);
   });
   test('every external stylesheet the app loads is listed exactly', () => {
     const missing = [...styles].filter(u => !policy['style-src'].includes(u));
