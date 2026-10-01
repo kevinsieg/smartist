@@ -6,6 +6,7 @@ const { parseFields } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
 const { ownsVenue, ownsOrganizer } = require('../_ownership');
+const { presignLimited } = require('../_ratelimit');
 
 // venue_id / organizer_id come from the body; both must be this artist's rows.
 async function refsOwned(sql, artistId, body) {
@@ -116,6 +117,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       const okSize = n => Number.isInteger(n) && n > 0 && n <= POSTER_MAX_BYTES;
       if (!okSize(posterSize) || !okSize(thumbSize))
         return res.status(400).json({ error: `posterSize and thumbSize required, max ${POSTER_MAX_BYTES / 1024 / 1024} MB` });
+      if (await presignLimited(artist.id))
+        return res.status(429).json({ error: 'Too many uploads — try again later' });
       const uuid      = crypto.randomUUID();
       const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
       const thumbKey  = `gigs/${artist.slug}/${gigId}-${uuid}-thumb.jpg`;

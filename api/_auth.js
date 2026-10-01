@@ -27,10 +27,10 @@ async function loadArtistAndMember(token, slug) {
   const sql = getDb();
   const [row] = await sql`
     SELECT a.*, m.id AS member_id, m.role AS member_role, m.password_hash AS member_password_hash,
-           m.sessions_valid_after AS member_sessions_valid_after
+           m.sessions_valid_after AS member_sessions_valid_after, m.email AS member_email
     FROM artists a
     LEFT JOIN LATERAL (
-      SELECT u2.id, u2.role, u1.password_hash, u1.sessions_valid_after
+      SELECT u2.id, u2.role, u1.password_hash, u1.sessions_valid_after, u1.email
       FROM users u1
       JOIN users u2 ON u2.email = u1.email AND u2.artist_id = a.id
       WHERE u1.id = ${claim.userId}
@@ -40,17 +40,17 @@ async function loadArtistAndMember(token, slug) {
     LIMIT 1
   `;
   if (!row) return { artist: null, claim, member: null };
-  const { member_id, member_role, member_password_hash, member_sessions_valid_after, ...artist } = row;
+  const { member_id, member_role, member_password_hash, member_sessions_valid_after, member_email, ...artist } = row;
   const member = member_id == null ? null
     : { id: member_id, role: member_role, password_hash: member_password_hash,
-        sessions_valid_after: member_sessions_valid_after };
+        sessions_valid_after: member_sessions_valid_after, email: member_email };
   return { artist, claim, member };
 }
 
 async function resolveUser(token, artist, claim, member) {
   if (claim) {
     if (!member || !sessionValid(claim, member)) return null;
-    return { id: member.id, role: member.role };
+    return { id: member.id, role: member.role, email: member.email };
   }
   const role = demoRole(String(token), artist);
   return role ? { id: null, role } : null;

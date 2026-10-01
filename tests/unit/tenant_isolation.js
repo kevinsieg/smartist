@@ -46,7 +46,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
     id: dbPath, filename: dbPath, loaded: true,
     exports: {
       getDb: () => sql, getArtist: async () => ARTIST,
-      getSlug: () => 'test', insertAuditLog: async () => {},
+      getSlug: () => 'test', insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };

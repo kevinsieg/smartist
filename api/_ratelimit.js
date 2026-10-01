@@ -59,6 +59,25 @@ async function countLoginFailure(email) {
   await checkRateLimit(loginFailKey(email), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW);
 }
 
+// Mail a session sends to an address of its choosing (invites, setlist
+// shares). The per-band and per-IP limits at each call site stop one band;
+// these stop one person spread over many bands, and everyone together, from
+// turning the app's sender into a relay. `who` is the sender's address.
+const MAIL_OUT_PERSON_DAILY = 50;
+const MAIL_OUT_DAILY = 500;
+async function outboundMailLimited(who) {
+  return (await checkRateLimit(`mail-out:${String(who || '').toLowerCase()}`, MAIL_OUT_PERSON_DAILY, 86400))
+      || (await checkRateLimit('mail-out-day', MAIL_OUT_DAILY, 86400));
+}
+
+// Presigned upload URLs. Storage is counted when an upload is confirmed, so an
+// upload that is never confirmed costs bucket space nobody is charged for; this
+// bounds how much of it one band can park.
+const PRESIGN_PER_HOUR = 60;
+async function presignLimited(bandId) {
+  return checkRateLimit(`presign:${bandId}`, PRESIGN_PER_HOUR, 3600);
+}
+
 function clientIp(req) {
   if (req.headers['x-real-ip']) return req.headers['x-real-ip'].trim();
   const fwd = req.headers['x-forwarded-for'];
@@ -66,4 +85,7 @@ function clientIp(req) {
   return 'unknown';
 }
 
-module.exports = { checkRateLimit, isRateLimited, clientIp, loginLocked, countLoginFailure };
+module.exports = {
+  checkRateLimit, isRateLimited, clientIp, loginLocked, countLoginFailure,
+  outboundMailLimited, MAIL_OUT_PERSON_DAILY, MAIL_OUT_DAILY, presignLimited, PRESIGN_PER_HOUR,
+};

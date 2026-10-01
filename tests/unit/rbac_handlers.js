@@ -92,7 +92,7 @@ function loadHandler(relPath, { role = 'admin', rows } = {}) {
       getDb: () => sql,
       getArtist: async slug => (slug === ARTIST.slug ? ARTIST : null),
       getSlug: req => req.query?.artist || req.url.split('?')[0].split('/')[2],
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: req => ({
         limit: Math.min(Math.max(parseInt(req.query?.limit, 10) || 50, 1), 200),
         offset: Math.max(parseInt(req.query?.offset, 10) || 0, 0),

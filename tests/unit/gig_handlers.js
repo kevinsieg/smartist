@@ -44,7 +44,7 @@ function loadHandler(route) {
       getDb: () => sql,
       getArtist: async () => ARTIST,
       getSlug: req => req.query?.artist || req.url.split('?')[0].split('/')[2],
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };
@@ -65,6 +65,11 @@ function loadHandler(route) {
       deleteFromR2: async () => {}, verifyUpload: async () => ({ size: 1, contentType: 'image/jpeg' }),
       keyFromUrl: () => 'k', filenameFromUrl: () => 'f',
     },
+  };
+  const rlPath = mp('api/_ratelimit');
+  require.cache[rlPath] = {
+    id: rlPath, filename: rlPath, loaded: true,
+    exports: { ...require(rlPath), presignLimited: async () => false },
   };
   return { handler: viaRouter(path.join(__dirname, '../..', 'api/_band/gigs.js')), calls };
 }

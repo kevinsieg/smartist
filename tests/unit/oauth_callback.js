@@ -74,7 +74,7 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
     exports: {
       getDb: () => sql,
       getArtist: async slug => ({ id: 1, slug, name: 'Test', config: {} }),
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
     },
   };
 

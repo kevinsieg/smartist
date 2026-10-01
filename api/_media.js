@@ -4,6 +4,7 @@ const { requireAuth, refuseDemo } = require('./_auth');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
 const { isOwnMediaUrl } = require('./_ownership');
 const { storageLimitBytes } = require('./_plans');
+const { presignLimited } = require('./_ratelimit');
 
 // Song media (audio, sheet, playback) stored in R2. The three steps — presign,
 // confirm, delete — are POST, PUT and DELETE on /api/:artist/songs/:id/:type
@@ -182,7 +183,9 @@ function makeMediaFn(config) {
     const sql = getDb();
 
     let result;
-    if (req.method === 'POST')        result = await presignMedia(sql, band, songId, config, req.body ?? {});
+    if (req.method === 'POST')        result = await presignLimited(band.id)
+      ? out(429, { error: 'Too many uploads — try again later' })
+      : await presignMedia(sql, band, songId, config, req.body ?? {});
     else if (req.method === 'PUT')    result = await confirmMedia(sql, band, songId, config, req.body?.publicUrl);
     else if (req.method === 'DELETE') result = await deleteMedia(sql, band, songId, config);
     else                              result = out(405, { error: 'Method not allowed' });
