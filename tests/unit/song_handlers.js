@@ -4,7 +4,7 @@
 // not silently skipped — a skipped row looks to the user like "saving does nothing".
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -58,7 +58,7 @@ function loadHandler(route) {
     exports: { createPresignedUrl: async () => ({}), deleteFromR2: async () => {},
       verifyUpload: async () => ({}), keyFromUrl: () => 'k', filenameFromUrl: () => 'f' },
   };
-  return { handler: require(path.join(__dirname, '../..', 'api/_band/songs.js')), calls };
+  return { handler: viaRouter(path.join(__dirname, '../..', 'api/_band/songs.js')), calls };
 }
 
 async function patch(handler, body) {

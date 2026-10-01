@@ -8,7 +8,7 @@
 // throw (→ 500) and fail here.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -72,7 +72,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
       verifyUpload: async () => ({}), keyFromUrl: () => 'k',
     },
   };
-  return { handler: require(path.join(__dirname, '../..', rel)), sql };
+  return { handler: viaRouter(path.join(__dirname, '../..', rel)), sql };
 }
 
 async function run(r) {
@@ -84,7 +84,7 @@ async function run(r) {
     const { handler } = loadHandler('api/_band/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5, artist_id: 1 }] : []));
     const res = mockRes();
-    await handler({ method: 'DELETE', url: '/api/test/gigs/5', query: { artist: 'test', id: '5' },
+    await handler({ method: 'DELETE', url: '/api/test/gigs/5',
       body: { hard: true }, headers: { authorization: 'Bearer t' } }, res);
     assertEq(res.statusCode, 200);
     assertEq(res.body, { deleted: true, hard: true });
@@ -94,7 +94,7 @@ async function run(r) {
     const { handler, sql } = loadHandler('api/_band/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5 }] : []));
     const res = mockRes();
-    await handler({ method: 'DELETE', url: '/api/test/gigs/5', query: { artist: 'test', id: '5' },
+    await handler({ method: 'DELETE', url: '/api/test/gigs/5',
       body: { hard: true, cascade: ['setlists'] }, headers: { authorization: 'Bearer t' } }, res);
     assertEq(res.statusCode, 200);
     assert(sql.calls.some(t => t.startsWith('DELETE FROM setlists')), 'expected setlists delete');

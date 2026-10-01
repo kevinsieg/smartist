@@ -59,9 +59,9 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
   }
 }
 
-// Extract the artist slug from req.query or the URL path (Vercel dev workaround).
+// The band's slug, set by the router from /api/:artist/….
 function getSlug(req) {
-  return req.query.artist || req.url.split('?')[0].split('/')[2];
+  return req.query.artist;
 }
 
 function parsePage(req) {
