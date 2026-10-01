@@ -1,5 +1,6 @@
 {
   "regions": ["fra1"],
+  "ignoreCommand": "if [ \"$SKIP_PREVIEW_BUILDS\" = 1 ] && [ \"$VERCEL_GIT_COMMIT_REF\" != dev ] && [ \"$VERCEL_GIT_COMMIT_REF\" != main ]; then echo \"Preview builds off for this project\"; exit 0; fi; exit 1",
   "redirects": [
     { "source": "/impressum", "destination": "https://smartist.studio/impressum", "permanent": false },
     {
