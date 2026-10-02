@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Band Tools — GEMA works importer
+ * smartist — GEMA works importer
  *
  * Imports works and rightholders from GEMA CSV exports — the same import the
  * pro-import page runs (api/_domain/gema.js), from the command line.
@@ -32,8 +32,7 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const flag   = k => { const i = args.indexOf(k); return i !== -1 ? args[i + 1] : null; };
 
-  // --artist like every other script; --band kept for old command lines.
-  const slug  = flag('--artist') || flag('--band') || process.env.ARTIST_SLUG;
+  const slug  = flag('--artist') || process.env.ARTIST_SLUG;
   const files = [['ids', flag('--ids')], ['info', flag('--info')], ['beteiligte', flag('--beteiligte')]]
     .filter(([, file]) => file);
 

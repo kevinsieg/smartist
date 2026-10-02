@@ -138,13 +138,23 @@ function createListView(opts) {
 
     if (opts.groupBy) {
       _renderGroupedList(_items);
+      _focusableRows(body);
     } else {
       body.innerHTML = _items.map(opts.renderRow).join('');
       if (_selectedId) {
         var el = body.querySelector('[data-id="' + _selectedId + '"]');
         if (el) el.classList.add('lv-row--selected');
       }
+      _focusableRows(body);
     }
+  }
+
+  // Rows open the side panel on click; Enter / Space do the same (ui.js).
+  function _focusableRows(body) {
+    body.querySelectorAll('[data-id]').forEach(function(row) {
+      if (row.matches('a, button, input, select, textarea') || row.hasAttribute('tabindex')) return;
+      row.setAttribute('tabindex', '0');
+    });
   }
 
   function _updateCount() {

@@ -8,7 +8,7 @@
 // throw (→ 500) and fail here.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -51,7 +51,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
       getDb: () => sql,
       getArtist: async () => ARTIST,
       getSlug: req => req.query?.artist || 'test',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
     },
   };
   require.cache[authPath] = {
@@ -72,7 +72,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
       verifyUpload: async () => ({}), keyFromUrl: () => 'k',
     },
   };
-  return { handler: require(path.join(__dirname, '../..', rel)), sql };
+  return { handler: viaRouter(path.join(__dirname, '../..', rel)), sql };
 }
 
 async function run(r) {
@@ -81,20 +81,20 @@ async function run(r) {
   console.log(r.B('\ntransaction handlers (sql.begin)'));
 
   await testAsync('gig hard delete commits in a transaction → 200', async () => {
-    const { handler } = loadHandler('api/[artist]/gigs.js',
+    const { handler } = loadHandler('api/_band/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5, artist_id: 1 }] : []));
     const res = mockRes();
-    await handler({ method: 'DELETE', url: '/api/test/gigs/5', query: { artist: 'test', id: '5' },
+    await handler({ method: 'DELETE', url: '/api/test/gigs/5',
       body: { hard: true }, headers: { authorization: 'Bearer t' } }, res);
     assertEq(res.statusCode, 200);
     assertEq(res.body, { deleted: true, hard: true });
   });
 
   await testAsync('gig hard delete with cascade removes setlists then the gig', async () => {
-    const { handler, sql } = loadHandler('api/[artist]/gigs.js',
+    const { handler, sql } = loadHandler('api/_band/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5 }] : []));
     const res = mockRes();
-    await handler({ method: 'DELETE', url: '/api/test/gigs/5', query: { artist: 'test', id: '5' },
+    await handler({ method: 'DELETE', url: '/api/test/gigs/5',
       body: { hard: true, cascade: ['setlists'] }, headers: { authorization: 'Bearer t' } }, res);
     assertEq(res.statusCode, 200);
     assert(sql.calls.some(t => t.startsWith('DELETE FROM setlists')), 'expected setlists delete');
@@ -102,7 +102,7 @@ async function run(r) {
   });
 
   await testAsync('arrangement activate commits in a transaction → 200', async () => {
-    const { handler, sql } = loadHandler('api/[artist]/songs/[...path].js', text => {
+    const { handler, sql } = loadHandler('api/_band/songs/item.js', text => {
       if (text.startsWith('UPDATE song_arrangements SET is_active = true')) return [{ id: 3, is_active: true, rows: [] }];
       return [];
     });
@@ -119,7 +119,7 @@ async function run(r) {
   });
 
   await testAsync('activating an unknown arrangement → 404', async () => {
-    const { handler } = loadHandler('api/[artist]/songs/[...path].js', () => []);
+    const { handler } = loadHandler('api/_band/songs/item.js', () => []);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/songs/10/arrangements/99/activate',
       query: { artist: 'test' }, body: {}, headers: { authorization: 'Bearer t' } }, res);

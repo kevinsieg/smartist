@@ -22,7 +22,7 @@ function run(r) {
   test('empty inputs → default en', () =>
     assertEq(resolveLocale(null, []), 'en'));
   test('null stored, null-ish navLangs → default', () =>
-    assertEq(resolveLocale(null, undefined || []), 'en'));
+    assertEq(resolveLocale(null, []), 'en'));
 
   console.log(B('\ntranslate'));
   const dict = { 'a.b': 'Hello', 'greet': 'Hi {name}!' };

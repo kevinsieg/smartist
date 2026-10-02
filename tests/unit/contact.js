@@ -8,7 +8,7 @@ function makeHandler({ emailFn } = {}) {
   const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const emailPath  = require.resolve(path.join(__dirname, '../../api/_email'));
-  const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
   delete require.cache[dbPath];
   delete require.cache[configPath];
@@ -21,7 +21,7 @@ function makeHandler({ emailFn } = {}) {
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
   };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
@@ -35,7 +35,7 @@ function makeHandler({ emailFn } = {}) {
     exports: { sendEmail: emailFn || (async () => {}) },
   };
 
-  return require(path.join(__dirname, '../../api/config'));
+  return require(path.join(__dirname, '../../api/_config'));
 }
 
 function mockRes() {

@@ -26,12 +26,10 @@ const BLOCKED = [
   { id: 8, artist_id: 1, slug: 'band', name: 'Band', email: NEIGHBOUR, role: 'member' },
 ];
 
-// Mirrors real Postgres: an exact-string column compares case-sensitively
-// unless the SQL text itself wraps the column in lower(...).
-function emailMatches(queryText, rowEmail, paramValue) {
-  return /lower\s*\(/i.test(queryText)
-    ? rowEmail.toLowerCase() === String(paramValue).toLowerCase()
-    : rowEmail === paramValue;
+// Mirrors real Postgres: addresses are stored lowercase (users_email_lowercase)
+// and compared exactly.
+function emailMatches(_queryText, rowEmail, paramValue) {
+  return rowEmail === paramValue;
 }
 
 // A stateful fake `users` table. Unlike deletion.js's fakeSql (one query in,
@@ -47,7 +45,7 @@ function makeDb(rows) {
     writes.push({ text, values });
 
     // _sessionEmail: who is the bearer token's userId.
-    if (/SELECT email(, password_hash)? FROM users WHERE id =/i.test(text)) {
+    if (/SELECT email(, password_hash(, sessions_valid_after)?)? FROM users WHERE id =/i.test(text)) {
       const row = users.find(u => u.id === values[0]);
       return Promise.resolve(row ? [{ email: row.email }] : []);
     }
@@ -62,9 +60,6 @@ function makeDb(rows) {
     // requestDeletion: store the hash on the requester's row(s).
     if (/UPDATE users SET delete_token_hash/i.test(text)) {
       const [hash, expires, email] = values;
-      // Same lower(email) matching as the real column — a bare === here would
-      // let this fake pass even without the fix, since it would silently
-      // agree with a bug that matches nothing for a mixed-case stored address.
       const matched = users.filter(u => emailMatches(text, u.email, email));
       matched.forEach(u => { u.delete_token_hash = hash; u.delete_token_expires = expires; });
       return Promise.resolve(matched.map(u => ({ id: u.id })));
@@ -173,7 +168,7 @@ function load(rows, opts) {
 
   return {
     // The handlers take plain input and return { status, body }; these tests
-    // drive them the way api/config.js does, through the http adapter.
+    // drive them the way api/_config.js does, through the http adapter.
     handlers: asHttp(require(path.join(__dirname, '../../api/_domain/deletion_handlers'))),
     token: require(tokenPath),   // the real one, loaded after the eviction above
     db, sent, deletedFiles, rateKeys,
@@ -224,27 +219,6 @@ async function run(r) {
     const res = mockRes();
     await handlers.confirmDeletion({ headers: {}, body: { token: 'anything' }, query: {} }, res);
     assertEq(res._status, 429);
-  });
-
-  // OAuth signup stores whatever casing the provider sent (registration.js
-  // inserts verified.email unchanged) — the request path must still find and
-  // update that row, or the token is never stored while the handler still
-  // mails a link that can never work.
-  await testAsync('a mixed-case stored address still gets a deletion token it can use', async () => {
-    const mixed = [{ id: 7, artist_id: 1, slug: 'mine', name: 'Mine', email: 'Some.One@Example.COM', role: 'admin' }];
-    const { handlers, token, sent, db } = load(mixed);
-    const sessionToken = token.generateUserToken(7, 'admin', 60_000);
-    const res = mockRes();
-    await handlers.requestDeletion({ headers: { authorization: 'Bearer ' + sessionToken }, body: {}, query: {} }, res);
-    assertEq(res._status, 200);
-    assertEq(sent.length, 1);
-    const stored = db.users.find(u => u.id === 7);
-    assert(stored.delete_token_hash, 'the token was never stored against the mixed-case row');
-
-    const raw = sent[0].html.match(/token=([a-f0-9]+)/)[1];
-    const confirmRes = mockRes();
-    await handlers.confirmDeletion({ headers: {}, body: { token: raw, confirm: true }, query: {} }, confirmRes);
-    assertEq(confirmRes._status, 200);
   });
 
   // The whole point of the two-phase split: opening the link is not a gesture.

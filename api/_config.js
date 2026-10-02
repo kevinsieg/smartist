@@ -1,12 +1,12 @@
 const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr } = require('./_validate');
-const { checkRateLimit, clientIp } = require('./_ratelimit');
+const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
-const { verifyUserToken, passwordMatches } = require('./_token');
+const { verifyUserToken, sessionValid } = require('./_token');
 const { isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
-const { configSongs } = require('./_domain/songs');
+const { configSongs, publicSong } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const { envReport, SCHEMA_VERSION } = require('./_env');
 const admin = require('./_domain/admin');
@@ -35,6 +35,8 @@ module.exports = wrap(async function handler(req, res) {
     if (action === 'upgrade')             return upgrade(req, res);
     if (action === 'downgrade')           return downgrade(req, res);
     if (action === 'login')               return run(login.passwordLogin, req, res);
+    if (action === 'magic-login')         return run(login.magicLogin, req, res);
+    if (action === 'logout-everywhere')   return run(login.logoutEverywhere, req, res);
     if (action === 'request-reset')       return run(reset.requestReset, req, res);
     if (action === 'set-password')        return run(reset.setPassword, req, res);
     if (action === 'signup-link')         return run(signup.signupLink, req, res);
@@ -131,6 +133,8 @@ async function downgrade(req, res) {
 }
 
 // ── PATCH — update artist name / config ─────────────────────────────────────────
+const CONFIG_MAX_BYTES = 64 * 1024;
+
 async function patchConfig(req, res) {
   const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
   if (!slugParam) return res.status(400).json({ error: 'slug required' });
@@ -158,7 +162,13 @@ async function patchConfig(req, res) {
       if (key !== null && !key.startsWith(`bands/${band.slug}/`))
         return res.status(400).json({ error: `Invalid ${k}` });
     }
-    await sql`UPDATE artists SET config = config || ${update} WHERE id = ${band.id}`;
+    // artists.* is read on every authenticated request of the band, so its
+    // settings stay small: a merge past CONFIG_MAX_BYTES is refused.
+    const [saved] = await sql`
+      UPDATE artists SET config = config || ${update}
+      WHERE id = ${band.id} AND octet_length((config || ${update})::text) <= ${CONFIG_MAX_BYTES}
+      RETURNING id`;
+    if (!saved) return res.status(413).json({ error: 'Settings too large' });
   }
   return res.json({ ok: true });
 }
@@ -181,8 +191,8 @@ async function myArtists(req, res) {
   const claim = verifyUserToken(authHeader);
   const sql = getDb();
   if (claim) {
-    const [row] = await sql`SELECT password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
-    if (row && !passwordMatches(claim, row)) return res.status(401).json({ error: 'Unauthorised' });
+    const [row] = await sql`SELECT password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+    if (row && !sessionValid(claim, row)) return res.status(401).json({ error: 'Unauthorised' });
     const artists = await getArtistsForUser(claim.userId, sql);
     // Every users row belongs to a workspace, so none means the user is gone
     // (account deleted) while its signed token is still in date.
@@ -209,12 +219,20 @@ async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) 
   const size = Number(req.query.size);
   if (!Number.isInteger(size) || size <= 0 || size > IMAGE_MAX_BYTES)
     return res.status(400).json({ error: `size required, max ${IMAGE_MAX_BYTES / 1024 / 1024} MB` });
+  if (await presignLimited(band.id)) return res.status(429).json({ error: 'Too many uploads — try again later' });
   const key = `bands/${band.slug}/${kind}`;
   const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType, size);
   return res.json({ uploadUrl, publicUrl });
 }
 
-const PRIVATE_CONFIG_KEYS = ['gemaIpNameNumber', 'upgradedAt'];
+// What a visitor without a session sees of a band's config: branding, display
+// settings and its public switches. An allowlist, so a key added later stays
+// private until it is named here (gemaIpNameNumber and upgradedAt never are).
+const PUBLIC_CONFIG_KEYS = [
+  'logoUrl', 'faviconUrl', 'platforms', 'plan',
+  'displayFields', 'hiddenSongFields', 'filterFields', 'arrangementConfig',
+  'publicCatalogue', 'publicStage',
+];
 
 // ── GET — public config (songs, counts, feature flags) ──────────────────────────
 // ?light=1 skips the songs payload (full song rows + GEMA join) for pages that
@@ -249,8 +267,7 @@ async function publicConfig(req, res, slugParam) {
   // rights-administration details or plan history.
   let config = band.config;
   if (!user && config) {
-    config = { ...config };
-    for (const k of PRIVATE_CONFIG_KEYS) delete config[k];
+    config = Object.fromEntries(PUBLIC_CONFIG_KEYS.filter(k => k in band.config).map(k => [k, band.config[k]]));
   }
   res.json({
     slug:          band.slug,
@@ -258,19 +275,18 @@ async function publicConfig(req, res, slugParam) {
     config,
     // Per-workspace role of the authenticated caller (the session token's own
     // role claim is only valid for the workspace it was issued for, so the
-    // client must read this instead of decoding the token). Bootstrap
-    // password sessions (user.id === null) report null — the client treats
-    // null as "legacy admin" and uses it to detect bootstrap logins.
-    // Band-password sessions have no users row; a full one reports null
-    // ("legacy admin"), a demo-gate session reports its real, lesser role.
-    role:          user ? ((user.id != null || user.role !== 'admin') ? user.role : null) : null,
-    songs:         light ? undefined : songs,
+    // client must read this instead of decoding the token). The demo gate's
+    // session reports 'member'; no session reports null.
+    role:          user ? user.role : null,
+    songs:         light ? undefined : (user ? songs : songs.map(publicSong)),
     counts,
-    plan:          planSummary(band),
-    usage:         {
+    // Visitors get the feature list the nav needs, not the plan, limits or
+    // storage use.
+    plan:          user ? planSummary(band) : { features: planSummary(band).features },
+    usage:         user ? {
       storageUsedBytes: Number(band.storage_used_bytes || 0),
       songs: (counts && counts.songs != null) ? counts.songs : null,
-    },
+    } : undefined,
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
     singleTenant:  !!process.env.ARTIST_SLUG,

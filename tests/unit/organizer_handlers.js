@@ -5,7 +5,7 @@
 // all three are easy to break without noticing.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -46,7 +46,7 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
       getDb: () => sql,
       getArtist: async () => artist,
       getSlug: req => req.query?.artist || 'test',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };
@@ -64,7 +64,7 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
       canOpenStage: () => true,
     },
   };
-  return { handler: require(path.join(__dirname, '../..', rel)), calls };
+  return { handler: viaRouter(path.join(__dirname, '../..', rel)), calls };
 }
 
 async function call(handler, method, url, { query = {}, body } = {}) {
@@ -73,8 +73,8 @@ async function call(handler, method, url, { query = {}, body } = {}) {
   return res;
 }
 
-const LIST = 'api/[artist]/organizers.js';
-const ITEM = 'api/[artist]/organizers/[...path].js';
+const LIST = 'api/_band/organizers.js';
+const ITEM = 'api/_band/organizers/item.js';
 
 async function run(r) {
   const { testAsync, assert, assertEq } = r;
@@ -90,7 +90,7 @@ async function run(r) {
 
   await testAsync('GET one requires a session', async () => {
     const { handler } = loadHandler(ITEM, () => [ORG], { authFails: true });
-    const res = await call(handler, 'GET', '/api/test/organizers/5', { query: { path: ['5'] } });
+    const res = await call(handler, 'GET', '/api/test/organizers/5');
     assertEq(res.statusCode, 401);
   });
 
@@ -112,7 +112,7 @@ async function run(r) {
   // ── list ───────────────────────────────────────────────────────────────────
   await testAsync('?slim returns only id, name and city', async () => {
     const { handler, calls } = loadHandler(LIST, () => [{ id: 5, name: 'Giesserei', city: 'Konstanz' }]);
-    const res = await call(handler, 'GET', '/api/test/organizers?slim=1', { query: { slim: '1' } });
+    const res = await call(handler, 'GET', '/api/test/organizers?slim=1');
     assertEq(res.statusCode, 200);
     const select = calls.find(c => c.text.includes('FROM organizers'));
     assert(!/SELECT \*/.test(select.text), 'slim must not select every column');
@@ -121,7 +121,7 @@ async function run(r) {
 
   await testAsync('a search term is passed as a pattern', async () => {
     const { handler, calls } = loadHandler(LIST, () => [{ ...ORG, total: 1 }]);
-    await call(handler, 'GET', '/api/test/organizers?q=giess', { query: { q: 'giess' } });
+    await call(handler, 'GET', '/api/test/organizers?q=giess');
     const select = calls.find(c => c.text.includes('FROM organizers'));
     assert(select.values.includes('%giess%'), 'search pattern not applied');
   });
@@ -160,24 +160,16 @@ async function run(r) {
   });
 
   // ── item ───────────────────────────────────────────────────────────────────
-  await testAsync('the id comes from the URL when req.query.path is empty (vercel dev)', async () => {
-    const { handler, calls } = loadHandler(ITEM, () => [ORG]);
-    const res = await call(handler, 'GET', '/api/test/organizers/5');
-    assertEq(res.statusCode, 200);
-    const select = calls.find(c => c.text.includes('FROM organizers'));
-    assert(select.values.includes(5), 'id 5 not used in the query');
-  });
-
   await testAsync('a non-numeric id is rejected before any query', async () => {
     const { handler, calls } = loadHandler(ITEM, () => []);
-    const res = await call(handler, 'GET', '/api/test/organizers/abc', { query: { path: ['abc'] } });
+    const res = await call(handler, 'GET', '/api/test/organizers/abc');
     assertEq(res.statusCode, 400);
     assertEq(calls.length, 0);
   });
 
   await testAsync('every query is scoped to the artist', async () => {
     const { handler, calls } = loadHandler(ITEM, () => [ORG]);
-    await call(handler, 'GET', '/api/test/organizers/5', { query: { path: ['5'] } });
+    await call(handler, 'GET', '/api/test/organizers/5');
     const select = calls.find(c => c.text.includes('FROM organizers'));
     assert(/artist_id =/.test(select.text), 'query must filter by artist_id');
   });
@@ -185,7 +177,7 @@ async function run(r) {
   await testAsync('PUT refuses to modify a deleted organizer', async () => {
     const { handler } = loadHandler(ITEM, () => [{ ...ORG, deleted: true }]);
     const res = await call(handler, 'PUT', '/api/test/organizers/5',
-      { query: { path: ['5'] }, body: { name: 'Renamed' } });
+      { body: { name: 'Renamed' } });
     assertEq(res.statusCode, 409);
   });
 
@@ -194,7 +186,7 @@ async function run(r) {
     const { handler, calls } = loadHandler(ITEM, text =>
       (text.startsWith('SELECT * FROM organizers') ? [stored] : [{ ...stored, name: 'Renamed' }]));
     const res = await call(handler, 'PUT', '/api/test/organizers/5',
-      { query: { path: ['5'] }, body: { name: 'Renamed', social_links: { instagram: 'ig' } } });
+      { body: { name: 'Renamed', social_links: { instagram: 'ig' } } });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE organizers'));
     assertEq(written(update).social_links, { facebook: 'fb', instagram: 'ig' }, 'social links should merge, not replace');
@@ -204,7 +196,7 @@ async function run(r) {
   await testAsync('DELETE without hard only marks it deleted', async () => {
     const { handler, calls } = loadHandler(ITEM, text =>
       (text.startsWith('SELECT * FROM organizers') ? [ORG] : [{ ...ORG, deleted: true }]));
-    const res = await call(handler, 'DELETE', '/api/test/organizers/5', { query: { path: ['5'] } });
+    const res = await call(handler, 'DELETE', '/api/test/organizers/5');
     assertEq(res.statusCode, 200);
     assert(calls.some(c => /UPDATE organizers SET deleted/.test(c.text)), 'expected a soft delete');
     assert(!calls.some(c => /DELETE FROM organizers/.test(c.text)), 'must not remove the row');
@@ -213,7 +205,7 @@ async function run(r) {
   await testAsync('hard delete removes setlists before gigs before the organizer', async () => {
     const { handler, calls } = loadHandler(ITEM, () => [ORG]);
     const res = await call(handler, 'DELETE', '/api/test/organizers/5',
-      { query: { path: ['5'] }, body: { hard: true, cascade: ['setlists', 'gigs'] } });
+      { body: { hard: true, cascade: ['setlists', 'gigs'] } });
     assertEq(res.statusCode, 200);
     assertEq(res.body, { deleted: true, hard: true });
     const order = calls.map(c => c.text).filter(t => /^DELETE FROM/.test(t))
@@ -225,7 +217,7 @@ async function run(r) {
   await testAsync('hard delete without cascade leaves gigs alone', async () => {
     const { handler, calls } = loadHandler(ITEM, () => [ORG]);
     await call(handler, 'DELETE', '/api/test/organizers/5',
-      { query: { path: ['5'] }, body: { hard: true } });
+      { body: { hard: true } });
     assert(!calls.some(c => /DELETE FROM gigs/.test(c.text)), 'gigs must survive without cascade');
     assert(calls.some(c => /DELETE FROM organizers/.test(c.text)), 'organizer should still go');
   });

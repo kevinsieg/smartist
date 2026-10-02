@@ -6,7 +6,7 @@
 // failed — deleteFromR2 reports whether the object really went away.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -40,7 +40,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
   const dbPath      = modulePath('api/_db');
   const authPath    = modulePath('api/_auth');
   const tokenPath   = modulePath('api/_token');
-  const handlerPath = modulePath('api/[artist]/songs.js');
+  const handlerPath = modulePath('api/_band/songs/item.js');
   const r2Path      = modulePath('api/_r2');
   const rlPath      = modulePath('api/_ratelimit');
   const emailPath   = modulePath('api/_email');
@@ -72,7 +72,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
   };
 
   require.cache[rlPath]    = { id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false } };
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' } };
   require.cache[emailPath] = { id: emailPath, filename: emailPath, loaded: true, exports: { sendEmail: async () => {} } };
   require.cache[aiPath]    = { id: aiPath, filename: aiPath, loaded: true,
     exports: { suggestLyricsWithAI: async () => ({ lyrics: null, skipped: true }) } };
@@ -89,33 +89,34 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
       getDb: () => sql,
       getArtist: async slug => (slug === ARTIST.slug ? ARTIST : null),
       getSlug: req => req.query?.artist || ARTIST.slug,
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     } };
 
   const tokenApi = require(path.join(__dirname, '../../api/_token'));
   return {
-    handler: require(path.join(__dirname, '../../api/[artist]/songs.js')),
+    handler: viaRouter(path.join(__dirname, '../../api/_band/songs/item.js')),
     token:   tokenApi.generateUserToken(7, 'member', tokenApi.TTL_8H),
     deltas,
     deleted,
   };
 }
 
-async function call(handler, token, body) {
+// PUT /songs/5/audio confirms an upload, DELETE removes the file.
+async function call(handler, token, { method, body }) {
   const res = mockRes();
   await handler({
-    method: 'POST',
-    url: `/api/${ARTIST.slug}/songs`,
-    query: { artist: ARTIST.slug },
+    method,
+    url: `/api/${ARTIST.slug}/songs/5/audio`,
+    query: { artist: ARTIST.slug, path: ['5', 'audio'] },
     headers: { authorization: `Bearer ${token}` },
     body,
   }, res);
   return res;
 }
 
-const confirmAudio = { media_confirm_id: 5, media_type: 'audio', publicUrl: NEW_URL };
-const deleteAudio  = { media_delete_id: 5, media_type: 'audio' };
+const confirmAudio = { method: 'PUT', body: { publicUrl: NEW_URL } };
+const deleteAudio  = { method: 'DELETE' };
 
 async function run(r) {
   const { testAsync, assert, assertEq } = r;

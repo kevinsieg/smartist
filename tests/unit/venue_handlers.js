@@ -3,7 +3,7 @@
 // Venue POST/PUT handling of the phone and contact_name fields.
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -42,7 +42,7 @@ function loadHandler(rel, route, opts) {
       getDb: () => sql,
       getArtist: async () => ARTIST,
       getSlug: () => 'test',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };
@@ -61,7 +61,7 @@ function loadHandler(rel, route, opts) {
   };
   const began = { value: false };
   sql.begin = async fn => { began.value = true; return fn(sql); };
-  return { handler: require(path.join(__dirname, '../..', rel)), calls, began };
+  return { handler: viaRouter(path.join(__dirname, '../..', rel)), calls, began };
 }
 
 async function call(handler, method, url, body) {
@@ -80,7 +80,7 @@ async function run(r) {
   await r.testAsync('venue reads always need a session — no setting opens them', async () => {
     // Venue rows carry contact_name, phone and generic_email. The old private
     // flag published them when switched off; there is deliberately no flag now.
-    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => [], { authFails: true });
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => [], { authFails: true });
     const res = await call(handler, 'GET', '/api/test/venues');
     r.assertEq(res.statusCode, 401);
     r.assertEq(calls.length, 0, 'must not query before the auth gate');
@@ -90,7 +90,7 @@ async function run(r) {
   console.log(r.B('\nvenue handlers (phone, contact_name)'));
 
   await testAsync('POST stores phone and contact_name', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', phone: ' 0711 123 ', contact_name: 'Max' });
     assertEq(res.statusCode, 201);
     const insert = calls.find(c => c.text.startsWith('INSERT INTO venues'));
@@ -100,7 +100,7 @@ async function run(r) {
   });
 
   await testAsync('POST stores postcode, generic_email and website', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues',
       { name: 'Club', postcode: '78462', generic_email: 'booking@club.de', website: 'https://club.de' });
     assertEq(res.statusCode, 201);
@@ -111,42 +111,42 @@ async function run(r) {
   });
 
   await testAsync('POST rejects postcode over 20 chars → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
+    const { handler } = loadHandler('api/_band/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', postcode: '1'.repeat(21) });
     assertEq(res.statusCode, 400);
     assert(/^postcode too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects website over 500 chars → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
+    const { handler } = loadHandler('api/_band/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', website: 'https://x.de/' + 'a'.repeat(500) });
     assertEq(res.statusCode, 400);
     assert(/^website too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects generic_email over 254 chars → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
+    const { handler } = loadHandler('api/_band/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', generic_email: 'a'.repeat(250) + '@x.de' });
     assertEq(res.statusCode, 400);
     assert(/^generic_email too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects phone over 100 chars → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
+    const { handler } = loadHandler('api/_band/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', phone: 'x'.repeat(101) });
     assertEq(res.statusCode, 400);
     assert(/^phone too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('POST rejects contact_name over 200 chars → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js', () => [{ id: 9 }]);
+    const { handler } = loadHandler('api/_band/venues.js', () => [{ id: 9 }]);
     const res = await call(handler, 'POST', '/api/test/venues', { name: 'Club', contact_name: 'x'.repeat(201) });
     assertEq(res.statusCode, 400);
     assert(/^contact_name too long/.test(res.body?.error), res.body?.error);
   });
 
   await testAsync('PUT updates phone and contact_name', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues/[...path].js', byId);
+    const { handler, calls } = loadHandler('api/_band/venues/item.js', byId);
     const res = await call(handler, 'PUT', '/api/test/venues/5', { name: 'Old', phone: '+41 2', contact_name: 'Ben' });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE venues'));
@@ -155,7 +155,7 @@ async function run(r) {
   });
 
   await testAsync('PUT writes only the fields sent', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues/[...path].js', byId);
+    const { handler, calls } = loadHandler('api/_band/venues/item.js', byId);
     const res = await call(handler, 'PUT', '/api/test/venues/5', { name: 'Old' });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE venues'));
@@ -163,31 +163,29 @@ async function run(r) {
   });
 
   await testAsync('PUT with null clears a field; bad values are 400, not 500', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues/[...path].js', byId);
+    const { handler, calls } = loadHandler('api/_band/venues/item.js', byId);
     const res = await call(handler, 'PUT', '/api/test/venues/5', { phone: null });
     assertEq(res.statusCode, 200);
     assertEq(written(calls.find(c => c.text.startsWith('UPDATE venues'))).phone, null);
     for (const body of [{ size: 'big' }, { deadline: '2026-02-31' }, { website: 'javascript:alert(1)' }, { name: '' }, { alive: 'maybe' }]) {
-      const bad = await call(loadHandler('api/[artist]/venues/[...path].js', byId).handler, 'PUT', '/api/test/venues/5', body);
+      const bad = await call(loadHandler('api/_band/venues/item.js', byId).handler, 'PUT', '/api/test/venues/5', body);
       assertEq(bad.statusCode, 400, JSON.stringify(body));
     }
   });
 
   await testAsync('GET sorts by a whitelisted column', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => []);
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', sort: 'last_communication', dir: 'desc' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?sort=last_communication&dir=desc', headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(JSON.stringify(select.values).includes('last_communication'), 'sort column not used in ORDER BY');
     assert(JSON.stringify(select.values).includes('DESC'), 'sort direction not applied');
   });
 
   await testAsync('GET ignores an unknown sort column (no SQL injection)', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => []);
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', sort: 'name; DROP TABLE venues' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?sort=' + encodeURIComponent('name; DROP TABLE venues'), headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(!select.text.includes('DROP TABLE'), 'raw sort value reached the query');
     assert(!JSON.stringify(select.values).includes('DROP TABLE'), 'raw sort value passed into the query');
@@ -195,19 +193,17 @@ async function run(r) {
   });
 
   await testAsync('GET filters by letter for the A-Z jump', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => []);
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', letter: 'K' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?letter=K', headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(select.values.includes('K%'), 'letter filter not applied');
   });
 
   await testAsync('GET ignores a letter that is not a single character', async () => {
-    const { handler, calls } = loadHandler('api/[artist]/venues.js', () => []);
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
     const res = mockRes();
-    await handler({ method: 'GET', url: '/api/test/venues', headers: {},
-      query: { artist: 'test', letter: 'Kon' } }, res);
+    await handler({ method: 'GET', url: '/api/test/venues?letter=Kon', headers: {} }, res);
     const select = calls.find(c => c.text.includes('FROM venues'));
     assert(!select.values.includes('Kon%'), 'multi-character letter should be ignored');
   });
@@ -216,7 +212,7 @@ async function run(r) {
     const stored = { id: 5, artist_id: 1, status: 'prospect', category: 'pub', comment: 'old note',
       booking_channel: 'email', season: 'summer', preferred_period: 'June', remuneration: '150',
       last_communication: '2026-01-01', deadline: null };
-    const { handler, calls } = loadHandler('api/[artist]/venues.js',
+    const { handler, calls } = loadHandler('api/_band/venues.js',
       text => (text.startsWith('SELECT * FROM venues') ? [stored] : [{ ...stored, status: 'contacted' }]));
     const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, status: 'contacted', comment: '' }]);
     assertEq(res.statusCode, 200);
@@ -232,7 +228,7 @@ async function run(r) {
   await testAsync('PATCH reports which rows were rejected and why', async () => {
     const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
       season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null };
-    const { handler } = loadHandler('api/[artist]/venues.js',
+    const { handler } = loadHandler('api/_band/venues.js',
       text => (text.startsWith('SELECT * FROM venues') ? [stored] : [stored]));
     const res = await call(handler, 'PATCH', '/api/test/venues', [
       { id: 5, last_communication: 'gestern' },
@@ -250,7 +246,7 @@ async function run(r) {
   await testAsync('PATCH writes all rows in one transaction', async () => {
     const stored = id => ({ id, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
       season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null });
-    const { handler, calls, began } = loadHandler('api/[artist]/venues.js',
+    const { handler, calls, began } = loadHandler('api/_band/venues.js',
       text => (text.startsWith('SELECT * FROM venues') ? [stored(5), stored(6)] : [{ id: 5 }, { id: 6 }]));
     const res = await call(handler, 'PATCH', '/api/test/venues',
       [{ id: 5, status: 'contacted' }, { id: 6, status: 'declined' }]);
@@ -264,7 +260,7 @@ async function run(r) {
   await testAsync('PATCH skips rows with an invalid date and reports the count', async () => {
     const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
       season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null };
-    const { handler } = loadHandler('api/[artist]/venues.js',
+    const { handler } = loadHandler('api/_band/venues.js',
       text => (text.startsWith('SELECT * FROM venues') ? [stored] : [stored]));
     const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, last_communication: 'gestern' }]);
     assertEq(res.statusCode, 200);
@@ -274,7 +270,7 @@ async function run(r) {
   await testAsync('PATCH accepts a date and clears one with an empty string', async () => {
     const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
       season: null, preferred_period: null, remuneration: null, last_communication: '2020-01-01', deadline: '2020-02-02' };
-    const { handler, calls } = loadHandler('api/[artist]/venues.js',
+    const { handler, calls } = loadHandler('api/_band/venues.js',
       text => (text.startsWith('SELECT * FROM venues') ? [stored] : [stored]));
     const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, last_communication: '2026-09-21', deadline: '' }]);
     assertEq(res.body?.count, 1);
@@ -283,19 +279,19 @@ async function run(r) {
   });
 
   await testAsync('PATCH without an array → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js', () => []);
+    const { handler } = loadHandler('api/_band/venues.js', () => []);
     const res = await call(handler, 'PATCH', '/api/test/venues', { id: 5 });
     assertEq(res.statusCode, 400);
   });
 
   await testAsync('PATCH with more than 200 rows → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js', () => []);
+    const { handler } = loadHandler('api/_band/venues.js', () => []);
     const res = await call(handler, 'PATCH', '/api/test/venues', Array.from({ length: 201 }, (_, i) => ({ id: i + 1 })));
     assertEq(res.statusCode, 400);
   });
 
   await testAsync('PATCH ignores ids that belong to another artist', async () => {
-    const { handler } = loadHandler('api/[artist]/venues.js',
+    const { handler } = loadHandler('api/_band/venues.js',
       text => (text.startsWith('SELECT * FROM venues') ? [] : []));
     const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 999, status: 'contacted' }]);
     assertEq(res.statusCode, 200);
@@ -303,7 +299,7 @@ async function run(r) {
   });
 
   await testAsync('PUT rejects phone over 100 chars → 400', async () => {
-    const { handler } = loadHandler('api/[artist]/venues/[...path].js', byId);
+    const { handler } = loadHandler('api/_band/venues/item.js', byId);
     const res = await call(handler, 'PUT', '/api/test/venues/5', { name: 'Old', phone: 'x'.repeat(101) });
     assertEq(res.statusCode, 400);
     assert(/^phone too long/.test(res.body?.error), res.body?.error);

@@ -1,6 +1,6 @@
 'use strict';
 
-// Song reads and writes shared by api/[artist]/songs.js and the songs catch-all.
+// Song reads and writes shared by api/_band/songs.js and api/_band/songs/item.js.
 //
 // Lyrics live in song_lyrics, not in songs.extra: a band's lyrics run to
 // megabytes, and the song list is loaded on every songs and setlist page. Lists
@@ -164,7 +164,18 @@ async function lyricsSearchInfo(sql, artistId, songId) {
   return song ?? null;
 }
 
+// What a visitor without a session may see of a song row: everything but the
+// band's private notes. Every anonymous read (public catalogue list, /api/config,
+// one song, a stage setlist) goes through this, so a new private column is
+// hidden in one place.
+const PRIVATE_SONG_KEYS = ['comment'];
+function publicSong(row) {
+  const out = { ...row };
+  for (const k of PRIVATE_SONG_KEYS) delete out[k];
+  return out;
+}
+
 module.exports = {
-  LYRICS_MAX, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
+  LYRICS_MAX, PRIVATE_SONG_KEYS, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
   splitMovedKeys, writeLyrics, lyricsSearchInfo,
 };

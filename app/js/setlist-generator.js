@@ -272,6 +272,29 @@ function moveSong(index, dir) {
   [currentSet[index], currentSet[newIndex]] = [currentSet[newIndex], currentSet[index]];
   _splitAt = null;
   renderResult(currentSet);
+  focusSongAfterMove(document.querySelector('.setlist-result .song-list'), newIndex, dir);
+  announce(t('setlist.movedTo', { title: currentSet[newIndex].title, pos: newIndex + 1, total: currentSet.length }));
+}
+
+// The list is rebuilt after every move or removal; put focus back where the
+// user was, so keyboard and switch users can keep going (shared with the
+// saved-setlist editor).
+function focusSongAfterMove(ul, index, dir) {
+  if (!ul) return;
+  var li = ul.querySelector('.song-item[data-index="' + index + '"]');
+  if (!li) return;
+  var btns = li.querySelectorAll('.move-btn');
+  var btn = btns[dir < 0 ? 0 : 1];
+  if (!btn || btn.disabled) btn = btns[dir < 0 ? 1 : 0];
+  if (btn) btn.focus();
+}
+
+function focusSongAfterRemove(ul, index, fallback) {
+  var items = ul ? ul.querySelectorAll('.song-item') : [];
+  var li = items[Math.min(index, items.length - 1)];
+  var btn = li && li.querySelector('.song-remove-btn, [data-remove]');
+  if (btn) btn.focus();
+  else if (fallback) fallback.focus();
 }
 
 // --- Render controls ---
@@ -362,7 +385,7 @@ function renderControls() {
       <div class="gen-sentence">
         <button class="btn generate-btn" data-onclick="onGenerate()">${t('setlist.generateBtn')}</button>
         <span class="gen-prose">${t('setlist.genProseOf')}</span>
-        <input type="number" id="target-min" min="0" max="300" value="45" class="gen-duration-input">
+        <input type="number" id="target-min" min="0" max="300" value="45" class="gen-duration-input" inputmode="numeric" aria-label="${t('setlist.targetMinLabel')}">
         <span class="gen-prose">${t('setlist.genProseMin')}${filterRows ? ' ' + t('setlist.genProseWith') : ''}</span>
         ${filterRows ? `<button class="controls-toggle" id="controls-toggle" data-onclick="toggleControls()" aria-expanded="false"><span class="toggle-arrow">▼</span> ${t('setlist.filtersBtn')}</button>` : ''}
       </div>
@@ -390,7 +413,7 @@ function renderControls() {
           <input type="checkbox" id="group-by-tag">
           ${t('setlist.groupByTag')}
         </label>` : ''}
-        <span class="active-toggle"${songFieldHidden(bandConfig, 'extra.banjoCapo') && songFieldHidden(bandConfig, 'extra.gitCapo') ? ' hidden' : ''}>
+        <span class="active-toggle" role="group" aria-label="${escHtml(t('setlist.minimizeCapo').replace(/:\s*$/, ''))}"${songFieldHidden(bandConfig, 'extra.banjoCapo') && songFieldHidden(bandConfig, 'extra.gitCapo') ? ' hidden' : ''}>
           ${t('setlist.minimizeCapo')}
           ${songFieldHidden(bandConfig, 'extra.banjoCapo') ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-banjo-capo" checked> ${t('setlist.capoBanjo')}</label>`}
           ${songFieldHidden(bandConfig, 'extra.gitCapo')   ? '' : `<label class="active-toggle"><input type="checkbox" id="minimize-git-capo" checked> ${t('setlist.capoGuitar')}</label>`}
@@ -449,7 +472,7 @@ function renderResult(songs) {
       git   !== null && git   !== '0' ? `G&nbsp;${escHtml(git)}`   : '',
     ].filter(Boolean);
     const capoSpan = capoParts.length
-      ? `<span class="capo-badge${capoChanged ? ' capo-change' : ''}" title="${escHtml(capoChanged ? t('setlist.capoChanged') : t('setlist.capoTitle'))}">Capo: ${capoParts.join(' | ')}</span>`
+      ? `<span class="capo-badge${capoChanged ? ' capo-change' : ''}" title="${escHtml(capoChanged ? t('setlist.capoChanged') : t('setlist.capoTitle'))}">Capo: ${capoParts.join(' | ')}${capoChanged ? `<span class="sr-only"> (${escHtml(t('setlist.capoChangedShort'))})</span>` : ''}</span>`
       : '';
 
     const s = (v, field, title) => v && !songFieldHidden(bandConfig, field) ? `<span data-field="${escHtml(field)}" title="${escHtml(title)}">${escHtml(v)}</span>` : '';
@@ -460,6 +483,7 @@ function renderResult(songs) {
       s(energyLabel(song.energy), 'energy',        t('setlist.energyTitle')),
       s(song.genre       || '',  'genre',         t('setlist.genreTitle')),
       song.extra?.harp ? s(t('setlist.harmonica'), 'extra.harp', t('setlist.harmonicaTitle')) : '',
+      song.extra?.aCapella ? s(t('setlist.aCapella'), 'extra.aCapella', t('setlist.aCapellaTitle')) : '',
       song.extra?.git2 ? s(t('setlist.guitar2'),   'extra.git2', t('setlist.guitar2Title')) : '',
     ].filter(Boolean).join('');
 
@@ -484,7 +508,7 @@ function renderResult(songs) {
       <div class="song-actions">
         <button class="move-btn" data-onclick="moveSong(${i},-1)" ${isFirst ? 'disabled' : ''} aria-label="${t('setlist.moveUp')}">↑</button>
         <button class="move-btn" data-onclick="moveSong(${i},1)"  ${isLast  ? 'disabled' : ''} aria-label="${t('setlist.moveDown')}">↓</button>
-        <button class="song-remove-btn" data-onclick="removeFromSet(${i})" title="${t('setlist.removeTitle')}">&#215;</button>
+        <button class="song-remove-btn" data-onclick="removeFromSet(${i})" title="${t('setlist.removeTitle')}" aria-label="${escHtml(t('setlist.removeSong', { title: song.title }))}">&#215;</button>
       </div>
     </li>`;
   });
@@ -523,7 +547,7 @@ function renderResult(songs) {
       <h2>${headerText}${feelBadge}</h2>
       <ul class="song-list">${items}</ul>
       <div class="add-song-row">
-        <select id="add-song-select" data-onchange="addSongToSet(this)">
+        <select id="add-song-select" aria-label="${t('setlist.addSongLabel')}" data-onchange="addSongToSet(this)">
           <option value="">${t('setlist.addSongPlaceholder')}</option>
           ${options}
           ${artistSlug && getToken() ? `<option value="__new">${t('setlist.newSongOption')}</option>` : ''}
@@ -542,9 +566,11 @@ function renderResult(songs) {
 }
 
 function removeFromSet(index) {
-  currentSet.splice(index, 1);
+  const [removed] = currentSet.splice(index, 1);
   _splitAt = null;
   renderResult(currentSet);
+  focusSongAfterRemove(document.querySelector('.setlist-result .song-list'), index, document.getElementById('add-song-select'));
+  if (removed) announce(t('setlist.removedSong', { title: removed.title }));
 }
 
 function addSongToSet(select) {
@@ -753,12 +779,13 @@ document.getElementById('signin-btn').addEventListener('click', () => {
 
 async function loadGigs() {
   try {
-    const r = await apiFetch(`/api/${artistSlug}/gigs?limit=500`);
+    const r = await apiFetch(`/api/${artistSlug}/gigs?slim=1`);
     if (!r.ok) return;
-    const { rows } = await r.json();
+    const gigs = await r.json();
     const sel = document.getElementById('gig-select');
     while (sel.options.length > 1) sel.remove(1);
-    for (const g of rows) {
+    for (const g of gigs) {
+      if (g.deleted) continue;
       const opt = document.createElement('option');
       opt.value = g.id;
       opt.textContent = g.title + (g.date ? ' — ' + formatDate(g.date) : '');

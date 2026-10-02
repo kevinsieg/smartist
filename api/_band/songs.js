@@ -1,33 +1,30 @@
-const { getDb, getSlug, parsePage } = require('../_db');
-const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
-const { validateStr, validateNum } = require('../_validate');
+const { getDb, getSlug, parsePage, trimSongLogs } = require('../_db');
+const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
+const { validateStr, validateNum, jsonBytes } = require('../_validate');
 const { wrap } = require('../_handler');
-const { clientIp, checkRateLimit } = require('../_ratelimit');
-const { suggestLyrics } = require('../_lyrics');
+const { checkRateLimit } = require('../_ratelimit');
 const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { keyFromUrl } = require('../_r2');
-const { MEDIA_CONFIGS, presignMedia, confirmMedia, deleteMedia } = require('../_media');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
-  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, writeLyrics,
+  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong,
 } = require('../_domain/songs');
 const { songImport } = require('../_domain/song_import');
 
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
-async function genresOf(sql, artistId) {
-  const rows = await sql`
-    SELECT DISTINCT genre FROM songs
-    WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> ''`;
-  return rows.map(r => r.genre);
-}
-
-async function tagsOf(sql, artistId) {
-  const rows = await sql`
-    SELECT DISTINCT unnest(tags) AS tag FROM songs
-    WHERE artist_id = ${artistId} AND NOT deleted`;
-  return rows.map(r => r.tag);
+// What a new song is checked against: the band's live song count (plan
+// limit), genres (spelling) and tags (casing), in one statement.
+async function songValues(sql, artistId) {
+  const [row] = await sql`
+    SELECT
+      (SELECT count(*)::int FROM songs WHERE artist_id = ${artistId} AND NOT deleted) AS count,
+      ARRAY(SELECT DISTINCT genre FROM songs
+            WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> '') AS genres,
+      ARRAY(SELECT DISTINCT unnest(tags) FROM songs
+            WHERE artist_id = ${artistId} AND NOT deleted) AS tags`;
+  return { count: row?.count ?? 0, genres: row?.genres ?? [], tags: row?.tags ?? [] };
 }
 
 // `extra` is free-form, but its *Url keys end up in href/src attributes on the
@@ -35,9 +32,11 @@ async function tagsOf(sql, artistId) {
 // own bucket may only be the one the upload flow already stored on this song:
 // otherwise a band could point its song at another band's file and have it
 // deleted by the next media replace, media delete or account deletion.
+const EXTRA_MAX_BYTES = 32 * 1024;
 function extraError(extra, current = {}) {
   if (extra == null) return null;
   if (typeof extra !== 'object' || Array.isArray(extra)) return 'extra must be an object';
+  if (jsonBytes(extra) > EXTRA_MAX_BYTES) return 'extra is too large';
   for (const [k, v] of Object.entries(extra)) {
     if (!/Url$/.test(k) || v == null || v === '') continue;
     if (typeof v !== 'string' || !/^https?:\/\//i.test(v)) return `${k} must be an http(s) URL`;
@@ -54,18 +53,12 @@ function toBool(v, fallback) {
   return fallback;
 }
 
-// Song id from a body field (lyrics_update_id, media_confirm_id, …), or null.
-function bodyId(value) {
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
-
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
   const sql = getDb();
 
-  // ── song-logs (merged from song-logs.js via vercel.json rewrite) ──────────
-  if (req.url.includes('song-logs')) {
+  // ── GET /api/:artist/song-logs ─────────────────────────────────────────────
+  if (req.query.action === 'logs') {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
     const band = await requireAuth(req, res, slug);
     if (!band) return;
@@ -112,7 +105,7 @@ module.exports = wrap(async function handler(req, res) {
       const total = Number(rows[0]?.total ?? 0);
       res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
       return res.json({
-        rows: rows.map(({ total: _, ...row }) => row),
+        rows: rows.map(({ total: _, ...row }) => publicSong(row)),
         total,
         limit,
         offset,
@@ -124,78 +117,15 @@ module.exports = wrap(async function handler(req, res) {
     }));
   }
 
-  // ── POST lyrics-suggest ───────────────────────────────────────────────────
-  // Dispatched via body field to avoid multi-segment POST routing issues.
-  // Client sends POST /api/:band/songs with { lyrics_suggest_id: songId }.
-  if (req.method === 'POST' && req.body?.lyrics_suggest_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    const songId = bodyId(req.body.lyrics_suggest_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-    const result = await suggestLyrics(sql, band, songId, clientIp(req));
-    return res.status(result.status).json(result.body);
-  }
-
-  // ── POST lyrics update (replaces PUT /songs/:id/lyrics) ───────────────────
-  if (req.method === 'POST' && req.body?.lyrics_update_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    const songId = bodyId(req.body.lyrics_update_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-    if (typeof req.body.lyrics !== 'string')
-      return res.status(400).json({ error: 'lyrics must be a string' });
-    const lyrics = cleanLyrics(req.body.lyrics);
-    if (lyrics.error) return res.status(400).json({ error: lyrics.error });
-    const song = await writeLyrics(sql, band.id, songId, lyrics.value);
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-    return res.json({ ok: true });
-  }
-
-  // ── POST lyrics delete (replaces DELETE /songs/:id/lyrics) ────────────────
-  if (req.method === 'POST' && req.body?.lyrics_delete_id != null) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    const songId = bodyId(req.body.lyrics_delete_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-    const song = await writeLyrics(sql, band.id, songId, null, 'lyrics_delete');
-    if (!song) return res.status(404).json({ error: 'Song not found' });
-    return res.json({ ok: true });
-  }
-
-  // ── POST upload presign / confirm / delete (workaround: multi-segment PUT/DELETE to
-  //    /songs/:id/:type fails on Vercel catch-alls in dynamic dirs) ────────────────────────
-  if (req.method === 'POST' && (req.body?.media_confirm_id != null
-      || req.body?.media_delete_id != null || req.body?.upload_presign_id != null)) {
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    if (refuseDemo(req, res)) return;
-    const b = req.body;
-    const songId = bodyId(b.media_confirm_id ?? b.media_delete_id ?? b.upload_presign_id);
-    if (!songId) return res.status(400).json({ error: 'Invalid song id' });
-
-    let result;
-    if (b.upload_presign_id != null) {
-      const config = MEDIA_CONFIGS[b.upload_type];
-      if (!config) return res.status(400).json({ error: 'upload_type must be audio, sheet, or playback' });
-      result = await presignMedia(sql, band, songId, config, b);
-    } else {
-      const config = MEDIA_CONFIGS[b.media_type];
-      if (!config) return res.status(400).json({ error: 'media_type must be audio, sheet, or playback' });
-      result = b.media_confirm_id != null
-        ? await confirmMedia(sql, band, songId, config, b.publicUrl)
-        : await deleteMedia(sql, band, songId, config);
-    }
-    return res.status(result.status).json(result.body);
-  }
-
-  // ── POST CSV import: check a file or edited rows, or import them ─────────
-  if (req.method === 'POST' && req.body?.song_import != null) {
+  // ── POST /songs/import: check a CSV file or edited rows, or import them ──
+  if (req.query.action === 'import') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     // The preview re-checks after each edit; a burst of edits stays well under this.
     if (await checkRateLimit(`song-import:${band.id}`, 200, 600))
       return res.status(429).json({ error: 'Too many requests — try again in a few minutes' });
-    const result = await songImport(sql, band.id, req.body.song_import, { maxSongs: songLimit(band) });
+    const result = await songImport(sql, band.id, req.body ?? {}, { maxSongs: songLimit(band) });
     return res.status(result.status).json(result.body);
   }
 
@@ -204,14 +134,8 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const _max = songLimit(band);
-    const [countRows, knownGenres, knownTags] = await Promise.all([
-      _max != null
-        ? sql`SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`
-        : null,
-      genresOf(sql, band.id),
-      tagsOf(sql, band.id),
-    ]);
-    if (countRows && countRows[0].count >= _max)
+    const { count, genres: knownGenres, tags: knownTags } = await songValues(sql, band.id);
+    if (_max != null && count >= _max)
       return res.status(402).json({ error: 'song_limit', limit: _max });
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
@@ -246,7 +170,7 @@ module.exports = wrap(async function handler(req, res) {
     const language = cleanLanguage(req.body?.language !== undefined ? req.body.language : moved.language);
     if (language === false) return res.status(400).json({ error: 'language too long' });
     const tags = cleanTags(req.body?.tags, knownTags);
-    if (tags?.error) return res.status(400).json({ error: tags.error });
+    if (tags && 'error' in tags) return res.status(400).json({ error: tags.error });
     const lyrics = cleanLyrics(req.body?.lyrics !== undefined ? req.body.lyrics : moved.lyrics);
     if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
@@ -295,14 +219,20 @@ module.exports = wrap(async function handler(req, res) {
     const NUM_FIELDS = ['bpm', 'length_min'];
 
     const ids = updates.map(u => Number(u?.id)).filter(n => Number.isInteger(n) && n > 0);
-    const [storedRows, knownGenres, knownTags] = await Promise.all([
-      ids.length
-        ? sql`SELECT * FROM songs WHERE artist_id = ${band.id} AND id = ANY(${ids}::int[]) AND deleted = false`
-        : [],
-      updates.some(u => u && 'genre' in u) ? genresOf(sql, band.id) : [],
-      updates.some(u => u && 'tags' in u) ? tagsOf(sql, band.id) : [],
-    ]);
-    const stored = new Map(storedRows.map(row => [row.id, row]));
+    // The stored rows, with the band's genres and tags on each (one statement;
+    // the two lists are uncorrelated subqueries, computed once).
+    const storedRows = ids.length ? await sql`
+      SELECT s.*,
+        ARRAY(SELECT DISTINCT genre FROM songs
+              WHERE artist_id = ${band.id} AND NOT deleted AND genre IS NOT NULL AND genre <> '') AS known_genres,
+        ARRAY(SELECT DISTINCT unnest(tags) FROM songs
+              WHERE artist_id = ${band.id} AND NOT deleted) AS known_tags
+      FROM songs s
+      WHERE s.artist_id = ${band.id} AND s.id = ANY(${ids}::int[]) AND s.deleted = false
+    ` : [];
+    const knownGenres = storedRows[0]?.known_genres ?? [];
+    const knownTags = storedRows[0]?.known_tags ?? [];
+    const stored = new Map(storedRows.map(({ known_genres: _g, known_tags: _t, ...row }) => [row.id, row]));
 
     const rejected = [];
     const accepted = new Map(); // id → row; a repeated id keeps the last update
@@ -349,7 +279,7 @@ module.exports = wrap(async function handler(req, res) {
       }
       if (!error) {
         const tags = cleanTags(update.tags, knownTags);
-        if (tags?.error) error = tags.error;
+        if (tags && 'error' in tags) error = tags.error;
         else value.tags = tags ?? current.tags ?? [];
       }
       if (!error) error = extraError(moved.extra, current.extra);
@@ -398,6 +328,7 @@ module.exports = wrap(async function handler(req, res) {
       `;
       const done = new Set(updated.map(r => r.id));
       applied = done.size;
+      if (applied) await trimSongLogs(sql, band.id);
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
     return res.json({ ok: true, count: applied, rejected });

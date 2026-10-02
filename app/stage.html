@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <title>smartist · Stage</title>
     <meta charset="utf-8"/>
@@ -13,7 +13,7 @@
         :root {
             --s-bg:     #111;
             --s-text:   #f0ede8;
-            --s-muted:  #706860;
+            --s-muted:  #958a7f; /* 5.6:1 on --s-bg */
             --s-accent: #f9bf8f;
         }
         html, body {
@@ -50,7 +50,7 @@
         .stage-header {
             margin-bottom: 2.5rem;
             padding-bottom: 1.25rem;
-            padding-right: 5rem;
+            padding-right: 7rem;
             border-bottom: 1px solid rgba(249,191,143,0.18);
             position: relative;
         }
@@ -105,6 +105,7 @@
             white-space: nowrap;
             flex-shrink: 0;
         }
+        .stage-badges { display: flex; gap: 0.5rem; flex-shrink: 0; }
         .stage-total {
             margin-top: 2rem;
             font-size: 0.82rem;
@@ -116,16 +117,35 @@
             color: var(--s-muted);
             padding: 5rem 0;
         }
+        .stage-header--nav { padding-right: 17rem; }
         @media (max-width: 600px) {
-            .stage-wrap { padding: 1.5rem 1.25rem 4rem; }
-            .stage-song { gap: 0.75rem; }
+            .stage-wrap { padding: 1rem 1.25rem 6rem; }
+            .stage-song { gap: 0.4rem 0.75rem; flex-wrap: wrap; }
+            .stage-song-title { flex: 1 1 calc(100% - 3.25rem); }
+            /* Badges go under the title so a long title keeps the width. */
+            .stage-badges { flex-basis: 100%; padding-left: 3.15rem; }
+        }
+        /* Notch and home indicator (viewport-fit=cover) */
+        @supports (padding: max(0px)) {
+            .stage-wrap {
+                padding-left:  max(1.25rem, env(safe-area-inset-left));
+                padding-right: max(1.25rem, env(safe-area-inset-right));
+            }
+        }
+        .sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+        }
+        :focus-visible { outline: 2px solid var(--s-accent); outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) {
+            .stage-share-menu { animation: none; }
         }
         @page { margin: 1.5cm; }
         /* Light mode */
         body.stage-light {
             --s-bg:     #f5f2ee;
             --s-text:   #1c1714;
-            --s-muted:  #7a6e64;
+            --s-muted:  #695e55;
             --s-accent: #8a5820;
         }
         body.stage-light .stage-song { border-bottom-color: rgba(0,0,0,0.08); }
@@ -147,8 +167,8 @@
 
         .lyrics-size-bar {
             position: fixed;
-            bottom: 1.25rem;
-            right: 1.25rem;
+            bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+            right: calc(1.25rem + env(safe-area-inset-right, 0px));
             display: flex;
             gap: 0.3rem;
             z-index: 50;
@@ -162,7 +182,10 @@
             border-color: rgba(28,23,20,0.15);
         }
         @media (max-width: 480px) {
-            .lyrics-size-bar { bottom: 0.75rem; right: 0.75rem; }
+            .lyrics-size-bar {
+                bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+                right: calc(0.75rem + env(safe-area-inset-right, 0px));
+            }
         }
 
         @media print {
@@ -194,6 +217,11 @@
             gap: 0.4rem;
             align-items: flex-start;
         }
+        /* Phones: the buttons get their own row above the title, which keeps the full width. */
+        @media (max-width: 600px) {
+            .stage-header, .stage-header--nav { display: flex; flex-direction: column; padding-right: 0; }
+            .stage-header-btns { position: static; order: -1; justify-content: flex-end; flex-wrap: wrap; margin-bottom: 0.75rem; }
+        }
         .stage-share-btn,
         .stage-invert-btn {
             background: transparent;
@@ -202,6 +230,8 @@
             font-family: inherit;
             font-size: 0.82rem;
             padding: 0.4rem 0.5rem;
+            min-width: 44px;
+            min-height: 44px;
             border-radius: 2px;
             cursor: pointer;
             display: inline-flex;
@@ -217,7 +247,8 @@
             border: 1px solid rgba(176,106,42,.35);
             border-radius: 4px;
             color: #f9bf8f;
-            padding: 5px 8px;
+            padding: 5px 12px;
+            min-height: 44px;
             cursor: pointer;
             font-size: 13px;
             display: inline-flex;
@@ -255,6 +286,7 @@
             display: flex;
             align-items: center;
             gap: 0.6rem;
+            min-height: 44px;
             padding: 0.65rem 1rem;
             font-size: 0.84rem;
             cursor: pointer;
@@ -307,9 +339,11 @@
         }
         .audio-speed-btns button {
             font-family: inherit;
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             padding: 0.18rem 0.5rem;
-            border: 1px solid rgba(240,237,232,0.25);
+            min-width: 44px;
+            min-height: 36px;
+            border: 1px solid rgba(240,237,232,0.4);
             border-radius: 3px;
             background: none;
             color: var(--s-muted);
@@ -319,7 +353,7 @@
         }
         .audio-speed-btns button:hover { color: var(--s-text); border-color: rgba(240,237,232,0.5); }
         .audio-speed-btns button.active { color: var(--s-accent); border-color: var(--s-accent); background: rgba(249,191,143,0.1); }
-        body.stage-light .audio-speed-btns button { border-color: rgba(28,23,20,0.22); color: #706050; }
+        body.stage-light .audio-speed-btns button { border-color: rgba(28,23,20,0.35); color: #695e55; }
         body.stage-light .audio-speed-btns button:hover { color: #1c1714; border-color: rgba(28,23,20,0.5); }
         body.stage-light .audio-speed-btns button.active { color: #8b4400; border-color: #8b4400; background: rgba(139,68,0,0.08); }
         .song-stage-links {
@@ -360,7 +394,7 @@
             font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Courier New", monospace;
             color: var(--s-text);
         }
-        .stage-modal h3 { font-size: 0.95rem; font-weight: 400; margin-bottom: 1.1rem; }
+        .stage-modal-title { font-size: 0.95rem; font-weight: 400; margin-bottom: 1.1rem; }
         .stage-modal-field { margin-bottom: 0.7rem; }
         .stage-modal-field label { display: block; font-size: 0.75rem; color: var(--s-muted); margin-bottom: 0.28rem; text-transform: uppercase; letter-spacing: 0.06em; }
         .stage-modal-input {
@@ -369,8 +403,8 @@
             border: 1px solid rgba(255,255,255,0.14);
             color: var(--s-text);
             font-family: inherit;
-            font-size: 0.88rem;
-            padding: 0.45rem 0.6rem;
+            font-size: 1rem; /* 16px: iOS does not zoom on focus */
+            padding: 0.55rem 0.6rem;
             border-radius: 5px;
         }
         .stage-modal-input:focus { outline: none; border-color: var(--s-accent); }
@@ -382,6 +416,7 @@
             font-family: inherit;
             font-size: 0.82rem;
             padding: 0.38rem 0.85rem;
+            min-height: 44px;
             border-radius: 5px;
             cursor: pointer;
         }
@@ -393,24 +428,26 @@
         .arr-stage-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 200; align-items: center; justify-content: center; padding: 1rem; }
         .arr-stage-modal-overlay.open { display: flex; }
         .arr-stage-modal { background: #1a1a1a; border-radius: 6px; width: min(96vw, 960px); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
-        .arr-stage-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid #333; flex-shrink: 0; font-size: 0.78rem; letter-spacing: 0.06em; color: #f9bf8f; }
+        .arr-stage-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 14px; border-bottom: 1px solid #333; flex-shrink: 0; font-size: 0.78rem; letter-spacing: 0.06em; color: #f9bf8f; }
         .arr-stage-body { overflow: auto; flex: 1; padding: 0.25rem 0; }
+        .arr-stage-close { background: none; border: none; color: #909090; cursor: pointer; font-size: 1.3rem; line-height: 1; min-width: 44px; min-height: 44px; font-family: inherit; }
+        body.stage-light .arr-stage-close { color: #555; }
         body.stage-light .arr-stage-modal { background: #e8e2d9; }
         body.stage-light .arr-stage-modal-header { color: #8b4400; border-bottom-color: rgba(0,0,0,0.12); }
 
         /* ── Arrangement table (inside popup) ────────────────────────────── */
         .arr-table-wrap { overflow-x: auto; }
         .arr-table { border-collapse: collapse; font-size: 0.82rem; width: 100%; color: #f5f0ea; }
-        .arr-th { padding: 4px 8px; text-align: left; font-size: 0.7rem; letter-spacing: 0.07em; color: #555; border-bottom: 2px solid #2a2a2a; white-space: nowrap; background: #111; position: sticky; top: 0; }
-        .arr-th--inst { color: #b06a2a; }
-        .arr-th--orphan { color: #444; font-style: italic; }
+        .arr-th { padding: 4px 8px; text-align: left; font-size: 0.7rem; letter-spacing: 0.07em; color: #909090; border-bottom: 2px solid #2a2a2a; white-space: nowrap; background: #111; position: sticky; top: 0; }
+        .arr-th--inst { color: #d08a4a; }
+        .arr-th--orphan { color: #888; font-style: italic; }
         .arr-tr { border-bottom: 1px solid #222; }
         .arr-tr--alt { background: rgba(255,255,255,.03); }
         .arr-td { padding: 4px 8px; vertical-align: middle; white-space: nowrap; }
         .arr-td--struct { font-weight: 700; color: #f5f0ea; }
         .arr-td--inst { color: #888; }
         .arr-td--harm { color: #6fa8dc; font-weight: 600; }
-        .arr-td--com { color: #555; font-size: 0.75rem; }
+        .arr-td--com { color: #909090; font-size: 0.75rem; }
         .arr-lead--person { color: #6fa8dc; font-weight: 600; }
         .arr-lead--inst   { color: #b06a2a; font-weight: 600; }
         body.stage-light .arr-table { color: #111; }
@@ -423,40 +460,41 @@
         body.stage-light .arr-lead--person { color: #1a4a99; }
         body.stage-light .arr-lead--inst   { color: #8b4400; }
         body.stage-light .arr-td--harm { color: #1a4a99; }
-        body.stage-light .arr-td--com { color: #777; }
+        body.stage-light .arr-td--com { color: #5f5f5f; }
         @media print {
             .arr-stage-modal-overlay { display: none !important; }
         }
     </style>
 </head>
 <body>
-    <div class="stage-wrap">
+    <main class="stage-wrap">
         <div id="stage-content">
-            <p class="stage-message">Loading…</p>
+            <p class="stage-message" role="status">Loading…</p>
         </div>
-    </div>
+    </main>
+    <div class="sr-only" id="stage-live" role="status" aria-live="polite"></div>
 
-    <div class="stage-modal-overlay" id="stage-share-modal" style="display:none" data-onclick="hideOnBackdrop(event, this)">
-        <div class="stage-modal">
-            <h3>Share via email</h3>
+    <div class="stage-modal-overlay" id="stage-share-modal" style="display:none" data-onclick="stageEmailBackdrop(event, this)">
+        <div class="stage-modal" role="dialog" aria-modal="true" aria-labelledby="stage-share-title">
+            <h2 class="stage-modal-title" id="stage-share-title">Share via email</h2>
             <div class="stage-modal-field" id="stage-modal-pw-field">
                 <a id="stage-share-signin" href="/login">Sign in</a> to send the setlist by email.
             </div>
             <div class="stage-modal-field">
-                <label>Email</label>
-                <input type="email" class="stage-modal-input" id="stage-share-email" placeholder="recipient@example.com">
+                <label for="stage-share-email">Email</label>
+                <input type="email" class="stage-modal-input" id="stage-share-email" placeholder="recipient@example.com" autocomplete="email">
             </div>
-            <div class="stage-modal-status" id="stage-share-status"></div>
+            <div class="stage-modal-status" id="stage-share-status" role="status" aria-live="polite"></div>
             <div class="stage-modal-actions">
-                <button class="stage-modal-action-btn" data-onclick="hideById('stage-share-modal')">Cancel</button>
+                <button class="stage-modal-action-btn" data-onclick="stageCloseEmail()">Cancel</button>
                 <button class="stage-modal-action-btn primary" id="stage-share-send" data-onclick="stageSendEmail()">Send PDF</button>
             </div>
         </div>
     </div>
 
-    <script src="/app/js/core.js?v=7"></script>
-    <script src="/app/js/share-utils.js?v=3"></script>
-    <script src="/app/js/arrangement.js?v=4"></script>
-    <script src="/app/js/stage.js?v=4"></script>
+    <script src="/app/js/core.js?v=10"></script>
+    <script src="/app/js/share-utils.js?v=4"></script>
+    <script src="/app/js/arrangement.js?v=5"></script>
+    <script src="/app/js/stage.js?v=7"></script>
 </body>
 </html>

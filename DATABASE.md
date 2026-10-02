@@ -152,7 +152,6 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `comment` | text | |
 | `deadline` | date | |
 | `main_genre` | text | Primary genre this venue books |
-| `subgenres` | text[] | |
 | `size` | integer | Capacity |
 | `language` | text | |
 | `last_updated` | timestamptz DEFAULT NOW() | |
@@ -210,7 +209,7 @@ A performance event. Setlists can be linked to a gig but the link is optional.
 
 `ON DELETE RESTRICT` on `venue_id` and `organizer_id` means you must clear or reassign those FKs before hard-deleting a venue or organizer.
 
-**Indexes:** `gigs_artist_id_idx`
+**Indexes:** `gigs_artist_date_idx` (artist_id, date DESC NULLS LAST, id DESC)
 
 ---
 
@@ -227,7 +226,7 @@ A saved setlist. Songs are stored in `setlist_songs`.
 | `comment` | text | |
 | `created_at` | timestamptz DEFAULT NOW() | |
 
-**Indexes:** `setlists_artist_id_idx`
+**Indexes:** `setlists_artist_created_idx` (artist_id, created_at DESC)
 
 ---
 
@@ -286,7 +285,7 @@ Versioned arrangement charts for a song. Each song can have multiple named versi
 
 ### `song_logs`
 
-Append-only audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot.
+Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries: about one logged write in ten trims the band's older ones (`trimSongLogs` in `api/_db.js`). Entries with `song_id` `NULL` are never trimmed.
 
 `song_id` is nullable — if a song is ever hard-deleted the FK goes `NULL` via `ON DELETE SET NULL` but the `song_data` snapshot is preserved.
 
@@ -355,6 +354,8 @@ Sliding-window rate limiting: login, failed band-password bearers, password rese
 | `window_start` timestamptz | Start of current window |
 | `count` integer | Hits in current window |
 
+**Indexes:** `rate_limits_window_start_idx` (window_start), for the sweep in `api/_ratelimit.js` that deletes rows idle for a day.
+
 ---
 
 ### `subscribers`
@@ -383,6 +384,7 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `password_hash` text | bcrypt; NULL until an invite is accepted, or for Google-only accounts |
 | `role` text | `admin`, `member` or `viewer` |
 | `invite_token_hash`, `invite_expires_at` | SHA-256 of the emailed invite token; 7 days |
+| `sessions_valid_after` timestamptz | Set by "log out everywhere" on every row of the address; session tokens issued earlier are refused |
 | `invited_by` FK → `users` SET NULL | |
 | `pending_email`, `email_change_token_hash`, `email_change_expires_at` | Email change waiting for confirmation from the new address (24 h) |
 | `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |

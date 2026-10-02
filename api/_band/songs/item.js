@@ -1,16 +1,23 @@
-const { getDb, getSlug } = require('../../_db');
+const { getDb, getSlug, trimSongLogs } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
-const { validateStr } = require('../../_validate');
+const { validateStr, jsonBytes } = require('../../_validate');
 const { energyToScale } = require('../../_song_values');
-const { requireFeature } = require('../../_plans');
-const { checkRateLimit } = require('../../_ratelimit');
-const { songDetail } = require('../../_domain/songs');
-const { importWorks, importRightholders } = require('../../_domain/gema');
+const { clientIp } = require('../../_ratelimit');
+const { suggestLyrics } = require('../../_lyrics');
+const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
 
-// Song sub-resources. Lyrics are written through POST /api/:artist/songs
-// (lyrics_update_id, lyrics_delete_id, lyrics_suggest_id) — see songs.js.
+// Song sub-resources: media, lyrics, arrangements, GEMA, history.
+
+// An arrangement's rows and hidden instruments are stored as sent; cap them so
+// one request cannot park megabytes that every stage view then loads.
+const ARRANGEMENT_MAX_BYTES = 128 * 1024;
+function arrangementError(rows, hidden) {
+  if (rows !== undefined && jsonBytes(rows) > ARRANGEMENT_MAX_BYTES) return 'rows is too large';
+  if (hidden !== undefined && jsonBytes(hidden) > 4 * 1024) return 'hidden_instruments is too large';
+  return null;
+}
 
 const MEDIA = {
   audio:    makeMediaFn(MEDIA_CONFIGS.audio),
@@ -19,59 +26,10 @@ const MEDIA = {
 };
 
 module.exports = wrap(async function handler(req, res) {
-  // vercel dev 52.x does not populate req.query.path for catch-alls inside dynamic dirs
-  const pathParts = Array.isArray(req.query.path) && req.query.path.length
-    ? req.query.path
-    : req.url.split('?')[0].split('/songs/')[1]?.split('/') ?? [];
-  let rawId  = pathParts[0];
-  let action = pathParts[1];
-  let arrId  = Number(pathParts[2]);
-  let arrSub = pathParts[3]; // 'activate' or undefined
-
-  // vercel dev: multi-segment paths fail on catch-alls; vercel.json rewrites flatten them
-  if (rawId === 'arrangements' && req.query.songId) {
-    rawId  = req.query.songId;
-    action = 'arrangements';
-    arrId  = Number(req.query.arrId) || 0;
-    arrSub = req.query.sub;
-  }
-  if (rawId === 'gema' && req.query.songId) {
-    rawId  = req.query.songId;
-    action = 'gema';
-  }
-  // vercel dev: single-segment sub-routes also need flattening rewrites
-  if (req.query.songId && ['audio', 'sheet', 'playback', 'setlists', 'restore'].includes(rawId)) {
-    action = rawId;
-    rawId  = req.query.songId;
-  }
+  // /songs/:id/:action/:sub/:arrSub — e.g. [12, 'arrangements', 3, 'activate'], [12, 'lyrics', 'suggest']
+  const [rawId, action, sub, arrSub] = req.query.path || [];
+  const arrId = Number(sub);
   const slug = getSlug(req);
-
-  // ── GEMA import (via the /api/:artist/gema/import rewrite) ────────────────
-  if (rawId === 'gema-import') {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-    const band = await requireAuth(req, res, slug, 'member');
-    if (!band) return;
-    if (!requireFeature(res, band, 'pro-import')) return;
-
-    const { type, csv, dryRun = false, ownerIpNameNumber } = req.body || {};
-    if (!type || !['info', 'ids', 'beteiligte'].includes(type))
-      return res.status(400).json({ error: 'type must be "info", "ids", or "beteiligte"' });
-    if (typeof csv !== 'string' || csv.length < 10)
-      return res.status(400).json({ error: 'csv must be a non-empty string' });
-    if (csv.length > 5_000_000)
-      return res.status(400).json({ error: 'CSV too large (max 5 MB)' });
-
-    // Each call parses up to 5 MB and writes a batch; a page run is a handful.
-    if (await checkRateLimit(`gema-import:${band.id}`, 30, 600))
-      return res.status(429).json({ error: 'Too many imports — try again in a few minutes' });
-
-    const sql = getDb();
-    const result = type === 'beteiligte'
-      ? await importRightholders(sql, band, csv, { dryRun })
-      : await importWorks(sql, band, type, csv, { dryRun, ownerIpNameNumber });
-    return res.status(result.status).json(result.body);
-  }
 
   const songId = Number(rawId);
   if (!Number.isInteger(songId) || songId <= 0)
@@ -81,6 +39,34 @@ module.exports = wrap(async function handler(req, res) {
   if (action in MEDIA) {
     req.query.id = rawId;
     return MEDIA[action](req, res);
+  }
+
+  // ── PUT/DELETE /api/:artist/songs/:id/lyrics, POST …/lyrics/suggest ──────
+  if (action === 'lyrics') {
+    if (sub && sub !== 'suggest') return res.status(404).json({ error: 'Not found' });
+    const allowed = sub ? ['POST'] : ['PUT', 'DELETE'];
+    if (!allowed.includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+    const band = await requireAuth(req, res, slug, 'member');
+    if (!band) return;
+    const sql = getDb();
+    if (sub) {
+      // The demo session (no user row) gets the free sources only.
+      const result = await suggestLyrics(sql, band, songId, clientIp(req), { allowAI: req.user.id !== null });
+      return res.status(result.status).json(result.body);
+    }
+    let text = null;
+    if (req.method === 'PUT') {
+      if (typeof req.body?.lyrics !== 'string')
+        return res.status(400).json({ error: 'lyrics must be a string' });
+      const lyrics = cleanLyrics(req.body.lyrics);
+      if (lyrics.error) return res.status(400).json({ error: lyrics.error });
+      text = lyrics.value;
+    }
+    const song = await writeLyrics(sql, band.id, songId, text,
+      req.method === 'PUT' ? 'lyrics_update' : 'lyrics_delete');
+    if (!song) return res.status(404).json({ error: 'Song not found' });
+    await trimSongLogs(sql, band.id);
+    return res.json({ ok: true });
   }
 
   // ── GET /api/:artist/songs/:id/arrangements ───────────────────────────────
@@ -111,6 +97,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
     const sql = getDb();
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
+    const tooBig = arrangementError(rows, hidden_instruments);
+    if (tooBig) return res.status(400).json({ error: tooBig });
     const [[song], [src]] = await Promise.all([
       sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
       copy_from
@@ -142,6 +130,8 @@ module.exports = wrap(async function handler(req, res) {
     if (!Number.isInteger(arrId) || arrId <= 0) return res.status(400).json({ error: 'Invalid arrangement id' });
     const sql = getDb();
     const { name, rows, hidden_instruments } = req.body ?? {};
+    const tooBig = arrangementError(rows, hidden_instruments);
+    if (tooBig) return res.status(400).json({ error: tooBig });
     const updates = {};
     if (name !== undefined) {
       const validatedName = validateStr(name, 200);
@@ -226,8 +216,7 @@ module.exports = wrap(async function handler(req, res) {
     ]);
     if (!song) return res.status(404).json({ error: 'Song not found' });
     // A visitor without a session never sees the band's private notes.
-    if (!user) delete song.comment;
-    return res.json({ ...song, arrangements });
+    return res.json({ ...(user ? song : publicSong(song)), arrangements });
   }
 
   // ── DELETE song ───────────────────────────────────────────────────────────
@@ -300,11 +289,11 @@ module.exports = wrap(async function handler(req, res) {
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            bpm, length_min, interpret, reference_interpret, comment, language, extra)
         VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.heart ?? false}, ${d.key ?? null},
-                ${d.genre ?? null}, ${energyToScale(d.energy ?? d.tempo) ?? null}, ${d.time_signature ?? null},
+                ${d.genre ?? null}, ${energyToScale(d.energy) ?? null}, ${d.time_signature ?? null},
                 ${d.bpm ?? null}, ${d.length_min ?? null},
                 ${d.interpret ?? null}, ${d.reference_interpret ?? null},
-                ${d.comment ?? null}, ${d.language ?? d.extra?.language ?? null},
-                ${(({ lyrics: _l, language: _g, ...rest }) => rest)(d.extra ?? {})})
+                ${d.comment ?? null}, ${d.language ?? null},
+                ${d.extra ?? {}})
         RETURNING *
       ), logged AS (
         INSERT INTO song_logs (artist_id, song_id, action, song_data)

@@ -22,11 +22,11 @@ in [DATABASE.md](../DATABASE.md).
 | `/organizers` | `app/js/organizers.js` |
 | `/hub` | `app/js/hub.js` |
 | `/profile` | `app/js/profile.js` — personal (email, change password) |
-| `/settings` (alias `/users`) | `app/js/settings.js` — admin only: band, app settings, members, instruments |
-| `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav** |
+| `/settings` | `app/js/settings.js` — admin only: band, app settings, members, instruments |
+| `/stage?id=N` | `app/js/stage.js` — **`core.js` only; no nav**. Keeps the screen awake (Wake Lock) while visible; ←/→ (and page-turner pedals) go to the previous/next song, Escape closes the share menu and dialogs |
 | `/admin` | `app/js/admin.js` — **super-admin only** (`SUPER_ADMIN_EMAILS`); cross-tenant usage overview + per-band plan change; standalone, none of the shared scripts, English-only |
 | `/signup`, `/onboarding` | `app/js/signup.js`, `app/js/onboarding.js` — new account, then new band |
-| `/workspaces` (alias `/home`) | `app/js/workspaces.js` — the signed-in user's bands |
+| `/workspaces` | `app/js/workspaces.js` — the signed-in user's bands |
 | `/contact`, `/confirm-email`, `/demo` | `app/js/contact.js`, `app/js/confirm-email.js`, `app/js/demo.js` |
 
 Every app page loads the four shared scripts in this order, after `footer.js`: `core.js` (escaping, `safeUrl`, `formatDate`/`formatTime`, `formatLength`, `songFieldHidden` — no session, no DOM shell), `session.js` (slug, token, `apiFetch`, `loadConfig`), `ui.js` (lists, typeahead, modals, `withBusy`, hard delete) and `shell.js` (header/nav, auth menu, `initPage`, SPA `navigate()`; its IIFEs run at load, so it comes last). SPA navigation keeps these four loaded and re-runs only page scripts. `stage.html` loads `core.js` only. **Do not put `<header>` or `<footer>` in page HTML** — `injectShell()` in `shell.js` builds them at script-load time. `stage.js` calls `fetch('/api/config')` directly instead of `loadConfig()`. Bump the `?v=` of all four together (`tests/unit/asset_versions.js`).
@@ -34,29 +34,32 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 **Key shared-script exports:**
 - `loadConfig()` — stale-while-revalidate; blocks on first call, cached in `sessionStorage` thereafter
 - `invalidateConfigCache()` — call after any `PATCH /api/config` that mutates `artists.config` so the next `loadConfig()` fetches fresh data
+- `announce(msg)` (`ui.js`) — polite screen-reader message for a change with no focus of its own (a song moved or removed); keep focus on the control the user used after re-rendering a list
 - `createSortableList(options)` — reusable column-driven table with sort buttons and filter input. Column shape: `{ field, label, width, sortable, filterable, muted, type, render, actions }`. Multiple instances sharing one filter input register via `filterInputId` (uses `_slFilterRegistry` internally). Returns `{ setData(rows), refresh() }`.
 
 ---
 
-## Serverless functions (11 of 12 — Hobby plan limit)
+## API handlers
+
+One serverless function, `api/index.js`, sends every `/api/*` path to a handler through its route table (`tests/unit/router.js` pins each path).
 
 | File | Routes |
 |------|--------|
-| `api/config.js` | `GET /api/config` (returns `plan`+`usage`); `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `POST ?action=upgrade|downgrade` (self-serve plan seam — see Plans); `GET ?action=admin-overview` / `POST ?action=admin-set-plan` (super-admin); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (via `/auth/callback` rewrite); `GET ?action=photo-url` (presigned upload) |
-| `api/[artist]/auth.js` | `POST /api/:artist/auth` (login); `POST ?action=invite\|resend-invite\|accept-invite\|change-password`; `GET` (list users), `PUT` (role only — login email is the cross-workspace identity and is never admin-editable), `DELETE` — admin; `POST /api/:artist/request-reset` (via rewrite) |
-| `api/[artist]/gigs.js` | `GET/POST /api/:artist/gigs`; `GET/PUT/DELETE /api/:artist/gigs/:id` and the poster actions (via the `/api/:artist/gigs/:id` → `?id=:id` rewrite — one function for both) |
-| `api/[artist]/organizers.js` | `GET/POST /api/:artist/organizers` |
-| `api/[artist]/organizers/[...path].js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
-| `api/[artist]/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}`, duplicate `{duplicate_id}`, share `{share_id,email}` |
-| `api/[artist]/setlists/[...path].js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `GET /api/:artist/export` (ZIP of CSVs, via rewrite) |
-| `api/[artist]/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs` (via rewrite); `POST {song_import}` — CSV import (`_domain/song_import.js`) |
-| `api/[artist]/songs/[...path].js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `gema-import` (internal catch-all segment, via `/api/:artist/gema/import` rewrite). Lyrics writes go through `POST /songs` body fields |
-| `api/[artist]/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
-| `api/[artist]/venues/[...path].js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
+| `api/_config.js` | `GET /api/config` (returns `plan`+`usage`); `PATCH /api/config` (update name/config); `POST /api/config` (subscribe/demo/contact); `POST ?action=upgrade|downgrade` (self-serve plan seam — see Plans); `GET ?action=admin-overview` / `POST ?action=admin-set-plan` (super-admin); `GET ?action=google-url\|facebook-url` (OAuth start); `GET ?action=oauth-callback` (`/auth/callback`); `GET ?action=photo-url` (presigned upload) |
+| `api/_band/members.js` | Who may call what, then `_domain/members.js`: `POST /members/accept-invite\|confirm-email-change` (public, the email links), `/members/change-password\|request-email-change` (own account), `/members/invite\|resend-invite`, `GET` (list users), `PUT` (role only — login email is the cross-workspace identity and is never admin-editable), `DELETE` — admin. Signing in and password reset are root actions in `api/_config.js` (`_domain/login.js`, `_domain/reset.js`) |
+| `api/_band/gigs.js` | `GET/POST /api/:artist/gigs`; `GET/PUT/DELETE /api/:artist/gigs/:id`; `POST …/:id/poster-url` (presigned upload), `PUT|DELETE …/:id/poster` |
+| `api/_band/organizers.js` | `GET/POST /api/:artist/organizers` |
+| `api/_band/organizers/item.js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
+| `api/_band/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}` |
+| `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `POST …/:id/duplicate`, `POST …/:id/share` `{email}` |
+| `api/_band/export.js` | `GET /api/:artist/export` — every table of the band as a ZIP of CSVs |
+| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`) |
+| `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `lyrics` (PUT/DELETE, `/lyrics/suggest` POST) |
+| `api/_band/gema.js` | `POST /api/:artist/gema/import` — one GEMA CSV (`_domain/gema.js`), Pro |
+| `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
+| `api/_band/venues/item.js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
 
-**Duplicate and share are both `POST /api/:artist/setlists`** with a body field — not separate URL paths. This avoids the vercel dev multi-segment POST bug (see AGENTS.md).
-
-`/api/docs` is a static rewrite to `app/api-docs.html` — uses zero functions.
+`/api/docs` is a static rewrite to `app/api-docs.html` in `vercel.json`.
 
 ---
 
@@ -64,22 +67,22 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 
 | Module | Key exports / notes |
 |--------|---------------------|
-| `_db.js` | `getDb()` singleton, `getArtist(slug)` → null if not found, `insertAuditLog` silently swallows errors by design |
+| `_db.js` | `getDb()` singleton, `getArtist(slug)` → null if not found, `insertAuditLog` silently swallows errors by design; `trimSongLogs` keeps each song's newest 20 history entries |
 | `_auth.js` | `requireAuth(req, res, slug)` → artist object or writes 401/404 and returns null |
 | `_handler.js` | `wrap(handler)` — **required on every handler**; catches unhandled errors → 500 |
 | `_validate.js` | returns `null` (missing/empty), validated value, or `false` (invalid) |
 | `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
 | `_pdf.js` | `buildSetlistPdf(setlist, songs, artistName)` → Buffer; `setlistTitle(setlist)` |
 | `_r2.js` | `createPresignedUrl`, `deleteFromR2` — swap storage via `STORAGE` block at top |
-| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` (shared by the body-dispatched POSTs in `songs.js` and the REST routes, both `member`); `makeMediaFn(config)` wraps them for the catch-all |
+| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` ; `makeMediaFn(config)` serves them as POST / PUT / DELETE on `/songs/:id/:type` (`member`) |
 | `_env.js` | Every env var the API reads (required / recommended / pairs), `envReport()`, and `SCHEMA_VERSION` — the newest migration id in `schema.sql` |
 | `_domain/song_import.js` | CSV song import: `parseSongCsv` (`,` `;` or tab, quoted line breaks, header aliases in EN/FR/DE), `checkRows` (same rules as a song created by hand; duplicate = same title ignoring case and spacing, in the band's live songs or an earlier row), `songImport` — `{csv}` or `{rows}` is checked only; `{rows, commit: true}` writes every row not skipped in one statement, or answers 422 while any row has an error or an unresolved duplicate, and 402 past the plan's song limit |
 | `_domain/gema.js` | GEMA CSV parsers and `importWorks` / `importRightholders` — used by the pro-import route and `scripts/import_gema.js` |
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
-| `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack; swap via `TRANSPORT` block |
-| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint: changing a password revokes older sessions (`passwordMatches`). |
-| `_ownership.js` | `ownsSongs/ownsGig/ownsVenue/ownsOrganizer` — **every foreign id from a request body must pass one** (ids are one sequence across tenants); `isOwnMediaUrl` gates R2 deletes |
+| `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack, one send per request after the response (`waitUntil` in `_handler.js`), lines buffered per request; swap via `TRANSPORT` block |
+| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint and the issue time: changing a password, or `users.sessions_valid_after` ("log out everywhere", `_domain/login.js` `logoutEverywhere`), revokes older sessions (`sessionValid`). |
+| `_ownership.js` | `ownsRefs` — **every foreign id from a request body must pass it** (ids are one sequence across tenants); songs, gig, venue and organizer in one statement; `isOwnMediaUrl` gates R2 deletes |
 
 ---
 
@@ -88,8 +91,8 @@ Every app page loads the four shared scripts in this order, after `footer.js`: `
 **Handler skeleton:**
 ```js
 module.exports = wrap(async function handler(req, res) {
-  // catch-alls: req.query.artist may be unpopulated in vercel dev
-  const slug = req.query.artist || req.url.split('?')[0].split('/')[2];
+  const slug = getSlug(req);   // req.query.artist, set by the router
+  const [id, action] = req.query.path || [];   // item handlers: segments after the resource
   const sql  = getDb();
   ...
 });
@@ -156,7 +159,11 @@ Both compare by identity (`=== true`) because `config` is JSONB and a string `"t
 
 **Everything else needs a session, with no setting involved:** venues (rows carry `contact_name`, `phone`, `generic_email` — this is why the old single flag was wrong), organizers, the setlists *list*, song logs and GEMA. Individual setlists are reachable for stage; the list is not, so nothing can be enumerated.
 
-A stage link carries no token and ids are sequential, so with `publicStage` on anyone can walk that band's songs and setlists by id — that is why it is off by default. Anonymous stage responses drop song `comment`s. The `share_token` sketched in `scripts/schema.sql` would replace this with per-link access.
+A stage link carries no token and ids are sequential, so with `publicStage` on anyone can walk that band's songs and setlists by id — that is why it is off by default. Every anonymous song read (catalogue list, `/api/config`, one song, a stage setlist) goes through `publicSong()` (`api/_domain/songs.js`), which drops `comment`. The `share_token` sketched in `scripts/schema.sql` would replace this with per-link access.
+
+**Abuse limits** (`api/_ratelimit.js`): mail to an address the caller chooses (invites, setlist shares) is capped per band and IP at the call site, and by `outboundMailLimited` per sender address and overall per day. Presigned uploads are capped per band per hour (`presignLimited`) — storage is only counted on confirm. AI lyrics suggestions are capped per band and overall per day (`api/_lyrics.js`).
+
+**Free-form JSON** is capped by serialized size: song `extra` 32 KB per request, venue/organizer `social_links` and `extra` 16 KB (`F.object({ maxBytes })`), arrangement `rows` 128 KB. Anonymous `GET /api/config` carries only `plan.features` (the nav needs them), no limits or `usage`. A malformed `%` escape in an `/api` path answers 400.
 
 **Song `extra.*Url` values** must be http(s); a URL into our bucket is only accepted when it is the one already stored (uploads go through presign → confirm). New media keys are `audio|sheets|playback/<artist id>/<uuid>-<name>`, and confirm checks that prefix.
 
@@ -173,7 +180,7 @@ Plan state lives in `artists.config`: `plan` (`free`|`pro`), `upgradedAt` (stick
 Per-band tier system. **`api/_plans.js` is the single source of truth** — edit the two `features` arrays to change what's free vs paid. `getPlan(artist)` is the **only entitlement seam** (reads `artists.config.plan`, unknown/missing → free); real billing later only changes what writes `config.plan`, nothing downstream.
 
 - **Tiers:** Free = 30 MB storage + 100 songs, features `songs/setlists/gigs/hub`. Pro = unlimited + `venues/organizers/pro-import/booking`. Helpers: `hasFeature`, `storageLimitBytes`, `songLimit`, `wouldExceedStorage`, `planSummary`, `requireFeature(res, artist, key)`.
-- **Enforcement is server-side** (`402` + machine codes): `requireFeature` → `upgrade_required` (venues/organizers/`gema-import`); storage cap → `storage_limit` (at song-media upload-confirm, `confirmMedia` in `_media.js`, nets the replaced file); song cap → `song_limit` (song create). Client mirrors for UX only.
+- **Enforcement is server-side** (`402` + machine codes): `requireFeature` → `upgrade_required` (venues/organizers/GEMA import); storage cap → `storage_limit` (at song-media upload-confirm, `confirmMedia` in `_media.js`, nets the replaced file); song cap → `song_limit` (song create). Client mirrors for UX only.
 - **Client gating:** `shell.js` adds `.plan-locked` to nav items the plan lacks (`NAV_FEATURE` map) and routes clicks to `/settings#plan`. `loadConfig()` exposes `cfg.plan`/`cfg.usage`.
 - **Self-serve upgrade seam:** `POST /api/config?action=upgrade` — today flips `config.plan=pro` + sets `upgradedAt`, returns `{mode:'self-serve'}`; later returns `{mode:'checkout', url}` and lets a webhook set the plan. `settings.js renderPlan` branches on `mode`. `POST ?action=downgrade` sets `plan=free` (keeps `upgradedAt`). `PATCH /api/config` strips `plan`/`upgradedAt` — plan state changes only through these actions or `admin-set-plan`. **This is the swap point for paid billing — no other code changes.**
 - **Super-admin:** `/admin` page + `?action=admin-overview`/`admin-set-plan`, gated by `SUPER_ADMIN_EMAILS` (allowlist via global user token, email from DB). Manual grants also via `scripts/plans.js`.
@@ -251,6 +258,11 @@ node scripts/create_user.js --artist <slug> --email <addr> --set-password
                                                           # change an existing account's password (no email needed)
 node scripts/demo_reset.js --export                      # snapshot the demo band to scripts/demo_seed.json
 node scripts/demo_reset.js [--dry-run] [--yes]            # restore it; runs nightly via .github/workflows/demo-reset.yml
+node scripts/db_backup.js [--label <l>] [--out <dir>] [--verify <local url>] [--recipient age1…]
+                                                          # pg_dump + manifest; nightly via .github/workflows/backup.yml
+node scripts/db_restore.js --dump <file> [--identity <key>] # into an EMPTY database, checked against the manifest
 ```
+
+**Backups** (`docs/backup-restore.md`): Neon point-in-time restore first; `.github/workflows/backup.yml` dumps every production database nightly (restored into a scratch Postgres and compared before it is kept, then age-encrypted to R2) and mirrors every upload bucket, keeping deleted objects 30 days. `scripts/_backup.js` holds the shared pieces; the libpq password travels in the environment, never argv.
 
 `ARTIST_SLUG` env var targets the artist; falls back to the first artist in the DB.

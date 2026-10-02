@@ -10,7 +10,7 @@ stubLogger();
 function makeHandler(sqlFn) {
   const dbPath = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
-  const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
   delete require.cache[dbPath];
   delete require.cache[configPath];
@@ -23,7 +23,7 @@ function makeHandler(sqlFn) {
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
   };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
@@ -33,7 +33,7 @@ function makeHandler(sqlFn) {
     },
   };
 
-  return require(path.join(__dirname, '../../api/config'));
+  return require(path.join(__dirname, '../../api/_config'));
 }
 
 function mockRes() {
@@ -92,6 +92,24 @@ async function run(r) {
     const meta = values.find(v => v && typeof v === 'object' && 'geo_country' in v);
     assertEq(meta.geo_country, 'FR');
     for (const k of ['geo_city', 'geo_region', 'ua', 'ref']) assertEq(k in meta, false);
+  });
+
+  await testAsync('POST /api/config subscribe demo — form fields are bounded strings', async () => {
+    const values = [];
+    const handler = makeHandler((s, ...v) => { values.push(...v); return Promise.resolve([]); });
+    const res = mockRes();
+    await handler({
+      method: 'POST', headers: {},
+      body: {
+        email: 'demo@example.com', source: 'demo',
+        name: 'x'.repeat(5000), genres: ['Folk', { big: 'x'.repeat(5000) }, 'Jazz'], perform_country: { nested: true },
+      },
+    }, res);
+    assertEq(res._status, 200);
+    const meta = values.find(v => v && typeof v === 'object' && 'geo_country' in v);
+    assertEq(meta.name, null);
+    assertEq(meta.genres, ['Folk', 'Jazz']);
+    assertEq(meta.perform_country, null);
   });
 
   await testAsync('sweepSubscribers — deletes rows past 24 months and strips dropped meta keys', async () => {

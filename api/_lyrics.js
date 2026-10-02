@@ -7,10 +7,19 @@ function plainFromSynced(synced) {
 }
 
 // Look lyrics up for one song: lyrics.ovh, then lrclib, then the AI provider.
-// Shared by the body-dispatched POST in songs.js and the catch-all route.
+// Behind POST /api/:artist/songs/:id/lyrics/suggest (songs/item.js).
 // Returns { status, body }. Required lazily so the pure helpers above stay
 // loadable without the database or logger.
-async function suggestLyrics(sql, band, songId, ip) {
+// The AI step is the only one that costs money. The public demo hands anyone a
+// member session, so it gets the free sources only, and every band together
+// shares a daily cap: the per-IP limit alone let many addresses spend without end.
+// A per-band cap under the global one keeps a single band (any free sign-up)
+// from spending the whole day's budget for everyone else.
+const AI_DAILY_MAX = 500;
+const AI_BAND_DAILY_MAX = 50;
+
+// opts.allowAI: false skips the AI step (the demo session).
+async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
   const { lyricsSearchInfo } = require('./_domain/songs');
   const { checkRateLimit } = require('./_ratelimit');
   const { suggestLyricsWithAI } = require('./_ai');
@@ -69,7 +78,12 @@ async function suggestLyrics(sql, band, songId, ip) {
     await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lrclib', error: e.message });
   }
 
-  const { lyrics, skipped } = await suggestLyricsWithAI(title, artist, { language, genre });
+  const aiAllowed = allowAI
+    && !(await checkRateLimit(`lyrics-ai-day:${band.id}`, AI_BAND_DAILY_MAX, 86400))
+    && !(await checkRateLimit('lyrics-ai-day', AI_DAILY_MAX, 86400));
+  const { lyrics, skipped } = aiAllowed
+    ? await suggestLyricsWithAI(title, artist, { language, genre })
+    : { lyrics: null, skipped: true };
   if (lyrics) {
     await logger.info('lyrics_suggest', { ...ctx, source: 'ai' });
     return found(lyrics, 'ai');
@@ -78,4 +92,4 @@ async function suggestLyrics(sql, band, songId, ip) {
   return { status: 200, body: { lyrics: null, sources: LYRICS_SOURCES, aiSkipped: skipped ?? false } };
 }
 
-module.exports = { LYRICS_SOURCES, plainFromSynced, suggestLyrics };
+module.exports = { LYRICS_SOURCES, AI_DAILY_MAX, AI_BAND_DAILY_MAX, plainFromSynced, suggestLyrics };

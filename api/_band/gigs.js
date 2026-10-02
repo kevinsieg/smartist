@@ -5,23 +5,20 @@ const { wrap } = require('../_handler');
 const { parseFields } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
-const { ownsVenue, ownsOrganizer } = require('../_ownership');
+const { ownsRefs } = require('../_ownership');
+const { presignLimited } = require('../_ratelimit');
 
 // venue_id / organizer_id come from the body; both must be this artist's rows.
-async function refsOwned(sql, artistId, body) {
-  const [venueOk, organizerOk] = await Promise.all([
-    ownsVenue(sql, artistId, body.venue_id ?? null),
-    ownsOrganizer(sql, artistId, body.organizer_id ?? null),
-  ]);
-  return { venueOk, organizerOk };
+function refsOwned(sql, artistId, body) {
+  return ownsRefs(sql, artistId, { venueId: body.venue_id ?? null, organizerId: body.organizer_id ?? null });
 }
 
 async function checkRefs(sql, artistId, body, res) {
-  const { venueOk, organizerOk } = await refsOwned(sql, artistId, body);
-  if (!venueOk) {
+  const owned = await refsOwned(sql, artistId, body);
+  if (!owned.venue) {
     res.status(400).json({ error: 'Invalid venue_id' }); return false;
   }
-  if (!organizerOk) {
+  if (!owned.organizer) {
     res.status(400).json({ error: 'Invalid organizer_id' }); return false;
   }
   return true;
@@ -31,40 +28,46 @@ async function checkRefs(sql, artistId, body, res) {
 // a single serverless function (Hobby plan allows 12, and all 12 are in use).
 const POSTER_MAX_BYTES = 5 * 1024 * 1024;
 
+// Sub-resources of one gig: the poster, and the upload URLs for it.
+const GIG_SUBS = { 'poster-url': ['POST'], poster: ['PUT', 'DELETE'] };
+
 async function handleOneGig(req, res, { slug, sql, gigId }) {
+  const { sub } = req.query;
+  if (sub !== undefined) {
+    if (!GIG_SUBS[sub]) return res.status(404).json({ error: 'Not found' });
+    if (!GIG_SUBS[sub].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+  }
   if (req.method === 'GET') {
       const { artist, user } = await getAccess(req, slug);
       if (!artist) return res.status(404).json({ error: 'Artist not found' });
       if (!user && !canBrowseCatalogue(artist))
         return res.status(401).json({ error: 'Sign in to view this' });
-      // The gig, and with ?refs its setlists and their songs: every query is
-      // scoped by gig id and band, so none needs another's result first.
-      const [[row], setlists, setlistSongs] = await Promise.all([
-        sql`
-          SELECT g.*, v.name AS venue_name, v.city AS venue_city,
-                 o.name AS organizer_name, o.city AS organizer_city
-          FROM gigs g
-          LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-          LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
-          WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
-            ${user ? sql`` : sql`AND g.deleted = false`}
-        `,
-        req.query.refs ? sql`
-          SELECT id, title FROM setlists
-          WHERE gig_id = ${gigId} AND artist_id = ${artist.id}
-          ORDER BY id DESC
-        ` : [],
-        req.query.refs ? sql`
-          SELECT ss.setlist_id, ss.position, s.title
-          FROM setlists sl
-          JOIN setlist_songs ss ON ss.setlist_id = sl.id
-          JOIN songs s ON s.id = ss.song_id AND s.artist_id = sl.artist_id
-          WHERE sl.gig_id = ${gigId} AND sl.artist_id = ${artist.id}
-          ORDER BY ss.setlist_id, ss.position
-        ` : [],
-      ]);
+      // The gig, and with ?refs its setlists and their songs, in one statement.
+      const [row] = await sql`
+        SELECT g.*, v.name AS venue_name, v.city AS venue_city,
+               o.name AS organizer_name, o.city AS organizer_city
+               ${req.query.refs ? sql`,
+               COALESCE((
+                 SELECT json_agg(json_build_object('id', sl.id, 'title', sl.title) ORDER BY sl.id DESC)
+                 FROM setlists sl
+                 WHERE sl.gig_id = g.id AND sl.artist_id = g.artist_id
+               ), '[]') AS ref_setlists,
+               COALESCE((
+                 SELECT json_agg(json_build_object('setlist_id', ss.setlist_id, 'position', ss.position, 'title', s.title)
+                                 ORDER BY ss.setlist_id, ss.position)
+                 FROM setlists sl
+                 JOIN setlist_songs ss ON ss.setlist_id = sl.id
+                 JOIN songs s ON s.id = ss.song_id AND s.artist_id = sl.artist_id
+                 WHERE sl.gig_id = g.id AND sl.artist_id = g.artist_id
+               ), '[]') AS ref_setlist_songs` : sql``}
+        FROM gigs g
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
+        WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
+          ${user ? sql`` : sql`AND g.deleted = false`}
+      `;
       if (!row) return res.status(404).json({ error: 'Gig not found' });
-      const { venue_city, organizer_city, ...fields } = row;
+      const { venue_city, organizer_city, ref_setlists: setlists, ref_setlist_songs: setlistSongs, ...fields } = row;
       let gig = fields;
       // Public visitors never see the private gig comment, nor who booked the
       // gig: organizers are private CRM data like venues' contacts.
@@ -87,7 +90,7 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
     if (!artist) return;
     // A PUT's fields are validated first; its venue/organizer ownership checks
     // don't depend on the gig row, so they run alongside it.
-    const isUpdate = req.method === 'PUT' && req.query.action !== 'poster';
+    const isUpdate = req.method === 'PUT' && req.query.sub !== 'poster';
     const parsed = isUpdate ? parseFields(req.body, GIG_FIELDS, { partial: true }) : null;
     if (parsed?.error) return res.status(400).json({ error: parsed.error });
     const [[gig], refs] = await Promise.all([
@@ -96,8 +99,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
     ]);
     if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
-    // ── POST ?action=poster-url — get presigned upload URLs ──────────────────
-    if (req.method === 'POST' && req.query.action === 'poster-url') {
+    // ── POST /gigs/:id/poster-url — get presigned upload URLs ──────────────────
+    if (req.method === 'POST' && req.query.sub === 'poster-url') {
       if (refuseDemo(req, res)) return;
       const { contentType, posterSize, thumbSize } = req.body ?? {};
       const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -108,6 +111,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       const okSize = n => Number.isInteger(n) && n > 0 && n <= POSTER_MAX_BYTES;
       if (!okSize(posterSize) || !okSize(thumbSize))
         return res.status(400).json({ error: `posterSize and thumbSize required, max ${POSTER_MAX_BYTES / 1024 / 1024} MB` });
+      if (await presignLimited(artist.id))
+        return res.status(429).json({ error: 'Too many uploads — try again later' });
       const uuid      = crypto.randomUUID();
       const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
       const thumbKey  = `gigs/${artist.slug}/${gigId}-${uuid}-thumb.jpg`;
@@ -123,23 +128,25 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       });
     }
 
-    // ── PUT ?action=poster — confirm upload, save to DB ──────────────────────
-    if (req.method === 'PUT' && req.query.action === 'poster') {
+    // ── PUT /gigs/:id/poster — confirm upload, save to DB ──────────────────────
+    if (req.method === 'PUT' && req.query.sub === 'poster') {
       if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
       const { posterUrl, thumbUrl } = req.body ?? {};
       if (!posterUrl || !thumbUrl)
         return res.status(400).json({ error: 'posterUrl and thumbUrl are required' });
+      // This gig's own keys first: asking storage about any other key would
+      // tell the caller whether that file exists.
+      const expectedPrefix = `gigs/${artist.slug}/${gigId}-`;
+      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix))
+        return res.status(400).json({ error: 'Invalid poster URL' });
+      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix))
+        return res.status(400).json({ error: 'Invalid thumb URL' });
       const [posterOk, thumbOk] = await Promise.all([
         verifyUpload(keyFromUrl(posterUrl)),
         verifyUpload(keyFromUrl(thumbUrl)),
       ]);
       if (!posterOk) return res.status(400).json({ error: 'Poster file not found in storage' });
       if (!thumbOk)  return res.status(400).json({ error: 'Thumbnail file not found in storage' });
-      const expectedPrefix = `gigs/${artist.slug}/${gigId}-`;
-      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix))
-        return res.status(400).json({ error: 'Invalid poster URL' });
-      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix))
-        return res.status(400).json({ error: 'Invalid thumb URL' });
       if (posterOk.contentType !== 'image/jpeg')
         return res.status(400).json({ error: 'Poster must be a JPEG image' });
       if (thumbOk.contentType !== 'image/jpeg')
@@ -161,8 +168,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     if (req.method === 'PUT') {
       if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
-      if (!refs.venueOk)     return res.status(400).json({ error: 'Invalid venue_id' });
-      if (!refs.organizerOk) return res.status(400).json({ error: 'Invalid organizer_id' });
+      if (!refs.venue)     return res.status(400).json({ error: 'Invalid venue_id' });
+      if (!refs.organizer) return res.status(400).json({ error: 'Invalid organizer_id' });
       // Only the fields sent are written; an empty value clears one.
       const value = parsed.value;
       if (!Object.keys(value).length) return res.json(gig);
@@ -174,8 +181,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       return res.json(updated);
     }
 
-    // ── DELETE ?action=poster — remove poster files and clear DB ─────────────
-    if (req.method === 'DELETE' && req.query.action === 'poster') {
+    // ── DELETE /gigs/:id/poster — remove poster files and clear DB ─────────────
+    if (req.method === 'DELETE' && req.query.sub === 'poster') {
       if (gig.poster_url) await deleteFromR2(gig.poster_url).catch(() => {});
       if (gig.thumb_url)  await deleteFromR2(gig.thumb_url).catch(() => {});
       await sql`
@@ -209,8 +216,7 @@ module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
   const sql = getDb();
 
-  // vercel dev does not always populate req.query for rewrites, so fall back to the path.
-  const rawId = req.query.id ?? req.url.split('?')[0].split('/gigs/')[1];
+  const rawId = req.query.id;
   if (rawId !== undefined && rawId !== '') {
     if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method))
       return res.status(405).json({ error: 'Method not allowed' });
@@ -224,6 +230,25 @@ module.exports = wrap(async function handler(req, res) {
     if (!artist) return res.status(404).json({ error: 'Artist not found' });
     if (!user && !canBrowseCatalogue(artist))
       return res.status(401).json({ error: 'Sign in to view this' });
+
+    // ?slim=1: every gig of the band, unpaged, with only what a picker or a
+    // filter shows. The paged list stops at 200 rows, and a picker built from
+    // it dropped older gigs — saving a setlist then unlinked its gig. Deleted
+    // gigs are included (flagged) so a setlist linked to one keeps its gig.
+    if (req.query.slim) {
+      if (!user) return res.status(401).json({ error: 'Sign in to view this' });
+      const gigs = await sql`
+        SELECT g.id, g.title, g.date, g.deleted,
+               g.venue_id, v.name AS venue_name, v.city AS venue_city,
+               g.organizer_id, o.name AS organizer_name
+        FROM gigs g
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
+        WHERE g.artist_id = ${artist.id}
+        ORDER BY g.date DESC NULLS LAST, g.id DESC
+      `;
+      return res.json(gigs);
+    }
 
     if (req.query.format === 'ics') {
       const today = new Date().toISOString().slice(0, 10);
@@ -239,8 +264,10 @@ module.exports = wrap(async function handler(req, res) {
       function esc(s) {
         return (s || '').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
       }
+      // postgres.js hands a DATE back as a Date at UTC midnight, not as text.
+      const ymd = t => new Date(t).toISOString().slice(0, 10).replace(/-/g, '');
       const events = gigs.map(g => {
-        const d = String(g.date).slice(0, 10).replace(/-/g, '');
+        const d = ymd(g.date);
         let dtstart, dtend;
         if (g.time_start) {
           const ts = g.time_start.slice(0, 5).replace(':', '');
@@ -252,9 +279,8 @@ module.exports = wrap(async function handler(req, res) {
             dtend = `DTEND:${d}T${String(h).padStart(2,'0')}${ts.slice(2)}00`;
           }
         } else {
-          const next = new Date(g.date); next.setDate(next.getDate() + 1);
           dtstart = `DTSTART;VALUE=DATE:${d}`;
-          dtend   = `DTEND;VALUE=DATE:${next.toISOString().slice(0,10).replace(/-/g,'')}`;
+          dtend   = `DTEND;VALUE=DATE:${ymd(new Date(g.date).getTime() + 86400000)}`;
         }
         const loc  = [g.venue_name, g.venue_city].filter(Boolean).join(', ');
         // No comments here: the feed URL is guessable (webcal can't auth),

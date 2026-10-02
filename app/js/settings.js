@@ -5,18 +5,9 @@ window.onNavAuthEmpty = function() { goToLogin(); };
 
 initPage(function(cfg) {
   if (requireLogin()) return;
-  var _role = getAuthRole();
-  if (_role !== null && _role !== 'admin') { navigate('/dashboard'); return; }
+  if (getAuthRole() !== 'admin') { navigate('/dashboard'); return; }
   _settingsSlug = cfg.slug;
-  try {
-    var tok = getToken();
-    if (tok) {
-      var b64 = tok.replace(/-/g, '+').replace(/_/g, '/');
-      while (b64.length % 4) b64 += '=';
-      var outer = JSON.parse(atob(b64));
-      if (outer.payload) _currentUserId = JSON.parse(outer.payload).userId || null;
-    }
-  } catch {}
+  _currentUserId = sessionUserId();
   document.getElementById('settings-loading').style.display = 'none';
   document.getElementById('settings-content').style.display = '';
   renderWorkspace(cfg);
@@ -40,7 +31,7 @@ function _usersStatus(msg, isError) {
 
 async function loadUsers() {
   try {
-    const r = await apiFetch('/api/' + _settingsSlug + '/auth');
+    const r = await apiFetch('/api/' + _settingsSlug + '/members');
     if (!r.ok) { _usersStatus(t('settings.accessDenied'), true); return; }
     const { users } = await r.json();
     _allUsers = users;
@@ -130,7 +121,7 @@ async function sendInvite() {
   var btn = document.getElementById('invite-btn');
   btn.disabled = true; btn.textContent = '…'; _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth?action=invite', 'POST', { email, role });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members/invite', 'POST', { email, role });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToSendInvite'), true); return; }
     _usersStatus(t('settings.inviteSentTo', { email: email }));
@@ -146,7 +137,7 @@ async function sendInvite() {
 async function _changeRole(userId, role) {
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'PUT', { userId, role });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members', 'PUT', { userId, role });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToUpdateRole'), true); loadUsers(); }
   } catch {}
@@ -157,7 +148,7 @@ async function _removeUser(userId) {
   if (!confirm(t('settings.confirmRemoveUser', { email: email }))) return;
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'DELETE', { userId });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members', 'DELETE', { userId });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToRemoveUser'), true); return; }
     _usersStatus(t('settings.userRemoved', { email: email }));
@@ -170,7 +161,7 @@ async function _revokeInvite(userId) {
   if (!confirm(t('settings.confirmRevokeInvite', { email: email }))) return;
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth', 'DELETE', { userId });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members', 'DELETE', { userId });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToRevokeInvite'), true); return; }
     _usersStatus(t('settings.inviteRevoked'));
@@ -181,7 +172,7 @@ async function _revokeInvite(userId) {
 async function _resendInvite(userId) {
   _usersStatus('');
   try {
-    const r    = await apiFetch('/api/' + _settingsSlug + '/auth?action=resend-invite', 'POST', { userId });
+    const r    = await apiFetch('/api/' + _settingsSlug + '/members/resend-invite', 'POST', { userId });
     const data = await r.json();
     if (!r.ok) { _usersStatus(data.error || t('settings.failedToResendInvite'), true); return; }
     _usersStatus(t('settings.inviteResent'));
@@ -253,8 +244,8 @@ function renderArrMembers(members) {
         (chips || '<span class="member-inst-empty">' + t('settings.noInstrumentsYet') + '</span>') +
       '</div>' +
       '<div class="member-account-row">' +
-        '<label>' + t('settings.accountLabel') + '</label>' +
-        '<select class="member-account-select" data-onchange="arrMemberAccountChange(' + i + ',this.value)">' + accountOpts + '</select>' +
+        '<label>' + t('settings.accountLabel') +
+        ' <select class="member-account-select" data-onchange="arrMemberAccountChange(' + i + ',this.value)">' + accountOpts + '</select></label>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -880,13 +871,14 @@ var _HIDEABLE_SONG_FIELDS = [
   { field: 'extra.banjoCapo', label: 'songs.fieldBanjoCapo' },
   { field: 'extra.git2',      label: 'songs.fieldGuitar2' },
   { field: 'extra.harp',      label: 'songs.fieldHarmonica' },
+  { field: 'extra.aCapella',  label: 'songs.fieldACapella' },
   { field: 'tags',            label: 'songs.fieldTags' },
 ];
 
 function _renderHiddenSongFields(cfg) {
   var box = document.getElementById('hidden-song-fields');
   if (!box) return;
-  var hidden = (cfg.config && cfg.config.hiddenSongFields) || [];
+  var hidden = hiddenSongFields(cfg.config);
   box.innerHTML = _HIDEABLE_SONG_FIELDS.map(function (f) {
     return '<label class="config-check-row"><input type="checkbox" class="auth-action" value="' + f.field + '"' +
       (hidden.indexOf(f.field) !== -1 ? ' checked' : '') + '> <span>' + escHtml(t(f.label)) + '</span></label>';

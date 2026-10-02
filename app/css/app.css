@@ -13,11 +13,12 @@
     --secondary-color: #f9bf8f;
     --secondary-ink:   #9e5e20;
     --third-color:     #28261f;
-    --muted-ink:       #7a7570; /* softer secondary text — same tone the songs list uses */
+    --muted-ink:       #6f6a65; /* softer secondary text; 5.1:1 on --primary-color */
     --white:           #fff;
     --black:           #0d0c0b;
     --danger-color:    #a03030;
-    --border-color:    #d6cdc0;
+    --border-color:    #d6cdc0; /* dividers and decoration only */
+    --field-border:    #948a7e; /* outline of a form field: 3.2:1, the field must be recognisable */
     --surface-color:   #fffdfa;
     --bg-color:        #fff;
     --bg-alt:          #f6f1e9;
@@ -41,6 +42,21 @@
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────────── */
+/* Keyboard focus is always visible: one ring for every control. Fields that
+   show focus with a border colour get the ring too (the border alone is 1.6:1). */
+:focus-visible { outline: 2px solid var(--secondary-ink); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--secondary-ink) !important; outline-offset: 1px; }
+[tabindex="-1"]:focus { outline: none; }
+.skip-link {
+    position: absolute; left: 0.5rem; top: -3rem; z-index: 1000;
+    background: var(--black); color: var(--primary-color); padding: 0.6rem 1rem;
+    border-radius: var(--radius); font-weight: 600; text-decoration: none;
+}
+.skip-link:focus { top: 0.5rem; }
+.sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { transition: opacity 0.15s ease; }
 main { transition: opacity 0.15s ease; }
@@ -110,7 +126,7 @@ h2 { font-weight: 600; font-size: clamp(1.05rem, 3vw, 1.3rem); line-height: 1.25
     height: 30px;
     border-radius: 50%;
     background: var(--secondary-color);
-    color: #fff;
+    color: var(--black);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.05em;
@@ -214,7 +230,7 @@ h2 { font-weight: 600; font-size: clamp(1.05rem, 3vw, 1.3rem); line-height: 1.25
     width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
     background: rgba(0,0,0,0.1); font-size: 0.65rem; font-weight: 700;
 }
-.app-header--authed .nav-auth-avatar-mono { background: rgba(255,255,255,0.2); }
+.app-header--authed .nav-auth-avatar-mono { background: rgba(0,0,0,0.22); }
 .nav-auth-email { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
 @media (max-width: 767px) { .nav-auth-email { display: none; } }
 /* View-mode / unauthed login link */
@@ -302,7 +318,7 @@ h2 { font-weight: 600; font-size: clamp(1.05rem, 3vw, 1.3rem); line-height: 1.25
 }
 .app-header--authed .band-name { color: var(--primary-color); }
 .app-header--authed .app-logo-initials {
-    background: rgba(255,255,255,0.2);
+    background: rgba(0,0,0,0.22);
     color: var(--primary-color);
 }
 /* Hide write-action buttons in view mode */
@@ -530,7 +546,7 @@ input[type="date"], input[type="number"] {
 .modal-field select,
 .modal-field textarea {
     width: 100%; padding: 0.45rem 0.65rem;
-    border: 1px solid var(--border-color); border-radius: 3px;
+    border: 1px solid var(--field-border); border-radius: 3px;
     font-family: var(--font-ui); font-size: 1rem;
     color: var(--black); background: var(--surface-color); box-sizing: border-box;
     /* reset iOS Safari's default rounded inputs */
@@ -589,7 +605,7 @@ input[type="date"], input[type="number"] {
 }
 .gen-duration-input {
     width: 58px; padding: 0.34rem 0.5rem;
-    border: 1px solid var(--border-color); border-radius: 3px;
+    border: 1px solid var(--field-border); border-radius: 3px;
     background: var(--surface-color); color: var(--black);
     font-family: var(--font-ui); font-size: 0.9rem; text-align: center;
 }
@@ -653,7 +669,7 @@ input[type="date"], input[type="number"] {
 }
 .duration-input input {
     width: 65px; padding: 0.38rem 0.55rem;
-    border: 1px solid var(--border-color); border-radius: 3px;
+    border: 1px solid var(--field-border); border-radius: 3px;
     background: var(--surface-color); color: var(--black);
     font-family: var(--font-ui); font-size: 0.9rem;
 }
@@ -708,12 +724,13 @@ input[type="date"], input[type="number"] {
     .drag-handle:active { cursor: grabbing; }
 }
 .song-remove-btn {
-    background: none; border: none; cursor: pointer; color: rgba(221,213,200,0.5);
+    background: none; border: none; cursor: pointer; color: var(--muted-ink);
     font-size: 1.25rem; line-height: 1; padding: 0 0.2rem; flex-shrink: 0;
+    min-width: 36px; min-height: 36px;
     transition: color 0.15s; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 .song-remove-btn:hover { color: var(--danger-color); }
-@media (min-width: 640px) { .song-remove-btn { font-size: 1.1rem; padding: 0 0.15rem; } }
+@media (min-width: 640px) { .song-remove-btn { font-size: 1.1rem; padding: 0 0.15rem; min-width: 28px; min-height: 28px; } }
 .add-song-row { margin: 0.4rem 0 0.2rem; }
 .add-song-row select {
     font-family: var(--font-ui); font-size: 0.82rem;
@@ -741,7 +758,9 @@ input[type="date"], input[type="number"] {
     white-space: nowrap; display: inline-block;
 }
 .capo-badge  { font-weight: 600; letter-spacing: 0.02em; }
-.capo-change { color: var(--secondary-color) !important; font-weight: 600; }
+/* A capo change is marked by more than colour: the ⇄ sign and hidden text. */
+.capo-change { color: var(--secondary-ink) !important; border-color: var(--secondary-ink) !important; font-weight: 600; }
+.capo-change::before { content: "⇄ "; }
 .set-break {
     list-style: none;
     display: flex; flex-direction: column; align-items: center;
@@ -842,7 +861,7 @@ input[type="date"], input[type="number"] {
     margin-bottom: 1.25rem;
 }
 .history-filter-input {
-    padding: 0.3rem 0.6rem; border: 1px solid var(--border-color);
+    padding: 0.3rem 0.6rem; border: 1px solid var(--field-border);
     border-radius: 3px; background: var(--surface-color); font-size: 0.82rem;
     color: var(--black); min-width: 0; font-family: inherit;
 }
@@ -1110,7 +1129,7 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
     transition: border-color 0.15s, background 0.15s;
 }
 .pro-card--active:hover { border-color: var(--secondary-color); background: rgba(249,191,143,0.12); }
-.pro-card--soon { opacity: 0.45; }
+.pro-card--soon { opacity: 0.75; }
 
 .pro-back-btn {
     background: none; border: none; padding: 0; margin-bottom: 1rem;
@@ -1119,11 +1138,11 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 }
 .pro-back-btn:hover { color: var(--black); }
 .pro-card-acronym  { font-size: 1.25rem; font-weight: 600; letter-spacing: 0.04em; color: var(--black); line-height: 1; margin-bottom: 0.35rem; }
-.pro-card--active .pro-card-acronym { color: var(--secondary-color); }
+.pro-card--active .pro-card-acronym { color: var(--secondary-ink); }
 .pro-card-fullname { font-size: 0.72rem; color: var(--third-color); line-height: 1.35; flex: 1; }
 .pro-card-region   { font-size: 0.72rem; color: var(--third-color); margin-top: 0.4rem; }
 .pro-card-badge    { display: inline-block; margin-top: 0.6rem; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 3px; background: rgba(221,213,200,0.15); color: var(--third-color); align-self: flex-start; }
-.pro-card-badge--active { background: rgba(249,191,143,0.2); color: var(--secondary-color); }
+.pro-card-badge--active { background: rgba(249,191,143,0.2); color: #7d4a18; }
 
 .pro-section { border-top: 1px solid rgba(221,213,200,0.2); padding-top: 1.5rem; }
 .pro-section-title { font-size: 1rem; font-weight: 500; color: var(--third-color); margin: 0 0 1.25rem; }
@@ -1297,7 +1316,7 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
     font-size: clamp(2rem, 8vw, 2.8rem);
     font-weight: 300;
     letter-spacing: 0.18em;
-    color: var(--secondary-color);
+    color: var(--secondary-ink);
     text-transform: lowercase;
     line-height: 1;
 }
@@ -1349,7 +1368,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .landing-logo        { height: 90px; width: auto; object-fit: contain; margin: 0 auto 1.25rem; display: block; }
 .landing-logo[src=""] { display: none; }
 .landing-band        { margin-bottom: 2rem; }
-.landing-band-name   { font-size: clamp(1rem, 4vw, 1.4rem); font-weight: 300; margin: 0.5rem 0 0; color: var(--third-color); }
+.landing-band-name   { font-size: clamp(1rem, 4vw, 1.4rem); font-weight: 300; line-height: 1.25; letter-spacing: normal; margin: 0.5rem 0 0; color: var(--third-color); }
 .landing-login       { text-align: left; }
 .auth-field { margin-bottom: 1rem; }
 .auth-label { display: block; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--third-color); margin-bottom: 0.35rem; }
@@ -1357,7 +1376,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .auth-field input[type="password"],
 .auth-field input[type="text"] {
     width: 100%; padding: 0.5rem 0.7rem;
-    border: 1px solid var(--border-color); border-radius: 3px;
+    border: 1px solid var(--field-border); border-radius: 3px;
     font-family: var(--font-ui); font-size: 1rem;
     color: var(--black); background: var(--surface-color);
     -webkit-appearance: none; appearance: none;
@@ -1377,7 +1396,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
     touch-action: manipulation;
 }
 .pro-card--active:hover { border-color: var(--secondary-color); background: rgba(249,191,143,0.12); }
-.pro-card--soon { opacity: 0.45; }
+.pro-card--soon { opacity: 0.75; }
 .pro-back-btn {
     background: none; border: none; padding: 0; margin-bottom: 1rem;
     font-size: 0.82rem; color: var(--third-color); cursor: pointer;
@@ -1386,11 +1405,11 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 }
 .pro-back-btn:hover { color: var(--black); }
 .pro-card-acronym  { font-size: 1.25rem; font-weight: 600; letter-spacing: 0.04em; color: var(--black); line-height: 1; margin-bottom: 0.35rem; }
-.pro-card--active .pro-card-acronym { color: var(--secondary-color); }
+.pro-card--active .pro-card-acronym { color: var(--secondary-ink); }
 .pro-card-fullname { font-size: 0.72rem; color: var(--third-color); line-height: 1.35; flex: 1; }
 .pro-card-region   { font-size: 0.72rem; color: var(--third-color); margin-top: 0.4rem; }
 .pro-card-badge    { display: inline-block; margin-top: 0.6rem; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 3px; background: rgba(221,213,200,0.15); color: var(--third-color); align-self: flex-start; }
-.pro-card-badge--active { background: rgba(249,191,143,0.2); color: var(--secondary-color); }
+.pro-card-badge--active { background: rgba(249,191,143,0.2); color: #7d4a18; }
 .pro-section { border-top: 1px solid rgba(221,213,200,0.2); padding-top: 1.5rem; }
 .pro-section-title { font-size: 1rem; font-weight: 500; color: var(--third-color); margin: 0 0 1.25rem; }
 
@@ -1503,7 +1522,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 /* ── URL preview modal ───────────────────────────────────────────────────── */
 .url-preview-modal  { max-width: 900px; width: 100%; padding: 0.75rem; }
 .url-preview-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
-.url-preview-input  { flex: 1; min-width: 0; font-size: 0.8rem; padding: 0.3rem 0.6rem; height: 32px; border: 1px solid var(--border-color); border-radius: 3px; background: var(--surface-color); color: var(--black); }
+.url-preview-input  { flex: 1; min-width: 0; font-size: 0.8rem; padding: 0.3rem 0.6rem; height: 32px; border: 1px solid var(--field-border); border-radius: 3px; background: var(--surface-color); color: var(--black); }
 .url-preview-modal iframe { display: block; width: 100%; height: 70vh; border: none; border-radius: 3px; background: var(--surface-color); }
 .url-preview-loading { width: 100%; height: 70vh; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--third-color); border-radius: 3px; background: var(--surface-color); }
 
@@ -1515,7 +1534,8 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .pw-wrapper input { width: 100%; padding-right: 3.2rem; }
 .pw-toggle {
     position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
-    background: none; border: none; cursor: pointer; padding: 0;
+    background: none; border: none; cursor: pointer; padding: 0 0.35rem;
+    min-height: 32px; min-width: 32px;
     font-family: var(--font-ui); font-size: 0.72rem;
     color: var(--third-color); -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
@@ -1523,7 +1543,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .pw-toggle:hover { color: var(--black); }
 /* inputs in auth-row expand to fill; pw-wrapper's own input overrides via .pw-wrapper */
 .auth-row input {
-    padding: 0.45rem 0.75rem; border: 1px solid var(--border-color); border-radius: 3px;
+    padding: 0.45rem 0.75rem; border: 1px solid var(--field-border); border-radius: 3px;
     font-family: var(--font-ui); font-size: 0.9rem;
     background: var(--surface-color); color: var(--black);
     flex: 1; min-width: 0; width: auto;
@@ -1549,7 +1569,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
     border: 1px solid #e3c4bd; border-radius: var(--radius);
     padding: 1rem; margin-top: 2rem; background: #fdf7f5;
 }
-.danger-zone h3 { color: #7a2a2a; margin-bottom: 0.5rem; }
+.danger-zone h2 { color: #7a2a2a; margin-bottom: 0.5rem; }
 .danger-zone ul { margin: 0.5rem 0 0.75rem 1.1rem; font-size: var(--text-sm); }
 .danger-zone .btn-danger { background: #7a2a2a; color: #fff; border-color: #7a2a2a; }
 .danger-zone .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1597,7 +1617,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .smartist-wordmark {
     display: block;
     font-size: clamp(2rem, 8vw, 2.8rem); font-weight: 300;
-    letter-spacing: 0.18em; color: var(--secondary-color);
+    letter-spacing: 0.18em; color: var(--secondary-ink);
     text-transform: lowercase; line-height: 1;
 }
 .smartist-tagline {
@@ -1879,7 +1899,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .filter-bar-input {
   height: var(--control-h);
   padding: 0 0.7rem;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius);
   font-family: inherit;
   font-size: var(--text-md);
@@ -2302,7 +2322,7 @@ span.heart-btn    { cursor: default; }
 /* ── Dashboard help ── */
 .dash-help { position: relative; margin: 0.5rem 0 1.2rem; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--third-color); text-align: left; }
 .dash-help summary { cursor: pointer; color: var(--secondary-ink); font-weight: 700; padding-right: 1.5rem; -webkit-tap-highlight-color: transparent; }
-.dash-help-close { position: absolute; top: 0.35rem; right: 0.5rem; background: none; border: 0; padding: 0.2rem 0.35rem; font-size: 1.2rem; line-height: 1; cursor: pointer; color: var(--muted-ink); -webkit-tap-highlight-color: transparent; }
+.dash-help-close { position: absolute; top: 0.2rem; right: 0.3rem; min-width: 32px; min-height: 32px; background: none; border: 0; padding: 0.2rem 0.35rem; font-size: 1.2rem; line-height: 1; cursor: pointer; color: var(--muted-ink); -webkit-tap-highlight-color: transparent; }
 .dash-help-close:hover { color: var(--secondary-ink); }
 .dash-help ol { margin: 0.75rem 0 0.5rem 1.2rem; padding: 0; display: grid; gap: 0.45rem; }
 .dash-help p { margin: 0.4rem 0 0; color: var(--muted-ink); }
@@ -2327,3 +2347,20 @@ span.heart-btn    { cursor: default; }
 }
 
 .filter-check { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--text-sm); white-space: nowrap; cursor: pointer; }
+
+/* ── Phones: form text at 16px so iOS Safari does not zoom in on focus ─────── */
+@media (max-width: 639px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: max(16px, 1em) !important; }
+}
+
+/* ── Small controls get a 24px minimum target (WCAG 2.5.8) ─────────────────── */
+input[type="checkbox"], input[type="radio"] { min-width: 18px; min-height: 18px; }
+.letter-btn { min-width: 28px; min-height: 28px; }
+
+/* ── Reduced motion: no fades, slides or animated menus ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+    }
+}

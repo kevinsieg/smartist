@@ -62,10 +62,7 @@ function applyNav(bandName, bandConfig) {
   }
 
   const path = window.location.pathname.replace(/\/+$/, '');
-  document.querySelectorAll('.nav-links a').forEach(a => {
-    const href = a.getAttribute('href').replace(/\/+$/, '');
-    a.classList.toggle('current', href === path);
-  });
+  _markCurrentNav(path);
 
   // Auth indicator — inject once into nav if not already present
   const nav = document.querySelector('.app-nav');
@@ -82,17 +79,12 @@ function updateAuthIndicator() {
   var el = document.getElementById('nav-auth');
   if (!el) return;
   var _tok = getToken();
-  if (_tok && _isTokenExpired(_tok)) {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    _tok = null;
-  }
   var authed = !!_tok;
   var _role  = authed ? getAuthRole() : null;
   var header = document.querySelector('.app-header');
   if (header) {
     header.classList.toggle('app-header--authed', authed);
-    header.classList.toggle('app-header--admin',  authed && (_role === 'admin' || _role === null));
+    header.classList.toggle('app-header--admin',  authed && _role === 'admin');
   }
   var _logoBase = _artistSlug ? '/' + _artistSlug : '';
   document.querySelectorAll('.app-logo').forEach(function(a) {
@@ -169,11 +161,11 @@ function _openAuthMenu(btn) {
   var existing = document.getElementById('nav-auth-menu');
   if (existing) { existing.remove(); return; }
   var _profilePath = _artistSlug ? '/' + _artistSlug + '/profile' : '/profile';
-  // Switch-workspace only makes sense for real (token) logins: bootstrap
-  // password sessions (role null) are bound to one fixed workspace. We don't
-  // gate on singleTenant — local dev sets ARTIST_SLUG (→ singleTenant) purely
-  // as a default-slug convenience while still serving multiple workspaces.
-  var _showSwitch = getAuthRole() !== null;
+  // Switch-workspace needs a personal account: the demo session is bound to
+  // the demo band. We don't gate on singleTenant — local dev sets ARTIST_SLUG
+  // (→ singleTenant) purely as a default-slug convenience while still serving
+  // multiple workspaces.
+  var _showSwitch = sessionUserId() !== null;
   var menu = document.createElement('div');
   menu.id = 'nav-auth-menu';
   menu.className = 'nav-auth-menu';
@@ -272,6 +264,28 @@ async function warmPage(href) {
   } catch { _htmlCache.delete(href); }
 }
 
+// Nav link of the current page: highlighted and announced as the current page.
+function _markCurrentNav(path) {
+  document.querySelectorAll('.nav-links a').forEach(function(a) {
+    var current = a.getAttribute('href').replace(/\/+$/, '') === path;
+    a.classList.toggle('current', current);
+    if (current) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  });
+}
+
+// The skip link lands on the page content: <main>, or the page's .app-wrap
+// on pages without one (it gets role="main").
+function _markMainContent() {
+  var main = document.querySelector('main') || document.querySelector('.app-wrap');
+  if (!main) return;
+  if (main.tagName !== 'MAIN') main.setAttribute('role', 'main');
+  if (!main.id) main.id = 'main-content';
+  if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+  var skip = document.querySelector('.skip-link');
+  if (skip) skip.setAttribute('href', '#' + main.id);
+}
+
 async function navigate(href) {
   // Remap bare artist-page paths to slugged paths when on a slugged page
   if (_artistSlug) {
@@ -362,10 +376,16 @@ async function navigate(href) {
     if (window.i18n && window.i18n.applyTranslations) window.i18n.applyTranslations(document);
 
     history.pushState(null, document.title, href);
-    document.querySelectorAll('.nav-links a').forEach(function(a) {
-      a.classList.toggle('current', a.getAttribute('href').replace(/\/+$/, '') === path);
-    });
+    _markCurrentNav(path);
     if (typeof updateAuthIndicator === 'function') updateAuthIndicator();
+    _markMainContent();
+    // A new page without a reload: move focus to its heading so screen readers
+    // announce it and Tab starts from the content, not from the old position.
+    var _navHeading = document.querySelector('[role="main"] h1, main h1, h1');
+    if (_navHeading) {
+      _navHeading.setAttribute('tabindex', '-1');
+      _navHeading.focus({ preventScroll: true });
+    }
 
   } catch {
     if (_navVersion === version) window.location.href = href;
@@ -394,6 +414,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
   const header = document.createElement('header');
   header.className = 'app-header';
   header.innerHTML =
+    '<a href="#main-content" class="skip-link" data-i18n="nav.skipToContent">Skip to content</a>' +
     '<nav class="app-nav">' +
       // No workspace in the URL means we are outside the app (login, root
       // contact page): the way back is the marketing site, not a band.
@@ -410,7 +431,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
           '<a href="' + _base + '/setlist" data-i18n="nav.setlists">Setlists</a>' +
           '<a href="' + _base + '/gigs" data-i18n="nav.gigs">Gigs</a>' +
           '<div class="nav-more">' +
-            '<a href="#" class="nav-more-toggle" id="nav-more-toggle" aria-expanded="false"><span data-i18n="nav.more">More</span> &#9662;</a>' +
+            '<a href="#" class="nav-more-toggle" id="nav-more-toggle" role="button" aria-haspopup="true" aria-controls="nav-more-menu" aria-expanded="false"><span data-i18n="nav.more">More</span> &#9662;</a>' +
             '<div class="nav-more-menu" id="nav-more-menu">' +
               '<a href="' + _base + '/venues" data-i18n="nav.venues">Venues</a>' +
               '<a href="' + _base + '/organizers" class="auth-only" data-i18n="nav.organizers">Organizers</a>' +
@@ -439,7 +460,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
   // Set auth class early so CSS hides/shows auth-gated nav items before applyNav() runs.
   try {
     const _earlyTok = sessionStorage.getItem(AUTH_TOKEN_KEY);
-    if (_earlyTok && !_isTokenExpired(_earlyTok)) header.classList.add('app-header--authed');
+    if (_earlyTok) header.classList.add('app-header--authed');
   } catch {}
 
   // Apply cached config before first paint so header renders complete on load.
@@ -459,9 +480,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
         document.querySelectorAll('.app-logo-initials').forEach(el => el.classList.add('app-logo-initials--show'));
       }
       const path = window.location.pathname.replace(/\/+$/, '');
-      document.querySelectorAll('.nav-links a').forEach(a => {
-        a.classList.toggle('current', a.getAttribute('href').replace(/\/+$/, '') === path);
-      });
+      _markCurrentNav(path);
       if (cached.name && document.title && !document.title.includes(cached.name)) {
         document.title = document.title + ' · ' + cached.name;
       }
@@ -557,6 +576,44 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
     }
     navigate(a.href);
   });
+
+  // Skip link: focus the content (a hash link is not an SPA link).
+  document.addEventListener('click', function(e) {
+    var skip = e.target.closest('.skip-link');
+    if (!skip) return;
+    e.preventDefault();
+    _markMainContent();
+    var target = document.querySelector(skip.getAttribute('href'));
+    if (target) target.focus();
+  });
+
+  // Keyboard: Space opens "More" like a button; Escape closes the More menu
+  // or the burger menu and puts focus back on its toggle.
+  document.addEventListener('keydown', function(e) {
+    if (e.key === ' ' && e.target.id === 'nav-more-toggle') {
+      e.preventDefault();
+      e.target.click();
+      return;
+    }
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    var openMore = document.querySelector('.nav-more.nav-more-open');
+    if (openMore) {
+      openMore.classList.remove('nav-more-open');
+      var mt = document.getElementById('nav-more-toggle');
+      if (mt) { mt.setAttribute('aria-expanded', 'false'); mt.focus(); }
+      e.preventDefault();
+      return;
+    }
+    var openHdr = document.querySelector('.app-header.nav-open');
+    if (openHdr) {
+      openHdr.classList.remove('nav-open');
+      var bg = document.getElementById('nav-burger');
+      if (bg) { bg.setAttribute('aria-expanded', 'false'); bg.focus(); }
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('DOMContentLoaded', _markMainContent);
 
   // Warm (fetch HTML + prefetch scripts) on hover and pointerdown.
   document.addEventListener('pointerdown', function(e) {

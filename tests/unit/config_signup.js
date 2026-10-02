@@ -14,11 +14,11 @@ async function run(r) {
   const { stubLogger } = require('./_runner');
   stubLogger();
 
-  function makeHandler(sqlFn, emailFn) {
+  function makeHandler(sqlFn, emailFn, artistConfig = {}) {
     const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
     const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
     const emailPath  = require.resolve(path.join(__dirname, '../../api/_email'));
-    const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+    const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
     const tokenPath = require.resolve(path.join(__dirname, '../../api/_token'));
     const authPath  = require.resolve(path.join(__dirname, '../../api/_auth'));
@@ -43,7 +43,7 @@ async function run(r) {
       id: dbPath, filename: dbPath, loaded: true,
       exports: {
         getDb:     () => sqlFn,
-        getArtist: async (slug) => ({ id: 1, slug, name: 'Test', config: {}, password_hash: 'hash' }),
+        getArtist: async (slug) => ({ id: 1, slug, name: 'Test', config: artistConfig, password_hash: 'hash' }),
         getSlug:   (req) => (req.query && req.query.artist) || 'test',
       },
     };
@@ -52,7 +52,7 @@ async function run(r) {
       exports: { sendEmail: emailFn || (async () => {}) },
     };
 
-    return require(path.join(__dirname, '../../api/config'));
+    return require(path.join(__dirname, '../../api/_config'));
   }
 
   function mockRes() {
@@ -115,7 +115,7 @@ async function run(r) {
     let signupTokenStored = false;
     const sql = async function(strings) {
       const q = String(strings[0]);
-      if (q.includes('FROM users')) return [{ id: 7, email: 'old@gmail.com', password_hash: '$2b$12$hash' }];
+      if (q.includes('FROM users')) return [{ id: 7, email: 'old@gmail.com', password_hash: '$2b$12$hash', slug: 'old-band' }];
       if (q.includes('INSERT INTO subscribers')) signupTokenStored = true;
       return [];
     };
@@ -132,6 +132,8 @@ async function run(r) {
     assert(/already/i.test(sentMail.subject || '') || /already/i.test(sentMail.html || ''), 'expected already-have-account email');
     assert(!/onboarding/.test(sentMail.html || ''), 'must NOT contain a workspace-setup link');
     assert(/\/login/.test(sentMail.html || ''), 'expected a login link');
+    // The login page finds the workspace to redeem the link at from `next`.
+    assert(/next=%2Fold-band%2Fdashboard/.test(sentMail.html || ''), 'expected the link to name the workspace');
     assert(!signupTokenStored, 'must not store a signup token for existing accounts');
   });
 
@@ -234,6 +236,7 @@ async function run(r) {
       const q = String(strings[0]);
       if (q.includes('SELECT email'))       return [{ email: 'u@t.com', signup_token_hash: hash, signup_token_expires: expires }];
       if (q.includes('EXISTS'))             return [{ exists: false }];  // slug available
+      if (q.includes('UPDATE subscribers')) return [{ email: 'u@t.com' }];  // link spent here
       if (q.includes('INSERT INTO artists')) return [{ id: 10 }];
       if (q.includes('INSERT INTO users'))   return [{ id: 20 }];
       return [];
@@ -246,6 +249,27 @@ async function run(r) {
     assertEq(res._body && res._body.ok, true);
     assertEq(res._body && res._body.slug, 'my-band');
     assert(typeof (res._body && res._body.token) === 'string', 'expected session token string');
+  });
+
+  await testAsync('a link spent by a racing request creates nothing → 400', async () => {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hash     = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expires  = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    let inserted = false;
+    const sql = async function(strings) {
+      const q = String(strings[0]);
+      if (q.includes('SELECT email'))       return [{ email: 'u@t.com', signup_token_hash: hash, signup_token_expires: expires }];
+      if (q.includes('EXISTS'))             return [{ exists: false }];
+      if (q.includes('UPDATE subscribers')) return [];   // the other request spent it first
+      if (q.includes('INSERT')) inserted = true;
+      return [];
+    };
+    sql.begin = async fn => fn(sql);
+    const handler = makeHandler(sql);
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'signup', token: rawToken, name: 'My Band', slug: 'my-band' }, headers: {} }, res);
+    assertEq(res._status, 400);
+    assert(!inserted, 'no workspace may be created from a spent link');
   });
 
   // ── GET ?action=check-slug ──────────────────────────────────────────────────
@@ -355,7 +379,7 @@ async function run(r) {
   await testAsync('PATCH config drops plan and upgradedAt but keeps other keys', async () => {
     let merged = null;
     const handler = makeHandler(memberSql('admin', (q, values) => {
-      if (q.includes('UPDATE artists SET config')) merged = values[0];
+      if (q.includes('UPDATE artists SET config')) { merged = values[0]; return [{ id: 1 }]; }
     }));
     const res = mockRes();
     await handler({
@@ -365,6 +389,33 @@ async function run(r) {
     }, res);
     assertEq(res._status, 200);
     assertEq(merged, { private: true });
+  });
+
+  await testAsync('PATCH config past the size cap → 413, the merge is guarded in SQL', async () => {
+    let guarded = false;
+    const handler = makeHandler(memberSql('admin', (q) => {
+      // The row matches only while the merged config stays under the cap; a
+      // database that refuses it returns no row.
+      if (q.includes('UPDATE artists SET config')) { guarded = /octet_length/.test(q); return []; }
+    }));
+    const res = mockRes();
+    await handler({
+      method: 'PATCH', query: { slug: 'test' },
+      body: { config: { displayFields: 'x'.repeat(70000) } },
+      headers: { authorization: bearer() },
+    }, res);
+    assert(guarded, 'expected the size check in the UPDATE');
+    assertEq(res._status, 413);
+  });
+
+  await testAsync('anonymous config carries only the public keys', async () => {
+    const handler = makeHandler(async () => [], null, {
+      logoUrl: 'https://x.test/l.png', publicStage: true, gemaIpNameNumber: '123', upgradedAt: 'x', someFutureKey: 1,
+    });
+    const res = mockRes();
+    await handler({ method: 'GET', query: { slug: 'test' }, headers: {} }, res);
+    assertEq(res._status, 200);
+    assertEq(res._body.config, { logoUrl: 'https://x.test/l.png', publicStage: true });
   });
 
   await testAsync('POST action=downgrade sets plan free and leaves upgradedAt alone', async () => {
@@ -416,7 +467,7 @@ async function run(r) {
   function superAdminSql(email, onQuery) {
     return async function(strings, ...values) {
       const q = strings.join('?');
-      if (/SELECT email(, password_hash)? FROM users/.test(q)) return email ? [{ email }] : [];
+      if (/SELECT email(, password_hash(, sessions_valid_after)?)? FROM users/.test(q)) return email ? [{ email }] : [];
       return (onQuery && onQuery(q, values)) || [];
     };
   }

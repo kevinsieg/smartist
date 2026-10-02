@@ -86,6 +86,7 @@ vercel env ls production --project <name>    # what that one actually has
 | `DEMO_ARTIST_SLUG` | optional | no | Band the `/demo` gate opens; default `demo`. |
 | `FACEBOOK_TRUST_EMAIL` | optional | optional | Only with Facebook sign-in; see `oauth-setup.md`. |
 | `BETTERSTACK_TOKEN` | production only | production only | |
+| `SKIP_PREVIEW_BUILDS` | no | `1` | Read only by `ignoreCommand` in `vercel.json`: with `1` the project builds `dev` and `main` and skips every other branch. Vercel Hobby allows 100 deployments a day; one project building PR previews is enough. |
 
 **Variables only reach new builds.** Adding one to a live deployment changes
 nothing until it is rebuilt: `vercel ls <project>`, then `vercel redeploy <the
@@ -128,7 +129,16 @@ Two checks per production deployment, both in Better Stack:
   response) as well as the deployment being down.
 
 The health check itself cannot tell whether logs arrive: the send happens after
-the handler returns, in a function instance that may be frozen right after.
+the response, handed to Vercel's `waitUntil` (`api/_handler.js`), so the request
+never waits for the log service.
+
+## Backups
+
+Neon's point-in-time restore, plus a nightly encrypted dump of every
+production database and a mirror of every upload bucket
+(`.github/workflows/backup.yml`). Setup, restore procedures and the drill:
+[`backup-restore.md`](backup-restore.md). A new deployment adds its database
+and bucket to the backup secrets.
 
 ## Unconfirmed uploads
 

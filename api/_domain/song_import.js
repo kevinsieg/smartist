@@ -1,6 +1,6 @@
 'use strict';
 
-// CSV song import (POST /api/:artist/songs with a `song_import` body field).
+// CSV song import (POST /api/:artist/songs/import).
 //
 // The songs page offers a template whose header row is COLUMNS' names. An
 // uploaded file is parsed here, every row is checked against the same rules
@@ -93,7 +93,7 @@ function detectDelimiter(text) {
 // RFC 4180: quoted cells may hold the delimiter, line breaks and "" for a quote.
 // Returns rows of cells with the line each row starts on.
 function parseCsvText(text) {
-  const src = String(text).replace(/^﻿/, '');
+  const src = String(text).replace(/^\uFEFF/, '');
   const delim = detectDelimiter(src);
   const rows = [];
   let row = [], cell = '', inQuotes = false, line = 1, rowLine = 1;
@@ -191,6 +191,7 @@ function cleanCell(raw, multiline) {
     .replace(/\r\n?/g, '\n')
     .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '')
     .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\t]/g, ' ')
+    // eslint-disable-next-line no-control-regex -- stripping control characters is the point
     .replace(/[\u0000-\u0009\u000B-\u001F\u007F-\u009F]/g, '');
   if (multiline) {
     v = v.split('\n').map(l => l.replace(/ +$/, '')).join('\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -236,7 +237,7 @@ function checkCell(col, raw, ctx) {
     }
     case 'tags': {
       const tags = cleanTags(t.split(/[;|,]/), ctx.tags);
-      if (tags.error) return { error: /too many/.test(tags.error) ? 'too_many_tags' : 'tag_too_long' };
+      if ('error' in tags) return { error: /too many/.test(tags.error) ? 'too_many_tags' : 'tag_too_long' };
       return { value: tags, text: tags.join('; ') };
     }
     case 'energy': {
@@ -387,7 +388,7 @@ async function insertSongs(sql, artistId, records) {
   return res?.count ?? 0;
 }
 
-// The whole request: body.song_import is { csv } (a new file) or
+// The whole request body: { csv } (a new file) or
 // { rows, commit } (a re-check after edits, or the import itself).
 // maxSongs: the plan's song limit, or null. → { status, body }
 async function songImport(sql, artistId, input, { maxSongs = null } = {}) {

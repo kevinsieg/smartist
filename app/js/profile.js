@@ -34,19 +34,22 @@
     document.getElementById('profile-email').textContent =
       sessionStorage.getItem('smartist_admin_email') || '—';
 
-    // Bootstrap (workspace-password) logins have no users row → no personal password.
-    var isBootstrap = getAuthRole() === null;
-    document.getElementById(isBootstrap ? 'bootstrap-note' : 'password-section').style.display = '';
-    if (isBootstrap) return;
+    // The demo session has no users row → no personal password, email or deletion.
+    var noAccount = sessionUserId() === null;
+    document.getElementById(noAccount ? 'demo-note' : 'password-section').style.display = '';
+    if (noAccount) return;
 
     document.getElementById('pw-save-btn').addEventListener('click', changePassword);
 
-    // Reached only past the bootstrap early-return above, so accounts without a
-    // users row never see this — matching the server, which rejects them.
+    // Reached only past the early return above, so sessions without a users
+    // row never see this — matching the server, which rejects them.
     document.getElementById('email-section').style.display = '';
     document.getElementById('em-save-btn').addEventListener('click', requestEmailChange);
 
-    // Same reasoning: deletion acts on a users row, so bootstrap logins skip it too.
+    document.getElementById('sessions-section').style.display = '';
+    document.getElementById('logout-all-btn').addEventListener('click', logoutEverywhere);
+
+    // Same reasoning: deletion acts on a users row.
     document.getElementById('delete-account-btn').addEventListener('click', _requestDeletion);
     _loadDeletionZone();
   }
@@ -63,7 +66,7 @@
     var btn = document.getElementById('pw-save-btn');
     btn.disabled = true; msg.textContent = t('profile.saving');
     try {
-      var r = await apiFetch('/api/' + _slug + '/auth?action=change-password', 'POST',
+      var r = await apiFetch('/api/' + _slug + '/members/change-password', 'POST',
         { currentPassword: cur, newPassword: nw, rememberMe: !!localStorage.getItem(AUTH_TOKEN_KEY) });
       var data = await r.json();
       if (!r.ok) { msg.textContent = data.error || t('profile.failed'); msg.className = 'save-msg err'; return; }
@@ -91,13 +94,28 @@
     var btn = document.getElementById('em-save-btn');
     btn.disabled = true; msg.textContent = t('profile.saving');
     try {
-      var r = await apiFetch('/api/' + _slug + '/auth?action=request-email-change', 'POST',
+      var r = await apiFetch('/api/' + _slug + '/members/request-email-change', 'POST',
         { currentPassword: cur, newEmail: nw });
       var data = await r.json();
       if (!r.ok) { msg.textContent = data.error || t('profile.failed'); msg.className = 'save-msg err'; return; }
       msg.textContent = t('profile.emailLinkSent'); msg.className = 'save-msg ok';
       document.getElementById('em-current').value = '';
       document.getElementById('em-new').value = '';
+    } catch (e) {
+      if (!String(e.message).includes('Session')) { msg.textContent = t('profile.connError'); msg.className = 'save-msg err'; }
+    } finally { btn.disabled = false; }
+  }
+
+  // Ends every session of this address, this one included, then leaves the
+  // page the way the menu's logout does.
+  async function logoutEverywhere() {
+    var btn = document.getElementById('logout-all-btn');
+    var msg = document.getElementById('logout-all-msg');
+    btn.disabled = true; msg.className = 'save-msg'; msg.textContent = '';
+    try {
+      var r = await apiFetch('/api/config', 'POST', { action: 'logout-everywhere' });
+      if (!r.ok) { msg.textContent = t('profile.logoutEverywhereFailed'); msg.className = 'save-msg err'; return; }
+      doLogout();
     } catch (e) {
       if (!String(e.message).includes('Session')) { msg.textContent = t('profile.connError'); msg.className = 'save-msg err'; }
     } finally { btn.disabled = false; }
@@ -130,7 +148,7 @@
   // execute JS; if the load itself deleted, every one of those would destroy an
   // account nobody clicked on. Nothing is deleted until _confirmAccountDeletion
   // below, which only a click reaches. Same two-phase shape as
-  // confirm-email-change (api/[artist]/auth.js).
+  // confirm-email-change (api/_band/members.js).
   //
   // No session required — the token authenticates it — so this uses apiFetch
   // only to keep the guard happy, not because a token is needed. Runs before

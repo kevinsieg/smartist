@@ -4,7 +4,7 @@
 // not silently skipped — a skipped row looks to the user like "saving does nothing".
 
 const path = require('path');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 
@@ -22,7 +22,7 @@ function mockRes() {
 
 function loadHandler(route) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), r2Path = mp('api/_r2');
-  const handlerPath = mp('api/[artist]/songs.js');
+  const handlerPath = mp('api/_band/songs.js');
   for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
   const calls = [];
   const sql = (strings, ...values) => {
@@ -39,7 +39,7 @@ function loadHandler(route) {
       getDb: () => sql,
       getArtist: async () => ARTIST,
       getSlug: () => 'test',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };
@@ -58,7 +58,7 @@ function loadHandler(route) {
     exports: { createPresignedUrl: async () => ({}), deleteFromR2: async () => {},
       verifyUpload: async () => ({}), keyFromUrl: () => 'k', filenameFromUrl: () => 'f' },
   };
-  return { handler: require(path.join(__dirname, '../..', 'api/[artist]/songs.js')), calls };
+  return { handler: viaRouter(path.join(__dirname, '../..', 'api/_band/songs.js')), calls };
 }
 
 async function patch(handler, body) {
@@ -138,12 +138,12 @@ async function run(r) {
 
   await testAsync('tags are normalised against the band\'s tags', async () => {
     const stored = { id: 5, artist_id: 1, title: 'Song', active: true, heart: false, extra: {}, tags: [] };
-    const { handler, calls } = loadHandler((text, values) =>
-      text.includes('unnest(tags)') ? [{ tag: 'Liebe' }] : routeFor(stored)(text, values));
+    const { handler, calls } = loadHandler(routeFor({ ...stored, known_tags: ['Liebe'] }));
     await patch(handler, [{ id: 5, tags: ['liebe', ' Arbeit '] }]);
     assertEq(JSON.stringify(batchRows(calls)[0].tags), '["Liebe","Arbeit"]');
     const q = calls.find(c => c.text.includes('unnest(tags)'));
-    assert(q && q.values.includes(1), 'known tags are scoped to the band');
+    assert(q && q.values.every(v => v === 1 || Array.isArray(v)), 'known tags are scoped to the band');
+    assertEq(calls.filter(c => c.text.startsWith('SELECT')).length, 1, 'rows, genres and tags in one statement');
   });
 
   await testAsync('invalid tags reject the row', async () => {

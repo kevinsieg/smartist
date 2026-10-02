@@ -6,7 +6,7 @@
 
 const path = require('path');
 const crypto = require('crypto');
-const { makeRunner, stubLogger } = require('./_runner');
+const { makeRunner, stubLogger, viaRouter } = require('./_runner');
 
 stubLogger();
 process.env.APP_SECRET = process.env.APP_SECRET || 'test-secret-exactly-32-bytes-ok!';
@@ -46,7 +46,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
     id: dbPath, filename: dbPath, loaded: true,
     exports: {
       getDb: () => sql, getArtist: async () => ARTIST,
-      getSlug: () => 'test', insertAuditLog: async () => {},
+      getSlug: () => 'test', insertAuditLog: async () => {}, trimSongLogs: async () => {},
       parsePage: () => ({ limit: 50, offset: 0 }),
     },
   };
@@ -68,19 +68,23 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
       keyFromUrl: u => (String(u).startsWith('https://media.example.test/') ? String(u).slice(27) : null),
     },
   };
-  return { handler: require(handlerPath), sql };
+  return { handler: viaRouter(handlerPath), sql };
 }
 
 // Songs 10 and 11 belong to this band; anything else belongs to someone else.
 const OWN_SONGS = new Set([10, 11]);
 function ownershipRoute(text, values) {
-  if (text.startsWith('SELECT count(*)::int AS n FROM songs')) {
-    const ids = values[1] || [];
-    return [{ n: ids.filter(id => OWN_SONGS.has(id)).length }];
+  // ownsRefs: one statement. Values: artist, song ids, their count, then
+  // (id, id, artist) for the gig, the venue and the organizer.
+  if (text.startsWith('SELECT (SELECT count(*)::int FROM songs')) {
+    const [, ids, n, gig, , , venue, , , organizer] = values;
+    return [{
+      songs: ids.filter(id => OWN_SONGS.has(id)).length === n,
+      gig: gig == null || gig === 5,
+      venue: venue == null || venue === 7,
+      organizer: organizer == null || organizer === 8,
+    }];
   }
-  if (text.startsWith('SELECT 1 AS ok FROM gigs'))       return values[0] === 5 ? [{ ok: 1 }] : [];
-  if (text.startsWith('SELECT 1 AS ok FROM venues'))     return values[0] === 7 ? [{ ok: 1 }] : [];
-  if (text.startsWith('SELECT 1 AS ok FROM organizers')) return values[0] === 8 ? [{ ok: 1 }] : [];
   // Setlist create is one WITH s AS (INSERT INTO setlists …) statement.
   if (text.startsWith('WITH s AS ( INSERT INTO setlists')) return [{ id: 99 }];
   if (text.startsWith('INSERT INTO gigs'))               return [{ id: 55 }];
@@ -94,7 +98,7 @@ async function run(r) {
   console.log(B('\ntenant isolation — foreign ids in request bodies'));
 
   await testAsync("a setlist cannot include another band's song", async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists.js', ownershipRoute);
+    const { handler, sql } = loadHandler('api/_band/setlists.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10, 12345] } }, res);
@@ -103,15 +107,30 @@ async function run(r) {
   });
 
   await testAsync('a setlist of own songs is created', async () => {
-    const { handler } = loadHandler('api/[artist]/setlists.js', ownershipRoute);
+    const { handler } = loadHandler('api/_band/setlists.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10, 11], gig_id: 5 } }, res);
     assertEq(res.statusCode, 201);
   });
 
+  await testAsync('songs and gig of a new setlist are checked in one statement', async () => {
+    const { handler, sql } = loadHandler('api/_band/setlists.js', ownershipRoute);
+    await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
+      body: { song_ids: [10, 11], gig_id: 5 } }, mockRes());
+    assertEq(sql.calls.length, 2, sql.calls.map(c => c.text.slice(0, 40)).join(' | '));
+  });
+
+  await testAsync('a gig without venue or organizer sends no ownership query', async () => {
+    const { handler, sql } = loadHandler('api/_band/gigs.js', ownershipRoute);
+    const res = mockRes();
+    await handler({ method: 'POST', url: '/api/test/gigs', query: {}, headers: {}, body: { title: 'x' } }, res);
+    assertEq(res.statusCode, 201);
+    assertEq(sql.calls.map(c => c.text.split(' ').slice(0, 3).join(' ')), ['INSERT INTO gigs']);
+  });
+
   await testAsync("a setlist cannot hang off another band's gig", async () => {
-    const { handler } = loadHandler('api/[artist]/setlists.js', ownershipRoute);
+    const { handler } = loadHandler('api/_band/setlists.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10], gig_id: 6 } }, res);
@@ -119,7 +138,7 @@ async function run(r) {
   });
 
   await testAsync("updating a setlist cannot pull in another band's song", async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', (text, values) => {
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
       if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
       return ownershipRoute(text, values);
     });
@@ -131,7 +150,7 @@ async function run(r) {
   });
 
   await testAsync('updating a setlist rewrites its songs in one transaction', async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', (text, values) => {
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
       if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
       if (text.startsWith('SELECT s.*, g.title AS gig_name')) return [{ id: 3, song_count: 2 }];
       return ownershipRoute(text, values);
@@ -151,7 +170,7 @@ async function run(r) {
   });
 
   await testAsync('reading a setlist only joins this band\'s songs', async () => {
-    const { handler, sql } = loadHandler('api/[artist]/setlists/[...path].js', text =>
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', text =>
       text.startsWith('SELECT s.*, g.title AS gig_name') ? [{ id: 3 }] : []);
     const res = mockRes();
     await handler({ method: 'GET', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {} }, res);
@@ -161,7 +180,7 @@ async function run(r) {
 
   await testAsync("a gig cannot point at another band's venue or organizer", async () => {
     for (const body of [{ title: 'x', venue_id: 70 }, { title: 'x', organizer_id: 80 }]) {
-      const { handler, sql } = loadHandler('api/[artist]/gigs.js', ownershipRoute);
+      const { handler, sql } = loadHandler('api/_band/gigs.js', ownershipRoute);
       const res = mockRes();
       await handler({ method: 'POST', url: '/api/test/gigs', query: {}, headers: {}, body }, res);
       assertEq(res.statusCode, 400, JSON.stringify(body));
@@ -170,7 +189,7 @@ async function run(r) {
   });
 
   await testAsync('a gig with own venue and organizer is created', async () => {
-    const { handler } = loadHandler('api/[artist]/gigs.js', ownershipRoute);
+    const { handler } = loadHandler('api/_band/gigs.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/gigs', query: {}, headers: {},
       body: { title: 'x', venue_id: 7, organizer_id: 8 } }, res);
@@ -181,7 +200,7 @@ async function run(r) {
 
   const stored = { id: 10, title: 'Song', extra: { listenUrl: 'https://media.example.test/audio/1/a.mp3' } };
   // The PATCH batch is one WITH … UPDATE … RETURNING statement.
-  const songRoute = text => (text.startsWith('SELECT * FROM songs') ? [stored] : text.startsWith('WITH u AS') ? [stored] : []);
+  const songRoute = text => (text.startsWith('SELECT s.*') && text.includes('FROM songs s') ? [stored] : text.startsWith('WITH u AS') ? [stored] : []);
 
   for (const [label, extra, ok] of [
     ['a javascript: sheet link is refused', { sheetUrl: 'javascript:alert(1)' }, false],
@@ -192,7 +211,7 @@ async function run(r) {
     ['clearing a link is fine', { sheetUrl: '' }, true],
   ]) {
     await testAsync(label, async () => {
-      const { handler } = loadHandler('api/[artist]/songs.js', songRoute);
+      const { handler } = loadHandler('api/_band/songs.js', songRoute);
       const res = mockRes();
       await handler({ method: 'PATCH', url: '/api/test/songs', query: {}, headers: {},
         body: [{ id: 10, extra }] }, res);
@@ -202,7 +221,7 @@ async function run(r) {
   }
 
   await testAsync('a new song cannot start with a script link', async () => {
-    const { handler } = loadHandler('api/[artist]/songs.js', () => [{ count: 0 }]);
+    const { handler } = loadHandler('api/_band/songs.js', () => [{ count: 0 }]);
     const res = mockRes();
     await handler({ method: 'POST', url: '/api/test/songs', query: {}, headers: {},
       body: { title: 'x', extra: { songinfoUrl: 'JaVaScRiPt:alert(1)' } } }, res);
@@ -213,7 +232,7 @@ async function run(r) {
 
   const authPath = mp('api/_auth'), tokenPath = mp('api/_token'), dbPath = mp('api/_db');
   for (const p of [authPath, tokenPath, dbPath]) delete require.cache[p];
-  const { generateMagicToken, verifyMagicToken, generateUserToken, verifyUserToken, passwordMatches } = require(tokenPath);
+  const { generateMagicToken, verifyMagicToken, generateUserToken, verifyUserToken, sessionValid } = require(tokenPath);
   const band = { id: 42, slug: 'band', password_hash: crypto.randomBytes(16).toString('hex') };
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true,
     exports: { getArtist: async () => band, getDb: () => { throw new Error('no db'); } } };
@@ -244,16 +263,29 @@ async function run(r) {
 
   test('a session verifies against the hash it was issued with', () => {
     const claim = verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A'));
-    assertEq(passwordMatches(claim, { password_hash: 'hash-A' }), true);
+    assertEq(sessionValid(claim, { password_hash: 'hash-A' }), true);
   });
   test('after a password change the old session no longer matches', () => {
     const claim = verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A'));
-    assertEq(passwordMatches(claim, { password_hash: 'hash-B' }), false);
+    assertEq(sessionValid(claim, { password_hash: 'hash-B' }), false);
   });
   test('setting a first password ends a password-less (OAuth) session', () => {
     const claim = verifyUserToken(generateUserToken(1, 'admin', 60_000, null));
-    assertEq(passwordMatches(claim, { password_hash: null }), true);
-    assertEq(passwordMatches(claim, { password_hash: 'hash-new' }), false);
+    assertEq(sessionValid(claim, { password_hash: null }), true);
+    assertEq(sessionValid(claim, { password_hash: 'hash-new' }), false);
+  });
+  test('"log out everywhere" ends sessions issued before it, not after', () => {
+    const before = verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A'));
+    const cut = new Date(before.iat + 1);
+    const after = { ...before, iat: before.iat + 2 };
+    assertEq(sessionValid(before, { password_hash: 'hash-A', sessions_valid_after: cut }), false);
+    assertEq(sessionValid(after,  { password_hash: 'hash-A', sessions_valid_after: cut }), true);
+    assertEq(sessionValid(before, { password_hash: 'hash-A', sessions_valid_after: null }), true);
+  });
+  test('a token from before issue times were recorded counts as issued at 0', () => {
+    const claim = { ...verifyUserToken(generateUserToken(1, 'admin', 60_000, 'hash-A')), iat: 0 };
+    assertEq(sessionValid(claim, { password_hash: 'hash-A' }), true);
+    assertEq(sessionValid(claim, { password_hash: 'hash-A', sessions_valid_after: new Date(1) }), false);
   });
 }
 

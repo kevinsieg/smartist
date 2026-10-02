@@ -49,6 +49,8 @@ production database.
 ## Run and test
 
 ```bash
+npm run lint         # always, before every push (ESLint, eslint.config.js)
+npm run typecheck    # always, before every push (tsc on api/ via JSDoc, jsconfig.json)
 npm run test:unit    # always, before every push (no database needed)
 npm run test:all     # unit + API + browser smoke test on a local stack
 npm run dev:up       # the local stack alone: own Postgres, seeded band, :3000
@@ -61,10 +63,15 @@ and cleaned up.
 
 ## API rules
 
-- **Twelve functions at most** (Vercel Hobby); eleven are used. Do not add a
-  file under `api/` that is not prefixed `_` — route through an existing
-  handler, a `vercel.json` rewrite or a body field instead.
-- Every handler is wrapped in `wrap()` (`api/_handler.js`).
+- **One function: `api/index.js`.** Every `/api/*` path goes through its
+  route table to a handler in `api/_config.js` or `api/_band/`. A new endpoint
+  is a line in that table; every other file under `api/` starts with `_` (a
+  unit test checks), so Vercel's function limit never comes into it.
+- Every handler is wrapped in `wrap()` (`api/_handler.js`) and reads the
+  route from `req.query` (`artist`, `path`, `id`, `action`) as the router sets
+  it, never from `req.url`.
+- Actions are URL paths (`POST /setlists/:id/duplicate`, `PUT /songs/:id/lyrics`),
+  not body fields.
 - **Every workspace is private.** Reads and writes go through `requireAuth` /
   `getAccess`; anonymous access exists only where the band opted in
   (`publicCatalogue`, `publicStage`, compared with `=== true`).
@@ -85,15 +92,6 @@ and cleaned up.
   with one song's details.
 - Plans: `api/_plans.js` is the only place features and limits are decided.
 
-## vercel dev bugs (52.x)
-
-Routing that works on Vercel can fail under `vercel dev`:
-1. `req.query.path` is not populated in catch-alls inside dynamic dirs — fall
-   back to parsing `req.url`; same for `req.query.artist`
-   (`req.query.artist || req.url.split('?')[0].split('/')[2]`).
-2. Multi-segment POSTs to catch-alls return vercel's own 404 — use a body field
-   on the plain handler (`duplicate_id`, `share_id` on `POST /setlists`).
-
 ## Client rules
 
 - Every app page loads, after `footer.js`: `core.js`, `session.js`, `ui.js`,
@@ -110,6 +108,8 @@ Routing that works on Vercel can fail under `vercel dev`:
 - Dates only through `formatDate` / `formatTime` (`core.js`).
 - Bump `?v=` on every page when a shared asset changes (`app.css`, the shared
   scripts, `i18n.js` together with `I18N_VERSION`).
+  `/app/js` and `/app/css` are cached immutable for a year: every reference
+  carries `?v=`, and a page script's `?v=` goes up whenever the script changes.
 - i18n: English is the source; `en`, `fr`, `de` hold the same keys; every key
   used in HTML or `t('…')` must exist. Never put `data-i18n` on an element with
   child elements. Scripts `stage.html` loads may not call bare `t()`.

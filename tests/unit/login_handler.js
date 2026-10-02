@@ -22,7 +22,7 @@ function makeHandler(rows, { rateLimited = false, artists = [{ slug: 'a', name: 
   const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const authPath   = require.resolve(path.join(__dirname, '../../api/_auth'));
   const tokenPath  = require.resolve(path.join(__dirname, '../../api/_token'));
-  const configPath = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath = require.resolve(path.join(__dirname, '../../api/_config'));
 
   [dbPath, authPath, tokenPath, configPath].forEach(p => delete require.cache[p]);
   const domainDir = path.join(__dirname, '../../api/_domain');
@@ -51,7 +51,7 @@ function makeHandler(rows, { rateLimited = false, artists = [{ slug: 'a', name: 
       getSlug: req => (req.query && req.query.artist) || 'test',
     },
   };
-  return { handler: require(path.join(__dirname, '../../api/config')), queries };
+  return { handler: require(path.join(__dirname, '../../api/_config')), queries };
 }
 
 function mockRes() {
@@ -62,9 +62,6 @@ function mockRes() {
   res.redirect = (c, u) => { res._status = c; res._redirected = u; return res; };
   return res;
 }
-
-const post = (handler, body) =>
-  handler({ method: 'POST', body: { action: 'login', ...body }, headers: {}, query: {} }, mockRes());
 
 // The rewrite /api/login → /api/config?action=login delivers the action in the
 // QUERY. Exercising only the body shape is exactly what let a rewritten login
@@ -135,6 +132,16 @@ async function run(r) {
       'an invited-but-not-accepted row has a null hash and must be excluded');
   });
 
+  await testAsync('rows sharing a hash are compared once', async () => {
+    const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
+    await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
+    const q = queries.find(x => /FROM users/.test(x.text));
+    assert(/DISTINCT ON \(password_hash\)/.test(q.text),
+      'one password is written to every row of an address; a bcrypt round per band made sign-in seconds slow');
+    assert(/ORDER BY password_hash, id \) first_per_hash ORDER BY id/.test(q.text),
+      'the lowest row id of each hash, then by id, so the same row wins as before');
+  });
+
   await testAsync('too many attempts → 429, before any lookup', async () => {
     const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }], { rateLimited: true });
     const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
@@ -165,6 +172,88 @@ async function run(r) {
     assertEq(res._body.error, 'Invalid email or password');
   });
 
+  // ── mailed sign-in links ──────────────────────────────────────────────────
+  console.log(B('\nsign-in link'));
+
+  const { generateMagicToken } = require('../../api/_token');
+  const hint = addr => Buffer.from(addr).toString('base64url');
+  async function magic(handler, body) {
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'magic-login', ...body }, headers: {}, query: {} }, res);
+    return res;
+  }
+
+  await testAsync('a link signed for the address logs in and lists the bands', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(res._status, 200);
+    assert(res._body.token, 'expected a session token');
+    assertEq(res._body.email, 'a@b.co');
+    assert(Array.isArray(res._body.artists), 'expected the list of bands');
+  });
+
+  await testAsync('a link signed with another row of the address still works', async () => {
+    const { handler } = makeHandler([
+      { id: 1, role: 'member', password_hash: OTHER },
+      { id: 2, role: 'admin',  password_hash: HASH },
+    ]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(res._status, 200);
+    assertEq(res._body.role, 'admin');
+  });
+
+  await testAsync('a reset link does not log anyone in', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'reset'), hint: hint('a@b.co') });
+    assertEq(res._status, 401);
+  });
+
+  await testAsync('a link for one account with another address in the hint is refused', async () => {
+    const { handler } = makeHandler([{ id: 9, role: 'admin', password_hash: OTHER }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('victim@b.co') });
+    assertEq(res._status, 401);
+  });
+
+  await testAsync('no hint → 400, before any lookup', async () => {
+    const { handler, queries } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const res = await magic(handler, { magic: generateMagicToken(HASH, 'login') });
+    assertEq(res._status, 400);
+    assertEq(queries.length, 0);
+  });
+
+  // ── log out everywhere ────────────────────────────────────────────────────
+  console.log(B('\nlog out everywhere'));
+
+  const { generateUserToken, TTL_8H } = require('../../api/_token');
+  async function logoutAll(handler, token) {
+    const res = mockRes();
+    await handler({ method: 'POST', body: { action: 'logout-everywhere' },
+      headers: token ? { authorization: `Bearer ${token}` } : {}, query: {} }, res);
+    return res;
+  }
+
+  await testAsync('a valid session stamps every row of its address', async () => {
+    const { handler, queries } = makeHandler([{ email: 'a@b.co', password_hash: HASH, sessions_valid_after: null }]);
+    const res = await logoutAll(handler, generateUserToken(7, 'member', TTL_8H, HASH));
+    assertEq(res._status, 200);
+    const upd = queries.find(q => /UPDATE users SET sessions_valid_after/.test(q.text));
+    assert(upd, 'expected the update');
+    assert(/WHERE email =/.test(upd.text), 'every workspace of the address, not only this row');
+    assertEq(upd.values[1], 'a@b.co');
+  });
+
+  await testAsync('no token → 401, nothing written', async () => {
+    const { handler, queries } = makeHandler([]);
+    assertEq((await logoutAll(handler, null))._status, 401);
+    assertEq(queries.length, 0);
+  });
+
+  await testAsync('a session already ended by a password change → 401, nothing written', async () => {
+    const { handler, queries } = makeHandler([{ email: 'a@b.co', password_hash: OTHER, sessions_valid_after: null }]);
+    assertEq((await logoutAll(handler, generateUserToken(7, 'member', TTL_8H, HASH)))._status, 401);
+    assertEq(queries.filter(q => /UPDATE/.test(q.text)).length, 0);
+  });
+
   // ── the config read the login page makes on load ──────────────────────────
   console.log(B('\nconfig without a slug'));
 
@@ -173,7 +262,7 @@ async function run(r) {
     delete process.env.ARTIST_SLUG;
     const { handler } = makeHandler([]);
     const res = mockRes();
-    await handler({ method: 'GET', query: {}, headers: {}, url: '/api/config' }, res);
+    await handler({ method: 'GET', query: {}, headers: {}, url: '/api/_config' }, res);
     if (saved !== undefined) process.env.ARTIST_SLUG = saved;
     assertEq(res._status, 200, 'the multi-tenant root would log a 404 on every page load');
     assertEq(res._body.singleTenant, false);
@@ -184,7 +273,7 @@ async function run(r) {
     delete process.env.ARTIST_SLUG;
     const { handler } = makeHandler([]);
     const res = mockRes();
-    await handler({ method: 'GET', query: { action: 'photo-url' }, headers: {}, url: '/api/config' }, res);
+    await handler({ method: 'GET', query: { action: 'photo-url' }, headers: {}, url: '/api/_config' }, res);
     if (saved !== undefined) process.env.ARTIST_SLUG = saved;
     assertEq(res._status, 404);
   });

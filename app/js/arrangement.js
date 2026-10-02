@@ -748,8 +748,14 @@ function openArrStagePopup(arrangement, arrConfig) {
   var body = document.getElementById('arr-stage-body');
   if (!body) return;
   body.innerHTML = _arrReadOnlyHtml(arrangement, arrConfig);
-  document.getElementById('arr-stage-modal').classList.add('open');
+  var modal = document.getElementById('arr-stage-modal');
+  _arrStageOpener = document.activeElement;
+  modal.classList.add('open');
+  var close = modal.querySelector('.arr-stage-close');
+  if (close) close.focus();
 }
+
+var _arrStageOpener = null;
 
 function _ensureArrStageModal() {
   if (document.getElementById('arr-stage-modal')) return;
@@ -757,18 +763,28 @@ function _ensureArrStageModal() {
   el.id        = 'arr-stage-modal';
   el.className = 'arr-stage-modal-overlay';
   el.innerHTML =
-    '<div class="arr-stage-modal">' +
+    '<div class="arr-stage-modal" role="dialog" aria-modal="true" aria-labelledby="arr-stage-title">' +
       '<div class="arr-stage-modal-header">' +
-        '<span>' + _arrT('arr.stageTitle', 'Arrangement') + '</span>' +
-        '<button data-onclick="closeArrStagePopup()" style="background:none;border:none;color:#888;cursor:pointer;font-size:1.1rem;line-height:1">&#215;</button>' +
+        '<span id="arr-stage-title">' + _arrT('arr.stageTitle', 'Arrangement') + '</span>' +
+        '<button class="arr-stage-close" data-onclick="closeArrStagePopup()" aria-label="' + _arrT('songs.close', 'Close') + '">&#215;</button>' +
       '</div>' +
-      '<div class="arr-stage-body" id="arr-stage-body"></div>' +
+      '<div class="arr-stage-body" id="arr-stage-body" tabindex="0"></div>' +
     '</div>';
   el.addEventListener('click', function(e) { if (e.target === el) closeArrStagePopup(); });
+  // Escape closes; Tab has only the close button and the scrollable table.
+  el.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeArrStagePopup(); return; }
+    if (e.key !== 'Tab') return;
+    var close = el.querySelector('.arr-stage-close'), body = el.querySelector('.arr-stage-body');
+    if (e.shiftKey && document.activeElement === close) { e.preventDefault(); body.focus(); }
+    else if (!e.shiftKey && document.activeElement === body) { e.preventDefault(); close.focus(); }
+  });
   document.body.appendChild(el);
 }
 
 function closeArrStagePopup() {
   var modal = document.getElementById('arr-stage-modal');
   if (modal) modal.classList.remove('open');
+  if (_arrStageOpener && _arrStageOpener.focus) _arrStageOpener.focus();
+  _arrStageOpener = null;
 }

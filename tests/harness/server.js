@@ -1,8 +1,9 @@
 'use strict';
 
 // Local stand-in for Vercel's router, for the CI integration job: vercel.json
-// rewrites, then file-system routing into api/ with the [artist] and [...path]
-// params, and static files. Not vercel dev: that needs a Vercel login.
+// rewrites, static files, and the one function at /api (api/index.js), which
+// /api/* reaches only through its rewrite, as on Vercel. Not vercel dev: that
+// needs a Vercel login.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -16,7 +17,7 @@ const CSP = vercel.headers.flatMap(h => h.headers).find(h => h.key === 'Content-
 function matchRewrite(p) {
   for (const r of rewrites) {
     const names = [];
-    const re = new RegExp('^' + r.source.replace(/:(\w+)/g, (_, n) => { names.push(n); return '([^/]+)'; }) + '$');
+    const re = new RegExp('^' + r.source.replace(/:(\w+)(\*?)/g, (_, n, star) => { names.push(n + star); return star ? '(.*)' : '([^/]+)'; }) + '$');
     const m = re.exec(p);
     if (!m) continue;
     let dest = r.destination;
@@ -26,25 +27,36 @@ function matchRewrite(p) {
   return null;
 }
 
+// Mail goes to an outbox here instead of to the provider, so the flows that mail
+// a link (invites, resets, shares) run end to end. Tests read it at
+// GET /__outbox?to=<address>. A real RESEND_API_KEY in the env turns this off.
+const outbox = [];
+if (!process.env.RESEND_API_KEY) {
+  process.env.RESEND_API_KEY = 'local-outbox';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url) !== 'https://api.resend.com/emails') return realFetch(url, opts);
+    outbox.push(JSON.parse(String(opts?.body)));
+    return new Response(JSON.stringify({ id: `local-${outbox.length}` }), { status: 200 });
+  };
+}
+
+// The function lives at /api only; any other /api/* path is Vercel's 404
+// unless a rewrite sent it there.
 function resolve(p) {
-  const segs = p.split('/').filter(Boolean); // ['api', ...]
-  if (segs[0] !== 'api') return null;
-  if (segs.length === 2 && fs.existsSync(path.join(ROOT, 'api', segs[1] + '.js')))
-    return { file: path.join(ROOT, 'api', segs[1] + '.js'), query: {} };
-  const artist = segs[1], rest = segs.slice(2);
-  if (!rest.length) return null;
-  const base = path.join(ROOT, 'api', '[artist]');
-  if (rest.length === 1 && fs.existsSync(path.join(base, rest[0] + '.js')))
-    return { file: path.join(base, rest[0] + '.js'), query: { artist } };
-  const catchAll = path.join(base, rest[0], '[...path].js');
-  if (fs.existsSync(catchAll)) return { file: catchAll, query: { artist, path: rest.slice(1) } };
-  return null;
+  if (p !== '/api') return null;
+  return { file: path.join(ROOT, 'api', 'index.js'), query: {} };
 }
 
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
   let p = u.pathname;
   let extra = new URLSearchParams();
+  if (u.pathname === '/__outbox') {
+    const to = u.searchParams.get('to');
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ outbox: outbox.filter(m => [].concat(m.to).includes(to)) }));
+  }
   const rw = matchRewrite(p);
   if (rw) { const d = new URL(rw, 'http://localhost'); p = d.pathname; extra = d.searchParams; }
   if (!p.startsWith('/api')) {

@@ -1,6 +1,23 @@
 // Shared widgets: sortable lists, typeahead, modals, busy buttons, the heart
 // toggle, CSV export and printing, the resizable side panel, hard-delete dialog.
 
+// Tell screen readers about a change that has no visible focus of its own
+// (a song moved, a row removed). One polite live region per page.
+function announce(msg) {
+  var live = document.getElementById('app-live');
+  if (!live) {
+    live = document.createElement('div');
+    live.id = 'app-live';
+    live.className = 'sr-only';
+    live.setAttribute('role', 'status');
+    live.setAttribute('aria-live', 'polite');
+    document.body.appendChild(live);
+  }
+  // Clearing first makes the same text announced twice in a row.
+  live.textContent = '';
+  setTimeout(function() { live.textContent = msg; }, 50);
+}
+
 // Favourite heart for list rows (songs, venues, organizers). onclick is a JS expression.
 function heartButtonHtml(on, onclick, title, readOnly) {
   var cls = 'heart-btn' + (on ? ' heart-btn--on' : '');
@@ -99,6 +116,7 @@ function printSetlistSongs(songs, title, cfg, opts) {
       span(song.tempo || '', 'tempo', 'Tempo'),
       span(song.genre || '', 'genre', 'Genre'),
       song.extra && song.extra.harp ? span('harmonica', 'extra.harp', 'Harmonica') : '',
+      song.extra && song.extra.aCapella ? span('a cappella', 'extra.aCapella', 'A cappella') : '',
       song.extra && song.extra.git2 ? span('guitar 2',  'extra.git2', 'Second guitar') : ''
     ].filter(Boolean).join('');
     var printLabels = song.genre ? '<span>' + escHtml(song.genre) + '</span>' : '';
@@ -321,6 +339,7 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
 
   async function _loadExpansion(rowEl, row) {
     rowEl.classList.add('sl-row--expanded');
+    rowEl.setAttribute('aria-expanded', 'true');
     const expEl = document.createElement('div');
     expEl.className = 'sl-expansion';
     expEl.setAttribute('data-for', String(row.id));
@@ -339,6 +358,7 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
       const prevRowEl = containerEl ? containerEl.querySelector('.sl-row[data-id="' + _openId + '"]') : null;
       if (prevRowEl) {
         prevRowEl.classList.remove('sl-row--expanded');
+        prevRowEl.setAttribute('aria-expanded', 'false');
         const prevExp = prevRowEl.nextElementSibling;
         if (prevExp && prevExp.classList.contains('sl-expansion')) prevExp.remove();
       }
@@ -385,7 +405,8 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     el.innerHTML = visible.map(row => {
       const cls = ['sl-row', rowClass ? rowClass(row) : ''].filter(Boolean).join(' ');
       const cells = columns.map(col => _cellHtml(col, row)).join('');
-      return `<div class="${cls}" style="grid-template-columns:${colWidths}" data-id="${row.id}">${cells}</div>`;
+      const focusable = onRowClick || onExpand ? ' tabindex="0"' + (onExpand ? ' aria-expanded="false"' : '') : '';
+      return `<div class="${cls}" style="grid-template-columns:${colWidths}" data-id="${row.id}"${focusable}>${cells}</div>`;
     }).join('');
 
     if (onRowClick) {
@@ -436,16 +457,26 @@ function createTypeahead(inputEl, { items, labelFn, onSelect, onCreate, minChars
   const wrap = inputEl.closest('.typeahead-wrap') || inputEl.parentElement;
   let ul = null;
   let activeIdx = -1;
+  // Combobox semantics: screen readers hear the list open and each highlighted option.
+  const listId = (inputEl.id || 'ta' + Math.random().toString(36).slice(2)) + '-listbox';
+  inputEl.setAttribute('role', 'combobox');
+  inputEl.setAttribute('aria-autocomplete', 'list');
+  inputEl.setAttribute('aria-expanded', 'false');
+  inputEl.setAttribute('aria-controls', listId);
 
   function open(filtered) {
     close();
     if (!filtered.length && !onCreate) return;
     ul = document.createElement('ul');
     ul.className = 'typeahead-dropdown';
+    ul.id = listId;
+    ul.setAttribute('role', 'listbox');
 
     filtered.forEach((item, i) => {
       const li = document.createElement('li');
       li.className = 'typeahead-item';
+      li.id = listId + '-' + i;
+      li.setAttribute('role', 'option');
       li.textContent = labelFn(item);
       li.addEventListener('mousedown', e => { e.preventDefault(); pick(item); });
       ul.appendChild(li);
@@ -454,23 +485,34 @@ function createTypeahead(inputEl, { items, labelFn, onSelect, onCreate, minChars
     if (onCreate) {
       const li = document.createElement('li');
       li.className = 'typeahead-item typeahead-create';
+      li.id = listId + '-create';
+      li.setAttribute('role', 'option');
       li.textContent = `+ Create "${inputEl.value.trim()}"…`;
       li.addEventListener('mousedown', e => { e.preventDefault(); close(); onCreate(inputEl.value.trim()); });
       ul.appendChild(li);
     }
     wrap.appendChild(ul);
     activeIdx = -1;
+    inputEl.setAttribute('aria-expanded', 'true');
   }
 
-  function close() { ul?.remove(); ul = null; activeIdx = -1; }
+  function close() {
+    ul?.remove(); ul = null; activeIdx = -1;
+    inputEl.setAttribute('aria-expanded', 'false');
+    inputEl.removeAttribute('aria-activedescendant');
+  }
 
   function pick(item) { close(); onSelect(item); }
 
   function highlight(idx) {
     if (!ul) return;
     const lis = ul.querySelectorAll('.typeahead-item');
-    lis.forEach((li, i) => li.classList.toggle('active', i === idx));
+    lis.forEach((li, i) => {
+      li.classList.toggle('active', i === idx);
+      li.setAttribute('aria-selected', i === idx ? 'true' : 'false');
+    });
     activeIdx = idx;
+    if (lis[idx]) inputEl.setAttribute('aria-activedescendant', lis[idx].id);
   }
 
   inputEl.addEventListener('input', () => {
@@ -485,7 +527,7 @@ function createTypeahead(inputEl, { items, labelFn, onSelect, onCreate, minChars
     const lis = ul.querySelectorAll('.typeahead-item');
     if (e.key === 'ArrowDown')  { e.preventDefault(); highlight(Math.min(activeIdx + 1, lis.length - 1)); }
     if (e.key === 'ArrowUp')    { e.preventDefault(); highlight(Math.max(activeIdx - 1, 0)); }
-    if (e.key === 'Escape')     { close(); }
+    if (e.key === 'Escape')     { e.preventDefault(); e.stopPropagation(); close(); }
     if (e.key === 'Enter' && activeIdx >= 0) {
       e.preventDefault();
       lis[activeIdx].dispatchEvent(new MouseEvent('mousedown'));
@@ -606,3 +648,98 @@ async function confirmHardDelete() {
 }
 
 document.addEventListener('DOMContentLoaded', initPanelResize);
+
+// ── Keyboard access to clickable rows ─────────────────────────────────────────
+// List rows open a panel or expand on click. Rows rendered with tabindex="0"
+// (createSortableList, createListView) open with Enter or Space as well.
+if (typeof document !== 'undefined' && !window._rowKeysInit) {
+  window._rowKeysInit = true;
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var row = e.target;
+    if (!row || !row.matches || !row.matches('[data-id][tabindex="0"]')) return;
+    e.preventDefault();
+    row.click();
+  });
+}
+
+// ── Dialog behaviour for every .modal-overlay ─────────────────────────────────
+// Pages open and close modals by toggling .open. Whatever the page does, an open
+// modal is announced as a dialog named by its heading, takes focus, keeps Tab
+// inside, closes on Escape (through closeModal, so page close hooks run) and
+// gives focus back to the control that opened it.
+var _modalOpeners = new Map();
+
+function _modalFocusables(dialog) {
+  return [].filter.call(dialog.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+  function(el) { return el.offsetParent !== null || el.getClientRects().length > 0; });
+}
+
+function _onModalOpen(overlay) {
+  var dialog = overlay.querySelector('.modal') || overlay;
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  if (!dialog.hasAttribute('aria-labelledby') && !dialog.hasAttribute('aria-label')) {
+    var h = dialog.querySelector('h2, h3');
+    if (h) {
+      if (!h.id) h.id = (overlay.id || 'modal') + '-heading';
+      dialog.setAttribute('aria-labelledby', h.id);
+    }
+  }
+  var active = document.activeElement;
+  if (active && !overlay.contains(active)) _modalOpeners.set(overlay, active);
+  // Pages often focus a field themselves a moment after opening; only step in
+  // when they did not.
+  setTimeout(function() {
+    if (!overlay.classList.contains('open') || overlay.contains(document.activeElement)) return;
+    var items = _modalFocusables(dialog).filter(function(el) { return !el.classList.contains('modal-x-btn'); });
+    var target = items[0] || dialog;
+    if (target === dialog) dialog.setAttribute('tabindex', '-1');
+    target.focus();
+  }, 120);
+}
+
+function _onModalClose(overlay) {
+  var opener = _modalOpeners.get(overlay);
+  _modalOpeners.delete(overlay);
+  var active = document.activeElement;
+  if (opener && opener.isConnected && (!active || active === document.body || overlay.contains(active))) opener.focus();
+}
+
+function _topModal() {
+  var open = document.querySelectorAll('.modal-overlay.open');
+  return open.length ? open[open.length - 1] : null;
+}
+
+if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined' && !window._modalDialogsInit) {
+  window._modalDialogsInit = true;
+  new MutationObserver(function(muts) {
+    muts.forEach(function(m) {
+      var el = m.target;
+      if (!el.classList || !el.classList.contains('modal-overlay')) return;
+      var isOpen = el.classList.contains('open');
+      var wasOpen = (' ' + (m.oldValue || '') + ' ').indexOf(' open ') >= 0;
+      if (isOpen && !wasOpen) _onModalOpen(el);
+      else if (!isOpen && wasOpen) _onModalClose(el);
+    });
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'], attributeOldValue: true, subtree: true });
+
+  document.addEventListener('keydown', function(e) {
+    var overlay = _topModal();
+    if (!overlay) return;
+    if (e.key === 'Escape' && !e.defaultPrevented) {
+      e.preventDefault();
+      if (overlay.id) closeModal(overlay.id);
+      else overlay.classList.remove('open');
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var items = _modalFocusables(overlay.querySelector('.modal') || overlay);
+    if (!items.length) return;
+    var first = items[0], last = items[items.length - 1];
+    if (!overlay.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+}

@@ -7,13 +7,15 @@ const logger = require('./_logger');
 //   Google Gemini with Google Search grounding — default (finds obscure/non-English songs):
 //     format:  'gemini'
 //     baseUrl: 'https://generativelanguage.googleapis.com/v1beta'
-//     model:   'gemini-2.0-flash'
+//     model:   'gemini-3.6-flash'
 //     apiKey:  () => process.env.GEMINI_API_KEY
+//   Google retires models on a schedule (gemini-2.0-flash shut down 2026-06-01):
+//   https://ai.google.dev/gemini-api/docs/deprecations
 //
 //   Google Gemini knowledge-only (faster, no web search — use if grounding quota runs low):
 //     format:  'openai'
 //     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai'
-//     model:   'gemini-2.0-flash'
+//     model:   'gemini-3.6-flash'
 //     apiKey:  () => process.env.GEMINI_API_KEY
 //
 //   Groq (free, fast, Llama):
@@ -36,7 +38,7 @@ const logger = require('./_logger');
 const AI = {
   format:  'gemini',
   baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-  model:   'gemini-2.0-flash',
+  model:   'gemini-3.6-flash',
   apiKey:  () => process.env.GEMINI_API_KEY,
 };
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ function _stripMarkdown(text) {
     .replace(/^---+$/gm, '')            // --- dividers
     .replace(/\[\d+\]/g, '')            // [1] citation indices
     .replace(/\^(\[\d+\]|\d+)\^/g, '') // ^[1]^ or ^1^ superscript citations
-    .replace(/\(https?:\/\/[^\)]*\)/g, '') // (https://...) inline links
+    .replace(/\(https?:\/\/[^)]*\)/g, '') // (https://...) inline links
     .trim();
 }
 
@@ -57,6 +59,11 @@ function _stripMarkdown(text) {
 // genre:    string ('FOLK', 'SCHLAGER', …)
 // Returns { lyrics: string } on success, { lyrics: null, skipped: true } when the
 // AI provider is unavailable (no key / quota exceeded), or { lyrics: null } on miss.
+/**
+ * @param {string} title
+ * @param {string} artist
+ * @param {{ language?: string, genre?: string }} [opts]
+ */
 async function suggestLyricsWithAI(title, artist, { language, genre } = {}) {
   const apiKey = AI.apiKey();
   if (!apiKey) {
@@ -84,7 +91,9 @@ async function suggestLyricsWithAI(title, artist, { language, genre } = {}) {
         body: JSON.stringify({
           contents:         [{ parts: [{ text: prompt }] }],
           tools:            [{ google_search: {} }],
-          generationConfig: { maxOutputTokens: 1500 },
+          // Thinking tokens count against maxOutputTokens: keep thinking low and
+          // leave room for a full song after it.
+          generationConfig: { maxOutputTokens: 4000, thinkingConfig: { thinkingLevel: 'low' } },
         }),
         signal: AbortSignal.timeout(20000),
       });
@@ -116,7 +125,7 @@ async function suggestLyricsWithAI(title, artist, { language, genre } = {}) {
 
   const json = await res.json();
   const text = AI.format === 'gemini'
-    ? json.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('') ?? null
+    ? json.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text ?? '').join('') ?? null
     : json.choices?.[0]?.message?.content ?? null;
 
   if (!text) return { lyrics: null };

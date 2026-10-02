@@ -6,10 +6,10 @@ function _shareT(key, en) { return (typeof window !== 'undefined' && window.t) ?
 // Returns { ok: true } on success, or { ok: false, unauthorized: bool, error: string }.
 async function sendSetlistEmail(slug, setlistId, email, token) {
   try {
-    var r = await fetch('/api/' + slug + '/setlists', {
+    var r = await fetch('/api/' + slug + '/setlists/' + Number(setlistId) + '/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ share_id: setlistId, email: email })
+      body: JSON.stringify({ email: email })
     });
     if (r.status === 401) {
       sessionStorage.removeItem('smartist_token');

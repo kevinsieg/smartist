@@ -67,29 +67,35 @@ async function verifySignupToken(rawToken, sql) {
   return { email: row.email };
 }
 
-async function createArtistAndAdmin(name, slug, email, sql) {
-  email = String(email).trim().toLowerCase();
+// Redeem a sign-up link: the token is spent and the workspace created in one
+// transaction, so two requests racing on the same link cannot both create one
+// (checking, creating and then clearing let both through). Returns
+// { email, artistId, userId }, or null when the link is invalid or spent. A
+// taken slug rolls back and leaves the token usable (23505 is rethrown).
+async function redeemSignupToken(rawToken, name, slug, sql) {
+  const hash = crypto.createHash('sha256').update(String(rawToken)).digest('hex');
   return await sql.begin(async tx => {
+    const [row] = await tx`
+      UPDATE subscribers
+      SET meta = (meta - 'signup_token_hash') - 'signup_token_expires'
+      WHERE meta->>'signup_token_hash' = ${hash}
+        AND (meta->>'signup_token_expires')::timestamptz > now()
+      RETURNING email
+    `;
+    if (!row) return null;
+    const email = String(row.email).trim().toLowerCase();
     const [artist] = await tx`
-      INSERT INTO artists (slug, name, config)
-      VALUES (${slug}, ${name}, '{}')
-      RETURNING id
+      INSERT INTO artists (slug, name, config) VALUES (${slug}, ${name}, '{}') RETURNING id
     `;
     const [user] = await tx`
       INSERT INTO users (artist_id, email, role, password_hash)
       VALUES (${artist.id}, ${email}, 'admin', NULL)
       RETURNING id
     `;
-    return { artistId: artist.id, userId: user.id };
+    return { email, artistId: artist.id, userId: user.id };
   });
 }
 
-async function clearSignupToken(email, sql) {
-  await sql`
-    UPDATE subscribers
-    SET meta = (meta - 'signup_token_hash') - 'signup_token_expires'
-    WHERE email = ${email}
-  `;
-}
-
-module.exports = { createSignupToken, verifySignupToken, createArtistAndAdmin, clearSignupToken, checkEmailDeliverable };
+module.exports = {
+  createSignupToken, verifySignupToken, redeemSignupToken, checkEmailDeliverable,
+};

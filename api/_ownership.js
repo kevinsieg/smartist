@@ -8,34 +8,30 @@
 // gig off another band's venue, which also blocks that band's deletions
 // through the ON DELETE RESTRICT / no-cascade references.
 
-// true when every id is a song of this artist. Soft-deleted songs count: an
-// older setlist may still list them and must stay editable. Empty list → true.
-async function ownsSongs(sql, artistId, ids) {
-  if (!ids.length) return true;
+// Every foreign id of one request body, checked in one statement (each
+// statement costs two round-trips). Returns { songs, gig, venue, organizer }:
+// true when the ids belong to this artist or nothing was sent for that key.
+// Soft-deleted songs count: an older setlist may still list them and must stay
+// editable. No ids at all → no query.
+async function ownsRefs(sql, artistId, { songIds = [], gigId = null, venueId = null, organizerId = null } = {}) {
+  const ids = songIds.map(Number);
+  const gig = gigId == null ? null : Number(gigId);
+  const venue = venueId == null ? null : Number(venueId);
+  const organizer = organizerId == null ? null : Number(organizerId);
+  if (!ids.length && gig == null && venue == null && organizer == null)
+    return { songs: true, gig: true, venue: true, organizer: true };
   const [row] = await sql`
-    SELECT count(*)::int AS n FROM songs
-    WHERE artist_id = ${artistId} AND id = ANY(${ids}::int[])
+    SELECT
+      (SELECT count(*)::int FROM songs
+       WHERE artist_id = ${artistId} AND id = ANY(${ids}::int[])) = ${ids.length}::int AS songs,
+      (${gig}::int IS NULL OR EXISTS (
+        SELECT 1 FROM gigs WHERE id = ${gig}::int AND artist_id = ${artistId})) AS gig,
+      (${venue}::int IS NULL OR EXISTS (
+        SELECT 1 FROM venues WHERE id = ${venue}::int AND artist_id = ${artistId})) AS venue,
+      (${organizer}::int IS NULL OR EXISTS (
+        SELECT 1 FROM organizers WHERE id = ${organizer}::int AND artist_id = ${artistId})) AS organizer
   `;
-  return Number(row?.n) === ids.length;
-}
-
-// null / undefined id → true (nothing referenced).
-async function ownsGig(sql, artistId, id) {
-  if (id == null) return true;
-  const [row] = await sql`SELECT 1 AS ok FROM gigs WHERE id = ${Number(id)} AND artist_id = ${artistId}`;
-  return !!row;
-}
-
-async function ownsVenue(sql, artistId, id) {
-  if (id == null) return true;
-  const [row] = await sql`SELECT 1 AS ok FROM venues WHERE id = ${Number(id)} AND artist_id = ${artistId}`;
-  return !!row;
-}
-
-async function ownsOrganizer(sql, artistId, id) {
-  if (id == null) return true;
-  const [row] = await sql`SELECT 1 AS ok FROM organizers WHERE id = ${Number(id)} AND artist_id = ${artistId}`;
-  return !!row;
+  return { songs: !!row?.songs, gig: !!row?.gig, venue: !!row?.venue, organizer: !!row?.organizer };
 }
 
 // Song media this artist may delete from the bucket: a key scoped to its own
@@ -49,4 +45,4 @@ function isOwnMediaUrl(url, artistId, keyFromUrl) {
   return /^(audio|sheets|playback)\/[^/]+$/.test(key);
 }
 
-module.exports = { ownsSongs, ownsGig, ownsVenue, ownsOrganizer, isOwnMediaUrl };
+module.exports = { ownsRefs, isOwnMediaUrl };

@@ -3,12 +3,15 @@ var _loginNext = '';
 
 // Where to go after signing in: a path on this site, nothing else. A plain
 // "starts with / but not //" check let `/\evil.example` through — browsers
-// read the backslash as a slash and leave the site.
+// read the backslash as a slash and leave the site. The parsed path is
+// checked too: `/.//evil.example` resolves to the path `//evil.example`, which
+// the browser then reads as another host.
 function _safeNext(next) {
   if (!next) return '';
   try {
     var u = new URL(next, window.location.origin);
-    return u.origin === window.location.origin ? u.pathname + u.search + u.hash : '';
+    if (u.origin !== window.location.origin || /^\/[/\\]/.test(u.pathname)) return '';
+    return u.pathname + u.search + u.hash;
   } catch (e) { return ''; }
 }
 
@@ -68,8 +71,7 @@ async function init() {
     cfg = await loadConfig(slugFromNext || undefined);
     artistSlug = cfg.slug || slugFromNext;
     if (!artistSlug) {
-      // Multi-tenant root: nothing to brand the page with, and login goes
-      // through /api/login instead of /api/:artist/auth. Signup is a link on
+      // Multi-tenant root: nothing to brand the page with. Signup is a link on
       // the form, so returning users are not pushed into onboarding.
       //
       // A reset link is the one arrival that must survive this: it carries no
@@ -116,10 +118,10 @@ async function init() {
 async function verifyToken(token, hint) {
   if (!hint) return { ok: false, artists: [] };
   try {
-    const r = await fetch(`/api/${artistSlug}/auth`, {
+    const r = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ magic: token, hint }),
+      body: JSON.stringify({ action: 'magic-login', magic: token, hint }),
     });
     if (!r.ok) return { ok: false, artists: [] };
     const data = await r.json();
@@ -298,14 +300,10 @@ async function doSetPassword(token, hint, cfg) {
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   const restore = () => { btn.disabled = false; btn.textContent = t('home.savePassword'); };
   try {
-    const slug = cfg?.slug || artistSlug;
-    const url  = slug ? `/api/${slug}/auth?action=set-password` : '/api/config';
-    const body = slug ? { token, hint, password: pw }
-                      : { action: 'set-password', token, hint, password: pw };
-    const r    = await fetch(url, {
+    const r    = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ action: 'set-password', token, hint, password: pw }),
     });
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); restore(); return; }
@@ -326,7 +324,7 @@ async function doAcceptInvite(inviteToken, cfg) {
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
     const slug = cfg?.slug || artistSlug;
-    const r    = await fetch(`/api/${slug}/auth?action=accept-invite`, {
+    const r    = await fetch(`/api/${slug}/members/accept-invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: inviteToken, password: pw }),
@@ -356,9 +354,9 @@ async function doLogin() {
     const cfg = await loadConfig();
     if (cfg.slug) artistSlug = cfg.slug;
     const body = { email, password: pw, rememberMe: remember };
-    // Without a band, email is the only identity we have — /api/login resolves
-    // it across workspaces. Never build `/api/${undefined}/auth`.
-    const r = await fetch(artistSlug ? `/api/${artistSlug}/auth` : '/api/login', {
+    // Email is the identity: /api/login finds the account across workspaces,
+    // with or without a band in the URL.
+    const r = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -402,16 +400,11 @@ async function doRequestReset() {
   const msg = document.getElementById('reset-msg');
   btn.disabled = true; btn.textContent = '…'; msg.textContent = '';
   try {
-    if (!artistSlug) { const cfg = await loadConfig(); artistSlug = cfg.slug; }
-    // With no workspace there is no /api/:artist/ to post to — this used to send
-    // to /api//request-reset, a 308 to a 404, so nothing happened and nothing
-    // said so. The slug-independent action finds the account by address instead.
-    const url  = artistSlug ? `/api/${artistSlug}/request-reset` : '/api/config';
-    const body = artistSlug ? { email } : { action: 'request-reset', email };
-    await fetch(url, {
+    // The account is found by address, whichever band this page shows.
+    await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ action: 'request-reset', email }),
     });
     msg.style.color = 'var(--secondary-color)';
     msg.textContent = t('home.resetSent');

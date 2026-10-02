@@ -11,8 +11,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
-    <link rel="stylesheet" href="/app/css/app.css?v=45">
-    <script src="/app/js/i18n.js?v=47"></script>
+    <link rel="stylesheet" href="/app/css/app.css?v=48">
+    <script src="/app/js/i18n.js?v=54"></script>
 <style>
   .setlist-page-wrap { position: relative; }
 
@@ -26,11 +26,11 @@
   .hist-item-title { font-weight:600; font-size:0.9rem; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .hist-item-badges { display:flex; gap:0.3rem; flex-shrink:0; align-items:center; }
   .hist-badge { font-size:0.68rem; padding:0.12rem 0.5rem; border-radius:10px; white-space:nowrap; font-weight:500; }
-  .hist-badge--count { background:var(--secondary-color); color:var(--secondary-ink); }
+  .hist-badge--count { background:var(--secondary-color); color:var(--black); }
   .hist-badge--date { background:var(--primary-color); color:var(--third-color); border:1px solid var(--border-color); }
   .hist-meta-links--header { padding:0.25rem 0 0; border-bottom:none; margin-bottom:0; }
   .hist-item-comment { font-size:0.74rem; color:var(--third-color); font-style:italic; margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .hist-toggle { background:none; border:none; cursor:pointer; color:var(--third-color); padding:0.1rem; flex-shrink:0; font-size:0.65rem; line-height:1; margin-top:0.3rem; transition:color 60ms; }
+  .hist-toggle { background:none; border:none; cursor:pointer; color:var(--third-color); padding:0.1rem; flex-shrink:0; font-size:0.65rem; line-height:1; min-width:32px; min-height:32px; transition:color 60ms; }
   .hist-toggle:hover { color:var(--secondary-ink); }
   .hist-body { padding:0.1rem 0 0.75rem; }
   .hist-meta-links { display:flex; flex-wrap:wrap; gap:0.35rem; padding:0.45rem 0.1rem 0.55rem; border-bottom:1px solid var(--border-color); margin-bottom:0.35rem; }
@@ -40,7 +40,7 @@
   .hist-song-row:hover { background:var(--secondary-color); color:var(--secondary-ink); }
   .hist-song-row--active { background:var(--secondary-color); color:var(--secondary-ink); font-weight:600; }
   .hist-song-pos { color:var(--third-color); font-size:0.75rem; min-width:1.5rem; text-align:right; flex-shrink:0; }
-  .hist-song-name { flex:1; }
+  .hist-song-name { flex:1; background:none; border:none; padding:0; font:inherit; color:inherit; text-align:left; cursor:pointer; }
   .hist-song-key { font-size:0.72rem; color:var(--third-color); }
   .hist-song-len { font-size:0.72rem; color:var(--third-color); }
   .hist-songs-total { font-size:0.76rem; color:var(--third-color); margin-top:0.5rem; padding-top:0.4rem; border-top:1px solid var(--border-color); }
@@ -178,13 +178,13 @@
 </div>
 
 <script src="/app/js/footer.js?v=3"></script>
-<script src="/app/js/core.js?v=7"></script>
-<script src="/app/js/session.js?v=6"></script>
-<script src="/app/js/ui.js?v=6"></script>
-<script src="/app/js/shell.js?v=6"></script>
+<script src="/app/js/core.js?v=10"></script>
+<script src="/app/js/session.js?v=10"></script>
+<script src="/app/js/ui.js?v=9"></script>
+<script src="/app/js/shell.js?v=10"></script>
 <script src="/app/js/list-view.js?v=3"></script>
-<script src="/app/js/setlist-generator.js?v=4"></script>
-<script src="/app/js/setlist-history-tab.js?v=2"></script>
+<script src="/app/js/setlist-generator.js?v=6"></script>
+<script src="/app/js/setlist-history-tab.js?v=4"></script>
 <script src="/app/js/setlist.js?v=13"></script>
 </body>
 </html>

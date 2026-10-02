@@ -35,7 +35,7 @@ openssl rand -hex 32
 |---|---|
 | `APP_SECRET` | 32 random bytes as hex. Not a passphrase — it is an HMAC key, never typed by a human. |
 
-This signs the user session tokens (`{userId, role, exp, pwv}` — `pwv` is a password fingerprint, so a password change ends older sessions) that every authenticated request carries. Without it no one can sign in: signing a token fails (500) and every session is rejected (401). `GET /api/config?action=health` reports it as missing (see the checklist).
+This signs the user session tokens (`{userId, role, iat, exp, pwv}` — `pwv` is a password fingerprint, so a password change ends older sessions; `iat` lets "log out everywhere" end them too) that every authenticated request carries. Without it no one can sign in: signing a token fails (500) and every session is rejected (401). `GET /api/config?action=health` reports it as missing (see the checklist).
 
 Give each project its own value. Tokens are only ever verified by the deployment that issued them, so separate keys mean a leak in one workspace cannot forge sessions in another. Set it for **all environments**. Treat it as permanent: changing it invalidates every active session on that deployment.
 
@@ -287,6 +287,10 @@ dev              →    Preview               →    dev            →    auto 
 (any PR branch)  →    Preview               →    dev            →    auto *.vercel.app
 ```
 
+Only one project needs to build PR branches. On every other project set
+`SKIP_PREVIEW_BUILDS=1` (all environments): `ignoreCommand` in `vercel.json`
+then skips every branch except `dev` and `main`.
+
 Push to `dev` freely. Merge to `main` via PR only.
 
 ---
@@ -425,6 +429,11 @@ change) need the tenant's sending domain verified in Resend first.
 - [ ] A or CNAME record added for the app domain — DNS only / grey cloud (not proxied)
 - [ ] www CNAME added + Vercel redirect configured (optional but recommended)
 - [ ] DMARC TXT record added (`_dmarc` → `v=DMARC1; p=reject;`)
+
+**Backups** ([`backup-restore.md`](backup-restore.md))
+- [ ] A line for the database in the `BACKUP_DATABASES` secret and for the bucket in `BACKUP_FILE_BUCKETS` (neutral labels)
+- [ ] The upload-reader R2 token covers the new bucket
+- [ ] The Neon project's restore window checked
 
 **Verification**
 - [ ] At least one successful production deploy — Vercel shows green

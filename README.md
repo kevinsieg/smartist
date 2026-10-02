@@ -1,4 +1,4 @@
-# Smartist — DIY Artist Tools
+# smartist
 
 Song catalogue, setlists, gigs, venues and organizers for bands and musicians. Runs as a Vercel serverless application backed by a PostgreSQL database; one deployment can host many bands, each in its own private workspace.
 
@@ -36,13 +36,13 @@ Workspace pages live at `/<slug>/…`.
 
 **Song import** (`/song-import`) — upload songs from a CSV template; every row is checked and duplicates are flagged in a preview where rows are fixed or skipped before anything is saved.
 
-**PRO import** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. Pro plan. `/gema-import` redirects here.
+**PRO import** (`/pro-import`) — import PRO CSV exports (GEMA, Suisa, …) with dry-run preview and auto-matching against songs. Pro plan.
 
 **Stage view** (`/stage?id=N`) — dark full-screen display with large song titles and key badges. Needs a session unless the band turns on *public stage links* in Settings (off by default).
 
-**Settings** (`/settings`, alias `/users`) — admin only: band details, app settings, members and invites, instruments, plan. **Profile** (`/profile`) — your email and password.
+**Settings** (`/settings`) — admin only: band details, app settings, members and invites, instruments, plan. **Profile** (`/profile`) — your email and password.
 
-**Accounts** — sign up at `/signup` with email or Google (Facebook when enabled), then create a band at `/onboarding`. One login can belong to several bands (`/workspaces`, alias `/home`). A new Google account that signs in from the login page also goes on to onboarding. `/demo` opens the public demo band; `/admin` is a cross-tenant overview for `SUPER_ADMIN_EMAILS`.
+**Accounts** — sign up at `/signup` with email or Google (Facebook when enabled), then create a band at `/onboarding`. One login can belong to several bands (`/workspaces`). A new Google account that signs in from the login page also goes on to onboarding. `/demo` opens the public demo band; `/admin` is a cross-tenant overview for `SUPER_ADMIN_EMAILS`.
 
 **Plans** — Free: 100 songs, 30 MB storage, songs/setlists/gigs/hub. Pro: unlimited, plus venues, organizers and PRO import. There is no paid checkout yet: Settings upgrades a band to Pro for free, and `scripts/plans.js` or `/admin` set a plan by hand. `api/_plans.js` decides every feature and limit.
 
@@ -244,6 +244,8 @@ Needs Node 24 and the Vercel CLI (`npm i -g vercel`).
 
 ```bash
 npm ci                       # API dependencies (the only install; tests/ has none of its own)
+npm run lint                 # ESLint — unused and undefined names, dead code
+npm run typecheck            # tsc over api/ (JSDoc types, jsconfig.json)
 npm run test:unit            # unit tests — no database needed
 npm run dev:up               # local stack: own Postgres, seeded band, server on :3000
 npm run dev:restart          # after changing api/ code (the server keeps modules in memory)
@@ -352,25 +354,30 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | GET    | `/api/config?action=health`       | —    | Missing env vars and schema state of the deployment                                          |
 | POST   | `/api/login`                      | —    | Log in with email + password across workspaces                                               |
 | GET    | `/api/config?action=google-url`   | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
-| POST   | `/api/:artist/auth`               | —    | Log in to one band, get a session token; admins also invite and manage members here          |
-| POST   | `/api/:artist/request-reset`      | —    | Email a link to set a new password                                                           |
+| POST   | `/api/config` `request-reset`     | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
+| POST   | `/api/config` `logout-everywhere` | ✓    | End every session of the signed-in address, on all devices and workspaces                    |
+| POST   | `/api/:artist/members/…`          | ✓    | Admins invite and manage members; members change their password or address                   |
 | GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
-| POST   | `/api/:artist/songs`              | ✓    | Create song; also handles lyrics save/delete and media upload via body fields                |
+| POST   | `/api/:artist/songs`              | ✓    | Create song                                                                                  |
+| POST   | `/api/:artist/songs/import`       | ✓    | CSV import: `{csv}` or `{rows}` is checked, `{rows, commit: true}` imports                   |
 | PATCH  | `/api/:artist/songs`              | ✓    | Batch update songs (`extra.*Url` values must be http(s))                                     |
 | GET    | `/api/:artist/songs/:id`          | ✓ / catalogue / stage | Single song (used by stage view)                                            |
 | DELETE | `/api/:artist/songs/:id`          | ✓    | Soft-delete song                                                                             |
 | POST   | `/api/:artist/songs/:id/restore`  | ✓    | Restore from audit log                                                                       |
 | GET    | `/api/:artist/songs/:id/setlists` | ✓ / catalogue | Setlists that include this song                                                     |
 | GET    | `/api/:artist/songs/:id/gema`     | ✓    | GEMA works + rightholders for this song                                                      |
-| *      | `/api/:artist/songs/:id/audio`    | ✓    | Upload / remove a file (also `/sheet`, `/playback`)                                          |
+| *      | `/api/:artist/songs/:id/audio`    | ✓    | `POST` presign, `PUT` confirm, `DELETE` remove a file (also `/sheet`, `/playback`)          |
+| PUT    | `/api/:artist/songs/:id/lyrics`   | ✓    | Save lyrics `{lyrics}` (`DELETE` removes them, `POST …/lyrics/suggest` looks them up)       |
 | *      | `/api/:artist/songs/:id/arrangements` | ✓ / stage | Versioned arrangements; `/:arrId` to edit, `/:arrId/activate` to switch             |
 | GET    | `/api/:artist/song-logs`          | ✓    | Change log                                                                                   |
 | POST   | `/api/:artist/gema/import`        | ✓    | Import PRO CSV exports — Pro plan                                                            |
 | GET    | `/api/:artist/setlists`           | ✓    | List setlists with song count                                                                |
-| POST   | `/api/:artist/setlists`           | ✓    | Create (`{song_ids}`), duplicate (`{duplicate_id}`), or share by email (`{share_id, email}`) |
+| POST   | `/api/:artist/setlists`           | ✓    | Create (`{song_ids}`)                                                                        |
 | GET    | `/api/:artist/setlists/:id`       | ✓ / stage | Setlist detail with ordered songs                                                       |
 | PUT    | `/api/:artist/setlists/:id`       | ✓    | Update metadata + song list                                                                  |
 | DELETE | `/api/:artist/setlists/:id`       | ✓    | Delete setlist                                                                               |
+| POST   | `/api/:artist/setlists/:id/duplicate` | ✓ | Copy a setlist with its songs                                                               |
+| POST   | `/api/:artist/setlists/:id/share` | ✓    | Email it as a PDF (`{email}`)                                                                |
 | GET    | `/api/:artist/gigs`               | ✓ / catalogue | List gigs with venue and organizer names (`?format=ics` for a calendar feed)        |
 | POST   | `/api/:artist/gigs`               | ✓    | Create gig                                                                                   |
 | GET    | `/api/:artist/gigs/:id`           | ✓ / catalogue | Single gig; add `?refs` for linked setlists, venue, organizer                       |
@@ -409,10 +416,11 @@ See [scripts/README.md](scripts/README.md) for usage details.
 | `scripts/create_user.js`      | First login for a band, or set an account's password from the CLI        |
 | `scripts/plans.js`            | List bands with plan and usage; grant a plan; recount storage            |
 | `scripts/import_songs.js`     | Bulk-import songs from a JSON file (`--artist <slug>`)                   |
-| `scripts/import_venues.js`    | Bulk-import venues from a CSV file (`--artist <slug>`)                   |
 | `scripts/import_gema.js`      | Import GEMA CSV exports (Werkinformationen, Identifikatoren, Beteiligte) |
 | `scripts/delete_artist.js`    | Delete one artist and all its data (`--artist <slug>`, asks to confirm)  |
 | `scripts/demo_reset.js`       | Snapshot / restore the public demo band (`scripts/demo_seed.json`)       |
+| `scripts/db_backup.js`        | Dump a database with a manifest; nightly for production (`docs/backup-restore.md`) |
+| `scripts/db_restore.js`       | Restore a dump into an empty database and check it against its manifest  |
 | `scripts/schema.sql`          | The schema, idempotent — apply with `apply_schema.js`                    |
 
 ---

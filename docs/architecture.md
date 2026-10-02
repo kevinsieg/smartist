@@ -11,11 +11,15 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
 - **`api/`**: thin HTTP handlers. They parse, call domain code, respond.
 - **`api/_domain/`**: business logic, no DOM, no request or response objects.
   Modules take plain values and return data or a result: the account modules
-  (login, signup, reset, oauth, subscribe, admin, deletion) take
+  (login, signup, reset, oauth, subscribe, admin, deletion, members) take
   `{ body, query, headers, ip, origin }` and return `{ status, body }` (or
   `{ status, redirect, headers }`), and `api/_domain/http.js` (`toInput`,
   `send`, `handle`) is the only code that turns a request into input and a
-  result into a reply. Most of `api/config.js` is a router into these modules.
+  result into a reply. Most of `api/_config.js` and all of `api/_band/members.js`
+  are routers into these modules. The band resources (songs, setlists, gigs,
+  venues, organizers) keep their validation and SQL in the handler, with the
+  shared parts in `_domain/songs.js`, `setlists.js`, `records.js`: they are
+  one statement per route, and a second layer would only pass arguments on.
   Scripts call the same code (`scripts/import_gema.js` runs the page's import).
 - **Round-trips, not parallelism**: with `prepare: false` on one connection,
   `Promise.all` does not overlap queries. Fewer statements is what saves time
@@ -24,10 +28,10 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   limits). Each swappable provider sits behind one block at the top of its file.
 - **`app/js/services/`**: API client wrappers used by the standalone pages.
 
-Vercel's Hobby plan allows 12 functions, and the app uses 11. Files starting
-with `_` are not functions, so new logic goes into `_domain/` rather than a new
-endpoint. That is also why some routes share a handler via `vercel.json`
-rewrites.
+The whole API is one serverless function, `api/index.js`: a table of
+paths, each sent to a handler in `api/_config.js` or `api/_band/`. Files and
+directories starting with `_` are not functions, so an endpoint costs a line in
+that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
 
 ---
 
@@ -60,9 +64,12 @@ rewrites.
   was a bearer token checked with bcrypt on every request and kept in the
   browser in plain text. A band without a `users` row gets its first login
   from `scripts/create_user.js`. The only other session is the demo gate's.
-- **Sessions end when the password changes.** A session token carries a
-  fingerprint of the password hash it was issued against; changing or resetting
-  the password makes every earlier session stop verifying.
+- **Sessions end when the password changes, or on request.** A session token
+  carries a fingerprint of the password hash it was issued against and its
+  issue time; changing or resetting the password, or "log out everywhere" on
+  the profile page (`users.sessions_valid_after` on every row of the address),
+  makes every earlier session stop verifying. No session table: the check rides
+  on the users row every authenticated request already reads.
 - **One address, one password.** The same person has a `users` row per band.
   Every way of setting a password (reset, change, accepting an invite) writes
   all of them, so an old password never keeps working through another band.

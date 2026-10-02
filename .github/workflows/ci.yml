@@ -4,7 +4,7 @@ on:
   push:
     branches: [dev, main]
   pull_request:
-    branches: [main]
+    branches: [dev, main]
 
 # Read-only token: nothing here writes to the repository.
 permissions:
@@ -21,6 +21,10 @@ jobs:
           node-version: '24'
       - name: Install dependencies
         run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
       - name: Run unit tests
         run: npm run test:unit
 
@@ -66,6 +70,13 @@ jobs:
           node scripts/apply_schema.js --check
       - name: Seed the test band
         run: node tests/harness/seed.js
+      # The nightly backup's own path (scripts/db_backup.js --verify): dump,
+      # restore into an empty database, compare row counts and sequences.
+      - name: Back up and restore-check the test database
+        run: |
+          psql "$DATABASE_URL" -qc 'CREATE DATABASE restore_check'
+          node scripts/db_backup.js --yes --label ci --out "$RUNNER_TEMP/backup" \
+            --verify postgres://postgres:postgres@localhost:5432/restore_check
       - name: Start the API
         run: |
           node tests/harness/server.js > server.log 2>&1 &
@@ -80,10 +91,15 @@ jobs:
       # which the Vercel deployments must not do.
       - name: Install Playwright and Chromium
         run: |
-          npm install --no-save playwright@1.56.1
+          npm install --no-save playwright@1.56.1 axe-core@4.13.0
           npx playwright install --with-deps chromium
       - name: Browser smoke test (sign in, every page, SPA nav, stage)
         run: node tests/smoke.js
+      # Production serves many bands from one root; the steps above pin one band
+      # (ARTIST_SLUG). This starts a second server without it and checks the
+      # root flows: sign-in at /login and the sign-in and reset links mailed out.
+      - name: Browser smoke test at a multi-tenant root
+        run: node tests/smoke-root.js
       - name: Server log
         if: failure()
         run: cat server.log
@@ -203,7 +219,7 @@ jobs:
         if: steps.creds.outputs.ok == 'true'
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" > /dev/null
-          DEPLOY_URL=$(vercel deploy --token="$VERCEL_TOKEN" 2>/dev/null)
+          DEPLOY_URL=$(vercel deploy --token="$VERCEL_TOKEN" 2> deploy.err) || { tail -n 20 deploy.err; exit 1; }
           echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
 
       - name: Run integration tests

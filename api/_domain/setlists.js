@@ -1,6 +1,6 @@
 'use strict';
 
-// Setlist writes shared by api/[artist]/setlists.js and the setlists catch-all.
+// Setlist writes shared by api/_band/setlists.js and api/_band/setlists/item.js.
 
 // Copy one of this band's setlists with its songs, in one statement. The copy
 // has no gig. Resolves to [] when the source is not this band's.

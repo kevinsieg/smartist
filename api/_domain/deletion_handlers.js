@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const { getDb } = require('../_db');
-const { verifyUserToken, passwordMatches } = require('../_token');
+const { verifyUserToken, sessionValid } = require('../_token');
 const { checkRateLimit } = require('../_ratelimit');
 const { deleteFromR2 } = require('../_r2');
 const { sendEmail } = require('../_email');
@@ -12,13 +12,13 @@ const { planDeletion, executeDeletion } = require('./deletion');
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 
 // Slug-independent: deletion spans every workspace, so there is no slug to
-// authenticate against. Same shape as myArtists in api/config.js.
+// authenticate against. Same shape as myArtists in api/_config.js.
 async function _sessionEmail(headers, sql) {
   const bearer = (headers.authorization || '').replace(/^Bearer /, '');
   const claim  = verifyUserToken(bearer);
   if (!claim) return null;
-  const [row] = await sql`SELECT email, password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
-  return row && passwordMatches(claim, row) ? String(row.email).toLowerCase() : null;
+  const [row] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  return row && sessionValid(claim, row) ? String(row.email).toLowerCase() : null;
 }
 
 // GET ?action=deletion-preflight — what would happen, in the person's own words.
@@ -66,17 +66,12 @@ async function requestDeletion({ headers, origin }) {
   const raw     = crypto.randomBytes(32).toString('hex');
   const hash    = crypto.createHash('sha256').update(raw).digest('hex');
   const expires = new Date(Date.now() + TOKEN_TTL_MS);
-  // lower(email): stored addresses are not normalised (OAuth signup inserts
-  // the provider's raw casing — see api/_domain/deletion.js's own comment on
-  // this), and email here is already lowercased by _sessionEmail. A bare
-  // `email = ${email}` would silently match zero rows for a mixed-case
-  // stored address, and this UPDATE is the one place that failing silently
-  // is worst: nothing would be stored, yet the code below would still mail a
-  // link that can never work. RETURNING + the length check below is the
-  // belt to lower()'s braces, so that can never happen again either way.
+  // Addresses are stored lowercase (the users_email_lowercase CHECK) and
+  // _sessionEmail lowercases, so this is an exact match. If it ever matched
+  // nothing, the check below refuses to mail a link that could never work.
   const updated = await sql`
     UPDATE users SET delete_token_hash = ${hash}, delete_token_expires = ${expires}
-    WHERE lower(email) = ${email}
+    WHERE email = ${email}
     RETURNING id
   `;
   if (!updated.length) {

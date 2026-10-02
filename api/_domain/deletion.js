@@ -9,9 +9,8 @@
 //   leave   — others are in it and someone else can still administer it
 //   blocked — others are in it and this is the only admin
 //
-// Matched case-insensitively: what's stored is whatever a provider or the
-// signup form sent (oauth.js, registration.js insert the raw address), so a
-// literal `=` here would silently find nothing for `Someone@Example.com`.
+// Addresses are stored lowercase (the users_email_lowercase CHECK in
+// scripts/schema.sql), so every lookup here is an exact, indexed match.
 async function planDeletion(email, sql) {
   const addr = String(email).toLowerCase();
 
@@ -19,7 +18,7 @@ async function planDeletion(email, sql) {
     SELECT u.artist_id, a.slug, a.name, u.role
     FROM users u
     JOIN artists a ON a.id = u.artist_id
-    WHERE lower(u.email) = ${addr}
+    WHERE u.email = ${addr}
     ORDER BY a.name
   `;
   if (!mine.length) return { destroy: [], leave: [], blocked: [] };
@@ -180,28 +179,22 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
       // artists cascades songs, gigs, venues, organizers, users, logs.
       await tx`DELETE FROM artists WHERE id = ANY(${destroyIds})`;
     }
-    // users.invited_by has no ON DELETE clause (schema.sql:322), and invites
-    // are always issued within the inviter's own artist (auth.js ?action=invite
-    // inserts invited_by = req.user.id under that same artist_id). So in a
-    // "leave" workspace, whoever this person invited is still there after the
-    // row below removes this person's own membership — clear the reference
-    // first or that DELETE raises users_invited_by_fkey and the whole thing
-    // throws, leaving deletion permanently broken for anyone who ever invited
-    // someone. Scoped to this person's own user ids, not to an artist_id, since
-    // the rows it must reach span every surviving workspace.
-    await tx`UPDATE users SET invited_by = NULL WHERE invited_by IN (SELECT id FROM users WHERE lower(email) = ${addr})`;
+    // users.invited_by is ON DELETE SET NULL since schema 2026-09-29; cleared
+    // here as well so the order of the statements below never matters.
+    await tx`UPDATE users SET invited_by = NULL WHERE invited_by IN (SELECT id FROM users WHERE email = ${addr})`;
     // Workspaces that survive: drop only this person's membership.
-    await tx`DELETE FROM users WHERE lower(email) = ${addr}`;
+    await tx`DELETE FROM users WHERE email = ${addr}`;
     // The contact-form / mailing-list row is this person's own data too —
     // erasure means it goes as well, matched the same way, nothing wider.
-    await tx`DELETE FROM subscribers WHERE lower(email) = ${addr}`;
-    // rate_limits keys are `<prefix>:<address>` and nothing ever reaps them, so
-    // without this a bare email address sits in the database for an hour after
-    // the account it belonged to was erased. Only the two prefixes that are
-    // keyed on an address (delete-req here, signup-link in signup.js/oauth.js);
-    // every other key is keyed on an IP or an artist id. lower(key) because the
-    // key was built from whatever casing the row stored.
-    await tx`DELETE FROM rate_limits WHERE lower(key) IN ('delete-req:' || ${addr}, 'signup-link:' || ${addr})`;
+    await tx`DELETE FROM subscribers WHERE email = ${addr}`;
+    // rate_limits keys are `<prefix>:<address>` for the prefixes below, and the
+    // sweep in api/_ratelimit.js only clears them a day later — without this a
+    // bare email address outlives the account it belonged to. Every other key
+    // is keyed on an IP, an artist id or a song. lower(key) because the key
+    // was built from whatever casing the request carried.
+    await tx`DELETE FROM rate_limits WHERE lower(key) IN (
+      'delete-req:' || ${addr}, 'signup-link:' || ${addr},
+      'reset:' || ${addr}, 'login-fail:' || ${addr})`;
   });
 
   // Outside the transaction on purpose: R2 has no rollback. An orphaned file is

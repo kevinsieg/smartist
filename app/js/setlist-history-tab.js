@@ -110,7 +110,7 @@ function _openHistPanelContent(item, panelEl) {
   if (body && body.hidden) {
     body.hidden = false;
     var toggle = document.querySelector('[data-id="' + sid + '"] .hist-toggle');
-    if (toggle) toggle.innerHTML = '&#9660;';
+    if (toggle) { toggle.innerHTML = '&#9660;'; toggle.setAttribute('aria-expanded', 'true'); }
     if (!_histLoadedSongs[sid]) body.innerHTML = skeletonHtml(3);
   }
   _loadAndRenderHistSongs(sid);
@@ -123,12 +123,16 @@ async function _renderHistoryTab() {
 
   if (!_histLoaded) {
     try {
-      var setsRes = await apiFetch('/api/' + artistSlug + '/setlists');
-      var gigsRes = await apiFetch('/api/' + artistSlug + '/gigs?limit=500');
-      _histSets = await setsRes.json();
+      // Both at once. Every gig of the band (?slim=1 is unpaged): the filters
+      // and the edit panel's picker must know the gig of every setlist.
+      var both = await Promise.all([
+        apiFetch('/api/' + artistSlug + '/setlists'),
+        apiFetch('/api/' + artistSlug + '/gigs?slim=1'),
+      ]);
+      _histSets = await both[0].json();
       if (!Array.isArray(_histSets)) _histSets = [];
-      var gigsData = await gigsRes.json();
-      _histGigs = gigsData.rows || [];
+      _histGigs = await both[1].json();
+      if (!Array.isArray(_histGigs)) _histGigs = [];
       _histGigMap = {};
       _histGigs.forEach(function(g) { _histGigMap[g.id] = g; });
       _histLoaded = true;
@@ -222,7 +226,7 @@ function _renderHistRow(s) {
         (s.comment ? '<div class="hist-item-comment">' + escHtml(s.comment) + '</div>' : '') +
         (headerLinks.length ? '<div class="hist-meta-links hist-meta-links--header">' + headerLinks.join('') + '</div>' : '') +
       '</div>' +
-      '<button class="hist-toggle" data-onclick="event.stopPropagation();_toggleHistItemBody(\'' + escHtml(sid) + '\')" title="' + t('setlist.showSongs') + '">&#9654;</button>' +
+      '<button class="hist-toggle" data-onclick="event.stopPropagation();_toggleHistItemBody(\'' + escHtml(sid) + '\')" title="' + t('setlist.showSongs') + '" aria-label="' + escHtml(t('setlist.showSongs')) + '" aria-expanded="false" aria-controls="hist-body-' + escHtml(sid) + '">&#9654;</button>' +
       '<button class="hist-details-btn" data-onclick="event.stopPropagation();_histSelect(\'' + escHtml(sid) + '\')" title="' + t('setlist.detailsBtn') + '" aria-label="' + t('setlist.detailsBtn') + '">&#8801;</button>' +
     '</div>' +
   '</div>' +
@@ -236,12 +240,12 @@ function _toggleHistItemBody(sid) {
   if (!body) return;
   if (body.hidden) {
     body.hidden = false;
-    if (toggle) toggle.innerHTML = '&#9660;';
+    if (toggle) { toggle.innerHTML = '&#9660;'; toggle.setAttribute('aria-expanded', 'true'); }
     if (!_histLoadedSongs[sid]) body.innerHTML = skeletonHtml(3);
     _loadAndRenderHistSongs(sid);
   } else {
     body.hidden = true;
-    if (toggle) toggle.innerHTML = '&#9654;';
+    if (toggle) { toggle.innerHTML = '&#9654;'; toggle.setAttribute('aria-expanded', 'false'); }
   }
 }
 
@@ -279,7 +283,7 @@ async function _loadAndRenderHistSongs(sid) {
     total += song.length_min || 4;
     return '<div class="hist-song-row" data-song-id="' + song.id + '" data-onclick="_openSongPanel(\'' + escHtml(sid) + '\',' + Number(song.id) + ')">' +
       '<span class="hist-song-pos">' + (i + 1) + '.</span>' +
-      '<span class="hist-song-name">' + escHtml(song.title || '') + '</span>' +
+      '<button type="button" class="hist-song-name">' + escHtml(song.title || '') + '</button>' +
       (song.key ? '<span class="hist-song-key">' + escHtml(formatKey(song.key)) + '</span>' : '') +
       '<span class="hist-song-len">' + formatLength(song.length_min) + '</span>' +
       (!_viewMode ? '<button class="hist-song-edit-btn" data-onclick="event.stopPropagation();navigate(\'/songs?id=' + Number(song.id) + '\')" title="' + t('setlist.openInSongsShort') + '" aria-label="' + t('setlist.openInSongsShort') + '">&#8599;</button>' : '') +
@@ -319,7 +323,7 @@ function _renderEditSongsList(sid) {
       '<div class="song-actions">' +
         '<button class="move-btn" data-onclick="_histEditMoveSong(' + i + ',-1,\'' + escHtml(sid) + '\')" ' + (isFirst ? 'disabled' : '') + ' aria-label="' + t('setlist.moveUp') + '">↑</button>' +
         '<button class="move-btn" data-onclick="_histEditMoveSong(' + i + ',1,\'' + escHtml(sid) + '\')" ' + (isLast ? 'disabled' : '') + ' aria-label="' + t('setlist.moveDown') + '">↓</button>' +
-        '<button class="move-btn" data-onclick="_histEditRemoveSong(' + i + ',\'' + escHtml(sid) + '\')" title="' + t('setlist.removeTitle') + '">&#215;</button>' +
+        '<button class="move-btn" data-remove data-onclick="_histEditRemoveSong(' + i + ',\'' + escHtml(sid) + '\')" title="' + t('setlist.removeTitle') + '" aria-label="' + escHtml(t('setlist.removeSong', { title: song.title || '' })) + '">&#215;</button>' +
       '</div>' +
     '</li>';
   }).join('');
@@ -345,12 +349,16 @@ function _histEditMoveSong(index, dir, sid) {
   _editSongs[index] = _editSongs[newIndex];
   _editSongs[newIndex] = tmp;
   _renderEditSongsList(sid);
+  focusSongAfterMove(document.getElementById('hist-edit-songs-ul'), newIndex, dir);
+  announce(t('setlist.movedTo', { title: _editSongs[newIndex].title || '', pos: newIndex + 1, total: _editSongs.length }));
 }
 
 function _histEditRemoveSong(index, sid) {
   if (!_editSongs) return;
-  _editSongs.splice(index, 1);
+  var removed = _editSongs.splice(index, 1)[0];
   _renderEditSongsList(sid);
+  focusSongAfterRemove(document.getElementById('hist-edit-songs-ul'), index, document.getElementById('hist-edit-add-select'));
+  if (removed) announce(t('setlist.removedSong', { title: removed.title || '' }));
 }
 
 function _histEditAddSong(sel, sid) {
@@ -419,7 +427,10 @@ async function _histEdit(sid) {
   _editSongs = (_histLoadedSongs[sid] || []).slice();
 
   var gigOptions = '<option value="">' + t('setlist.noGig') + '</option>' +
-    _histGigs.map(function(g) {
+    _histGigs.filter(function(g) {
+      // A deleted gig is offered only while this setlist is linked to it.
+      return !g.deleted || String(g.id) === String(s.gig_id);
+    }).map(function(g) {
       var sel = String(g.id) === String(s.gig_id) ? ' selected' : '';
       var label = escHtml(g.title || '') + (g.date ? ' — ' + formatDate(g.date) : '');
       return '<option value="' + g.id + '"' + sel + '>' + label + '</option>';
@@ -444,10 +455,10 @@ async function _histEdit(sid) {
         '<textarea id="hist-edit-comment" placeholder="' + t('setlist.editCommentPlaceholder') + '">' + escHtml(s.comment || '') + '</textarea>' +
       '</div>' +
       '<div class="modal-field">' +
-        '<label>' + t('setlist.editSongsLabel') + '</label>' +
-        '<ul id="hist-edit-songs-ul" class="song-list" style="margin:0;padding:0;"></ul>' +
+        '<label for="hist-edit-add-select" id="hist-edit-songs-label">' + t('setlist.editSongsLabel') + '</label>' +
+        '<ul id="hist-edit-songs-ul" class="song-list" aria-labelledby="hist-edit-songs-label" style="margin:0;padding:0;"></ul>' +
         '<div class="add-song-row" style="margin-top:0.5rem;">' +
-          '<select id="hist-edit-add-select" data-onchange="_histEditAddSong(this,\'' + escHtml(sid) + '\')">' +
+          '<select id="hist-edit-add-select" aria-label="' + t('setlist.addSongLabel') + '" data-onchange="_histEditAddSong(this,\'' + escHtml(sid) + '\')">' +
             '<option value="">' + t('setlist.addSongPlaceholder') + '</option>' +
           '</select>' +
         '</div>' +
@@ -816,10 +827,10 @@ async function _histShareSend(sid) {
   if (st) { st.textContent = ''; st.className = 'status-msg'; }
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists', {
+    var r = await fetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ share_id: Number(sid), email: email })
+      body: JSON.stringify({ email: email })
     });
 
     if (r.status === 401) {
@@ -862,10 +873,9 @@ async function _histDuplicate(sid) {
   if (dupBtn) { dupBtn.disabled = true; dupBtn.textContent = '…'; }
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists', {
+    var r = await fetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/duplicate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ duplicate_id: Number(sid) })
+      headers: { 'Authorization': 'Bearer ' + token }
     });
 
     if (r.status === 401) {

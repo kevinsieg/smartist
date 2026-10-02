@@ -1,5 +1,5 @@
 const { getDb } = require('../_db');
-const { verifyUserToken, passwordMatches } = require('../_token');
+const { verifyUserToken, sessionValid } = require('../_token');
 const { validateStr } = require('../_validate');
 const { ok, fail } = require('./http');
 
@@ -9,8 +9,8 @@ async function superAdminDenied(headers, sql) {
   const tok = (headers.authorization || '').replace(/^Bearer /, '');
   const claim = verifyUserToken(tok);
   if (!claim) return fail(401, 'Unauthorized');
-  const [u] = await sql`SELECT email, password_hash FROM users WHERE id = ${claim.userId} LIMIT 1`;
-  if (u && !passwordMatches(claim, u)) return fail(401, 'Unauthorized');
+  const [u] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  if (u && !sessionValid(claim, u)) return fail(401, 'Unauthorized');
   const allow = (process.env.SUPER_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   if (!u || !allow.includes(String(u.email).toLowerCase())) return fail(403, 'Forbidden');
   return null;

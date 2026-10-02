@@ -28,8 +28,19 @@ function loadFinalize() {
 
 function run(r) {
   const { test, assertEq } = r;
-  const { songTags, bandTags, orderByFirstTag, tagGroupStarts } = load();
+  const { songTags, bandTags, orderByFirstTag, tagGroupStarts, songFieldHidden } = load();
   console.log('\nsong tags (client)');
+
+  test('songFieldHidden defaults: banjo capo and 2nd guitar hidden, tags shown', () => {
+    assertEq(songFieldHidden({}, 'extra.banjoCapo'), true);
+    assertEq(songFieldHidden(null, 'extra.git2'), true);
+    assertEq(songFieldHidden({}, 'tags'), false);
+    assertEq(songFieldHidden({}, 'extra.aCapella'), false);
+  });
+  test('songFieldHidden follows a saved list, even an empty one', () => {
+    assertEq(songFieldHidden({ hiddenSongFields: [] }, 'extra.banjoCapo'), false);
+    assertEq(songFieldHidden({ hiddenSongFields: ['tags'] }, 'tags'), true);
+  });
   const S = (id, tags) => ({ id, tags });
 
   test('songTags tolerates missing tags', () => assertEq(songTags({}).length, 0));

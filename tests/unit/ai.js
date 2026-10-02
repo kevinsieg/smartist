@@ -73,6 +73,23 @@ async function run(r) {
     });
   });
 
+  await testAsync('Gemini thought parts are not part of the lyrics', async () => {
+    let requestBody = null;
+    const song = 'A line of the song that is long enough to count as real lyrics here.';
+    await withAiEnv('test-key', async (_url, opts) => {
+      requestBody = JSON.parse(opts.body);
+      return {
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: 'Searching for the song first.', thought: true }, { text: song }] } }],
+        }),
+      };
+    }, async () => {
+      assertEq(await suggestLyricsWithAI('Song', 'Artist'), { lyrics: song });
+      assertEq(requestBody.generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+    });
+  });
+
   await testAsync('provider quota response → null lyrics with skipped flag', async () => {
     await withAiEnv('test-key', async () => ({
       ok: false,

@@ -75,11 +75,16 @@ async function subscribe({ body, headers, ip }) {
   if (source === 'demo') {
     // Only what the privacy policy (/privacy) names: the form's own fields and
     // the country of the connection. No city, user agent or referrer.
+    // Strings of bounded length only: the body is anyone's to write.
+    const text = (v, max) => validateStr(typeof v === 'string' ? v : null, max) || null;
+    const genres = Array.isArray(body.genres)
+      ? body.genres.map(g => text(g, 50)).filter(Boolean).slice(0, 10)
+      : null;
     const meta = {
-      name:            body.name            || null,
-      genres:          body.genres           || null,
-      perform_country: body.perform_country  || null,
-      geo_country: headers['x-vercel-ip-country'] || null,
+      name:            text(body.name, 200),
+      genres:          genres && genres.length ? genres : text(body.genres, 200),
+      perform_country: text(body.perform_country, 100),
+      geo_country:     text(headers['x-vercel-ip-country'], 10),
     };
     await sql`
       INSERT INTO subscribers (email, source, meta)

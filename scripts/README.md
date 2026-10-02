@@ -99,16 +99,6 @@ Inserts:
 ---
 
 
-## import_venues.js — bulk venue import
-
-Imports venues from a CSV file. Columns: `NOM LIEU, ADRESSE, CP, MAIL, TEL, REMARQUES`. Fuzzy duplicate detection prompts `[s]kip / [i]nsert / [m]erge` for each potential match.
-
-```bash
-node scripts/import_venues.js --artist <slug> venues.csv
-```
-
----
-
 ## import_songs.js — bulk import
 
 ```bash
@@ -169,6 +159,25 @@ node scripts/import_gema.js --artist <slug> --ids <...> --dry-run
 **Rightholder import** (`--beteiligte`): replace-all per work — existing rightholders for each affected work are deleted before re-inserting. Re-runs are idempotent.
 
 The web UI at `/<slug>/pro-import` runs the same pipeline interactively with a dry-run preview step (Pro plan).
+
+---
+
+## db_backup.js / db_restore.js — backups
+
+Nightly for every production database via `.github/workflows/backup.yml`; the
+setup and every restore procedure are in [`docs/backup-restore.md`](../docs/backup-restore.md).
+
+```bash
+node scripts/db_backup.js --label db1 --out ./backups --recipient age1…   # read-only on the database
+DATABASE_URL=<empty db> node scripts/db_restore.js --dump <file.dump.age> --identity <key file>
+```
+
+`db_backup.js` writes `<label>-<stamp>.dump[.age]` and a `.manifest.json` (row
+counts, sequences, schema version, checksum); `--verify <local url>` restores it
+into an empty local database first and fails if anything differs.
+`db_restore.js` refuses a database that already has tables. Both need the
+Postgres client tools (`PG_BIN=<dir>` to pick a version) and `age` for
+encrypted dumps.
 
 ---
 

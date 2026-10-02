@@ -38,33 +38,15 @@ function toggleBulkEdit() {
 
 var _configPromise = null;
 function getConfig() {
-  if (!_configPromise) _configPromise = loadConfig();
+  // Light: the songs come from GET /songs below. The full config would ship
+  // the whole catalogue a second time.
+  if (!_configPromise) _configPromise = loadConfig(undefined, { light: true });
   return _configPromise;
 }
 
 // --- Init ---
 
 async function init() {
-  // Magic link login: /songs#magic=TOKEN
-  const magic = new URLSearchParams(window.location.hash.slice(1)).get('magic');
-  if (magic) {
-    history.replaceState(null, '', window.location.pathname);
-    try {
-      const cfg = await getConfig();
-      artistSlug = cfg.slug;
-      applyNav(cfg.name, cfg.config);
-      const r = await fetch(`/api/${artistSlug}/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: magic }),
-      });
-      if (r.ok) {
-        sessionStorage.setItem(AUTH_TOKEN_KEY, magic);
-        await loadAndRender();
-        return;
-      }
-    } catch {}
-  }
   var _vm = isViewMode();
   if (_vm) {
     document.body.classList.add('view-mode');
@@ -194,6 +176,7 @@ var COLS = [
   { key: 'extra.git2',          label: 'git2',               type: 'bool',   cls: 'col-lgit',    width: 70  },
   { key: 'extra.gitCapo',       label: 'gitCapo',            type: 'number', cls: 'col-kcapo',   width: 58  },
   { key: 'extra.harp',          label: 'harp',               type: 'bool',   cls: 'col-harp',    width: 58  },
+  { key: 'extra.aCapella',      get label() { return t('songs.fieldACapella'); }, type: 'bool', cls: 'col-acapella', width: 76 },
   { key: 'genre',               get label() { return t('songs.colLabelGenre'); },      type: 'text',   cls: 'col-cat',     width: 100 },
   { key: 'tags',                get label() { return t('songs.colLabelTags'); },       type: 'tags',   cls: 'col-tags',    width: 140 },
   { key: 'energy',              get label() { return t('songs.colLabelEnergy'); },     type: 'energy', cls: 'col-energy',  width: 190 },
@@ -210,7 +193,7 @@ var COLS = [
 
 // Instrument fields a band can hide in Settings (artists.config.hiddenSongFields).
 // The data stays; only the bulk table and the panel edit form leave them out.
-var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp', 'tags'];
+var HIDEABLE_SONG_FIELDS = ['extra.lead', 'extra.banjoCapo', 'extra.git2', 'extra.gitCapo', 'extra.harp', 'extra.aCapella', 'tags'];
 
 function _isSongFieldHidden(key) {
   return songFieldHidden(_songsCfg && _songsCfg.config, key);
@@ -480,10 +463,10 @@ function renderListRowHtml(s) {
   var heartBtn = heartButtonHtml(!!s.heart, 'toggleFavourite(' + Number(s.id) + ')', t('songs.colTitleHeart'), _viewMode);
 
   var icons = '';
-  if (hasListen) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '">&#9654;</button>';
-  if (hasLyrics) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '">&#182;</button>';
+  if (hasListen) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openPlayer(\'' + sid + '\')" title="' + t('songs.listen') + '" aria-label="' + t('songs.listen') + '">&#9654;</button>';
+  if (hasLyrics) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();openLyrics(\'' + sid + '\')" title="' + t('songs.lyricsTitle') + '" aria-label="' + t('songs.lyricsTitle') + '">&#182;</button>';
   var hasArrangement = !_viewMode && !!s.has_arrangement;
-  if (hasArrangement) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
+  if (hasArrangement) icons += '<button class="song-card-icon-btn" data-onclick="event.stopPropagation();_openSongArrangement(' + Number(s.id) + ')" title="' + t('songs.colTitleArrangement') + '" aria-label="' + t('songs.colTitleArrangement') + '">&#8862;</button>';
 
   return '<div class="songs-list-row ' + borderCls + '" data-id="' + escHtml(sid) + '">' +
     heartBtn +

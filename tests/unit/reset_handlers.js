@@ -31,7 +31,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
   const emailPath = require.resolve(path.join(__dirname, '../../api/_email'));
   const tokenPath = require.resolve(path.join(__dirname, '../../api/_token'));
   const bcryptPath  = require.resolve('bcryptjs');
-  const configPath  = require.resolve(path.join(__dirname, '../../api/config'));
+  const configPath  = require.resolve(path.join(__dirname, '../../api/_config'));
 
   [dbPath, configPath, tokenPath].forEach(p => delete require.cache[p]);
   const domainDir = path.join(__dirname, '../../api/_domain');
@@ -60,7 +60,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', isMissingRateLimitTable: () => false },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
   };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
@@ -68,7 +68,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
       getDb: () => sql,
       getArtist: async slug => ({ id: 1, slug, name: 'Test', config: {} }),
       getSlug: () => '',
-      insertAuditLog: async () => {},
+      insertAuditLog: async () => {}, trimSongLogs: async () => {},
     },
   };
   require.cache[emailPath] = {
@@ -98,7 +98,7 @@ function mockRes() {
   return r;
 }
 
-const post = (body) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: {}, url: '/api/config' });
+const post = (body) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: {}, url: '/api/_config' });
 
 async function run(r) {
   const { testAsync, assert, assertEq, B } = r;
@@ -163,7 +163,7 @@ async function run(r) {
     assert(flat.includes('hashed:a-new-password'), `stored the raw password: ${flat}`);
     // The statement must name the address, not an artist and not an id — and
     // must not be able to reach the neighbour's row.
-    assert(/lower\(email\)/i.test(writes[0].text), `write is not scoped by address: ${writes[0].text}`);
+    assert(/WHERE email =/i.test(writes[0].text), `write is not scoped by address: ${writes[0].text}`);
     assert(flat.includes(VICTIM), 'write does not name the victim address');
     assert(!flat.includes(NEIGHBOUR), `write names another address: ${flat}`);
   });

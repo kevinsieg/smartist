@@ -6,7 +6,6 @@ async function run(r) {
   // requireRole is the only thing we need from _auth.js
   // We must stub _db and _token before requiring _auth to avoid DB connection
   const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
-  const tokenPath  = require.resolve(path.join(__dirname, '../../api/_token'));
   if (!require.cache[dbPath]) {
     require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true,
       exports: { getArtist: async () => null, getDb: () => null } };
@@ -159,7 +158,7 @@ async function run(r) {
         verifyMagicToken: () => false,
         generateMagicToken: () => '',
         generateUserToken: () => '',
-        passwordMatches: () => true,
+        sessionValid: () => true,
         TTL_8H: 28800000, TTL_30D: 2592000000,
       },
     };
@@ -231,81 +230,6 @@ async function run(r) {
     assertEq(res.statusCode(), 403);
   });
 
-  // ── login response includes artists list ─────────────────────────────────
-
-  const FAKE_ARTISTS = [{ slug: 'testband', name: 'Test Band', role: 'admin' }];
-
-  console.log(B('\n[artist]/auth — artists list in login response'));
-
-  function stubAuthWithArtists() {
-    const dbPath2    = require.resolve(path.join(__dirname, '../../api/_db'));
-    const tokenPath2 = require.resolve(path.join(__dirname, '../../api/_token'));
-    const authPath   = require.resolve(path.join(__dirname, '../../api/_auth'));
-    const artistDomainPath = require.resolve(path.join(__dirname, '../../api/_domain/artist'));
-
-    require.cache[dbPath2] = {
-      id: dbPath2, filename: dbPath2, loaded: true,
-      exports: {
-        getArtist: async () => FAKE_ARTIST,
-        getDb: () => {
-          const sqlFn = async () => FAKE_ARTISTS;
-          sqlFn.begin = async fn => fn(sqlFn);
-          return sqlFn;
-        },
-        getSlug: (req) => (req.query && req.query.artist) || 'testband',
-      },
-    };
-    require.cache[tokenPath2] = {
-      id: tokenPath2, filename: tokenPath2, loaded: true,
-      exports: {
-        verifyUserToken: () => ({ userId: 1, role: 'admin' }),
-        verifyMagicToken: () => false,
-        generateMagicToken: () => '',
-        generateUserToken: () => 'stub-session-token',
-        passwordMatches: () => true,
-        TTL_8H: 28800000, TTL_30D: 2592000000,
-      },
-    };
-    require.cache[artistDomainPath] = {
-      id: artistDomainPath, filename: artistDomainPath, loaded: true,
-      exports: {
-        isSlugAvailable:   async () => true,
-        getArtistsForUser: async () => FAKE_ARTISTS,
-      },
-    };
-    delete require.cache[authPath];
-    const handlerPath = require.resolve(path.join(__dirname, '../../api/[artist]/auth'));
-    delete require.cache[handlerPath];
-    return require(path.join(__dirname, '../../api/[artist]/auth'));
-  }
-
-  await r.testAsync('email+password login response includes artists array', async () => {
-    const bcryptPath       = require.resolve('bcryptjs');
-    const origBcrypt       = require.cache[bcryptPath];
-    const artistDomPath    = require.resolve(path.join(__dirname, '../../api/_domain/artist'));
-    const origArtistDomain = require.cache[artistDomPath];
-    require.cache[bcryptPath] = {
-      id: bcryptPath, filename: bcryptPath, loaded: true,
-      exports: { compare: async () => true, hash: async () => '$2b$12$stubhash' },
-    };
-    const h = stubAuthWithArtists();
-    const res = mockRes();
-    const req = {
-      method: 'POST',
-      url: '/api/testband/auth',
-      headers: { 'content-type': 'application/json' },
-      body: { email: 'admin@example.com', password: 'correct-password' },
-      query: { artist: 'testband' },
-    };
-    await h(req, res);
-    require.cache[bcryptPath] = origBcrypt;
-    // Restore domain module so subsequent tests in the suite get the real implementation
-    if (origArtistDomain) require.cache[artistDomPath] = origArtistDomain;
-    else delete require.cache[artistDomPath];
-    assert(res._body && Array.isArray(res._body.artists), 'expected artists array in login response');
-    assertEq(res._body.artists.length, 1);
-    assertEq(res._body.artists[0].slug, 'testband');
-  });
 }
 
 if (require.main === module) {

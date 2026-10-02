@@ -21,6 +21,10 @@ const PROVIDER = {
 
 const FROM = process.env.RESEND_FROM || 'Smartist Studio <noreply@smartist.studio>';
 
+/**
+ * @param {{ to: string, subject: string, text?: string, html?: string,
+ *   attachments?: { filename: string, content: string }[], reply_to?: string }} mail
+ */
 async function sendEmail({ to, subject, text, html, attachments, reply_to }) {
   const apiKey = process.env[PROVIDER.envVar];
   if (!apiKey) throw new Error(`${PROVIDER.envVar} not configured`);
@@ -33,10 +37,10 @@ async function sendEmail({ to, subject, text, html, attachments, reply_to }) {
 
   if (!r.ok) {
     const body = await r.text();
-    console.error(`[email] ${r.status}: ${body}`);
-    throw new Error(`email send failed: ${r.status}`);
+    // Not printed here: the reply can quote the recipient. Callers log the
+    // error through the logger, which redacts addresses.
+    throw new Error(`email send failed: ${r.status} ${body.slice(0, 300)}`);
   }
-  console.log(`[email] sent to=${Array.isArray(to) ? to.join(',') : to} subject="${subject}"`);
 }
 
 module.exports = { sendEmail };

@@ -3,7 +3,7 @@
   "info": {
     "title": "Smartist API",
     "version": "1.1.0",
-    "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/{band}/auth` (email + password) or from Google sign-in. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
+    "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/login` (email + password) or from Google sign-in. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
     "license": {
       "name": "AGPL-3.0-or-later",
       "url": "https://www.gnu.org/licenses/agpl-3.0.html"
@@ -101,7 +101,9 @@
           },
           "tags": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Theme tags"
           },
           "energy": {
@@ -206,7 +208,10 @@
           "tags": {
             "type": "array",
             "nullable": true,
-            "items": { "type": "string", "maxLength": 50 },
+            "items": {
+              "type": "string",
+              "maxLength": 50
+            },
             "maxItems": 10,
             "description": "Theme tags; trimmed, deduplicated case-insensitively, matched to the band's existing spelling. Omit to keep the stored tags, null or [] clears them."
           },
@@ -798,21 +803,15 @@
             "$ref": "#/components/responses/500"
           }
         }
-      }
-    },
-    "/api/{band}/auth": {
+      },
       "post": {
-        "summary": "Log in",
+        "summary": "Request a password-reset link (action: request-reset)",
         "tags": [
           "Auth"
         ],
         "security": [],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/band"
-          }
-        ],
-        "description": "Email + password login for a member of this band. Returns a session token for `Authorization: Bearer`, valid 8 hours (30 days with `rememberMe`). Changing or resetting the password ends every earlier session. A password without an email is refused with 400 (`code: band_password_retired`). Rate-limited per IP.",
+        "parameters": [],
+        "description": "Emails a 30-minute link to set a new password; the password is set on every account of the address. Sent as `POST /api/config` with `action: \"request-reset\"`. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
         "requestBody": {
           "required": true,
           "content": {
@@ -820,6 +819,59 @@
               "schema": {
                 "type": "object",
                 "required": [
+                  "action",
+                  "email"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "request-reset"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Always returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "summary": "Log in",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Email + password login. The address is the identity across workspaces: every account for it is tried and the response lists the bands it belongs to. Returns a session token for `Authorization: Bearer`, valid 8 hours (30 days with `rememberMe`). Changing or resetting the password ends every earlier session. Rate-limited per IP and per address.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
                   "password"
                 ],
                 "properties": {
@@ -899,64 +951,12 @@
           "401": {
             "$ref": "#/components/responses/401"
           },
-          "404": {
-            "$ref": "#/components/responses/404"
-          },
           "429": {
             "description": "Rate limited",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "$ref": "#/components/responses/500"
-          }
-        }
-      }
-    },
-    "/api/{band}/request-reset": {
-      "post": {
-        "summary": "Request a password-reset link",
-        "tags": [
-          "Auth"
-        ],
-        "security": [],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/band"
-          }
-        ],
-        "description": "Emails a 30-minute link to set a new password to a member of this band. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Always returned",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
                 }
               }
             }
@@ -1025,7 +1025,7 @@
             "$ref": "#/components/parameters/band"
           }
         ],
-        "description": "Member role. The same endpoint also carries lyrics and media actions selected by a body field (`lyrics_update_id`, `lyrics_delete_id`, `lyrics_suggest_id`, `upload_presign_id`, `media_confirm_id`, `media_delete_id`) — these exist because multi-segment POSTs to catch-all routes fail under `vercel dev`.",
+        "description": "Member role.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1178,6 +1178,122 @@
           },
           "403": {
             "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/import": {
+      "post": {
+        "summary": "Import songs from CSV",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role. `{ csv }` (a new file) or `{ rows }` (edited rows) is only checked and answers each row's values, errors and duplicates; `{ rows, commit: true }` writes every row not marked `skip` in one statement.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "csv": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "commit": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checked, nothing written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Imported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imported": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan song limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A row still has an error or an unresolved duplicate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
             "content": {
               "application/json": {
                 "schema": {
@@ -2150,6 +2266,182 @@
         }
       }
     },
+    "/api/{band}/songs/{id}/lyrics": {
+      "put": {
+        "summary": "Save a song's lyrics",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "lyrics"
+                ],
+                "properties": {
+                  "lyrics": {
+                    "type": "string",
+                    "maxLength": 20000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a song's lyrics",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/lyrics/suggest": {
+      "post": {
+        "summary": "Look up lyrics for a song",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Tries lyrics.ovh, lrclib, then the AI provider (not for the demo session). Nothing is saved.",
+        "responses": {
+          "200": {
+            "description": "Suggestion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Song has no artist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
     "/api/{band}/song-logs": {
       "get": {
         "summary": "Recent audit log",
@@ -2249,6 +2541,14 @@
               ]
             },
             "description": "`ics` returns an iCalendar feed of upcoming gigs (no comments)"
+          },
+          {
+            "name": "slim",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: every gig of the band, unpaged, as a plain array of `{ id, title, date, deleted, venue_id, venue_name, venue_city, organizer_id, organizer_name }` for pickers and filters. Needs a session."
           }
         ],
         "description": "Paged, newest first. Without a session only with a public catalogue; comments are then omitted.",
@@ -2436,7 +2736,7 @@
             "$ref": "#/components/parameters/id"
           }
         ],
-        "description": "Member role. `?action=poster` confirms an uploaded poster (`POST ?action=poster-url` presigns it; `DELETE ?action=poster` removes it).",
+        "description": "Member role. The poster is a sub-resource: `POST /gigs/{id}/poster-url` presigns an upload, `PUT /gigs/{id}/poster` confirms it, `DELETE /gigs/{id}/poster` removes it.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2628,7 +2928,7 @@
         }
       },
       "post": {
-        "summary": "Create, duplicate or share a setlist",
+        "summary": "Create a setlist",
         "tags": [
           "Setlists"
         ],
@@ -2642,59 +2942,18 @@
             "$ref": "#/components/parameters/band"
           }
         ],
-        "description": "Member role. One endpoint, three actions chosen by the body: `{ song_ids, title?, comment?, gig_id? }` creates; `{ duplicate_id }` copies a setlist; `{ share_id, email }` emails it as a PDF (rate-limited per band and IP).",
+        "description": "Member role. `{ song_ids, title?, comment?, gig_id? }`.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/SetlistInput"
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "duplicate_id"
-                    ],
-                    "properties": {
-                      "duplicate_id": {
-                        "type": "integer"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "share_id",
-                      "email"
-                    ],
-                    "properties": {
-                      "share_id": {
-                        "type": "integer"
-                      },
-                      "email": {
-                        "type": "string",
-                        "format": "email"
-                      }
-                    }
-                  }
-                ]
+                "$ref": "#/components/schemas/SetlistInput"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Shared",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
-                }
-              }
-            }
-          },
           "201": {
             "description": "Created",
             "content": {
@@ -2730,16 +2989,6 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
-          },
-          "429": {
-            "description": "Rate limited",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           },
           "500": {
             "$ref": "#/components/responses/500"
@@ -2921,6 +3170,141 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}/duplicate": {
+      "post": {
+        "summary": "Duplicate a setlist",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Copies the setlist and its songs.",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setlist"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}/share": {
+      "post": {
+        "summary": "Email a setlist as a PDF",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role, not the demo. Rate-limited per band and IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Demo is read-only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "500": {
             "$ref": "#/components/responses/500"
@@ -3828,6 +4212,788 @@
                 }
               }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/members": {
+      "get": {
+        "summary": "List the band's members",
+        "tags": [
+          "Members"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Admin role.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Change a member's role",
+        "tags": [
+          "Members"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Admin role. Only the role changes; the login email is the cross-workspace identity.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "integer"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "viewer",
+                      "member",
+                      "admin"
+                    ]
+                  }
+                },
+                "required": [
+                  "userId",
+                  "role"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a member",
+        "tags": [
+          "Members"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Admin role.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "userId"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/{band}/members/{action}": {
+      "post": {
+        "summary": "Member actions",
+        "tags": [
+          "Members"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "invite",
+                "resend-invite",
+                "change-password",
+                "request-email-change",
+                "accept-invite",
+                "confirm-email-change"
+              ]
+            }
+          }
+        ],
+        "description": "`invite` `{email, role}` and `resend-invite` `{userId}`: admin role. `change-password` `{currentPassword, newPassword, rememberMe?}` and `request-email-change` `{currentPassword, newEmail}`: the signed-in member. `accept-invite` `{token, password}` and `confirm-email-change` `{token, confirm?}` (without `confirm` it only previews the affected bands): public, the emailed links.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/arrangements": {
+      "get": {
+        "summary": "List a song's arrangements",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add an arrangement",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/arrangements/{arrId}": {
+      "put": {
+        "summary": "Update an arrangement",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "arrId",
+            "in": "path",
+            "required": true,
+            "description": "Arrangement id",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an arrangement",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "arrId",
+            "in": "path",
+            "required": true,
+            "description": "Arrangement id",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/arrangements/{arrId}/activate": {
+      "post": {
+        "summary": "Make an arrangement the active one on stage",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "arrId",
+            "in": "path",
+            "required": true,
+            "description": "Arrangement id",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "description": "Member role. At most one arrangement per song is active.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/songs/{id}/gema": {
+      "get": {
+        "summary": "GEMA registration of a song",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Any signed-in member. Never public.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/gema/import": {
+      "post": {
+        "summary": "Import one GEMA CSV export",
+        "tags": [
+          "Songs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role, Pro plan. `dryRun` previews without writing.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "info",
+                      "ids",
+                      "beteiligte"
+                    ]
+                  },
+                  "csv": {
+                    "type": "string"
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  },
+                  "ownerIpNameNumber": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "csv"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/{band}/gigs/{id}/poster-url": {
+      "post": {
+        "summary": "Presigned upload URLs for a gig poster",
+        "tags": [
+          "Gigs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Returns poster and thumbnail upload URLs, each signed for its size (max 5 MB).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contentType": {
+                    "type": "string",
+                    "enum": [
+                      "image/jpeg",
+                      "image/png",
+                      "image/webp"
+                    ]
+                  },
+                  "posterSize": {
+                    "type": "integer"
+                  },
+                  "thumbSize": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "contentType",
+                  "posterSize",
+                  "thumbSize"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/{band}/gigs/{id}/poster": {
+      "put": {
+        "summary": "Save an uploaded gig poster",
+        "tags": [
+          "Gigs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Checks both uploads exist.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "posterUrl": {
+                    "type": "string"
+                  },
+                  "thumbUrl": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "posterUrl",
+                  "thumbUrl"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a gig poster",
+        "tags": [
+          "Gigs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
           },
           "500": {
             "$ref": "#/components/responses/500"

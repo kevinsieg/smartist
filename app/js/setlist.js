@@ -57,7 +57,7 @@ async function init() {
     });
 
     if (_activeView === 'history') {
-      document.getElementById('setlist-page-title').style.display = 'none';
+      _setSetlistHeading('history');
       await _renderHistoryTab();
     } else {
       renderControls();
@@ -85,12 +85,10 @@ function switchTab(view) {
   _updateTabBar();
   _closeSongPanel();
   if (_histView) _histView.deselect();
-  var titleEl = document.getElementById('setlist-page-title');
+  _setSetlistHeading(view);
   if (view === 'history') {
-    if (titleEl) titleEl.style.display = 'none';
     _renderHistoryTab();
   } else {
-    if (titleEl) titleEl.style.display = '';
     renderControls();
     applyDemoFilters();
   }
@@ -103,3 +101,13 @@ document.addEventListener('keydown', function(e) {
 });
 
 init();
+
+// The saved-setlists tab shows no visible title, but keeps an <h1> for
+// screen readers and the page outline.
+function _setSetlistHeading(view) {
+  var titleEl = document.getElementById('setlist-page-title');
+  if (!titleEl) return;
+  var history = view === 'history';
+  titleEl.classList.toggle('sr-only', history);
+  titleEl.textContent = t(history ? 'setlist.tabSaved' : 'setlist.pageTitle');
+}
