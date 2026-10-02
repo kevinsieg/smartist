@@ -128,6 +128,12 @@ Two checks per production deployment, both in Better Stack:
   wrong `BETTERSTACK_TOKEN`, or lines lost when the function freezes after the
   response) as well as the deployment being down.
 
+- **Responses near the size limit.** Vercel refuses response bodies over
+  4.5 MB, and the song and setlist lists and the export are unpaged. Every
+  `request` line carries the body size (`bytes`); a body over 2 MB also logs a
+  `large_response` warning naming the endpoint (and so the band). Alert on
+  that event to page the endpoint before it starts failing.
+
 The health check itself cannot tell whether logs arrive: the send happens after
 the response, handed to Vercel's `waitUntil` (`api/_handler.js`), so the request
 never waits for the log service.

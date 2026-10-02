@@ -135,6 +135,28 @@ async function run(r) {
     });
   });
 
+  await testAsync('the request line carries the body size, and a large body logs a warning', async () => {
+    await withStubbedLogger(async (wrap, logs) => {
+      const { LARGE_RESPONSE_BYTES } = require(path.join(__dirname, '../../api/_handler'));
+      const send = (body) => {
+        const res = makeRes();
+        res.end = function () { this.headersSent = true; };
+        res.json = function (b) { this.end(JSON.stringify(b)); return this; };
+        return wrap(async (_req, res) => res.json(body))({ method: 'GET', url: '/list' }, res);
+      };
+      await send({ ok: 'é' });
+      assertEq(logs.map(l => l.event), ['request']);
+      assertEq(logs[0].data.bytes, Buffer.byteLength('{"ok":"é"}'), 'bytes, not characters');
+
+      logs.length = 0;
+      await send({ rows: 'x'.repeat(LARGE_RESPONSE_BYTES) });
+      assertEq(logs.map(l => l.event), ['large_response', 'request']);
+      assertEq(logs[0].level, 'warn');
+      assertEq(logs[0].data.url, '/list');
+      assert(logs[0].data.bytes > LARGE_RESPONSE_BYTES, 'the size is in the warning');
+    });
+  });
+
   await testAsync('wrap does not write a second response after headers were sent', async () => {
     await withStubbedLogger(async (wrap, logs) => {
       const res = makeRes({ headersSent: true });
