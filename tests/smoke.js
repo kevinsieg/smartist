@@ -14,6 +14,25 @@
 
 const { chromium } = require('playwright');
 
+// Accessibility: with axe-core installed (CI installs it next to playwright),
+// every page must be free of serious and critical WCAG 2.2 AA violations.
+let AXE = null;
+try { AXE = require('fs').readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'); } catch { /* optional locally */ }
+
+async function assertAccessible(page, where) {
+  if (!AXE) return;
+  // evaluate() is not subject to the page's CSP, unlike an injected <script>.
+  await page.evaluate(AXE);
+  const found = await page.evaluate(async () => {
+    const r = await window.axe.run(document, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+    });
+    return r.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
+      .map(v => `${v.id} (${v.nodes.length}): ${v.nodes[0].target.join(' ')}`);
+  });
+  if (found.length) throw new Error(`${where} accessibility:\n      ${found.join('\n      ')}`);
+}
+
 const BASE     = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const SLUG     = process.env.ARTIST_SLUG;
 const EMAIL    = process.env.ARTIST_EMAIL;
@@ -77,6 +96,7 @@ async function main() {
     await page.goto(`${BASE}/login`);
     await page.waitForSelector('#email-input', { timeout: 10000 });
     assertClean(log.take(), '/login');
+    await assertAccessible(page, '/login');
   });
 
   await check('signing in through the form lands on the workspace', async () => {
@@ -100,6 +120,7 @@ async function main() {
         .some(el => el.children.length > 0));
       if (!content) throw new Error('the page rendered no content');
       assertClean(log.take(), p);
+      await assertAccessible(page, p);
     });
   }
 
@@ -136,6 +157,7 @@ async function main() {
       const songs = await page.$$('.stage-song-title');
       if (songs.length < 1) throw new Error('stage lists no songs');
       assertClean(log.take(), 'stage');
+      await assertAccessible(page, 'stage');
     } finally {
       await page.evaluate(async ({ slug, id }) => {
         const t = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
