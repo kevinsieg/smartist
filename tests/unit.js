@@ -53,6 +53,7 @@ const suites = [
   require('./unit/logger'),
   require('./unit/http_adapter'),
   require('./unit/csp'),
+  require('./unit/ignore_build'),
   require('./unit/inline_handlers'),
   require('./unit/backup'),
 ];
