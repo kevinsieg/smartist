@@ -5,24 +5,20 @@ const { wrap } = require('../_handler');
 const { parseFields } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
-const { ownsVenue, ownsOrganizer } = require('../_ownership');
+const { ownsRefs } = require('../_ownership');
 const { presignLimited } = require('../_ratelimit');
 
 // venue_id / organizer_id come from the body; both must be this artist's rows.
-async function refsOwned(sql, artistId, body) {
-  const [venueOk, organizerOk] = await Promise.all([
-    ownsVenue(sql, artistId, body.venue_id ?? null),
-    ownsOrganizer(sql, artistId, body.organizer_id ?? null),
-  ]);
-  return { venueOk, organizerOk };
+function refsOwned(sql, artistId, body) {
+  return ownsRefs(sql, artistId, { venueId: body.venue_id ?? null, organizerId: body.organizer_id ?? null });
 }
 
 async function checkRefs(sql, artistId, body, res) {
-  const { venueOk, organizerOk } = await refsOwned(sql, artistId, body);
-  if (!venueOk) {
+  const owned = await refsOwned(sql, artistId, body);
+  if (!owned.venue) {
     res.status(400).json({ error: 'Invalid venue_id' }); return false;
   }
-  if (!organizerOk) {
+  if (!owned.organizer) {
     res.status(400).json({ error: 'Invalid organizer_id' }); return false;
   }
   return true;
@@ -46,34 +42,32 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       if (!artist) return res.status(404).json({ error: 'Artist not found' });
       if (!user && !canBrowseCatalogue(artist))
         return res.status(401).json({ error: 'Sign in to view this' });
-      // The gig, and with ?refs its setlists and their songs: every query is
-      // scoped by gig id and band, so none needs another's result first.
-      const [[row], setlists, setlistSongs] = await Promise.all([
-        sql`
-          SELECT g.*, v.name AS venue_name, v.city AS venue_city,
-                 o.name AS organizer_name, o.city AS organizer_city
-          FROM gigs g
-          LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-          LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
-          WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
-            ${user ? sql`` : sql`AND g.deleted = false`}
-        `,
-        req.query.refs ? sql`
-          SELECT id, title FROM setlists
-          WHERE gig_id = ${gigId} AND artist_id = ${artist.id}
-          ORDER BY id DESC
-        ` : [],
-        req.query.refs ? sql`
-          SELECT ss.setlist_id, ss.position, s.title
-          FROM setlists sl
-          JOIN setlist_songs ss ON ss.setlist_id = sl.id
-          JOIN songs s ON s.id = ss.song_id AND s.artist_id = sl.artist_id
-          WHERE sl.gig_id = ${gigId} AND sl.artist_id = ${artist.id}
-          ORDER BY ss.setlist_id, ss.position
-        ` : [],
-      ]);
+      // The gig, and with ?refs its setlists and their songs, in one statement.
+      const [row] = await sql`
+        SELECT g.*, v.name AS venue_name, v.city AS venue_city,
+               o.name AS organizer_name, o.city AS organizer_city
+               ${req.query.refs ? sql`,
+               COALESCE((
+                 SELECT json_agg(json_build_object('id', sl.id, 'title', sl.title) ORDER BY sl.id DESC)
+                 FROM setlists sl
+                 WHERE sl.gig_id = g.id AND sl.artist_id = g.artist_id
+               ), '[]') AS ref_setlists,
+               COALESCE((
+                 SELECT json_agg(json_build_object('setlist_id', ss.setlist_id, 'position', ss.position, 'title', s.title)
+                                 ORDER BY ss.setlist_id, ss.position)
+                 FROM setlists sl
+                 JOIN setlist_songs ss ON ss.setlist_id = sl.id
+                 JOIN songs s ON s.id = ss.song_id AND s.artist_id = sl.artist_id
+                 WHERE sl.gig_id = g.id AND sl.artist_id = g.artist_id
+               ), '[]') AS ref_setlist_songs` : sql``}
+        FROM gigs g
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        LEFT JOIN organizers o ON o.id = g.organizer_id AND o.artist_id = g.artist_id
+        WHERE g.id = ${gigId} AND g.artist_id = ${artist.id}
+          ${user ? sql`` : sql`AND g.deleted = false`}
+      `;
       if (!row) return res.status(404).json({ error: 'Gig not found' });
-      const { venue_city, organizer_city, ...fields } = row;
+      const { venue_city, organizer_city, ref_setlists: setlists, ref_setlist_songs: setlistSongs, ...fields } = row;
       let gig = fields;
       // Public visitors never see the private gig comment, nor who booked the
       // gig: organizers are private CRM data like venues' contacts.
@@ -174,8 +168,8 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     if (req.method === 'PUT') {
       if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
-      if (!refs.venueOk)     return res.status(400).json({ error: 'Invalid venue_id' });
-      if (!refs.organizerOk) return res.status(400).json({ error: 'Invalid organizer_id' });
+      if (!refs.venue)     return res.status(400).json({ error: 'Invalid venue_id' });
+      if (!refs.organizer) return res.status(400).json({ error: 'Invalid organizer_id' });
       // Only the fields sent are written; an empty value clears one.
       const value = parsed.value;
       if (!Object.keys(value).length) return res.json(gig);

@@ -1,7 +1,7 @@
 const { getDb, getSlug } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, refuseDemo } = require('../../_auth');
 const { validateSongIds, validateStr, validateEmail } = require('../../_validate');
-const { ownsSongs, ownsGig } = require('../../_ownership');
+const { ownsRefs } = require('../../_ownership');
 const { checkRateLimit, clientIp, outboundMailLimited } = require('../../_ratelimit');
 const { buildSetlistPdf, setlistTitle } = require('../../_pdf');
 const { sendEmail } = require('../../_email');
@@ -78,15 +78,13 @@ module.exports = wrap(async function handler(req, res) {
     const gigId = rawGigId != null ? Number(rawGigId) : null;
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
-    // Existence and ownership checks are independent of each other.
-    const [[setlist], songsOk, gigOk] = await Promise.all([
+    const [[setlist], owned] = await Promise.all([
       sql`SELECT id FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}`,
-      ownsSongs(sql, band.id, validIds),
-      ownsGig(sql, band.id, gigId),
+      ownsRefs(sql, band.id, { songIds: validIds, gigId }),
     ]);
-    if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
-    if (!songsOk) return res.status(400).json({ error: 'Invalid song_ids' });
-    if (!gigOk)   return res.status(400).json({ error: 'Invalid gig_id' });
+    if (!setlist)     return res.status(404).json({ error: 'Setlist not found' });
+    if (!owned.songs) return res.status(400).json({ error: 'Invalid song_ids' });
+    if (!owned.gig)   return res.status(400).json({ error: 'Invalid gig_id' });
 
     // One transaction: a failed insert can no longer leave the
     // setlist emptied by the delete before it.

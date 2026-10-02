@@ -138,12 +138,12 @@ async function run(r) {
 
   await testAsync('tags are normalised against the band\'s tags', async () => {
     const stored = { id: 5, artist_id: 1, title: 'Song', active: true, heart: false, extra: {}, tags: [] };
-    const { handler, calls } = loadHandler((text, values) =>
-      text.includes('unnest(tags)') ? [{ tag: 'Liebe' }] : routeFor(stored)(text, values));
+    const { handler, calls } = loadHandler(routeFor({ ...stored, known_tags: ['Liebe'] }));
     await patch(handler, [{ id: 5, tags: ['liebe', ' Arbeit '] }]);
     assertEq(JSON.stringify(batchRows(calls)[0].tags), '["Liebe","Arbeit"]');
     const q = calls.find(c => c.text.includes('unnest(tags)'));
-    assert(q && q.values.includes(1), 'known tags are scoped to the band');
+    assert(q && q.values.every(v => v === 1 || Array.isArray(v)), 'known tags are scoped to the band');
+    assertEq(calls.filter(c => c.text.startsWith('SELECT')).length, 1, 'rows, genres and tags in one statement');
   });
 
   await testAsync('invalid tags reject the row', async () => {

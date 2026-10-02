@@ -74,13 +74,17 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
 // Songs 10 and 11 belong to this band; anything else belongs to someone else.
 const OWN_SONGS = new Set([10, 11]);
 function ownershipRoute(text, values) {
-  if (text.startsWith('SELECT count(*)::int AS n FROM songs')) {
-    const ids = values[1] || [];
-    return [{ n: ids.filter(id => OWN_SONGS.has(id)).length }];
+  // ownsRefs: one statement. Values: artist, song ids, their count, then
+  // (id, id, artist) for the gig, the venue and the organizer.
+  if (text.startsWith('SELECT (SELECT count(*)::int FROM songs')) {
+    const [, ids, n, gig, , , venue, , , organizer] = values;
+    return [{
+      songs: ids.filter(id => OWN_SONGS.has(id)).length === n,
+      gig: gig == null || gig === 5,
+      venue: venue == null || venue === 7,
+      organizer: organizer == null || organizer === 8,
+    }];
   }
-  if (text.startsWith('SELECT 1 AS ok FROM gigs'))       return values[0] === 5 ? [{ ok: 1 }] : [];
-  if (text.startsWith('SELECT 1 AS ok FROM venues'))     return values[0] === 7 ? [{ ok: 1 }] : [];
-  if (text.startsWith('SELECT 1 AS ok FROM organizers')) return values[0] === 8 ? [{ ok: 1 }] : [];
   // Setlist create is one WITH s AS (INSERT INTO setlists …) statement.
   if (text.startsWith('WITH s AS ( INSERT INTO setlists')) return [{ id: 99 }];
   if (text.startsWith('INSERT INTO gigs'))               return [{ id: 55 }];
@@ -108,6 +112,21 @@ async function run(r) {
     await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
       body: { song_ids: [10, 11], gig_id: 5 } }, res);
     assertEq(res.statusCode, 201);
+  });
+
+  await testAsync('songs and gig of a new setlist are checked in one statement', async () => {
+    const { handler, sql } = loadHandler('api/_band/setlists.js', ownershipRoute);
+    await handler({ method: 'POST', url: '/api/test/setlists', query: {}, headers: {},
+      body: { song_ids: [10, 11], gig_id: 5 } }, mockRes());
+    assertEq(sql.calls.length, 2, sql.calls.map(c => c.text.slice(0, 40)).join(' | '));
+  });
+
+  await testAsync('a gig without venue or organizer sends no ownership query', async () => {
+    const { handler, sql } = loadHandler('api/_band/gigs.js', ownershipRoute);
+    const res = mockRes();
+    await handler({ method: 'POST', url: '/api/test/gigs', query: {}, headers: {}, body: { title: 'x' } }, res);
+    assertEq(res.statusCode, 201);
+    assertEq(sql.calls.map(c => c.text.split(' ').slice(0, 3).join(' ')), ['INSERT INTO gigs']);
   });
 
   await testAsync("a setlist cannot hang off another band's gig", async () => {
@@ -181,7 +200,7 @@ async function run(r) {
 
   const stored = { id: 10, title: 'Song', extra: { listenUrl: 'https://media.example.test/audio/1/a.mp3' } };
   // The PATCH batch is one WITH … UPDATE … RETURNING statement.
-  const songRoute = text => (text.startsWith('SELECT * FROM songs') ? [stored] : text.startsWith('WITH u AS') ? [stored] : []);
+  const songRoute = text => (text.startsWith('SELECT s.*') && text.includes('FROM songs s') ? [stored] : text.startsWith('WITH u AS') ? [stored] : []);
 
   for (const [label, extra, ok] of [
     ['a javascript: sheet link is refused', { sheetUrl: 'javascript:alert(1)' }, false],
