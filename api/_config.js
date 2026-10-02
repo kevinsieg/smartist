@@ -5,7 +5,7 @@ const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, sessionValid } = require('./_token');
-const { isSlugAvailable, getArtistsForUser } = require('./_domain/artist');
+const { isSlugAvailable } = require('./_domain/artist');
 const { configSongs, publicSong } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const { envReport, SCHEMA_VERSION } = require('./_env');
@@ -191,13 +191,20 @@ async function myArtists(req, res) {
   const claim = verifyUserToken(authHeader);
   const sql = getDb();
   if (claim) {
-    const [row] = await sql`SELECT password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
-    if (row && !sessionValid(claim, row)) return res.status(401).json({ error: 'Unauthorised' });
-    const artists = await getArtistsForUser(claim.userId, sql);
-    // Every users row belongs to a workspace, so none means the user is gone
-    // (account deleted) while its signed token is still in date.
-    if (!artists.length) return res.status(401).json({ error: 'Unauthorised' });
-    return res.json({ artists });
+    // The session row and the address's bands in one statement (the bands as
+    // getArtistsForUser lists them). No row means the user is gone (account
+    // deleted) while its signed token is still in date.
+    const [row] = await sql`
+      SELECT me.password_hash, me.sessions_valid_after,
+        COALESCE((
+          SELECT json_agg(json_build_object('slug', a.slug, 'name', a.name, 'role', u.role) ORDER BY a.name)
+          FROM users u JOIN artists a ON a.id = u.artist_id
+          WHERE u.email = me.email
+        ), '[]') AS artists
+      FROM users me WHERE me.id = ${claim.userId} LIMIT 1`;
+    if (!row || !sessionValid(claim, row) || !row.artists.length)
+      return res.status(401).json({ error: 'Unauthorised' });
+    return res.json({ artists: row.artists });
   }
   return res.status(401).json({ error: 'Unauthorised' });
 }

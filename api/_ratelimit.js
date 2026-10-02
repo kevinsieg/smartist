@@ -33,28 +33,14 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
   return row.count > maxRequests;
 }
 
-// Read-only: is this key already over its limit? Does not count a hit — for
-// callers that only want to count failures (failed logins per account, see
-// loginLocked), paired with checkRateLimit on the failure path.
-async function isRateLimited(key, maxRequests, windowSecs) {
-  const sql = getDb();
-  const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
-  const [row] = await sql`
-    SELECT count FROM rate_limits WHERE key = ${key} AND window_start >= ${windowStart}
-  `;
-  return !!row && row.count >= maxRequests;
-}
-
 // Failed sign-ins per account. The per-IP limit alone let a botnet try one
 // address from many machines. Only failures count, so a person who signs in
 // correctly is never slowed down; ten wrong passwords lock that address for
-// fifteen minutes.
+// fifteen minutes. The lock is read in passwordLogin's first statement
+// (api/_domain/login.js); a failure is counted here.
 const LOGIN_FAIL_MAX = 10;
 const LOGIN_FAIL_WINDOW = 15 * 60;
 const loginFailKey = email => `login-fail:${String(email || '').trim().toLowerCase()}`;
-async function loginLocked(email) {
-  return isRateLimited(loginFailKey(email), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW);
-}
 async function countLoginFailure(email) {
   await checkRateLimit(loginFailKey(email), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW);
 }
@@ -86,6 +72,7 @@ function clientIp(req) {
 }
 
 module.exports = {
-  checkRateLimit, isRateLimited, clientIp, loginLocked, countLoginFailure,
+  checkRateLimit, clientIp, countLoginFailure,
+  loginFailKey, LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW,
   outboundMailLimited, MAIL_OUT_PERSON_DAILY, MAIL_OUT_DAILY, presignLimited, PRESIGN_PER_HOUR,
 };

@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit, loginLocked, countLoginFailure } = require('../_ratelimit');
+const { checkRateLimit, countLoginFailure, loginFailKey, LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
 const { ok, fail } = require('./http');
 const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
@@ -29,26 +29,68 @@ const MAX_CANDIDATES = 10;
 // emails have accounts. Cost 12, like every stored hash; matches no password.
 const DUMMY_HASH = '$2a$12$bX/Oyxx22A2xtE30S33C6evrSuAbmD9UFwycjT85mhdiJBygShHLO';
 
+// Sign-in attempts per IP, on the `auth:${ip}` key magicLogin also counts on.
+const AUTH_IP_MAX = 10;
+const AUTH_IP_WINDOW = 60;
+const since = secs => new Date(Date.now() - secs * 1000).toISOString();
+
+// Everything before bcrypt is one statement: count this attempt against the IP
+// (the upsert checkRateLimit makes), read the address's lock (LOGIN_FAIL_MAX
+// failures in LOGIN_FAIL_WINDOW, api/_ratelimit.js), and fetch the candidate
+// rows and the address's bands. Each statement costs two round-trips
+// (prepare: false, see api/_db.js), and these were four statements. The bands
+// are the same for every row of the address (getArtistsForUser goes by email),
+// so they come along unused when the password is wrong; a failure costs one
+// more statement, to count it.
 async function passwordLogin({ body, ip }) {
   const { email, password, rememberMe } = body ?? {};
   const clean = String(email ?? '').trim().toLowerCase();
   if (!clean || !password) return fail(400, 'Email and password required');
   if (String(password).length > 1000) return fail(400, 'Invalid');
 
-  if (await checkRateLimit(`auth:${ip}`, 10, 60) || await loginLocked(clean))
-    return fail(429, 'Too many attempts — try again later');
-
   const sql = getDb();
-  const candidates = await sql`
-    SELECT id, role, password_hash FROM (
-      SELECT DISTINCT ON (password_hash) id, role, password_hash
-      FROM users
-      WHERE email = ${clean} AND password_hash IS NOT NULL
-      ORDER BY password_hash, id
-    ) first_per_hash
-    ORDER BY id
-    LIMIT ${MAX_CANDIDATES}
+  const [gate] = await sql`
+    WITH ip_hit AS (
+      INSERT INTO rate_limits (key, window_start, count)
+      VALUES (${`auth:${ip}`}, NOW(), 1)
+      ON CONFLICT (key) DO UPDATE SET
+        window_start = CASE
+          WHEN rate_limits.window_start < ${since(AUTH_IP_WINDOW)} THEN NOW()
+          ELSE rate_limits.window_start
+        END,
+        count = CASE
+          WHEN rate_limits.window_start < ${since(AUTH_IP_WINDOW)} THEN 1
+          ELSE rate_limits.count + 1
+        END
+      RETURNING count
+    )
+    SELECT
+      (SELECT count FROM ip_hit) > ${AUTH_IP_MAX}::int AS ip_limited,
+      EXISTS (
+        SELECT 1 FROM rate_limits
+        WHERE key = ${loginFailKey(clean)} AND window_start >= ${since(LOGIN_FAIL_WINDOW)}
+          AND count >= ${LOGIN_FAIL_MAX}::int
+      ) AS locked,
+      COALESCE((
+        SELECT json_agg(c ORDER BY c.id) FROM (
+          SELECT id, role, password_hash FROM (
+            SELECT DISTINCT ON (password_hash) id, role, password_hash
+            FROM users
+            WHERE email = ${clean} AND password_hash IS NOT NULL
+            ORDER BY password_hash, id
+          ) first_per_hash
+          ORDER BY id
+          LIMIT ${MAX_CANDIDATES}
+        ) c
+      ), '[]') AS candidates,
+      COALESCE((
+        SELECT json_agg(json_build_object('slug', a.slug, 'name', a.name, 'role', u.role) ORDER BY a.name)
+        FROM users u JOIN artists a ON a.id = u.artist_id
+        WHERE u.email = ${clean}
+      ), '[]') AS artists
   `;
+  if (gate.ip_limited || gate.locked) return fail(429, 'Too many attempts — try again later');
+  const candidates = gate.candidates;
 
   let user = null;
   for (const row of candidates) {
@@ -64,7 +106,7 @@ async function passwordLogin({ body, ip }) {
   }
 
   const token   = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, user.password_hash);
-  const artists = await getArtistsForUser(user.id, sql);
+  const artists = gate.artists;
   await logger.info('login', { email: clean, artists: artists.length });
   return ok({ ok: true, token, role: user.role, email: clean, artists });
 }

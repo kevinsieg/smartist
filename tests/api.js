@@ -1451,11 +1451,17 @@ async function testWrite(slug, token, firstSong, config) {
 
   // Verify password
   let authed = false;
-  await test('POST /login with correct password → 200', async () => {
+  await test('POST /login with correct password → 200 and the bands; my-artists lists the same', async () => {
     const { res, json } = await POST('/api/login', { email: EMAIL, password: PASSWORD });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
     authed = true;
+    // Both lists come from one statement each (login's gate, my-artists' row).
+    assert(json.artists.some(a => a.slug === slug && a.name && a.role), `band missing from ${JSON.stringify(json.artists)}`);
+    const mine = await GET('/api/config?action=my-artists', { token: json.token });
+    assertStatus(mine.res, mine.json, 200);
+    assert(JSON.stringify(mine.json.artists) === JSON.stringify(json.artists),
+      `my-artists differs from login — ${JSON.stringify(mine.json.artists)}`);
   });
 
   if (!authed) {
