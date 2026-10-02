@@ -84,21 +84,21 @@ function _openHistPanelContent(item, panelEl) {
     '</div>' +
     '<div class="vsp-actions" style="margin-bottom:1rem;">' +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="' + t('setlist.editTooltip') + '" data-onclick="_histEdit(\'' + escHtml(sid) + '\')">' +
+        '<button class="btn icon-btn" data-tooltip="' + t('setlist.editTooltip') + '" data-onclick="_histEdit(' + onArg(sid) + ')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
           '</svg>' +
         '</button>') +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="' + t('setlist.duplicateTooltip') + '" data-onclick="_histDuplicate(\'' + escHtml(sid) + '\')">' +
+        '<button class="btn icon-btn" data-tooltip="' + t('setlist.duplicateTooltip') + '" data-onclick="_histDuplicate(' + onArg(sid) + ')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
             '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
           '</svg>' +
         '</button>') +
-      '<button class="btn" data-onclick="_histStage(\'' + escHtml(sid) + '\')">' + t('setlist.stageBtn') + '</button>' +
+      '<button class="btn" data-onclick="_histStage(' + onArg(sid) + ')">' + t('setlist.stageBtn') + '</button>' +
       (_viewMode ? '' :
-        '<button class="btn share-btn" data-onclick="_histShareMenu(\'' + escHtml(sid) + '\', this)">' +
+        '<button class="btn share-btn" data-onclick="_histShareMenu(' + onArg(sid) + ', this)">' +
           SHARE_ICON + '<span style="margin-left:4px">' + t('setlist.shareBtn') + '</span>' +
         '</button>') +
     '</div>' +
@@ -226,8 +226,8 @@ function _renderHistRow(s) {
         (s.comment ? '<div class="hist-item-comment">' + escHtml(s.comment) + '</div>' : '') +
         (headerLinks.length ? '<div class="hist-meta-links hist-meta-links--header">' + headerLinks.join('') + '</div>' : '') +
       '</div>' +
-      '<button class="hist-toggle" data-onclick="event.stopPropagation();_toggleHistItemBody(\'' + escHtml(sid) + '\')" title="' + t('setlist.showSongs') + '" aria-label="' + escHtml(t('setlist.showSongs')) + '" aria-expanded="false" aria-controls="hist-body-' + escHtml(sid) + '">&#9654;</button>' +
-      '<button class="hist-details-btn" data-onclick="event.stopPropagation();_histSelect(\'' + escHtml(sid) + '\')" title="' + t('setlist.detailsBtn') + '" aria-label="' + t('setlist.detailsBtn') + '">&#8801;</button>' +
+      '<button class="hist-toggle" data-onclick="event.stopPropagation();_toggleHistItemBody(' + onArg(sid) + ')" title="' + t('setlist.showSongs') + '" aria-label="' + escHtml(t('setlist.showSongs')) + '" aria-expanded="false" aria-controls="hist-body-' + escHtml(sid) + '">&#9654;</button>' +
+      '<button class="hist-details-btn" data-onclick="event.stopPropagation();_histSelect(' + onArg(sid) + ')" title="' + t('setlist.detailsBtn') + '" aria-label="' + t('setlist.detailsBtn') + '">&#8801;</button>' +
     '</div>' +
   '</div>' +
   '<div class="hist-body" id="hist-body-' + escHtml(sid) + '" hidden></div>';
@@ -281,7 +281,7 @@ async function _loadAndRenderHistSongs(sid) {
   var total = 0;
   var rows = loaded.map(function(song, i) {
     total += song.length_min || 4;
-    return '<div class="hist-song-row" data-song-id="' + song.id + '" data-onclick="_openSongPanel(\'' + escHtml(sid) + '\',' + Number(song.id) + ')">' +
+    return '<div class="hist-song-row" data-song-id="' + song.id + '" data-onclick="_openSongPanel(' + onArg(sid) + ',' + Number(song.id) + ')">' +
       '<span class="hist-song-pos">' + (i + 1) + '.</span>' +
       '<button type="button" class="hist-song-name">' + escHtml(song.title || '') + '</button>' +
       (song.key ? '<span class="hist-song-key">' + escHtml(formatKey(song.key)) + '</span>' : '') +
@@ -321,9 +321,9 @@ function _renderEditSongsList(sid) {
         (song.key ? '<div class="song-meta"><span>' + escHtml(formatKey(song.key)) + '</span></div>' : '') +
       '</div>' +
       '<div class="song-actions">' +
-        '<button class="move-btn" data-onclick="_histEditMoveSong(' + i + ',-1,\'' + escHtml(sid) + '\')" ' + (isFirst ? 'disabled' : '') + ' aria-label="' + t('setlist.moveUp') + '">↑</button>' +
-        '<button class="move-btn" data-onclick="_histEditMoveSong(' + i + ',1,\'' + escHtml(sid) + '\')" ' + (isLast ? 'disabled' : '') + ' aria-label="' + t('setlist.moveDown') + '">↓</button>' +
-        '<button class="move-btn" data-remove data-onclick="_histEditRemoveSong(' + i + ',\'' + escHtml(sid) + '\')" title="' + t('setlist.removeTitle') + '" aria-label="' + escHtml(t('setlist.removeSong', { title: song.title || '' })) + '">&#215;</button>' +
+        '<button class="move-btn" data-onclick="_histEditMoveSong(' + i + ',-1,' + onArg(sid) + ')" ' + (isFirst ? 'disabled' : '') + ' aria-label="' + t('setlist.moveUp') + '">↑</button>' +
+        '<button class="move-btn" data-onclick="_histEditMoveSong(' + i + ',1,' + onArg(sid) + ')" ' + (isLast ? 'disabled' : '') + ' aria-label="' + t('setlist.moveDown') + '">↓</button>' +
+        '<button class="move-btn" data-remove data-onclick="_histEditRemoveSong(' + i + ',' + onArg(sid) + ')" title="' + t('setlist.removeTitle') + '" aria-label="' + escHtml(t('setlist.removeSong', { title: song.title || '' })) + '">&#215;</button>' +
       '</div>' +
     '</li>';
   }).join('');
@@ -419,7 +419,7 @@ async function _histEdit(sid) {
   inner.innerHTML =
     '<div class="vsp-header">' +
       '<div class="vsp-header-text"><h2 class="vsp-title">' + t('setlist.editPanelTitle') + '</h2></div>' +
-      '<button class="vsp-close" data-onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
+      '<button class="vsp-close" data-onclick="_histCancelEdit(' + onArg(sid) + ')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
     '</div>' +
     skeletonHtml(3);
 
@@ -439,7 +439,7 @@ async function _histEdit(sid) {
   inner.innerHTML =
     '<div class="vsp-header">' +
       '<div class="vsp-header-text"><h2 class="vsp-title">' + t('setlist.editPanelTitle') + '</h2></div>' +
-      '<button class="vsp-close" data-onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
+      '<button class="vsp-close" data-onclick="_histCancelEdit(' + onArg(sid) + ')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
     '</div>' +
     '<div style="padding:0 1rem 1rem;">' +
       '<div class="modal-field">' +
@@ -458,16 +458,16 @@ async function _histEdit(sid) {
         '<label for="hist-edit-add-select" id="hist-edit-songs-label">' + t('setlist.editSongsLabel') + '</label>' +
         '<ul id="hist-edit-songs-ul" class="song-list" aria-labelledby="hist-edit-songs-label" style="margin:0;padding:0;"></ul>' +
         '<div class="add-song-row" style="margin-top:0.5rem;">' +
-          '<select id="hist-edit-add-select" aria-label="' + t('setlist.addSongLabel') + '" data-onchange="_histEditAddSong(this,\'' + escHtml(sid) + '\')">' +
+          '<select id="hist-edit-add-select" aria-label="' + t('setlist.addSongLabel') + '" data-onchange="_histEditAddSong(this,' + onArg(sid) + ')">' +
             '<option value="">' + t('setlist.addSongPlaceholder') + '</option>' +
           '</select>' +
         '</div>' +
       '</div>' +
       '<div class="status-msg" id="hist-edit-error"></div>' +
       '<div class="modal-actions" id="hist-edit-actions">' +
-        '<button class="btn active" id="hist-edit-save" data-onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">' + t('setlist.saveBtn') + '</button>' +
-        '<button class="btn" data-onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">' + t('setlist.cancelBtn') + '</button>' +
-        '<button class="btn" style="margin-left:auto;color:#e55;" data-onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.deleteBtn') + '</button>' +
+        '<button class="btn active" id="hist-edit-save" data-onclick="_saveHistEdit(' + onArg(sid) + ')">' + t('setlist.saveBtn') + '</button>' +
+        '<button class="btn" data-onclick="_histCancelEdit(' + onArg(sid) + ')">' + t('setlist.cancelBtn') + '</button>' +
+        '<button class="btn" style="margin-left:auto;color:#e55;" data-onclick="_promptDeleteSetlist(' + onArg(sid) + ')">' + t('setlist.deleteBtn') + '</button>' +
       '</div>' +
     '</div>';
 
@@ -575,8 +575,8 @@ function _promptDeleteSetlist(sid) {
     '<p style="font-size:0.85rem;margin:0;">' + t('setlist.deleteConfirmMsg', { title: escHtml(s.title || t('setlist.untitled')) }) + '</p>' +
     gigNote +
     '<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">' +
-      '<button class="btn active" style="background:#e55;border-color:#e55;" data-onclick="_confirmDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.deleteBtn') + '</button>' +
-      '<button class="btn" data-onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.keepIt') + '</button>' +
+      '<button class="btn active" style="background:#e55;border-color:#e55;" data-onclick="_confirmDeleteSetlist(' + onArg(sid) + ')">' + t('setlist.deleteBtn') + '</button>' +
+      '<button class="btn" data-onclick="_cancelDeleteSetlist(' + onArg(sid) + ')">' + t('setlist.keepIt') + '</button>' +
     '</div>';
 }
 
@@ -585,9 +585,9 @@ function _cancelDeleteSetlist(sid) {
   var actionsEl = document.getElementById('hist-edit-actions');
   if (!actionsEl) return;
   actionsEl.innerHTML =
-    '<button class="btn active" id="hist-edit-save" data-onclick="_saveHistEdit(\'' + escHtml(sid) + '\')">' + t('setlist.saveBtn') + '</button>' +
-    '<button class="btn" data-onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">' + t('setlist.cancelBtn') + '</button>' +
-    '<button class="btn" style="margin-left:auto;color:#e55;" data-onclick="_promptDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.deleteBtn') + '</button>';
+    '<button class="btn active" id="hist-edit-save" data-onclick="_saveHistEdit(' + onArg(sid) + ')">' + t('setlist.saveBtn') + '</button>' +
+    '<button class="btn" data-onclick="_histCancelEdit(' + onArg(sid) + ')">' + t('setlist.cancelBtn') + '</button>' +
+    '<button class="btn" style="margin-left:auto;color:#e55;" data-onclick="_promptDeleteSetlist(' + onArg(sid) + ')">' + t('setlist.deleteBtn') + '</button>';
 }
 
 async function _confirmDeleteSetlist(sid) {
@@ -612,7 +612,7 @@ async function _confirmDeleteSetlist(sid) {
     if (_histView) _histView.refresh();
   } catch {
     if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:#e55;margin:0;">' + t('setlist.deleteFailed') + '</p>' +
-      '<button class="btn" style="margin-top:0.5rem;" data-onclick="_cancelDeleteSetlist(\'' + escHtml(sid) + '\')">' + t('setlist.backBtn') + '</button>';
+      '<button class="btn" style="margin-top:0.5rem;" data-onclick="_cancelDeleteSetlist(' + onArg(sid) + ')">' + t('setlist.backBtn') + '</button>';
   }
 }
 
@@ -747,13 +747,13 @@ function _histShareMenu(sid, btn) {
   menu.className = 'share-menu';
   menu.dataset.sid = sid;
   menu.innerHTML =
-    '<div class="share-menu-item" data-onclick="_histExportPdf(\'' + escHtml(sid) + '\');closeShareMenu()">' +
+    '<div class="share-menu-item" data-onclick="_histExportPdf(' + onArg(sid) + ');closeShareMenu()">' +
       '<span class="share-menu-icon">⎙</span><span class="share-menu-label">' + t('setlist.shareMenuExportPdf') + '</span>' +
     '</div>' +
-    '<div class="share-menu-item" data-onclick="_histCopyLink(\'' + escHtml(sid) + '\')">' +
+    '<div class="share-menu-item" data-onclick="_histCopyLink(' + onArg(sid) + ')">' +
       '<span class="share-menu-icon">⧉</span><span class="share-menu-label">' + t('setlist.shareMenuCopyLink') + '</span>' +
     '</div>' +
-    '<div class="share-menu-item" data-onclick="closeShareMenu();_histShare(\'' + escHtml(sid) + '\')">' +
+    '<div class="share-menu-item" data-onclick="closeShareMenu();_histShare(' + onArg(sid) + ')">' +
       '<span class="share-menu-icon">✉</span><span class="share-menu-label">' + t('setlist.shareMenuEmail') + '</span>' +
     '</div>';
 
@@ -792,7 +792,7 @@ function _histShare(sid) {
   inner.innerHTML =
     '<div class="vsp-header">' +
       '<div class="vsp-header-text"><h2 class="vsp-title">' + t('setlist.sharePanelTitle') + '</h2></div>' +
-      '<button class="vsp-close" data-onclick="_histCancelEdit(\'' + escHtml(sid) + '\')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
+      '<button class="vsp-close" data-onclick="_histCancelEdit(' + onArg(sid) + ')" aria-label="' + t('setlist.cancelBtn') + '">×</button>' +
     '</div>' +
     '<p style="padding:0 1rem;font-size:0.84rem;color:var(--third-color);">' + t('setlist.shareSendPdf') + '</p>' +
     '<div style="padding:0 1rem;">' +
@@ -800,8 +800,8 @@ function _histShare(sid) {
         '<input type="email" id="hist-share-email" placeholder="' + t('setlist.shareEmailPlaceholder') + '"></div>' +
       '<div class="status-msg" id="hist-share-status"></div>' +
       '<div class="modal-actions">' +
-        '<button class="btn active" id="hist-share-send" data-onclick="_histShareSend(\'' + escHtml(sid) + '\')">' + t('setlist.shareSendBtn') + '</button>' +
-        '<button class="btn" data-onclick="_histCancelEdit(\'' + escHtml(sid) + '\')">' + t('setlist.cancelBtn') + '</button>' +
+        '<button class="btn active" id="hist-share-send" data-onclick="_histShareSend(' + onArg(sid) + ')">' + t('setlist.shareSendBtn') + '</button>' +
+        '<button class="btn" data-onclick="_histCancelEdit(' + onArg(sid) + ')">' + t('setlist.cancelBtn') + '</button>' +
       '</div>' +
     '</div>';
 
