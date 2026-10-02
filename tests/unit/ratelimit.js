@@ -40,7 +40,7 @@ function run(r) {
 
 // The abuse limits on a counting fake of the rate_limits table.
 async function runAbuseLimits(r) {
-  const { testAsync, assertEq, B } = r;
+  const { testAsync, assert, assertEq, B } = r;
   console.log(B('\nabuse limits'));
   const dbPath = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
@@ -49,6 +49,8 @@ async function runAbuseLimits(r) {
     const sql = (strings, ...values) => {
       const text = strings.join('?');
       if (!text.includes('INSERT INTO rate_limits')) return Promise.resolve([]);
+      // Several rows in one INSERT: each VALUES row binds its key first.
+      if (/\),\s*\(/.test(text)) { values.slice(0, 2).forEach(k => { counts[k] = (counts[k] || 0) + 1; }); return Promise.resolve([]); }
       const key = values[0];
       counts[key] = (counts[key] || 0) + 1;
       return Promise.resolve([{ count: counts[key] }]);
@@ -81,6 +83,18 @@ async function runAbuseLimits(r) {
       for (let i = 0; i < mod.PRESIGN_PER_HOUR; i++) assertEq(await mod.presignLimited(1), false);
       assertEq(await mod.presignLimited(1), true);
       assertEq(await mod.presignLimited(2), false);
+    });
+    // A lock per address alone let anyone lock a person out by typing ten
+    // wrong passwords for them; passwordLogin compares these counts with
+    // LOGIN_FAIL_MAX (pair) and LOGIN_FAIL_ADDRESS_MAX (address).
+    await testAsync('a failed sign-in counts for the address and IP, and for the address', async () => {
+      const { mod, counts } = load();
+      for (let i = 0; i < 3; i++) await mod.countLoginFailure('Owner@x.test', '6.6.6.6');
+      await mod.countLoginFailure('owner@x.test', '1.1.1.1');
+      assertEq(counts['login-fail:owner@x.test|6.6.6.6'], 3);
+      assertEq(counts['login-fail:owner@x.test|1.1.1.1'], 1);
+      assertEq(counts['login-fail:owner@x.test'], 4);
+      assert(mod.LOGIN_FAIL_ADDRESS_MAX > mod.LOGIN_FAIL_MAX, 'the address-wide lock must need more than one IP');
     });
   } finally {
     Math.random = realRandom;

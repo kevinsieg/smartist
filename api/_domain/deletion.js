@@ -191,10 +191,12 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
     // sweep in api/_ratelimit.js only clears them a day later — without this a
     // bare email address outlives the account it belonged to. Every other key
     // is keyed on an IP, an artist id or a song. lower(key) because the key
-    // was built from whatever casing the request carried.
+    // was built from whatever casing the request carried. Failed sign-ins are
+    // also counted per address and IP, as `login-fail:<address>|<ip>`.
     await tx`DELETE FROM rate_limits WHERE lower(key) IN (
       'delete-req:' || ${addr}, 'signup-link:' || ${addr},
-      'reset:' || ${addr}, 'login-fail:' || ${addr})`;
+      'reset:' || ${addr}, 'login-fail:' || ${addr})
+      OR starts_with(lower(key), 'login-fail:' || ${addr} || '|')`;
   });
 
   // Outside the transaction on purpose: R2 has no rollback. An orphaned file is

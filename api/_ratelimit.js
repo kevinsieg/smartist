@@ -34,15 +34,30 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
 }
 
 // Failed sign-ins per account. The per-IP limit alone let a botnet try one
-// address from many machines. Only failures count, so a person who signs in
-// correctly is never slowed down; ten wrong passwords lock that address for
-// fifteen minutes. The lock is read in passwordLogin's first statement
-// (api/_domain/login.js); a failure is counted here.
+// address from many machines; a lock per address alone let anyone lock a
+// person out by typing ten wrong passwords for them. So failures count twice:
+// per address and IP, where ten lock that pair for fifteen minutes, and per
+// address overall, where a hundred (ten IPs' worth) lock the address
+// everywhere. Only failures count, so a person who signs in correctly is never
+// slowed down, and the owner on their own network stays out of a stranger's
+// lock. Password reset and emailed links are not affected by either. The lock
+// is read in passwordLogin's first statement (api/_domain/login.js); a failure
+// is counted here.
 const LOGIN_FAIL_MAX = 10;
+const LOGIN_FAIL_ADDRESS_MAX = 100;
 const LOGIN_FAIL_WINDOW = 15 * 60;
 const loginFailKey = email => `login-fail:${String(email || '').trim().toLowerCase()}`;
-async function countLoginFailure(email) {
-  await checkRateLimit(loginFailKey(email), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW);
+const loginFailPairKey = (email, ip) => `${loginFailKey(email)}|${ip || 'unknown'}`;
+async function countLoginFailure(email, ip) {
+  const windowStart = new Date(Date.now() - LOGIN_FAIL_WINDOW * 1000).toISOString();
+  // Both counters in one statement, with checkRateLimit's window reset.
+  await getDb()`
+    INSERT INTO rate_limits (key, window_start, count)
+    VALUES (${loginFailPairKey(email, ip)}, NOW(), 1), (${loginFailKey(email)}, NOW(), 1)
+    ON CONFLICT (key) DO UPDATE SET
+      window_start = CASE WHEN rate_limits.window_start < ${windowStart} THEN NOW() ELSE rate_limits.window_start END,
+      count        = CASE WHEN rate_limits.window_start < ${windowStart} THEN 1 ELSE rate_limits.count + 1 END
+  `;
 }
 
 // Mail a session sends to an address of its choosing (invites, setlist
@@ -73,6 +88,6 @@ function clientIp(req) {
 
 module.exports = {
   checkRateLimit, clientIp, countLoginFailure,
-  loginFailKey, LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW,
+  loginFailKey, loginFailPairKey, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW,
   outboundMailLimited, MAIL_OUT_PERSON_DAILY, MAIL_OUT_DAILY, presignLimited, PRESIGN_PER_HOUR,
 };
