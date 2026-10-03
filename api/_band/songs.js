@@ -328,7 +328,7 @@ module.exports = wrap(async function handler(req, res) {
       `;
       const done = new Set(updated.map(r => r.id));
       applied = done.size;
-      if (applied) await trimSongLogs(sql, band.id);
+      if (applied) await trimSongLogs(sql, band.id, [...done]);
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
     return res.json({ ok: true, count: applied, rejected });
