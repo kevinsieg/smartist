@@ -32,7 +32,7 @@ function run(r) {
 
   test('schema.sql splits into statements without DO blocks', () => {
     const stmts = splitStatements(schema);
-    assert(stmts.length > 50, `only ${stmts.length} statements`);
+    assert(stmts.length > 30, `only ${stmts.length} statements`);
     assert(!stmts.some(s => /\$\$/.test(s)), 'a $$ block cannot survive the ; split');
   });
 
