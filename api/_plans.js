@@ -10,7 +10,10 @@ const PLANS = {
   },
   pro: {
     label: 'Pro',
-    limits: { storageMB: null, songs: null }, // null = unlimited
+    // Pro is a free self-serve switch until paid billing exists, so its
+    // storage is capped: unlimited space in a public bucket is free file
+    // hosting for anyone who signs up. null = unlimited.
+    limits: { storageMB: 2048, songs: null },
     features: ['songs', 'setlists', 'gigs', 'hub', 'venues', 'organizers', 'pro-import', 'booking'],
   },
 };

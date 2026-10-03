@@ -1,4 +1,5 @@
 'use strict';
+const { unsafeKey } = require('./_validate');
 
 // Foreign ids arriving in a request body must belong to the caller's artist.
 // Row ids are one sequence across every tenant, and the foreign keys in
@@ -39,7 +40,7 @@ async function ownsRefs(sql, artistId, { songIds = [], gigId = null, venueId = n
 // keyFromUrl is passed in so callers use the same _r2 instance they delete with.
 function isOwnMediaUrl(url, artistId, keyFromUrl) {
   const key = keyFromUrl(url);
-  if (!key) return false;
+  if (!key || unsafeKey(key)) return false;
   const m = /^(audio|sheets|playback)\/([^/]+)\/[^/]+$/.exec(key);
   if (m) return m[2] === String(artistId);
   return /^(audio|sheets|playback)\/[^/]+$/.test(key);
