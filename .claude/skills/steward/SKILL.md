@@ -5,15 +5,17 @@ description: Conventions for driving a smartist pull request to green — commit
 
 # Steward — PR and CI conventions
 
-- **Commit as the owner, no attribution:**
-  `git -c user.name="Käv" -c user.email="35451482+kevinsieg@users.noreply.github.com" commit …`
-  No `Co-Authored-By:` / `Claude-Session:` trailers, no "Generated with Claude
-  Code" line in PR bodies, comments or review replies. The GitHub tools append
-  that footer to everything they create or edit: after every create or update,
-  read it back and edit the footer out before doing anything else.
+Commit identity, the no-attribution rule (read every PR body and comment back
+and strip the tool's footer) and the public-repository rules are in
+`AGENTS.md` → *Commits and pull requests* and *The repository is public*.
+Follow them on every commit, push, PR body and comment.
+
 - **Branches:** work on the assigned branch; `dev` takes direct pushes; `main`
-  only through a PR (see the `release` skill). Merge `origin/dev` into a
-  feature branch rather than rebasing someone else's history.
+  only through a PR (see the `release` skill), merged only after the user
+  says so. Merge `origin/dev` into a feature branch rather than rebasing
+  someone else's history. Delete the branch once its PR is merged.
+- **Fewer, bigger pushes:** every push to a PR branch costs a Vercel preview
+  deploy. Batch fixes locally and push once, not commit by commit.
 - **Before every push:** `npm run lint`, `npm run typecheck` and `npm run test:unit`; for API or page changes also
   `npm run test:api` and `npm run test:smoke` (local stack, same as CI).
 - **CI red:** reproduce locally first with the same command, fix the cause,
@@ -23,5 +25,3 @@ description: Conventions for driving a smartist pull request to green — commit
   there that the local job does not show is often data or env, not code.
 - **Review comments:** small, local asks → fix and push; design-level asks →
   answer with a proposal and let the user decide.
-- **Public repository:** no tenant names, emails or hostnames in commits,
-  code, docs or PR text. Plans and notes go to `docs/plans/` (git-ignored).

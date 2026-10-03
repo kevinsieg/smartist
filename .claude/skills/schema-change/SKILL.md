@@ -23,7 +23,7 @@ applied again and again to every database (CI applies it twice).
 2. **Set `SCHEMA_VERSION`** in `api/_env.js` to the new id (`tests/unit/env.js`
    fails otherwise).
 3. **Update the code and docs together:** handlers, `api/_domain/*`, the
-   export in `api/_band/setlists/item.js` if the table holds band data,
+   export in `api/_band/export.js` if the table holds band data,
    `DATABASE.md` (column tables), `openapi.json` for API-visible fields.
 4. **Verify locally:** `npm run dev:up` applies it to the local database;
    `node scripts/apply_schema.js --check` there; then `npm run test:all`.
