@@ -14,6 +14,7 @@ const suites = [
   require('./unit/ai'),
   require('./unit/handler'),
   require('./unit/router'),
+  require('./unit/openapi'),
   require('./unit/subscribe'),
   require('./unit/contact'),
   require('./unit/i18n'),

@@ -59,7 +59,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
 | `api/_band/venues/item.js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
 
-`/api/docs` is a static rewrite to `app/api-docs.html` in `vercel.json`.
+`/api/docs` is a static rewrite to `app/api-docs.html` in `vercel.json`. It renders `openapi.json`, which is written by hand: a new route, method or `/api/config` action goes into it too, or `tests/unit/openapi.js` fails.
 
 ---
 

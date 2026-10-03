@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Smartist API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/login` (email + password) or from Google sign-in. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
     "license": {
       "name": "AGPL-3.0-or-later",
@@ -734,9 +734,20 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "health",
+                "check-slug",
+                "my-artists",
+                "deletion-preflight",
+                "photo-url",
+                "favicon-url",
+                "google-url",
+                "facebook-url",
+                "oauth-callback"
+              ]
             },
-            "description": "`health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration. Other actions: `check-slug`, `my-artists`, `photo-url`, `favicon-url`, OAuth and admin actions."
+            "description": "Without `action` the band config below is returned. Actions:\n- `health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration.\n- `check-slug`: `{ available }` for the `slug` given; rate-limited per IP.\n- `my-artists`: the bands of the signed-in address, `[{ slug, name, role }]`.\n- `deletion-preflight`: what deleting the signed-in account would do — `{ email, destroy, leave, blocked }`, each a list of `{ slug, name }`.\n- `photo-url` / `favicon-url`: presigned upload URL for the band photo or favicon (admin).\n- `google-url` / `facebook-url`: `{ url }` to start OAuth sign-in (`mode=login|signup`); 503 when the provider is not configured. The provider returns to `/auth/callback` (`action=oauth-callback`), which sets a short-lived `oauth_session` cookie and redirects to `/login`; `POST action=oauth-session` redeems it."
           }
         ],
         "description": "Band slug, name, branding config, plan and usage. `songs` and `counts` are included only with a session or when the band has a public catalogue. `role` is the caller's role in this band (null without a session). The `slug` is the `{band}` path parameter for every other endpoint.",
@@ -805,33 +816,506 @@
         }
       },
       "post": {
-        "summary": "Request a password-reset link (action: request-reset)",
+        "summary": "Account and sign-up actions",
         "tags": [
           "Auth"
         ],
-        "security": [],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
         "parameters": [],
-        "description": "Emails a 30-minute link to set a new password; the password is set on every account of the address. Sent as `POST /api/config` with `action: \"request-reset\"`. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
+        "description": "The action is named in the body (`action`) or the query (`?action=`). A body without `action` is an email signup (`source: \"landing\"` or `\"demo\"`) or, with `source: \"contact\"`, a contact-form message.\n\n| action | session | returns |\n| --- | --- | --- |\n| `login` | — | session (same as `POST /api/login`) |\n| `magic-login` | — | session — redeems an emailed sign-in link |\n| `oauth-session` | `oauth_session` cookie | `{ token }` — finishes Google/Facebook sign-in |\n| `logout-everywhere` | ✓ | `{ ok }` — ends every session of the address |\n| `request-reset` | — | always `{ ok: true }` — emails a 30-minute link to set a new password on every account of the address |\n| `set-password` | — | session — redeems the reset link |\n| `signup-link` | — | `{ ok }` — emails a sign-up link |\n| `verify-signup-token` | — | `{ ok, email }` |\n| `signup` | — | 201 `{ ok, token, slug, role, email }` — creates the band |\n| `request-deletion` | ✓ | `{ ok }` — emails a link to delete the account; 409 when the caller is the only admin of a band that still has members |\n| `confirm-deletion` | — | `{ ok, destroyed, left }` |\n| `upgrade` / `downgrade` | ✓ admin, `?slug=` | `{ ok, mode }` / `{ ok }` — switch the band between Free and Pro |\n\nMail-sending and token-redeeming actions are rate-limited per IP and per address.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "title": "login",
+                    "description": "Email + password sign-in",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "email",
+                      "password"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "login"
+                        ]
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "password": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "rememberMe": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  {
+                    "title": "magic-login",
+                    "description": "Redeem an emailed sign-in link",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "magic",
+                      "hint"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "magic-login"
+                        ]
+                      },
+                      "magic": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string",
+                        "description": "base64url of the address, from the link"
+                      }
+                    }
+                  },
+                  {
+                    "title": "oauth-session",
+                    "description": "Redeem the `oauth_session` cookie after OAuth sign-in",
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "oauth-session"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "title": "logout-everywhere",
+                    "description": "End every session of the signed-in address",
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "logout-everywhere"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "title": "request-reset",
+                    "description": "Email a link to set a new password",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "email"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "request-reset"
+                        ]
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      }
+                    }
+                  },
+                  {
+                    "title": "set-password",
+                    "description": "Set a new password from a reset link",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "token",
+                      "hint",
+                      "password"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "set-password"
+                        ]
+                      },
+                      "token": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string",
+                        "maxLength": 1000
+                      }
+                    }
+                  },
+                  {
+                    "title": "signup-link",
+                    "description": "Email a sign-up link",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "email"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "signup-link"
+                        ]
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      }
+                    }
+                  },
+                  {
+                    "title": "verify-signup-token",
+                    "description": "Check a sign-up link",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "token"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "verify-signup-token"
+                        ]
+                      },
+                      "token": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "title": "signup",
+                    "description": "Create a band from a sign-up link",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "token",
+                      "name",
+                      "slug"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "signup"
+                        ]
+                      },
+                      "token": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "slug": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "title": "request-deletion",
+                    "description": "Email a link to delete the signed-in account",
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "request-deletion"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "title": "confirm-deletion",
+                    "description": "Delete the account from the emailed link",
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "token"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "confirm-deletion"
+                        ]
+                      },
+                      "token": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "title": "upgrade",
+                    "description": "Switch the band to Pro (admin, `?slug=`)",
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "upgrade"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "title": "downgrade",
+                    "description": "Switch the band back to Free (admin, `?slug=`)",
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "downgrade"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "title": "subscribe",
+                    "description": "Email signup; `demo` also opens a demo workspace",
+                    "type": "object",
+                    "required": [
+                      "email"
+                    ],
+                    "properties": {
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "landing",
+                          "demo"
+                        ]
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "genres": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "perform_country": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "title": "contact",
+                    "description": "Contact-form message",
+                    "type": "object",
+                    "required": [
+                      "source",
+                      "name",
+                      "email",
+                      "message"
+                    ],
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "contact"
+                        ]
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "message": {
+                        "type": "string",
+                        "maxLength": 5000
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result of the action (see the table)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Band created (`signup`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "admin",
+                        "member",
+                        "viewer"
+                      ]
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "artists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict (`request-deletion`: the only admin of a band that still has members)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update band name and settings",
+        "tags": [
+          "Config"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          }
+        ],
+        "description": "Admin role. `config` is merged into the stored settings (keys not sent are kept); `plan` and `upgradedAt` are ignored — the plan changes only through `POST action=upgrade|downgrade`. `logoUrl` / `faviconUrl` must be http(s) and, when they point into the app's storage, this band's own uploads. Settings are capped at 64 KB.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "action",
-                  "email"
-                ],
                 "properties": {
-                  "action": {
+                  "name": {
                     "type": "string",
-                    "enum": [
-                      "request-reset"
-                    ]
+                    "maxLength": 200
                   },
-                  "email": {
-                    "type": "string",
-                    "format": "email"
+                  "config": {
+                    "type": "object"
                   }
                 }
               }
@@ -840,11 +1324,44 @@
         },
         "responses": {
           "200": {
-            "description": "Always returned",
+            "description": "Saved",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Settings too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -3486,6 +4003,164 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Venue"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Batch update venue CRM fields",
+        "tags": [
+          "Venues"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role, `venues` feature. Up to 200 rows; only the fields sent are written, everything else keeps its stored value. Rows that fail validation are reported back; the accepted rows are written in one transaction.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 200,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "maxLength": 50,
+                      "nullable": true
+                    },
+                    "category": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "nullable": true
+                    },
+                    "booking_channel": {
+                      "type": "string",
+                      "maxLength": 50,
+                      "nullable": true
+                    },
+                    "remuneration": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "nullable": true
+                    },
+                    "season": {
+                      "type": "string",
+                      "maxLength": 50,
+                      "nullable": true
+                    },
+                    "preferred_period": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "nullable": true
+                    },
+                    "comment": {
+                      "type": "string",
+                      "maxLength": 2000,
+                      "nullable": true
+                    },
+                    "last_communication": {
+                      "type": "string",
+                      "format": "date",
+                      "nullable": true
+                    },
+                    "deadline": {
+                      "type": "string",
+                      "format": "date",
+                      "nullable": true
+                    },
+                    "heart": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "rejected": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

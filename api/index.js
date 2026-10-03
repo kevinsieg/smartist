@@ -104,3 +104,4 @@ module.exports = async function route(req, res) {
 };
 
 module.exports.match = match;
+module.exports.TABLE = TABLE;
