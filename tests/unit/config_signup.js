@@ -312,7 +312,11 @@ async function run(r) {
   await testAsync('valid token → 200 + artists array', async () => {
     const token   = generateUserToken(42, 'admin', TTL_8H);
     const artists = [{ slug: 'my-band', name: 'My Band', role: 'admin' }];
-    const handler = makeHandler(async () => artists);
+    let calls = 0;
+    const handler = makeHandler(async () => {
+      calls++;
+      return [{ password_hash: null, sessions_valid_after: null, artists }];
+    });
     const res = mockRes();
     await handler({
       method: 'GET',
@@ -320,7 +324,21 @@ async function run(r) {
       headers: { authorization: 'Bearer ' + token },
     }, res);
     assertEq(res._status, 200);
-    assert(Array.isArray(res._body && res._body.artists), 'expected artists array');
+    assertEq(res._body.artists, artists);
+    assertEq(calls, 1, 'session row and bands in one statement');
+  });
+
+  await testAsync('a session ended elsewhere → 401', async () => {
+    const token   = generateUserToken(42, 'admin', TTL_8H);
+    const handler = makeHandler(async () => [{ password_hash: null, sessions_valid_after: new Date(Date.now() + 60000),
+      artists: [{ slug: 'my-band', name: 'My Band', role: 'admin' }] }]);
+    const res = mockRes();
+    await handler({
+      method: 'GET',
+      query:  { action: 'my-artists' },
+      headers: { authorization: 'Bearer ' + token },
+    }, res);
+    assertEq(res._status, 401);
   });
 
   await testAsync('valid token whose user was deleted → 401, not an empty list', async () => {

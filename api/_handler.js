@@ -20,6 +20,17 @@ function platformWaitUntil() {
   return typeof ctx?.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null;
 }
 
+// Vercel refuses response bodies over 4.5 MB. List endpoints (songs, setlists)
+// and the export are unpaged and grow with a band; a body past this size logs a
+// large_response warning, well before the platform limit turns it into an error.
+const LARGE_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+function bodyBytes(chunk) {
+  if (typeof chunk === 'string') return Buffer.byteLength(chunk);
+  if (chunk && typeof chunk.length === 'number') return chunk.length;
+  return 0;
+}
+
 function wrap(handler) {
   return async function (req, res) {
     const start = Date.now();
@@ -38,7 +49,9 @@ function wrap(handler) {
         res.end = end;
         ending = (async () => {
           try {
-            if (!failed) await logger.info('request', { method, url, ms: Date.now() - start, status: res.statusCode });
+            const bytes = bodyBytes(args[0]);
+            if (bytes > LARGE_RESPONSE_BYTES && logger.warn) await logger.warn('large_response', { method, url, bytes });
+            if (!failed) await logger.info('request', { method, url, ms: Date.now() - start, status: res.statusCode, bytes });
             if (waitUntil) {
               waitUntil(Promise.resolve(flush()).catch(() => {}));
             } else {
@@ -69,4 +82,4 @@ function wrap(handler) {
   };
 }
 
-module.exports = { wrap };
+module.exports = { wrap, LARGE_RESPONSE_BYTES };

@@ -23,6 +23,15 @@ function nonceCookie() {
 }
 const CLEAR_NONCE = `${NONCE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 
+// The finished session travels from the callback to the login page in a
+// short-lived HttpOnly cookie that only this site's own scripts can redeem,
+// not in the URL. A URL carrying a session is a login link: anyone holding one
+// for their own account could send it to someone else and sign them in as
+// that account (login CSRF), and it sits in history while it lives.
+const SESSION_COOKIE = 'oauth_session';
+const sessionCookie = token => `${SESSION_COOKIE}=${token}; Path=/api; Max-Age=120; HttpOnly; Secure; SameSite=Strict`;
+const CLEAR_SESSION = `${SESSION_COOKIE}=; Path=/api; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;
+
 function readNonceCookie(headers) {
   const m = new RegExp(`(?:^|;\\s*)${NONCE_COOKIE}=([0-9a-f]{32})(?:;|$)`).exec(headers?.cookie || '');
   return m ? m[1] : null;
@@ -69,8 +78,9 @@ async function facebookUrl({ query, origin }) {
 
 // GET ?action=oauth-callback — OAuth provider redirects here (routed from
 // /auth/callback via vercel.json rewrite). Validates state, exchanges code for
-// email, and on success redirects to /login#session=<token>, which home.js
-// stores and verifies against the slug-independent my-artists endpoint.
+// email, and on success sets the oauth_session cookie and redirects to
+// /login#oauth=1, where home.js redeems the cookie (oauthSession below) and
+// verifies the token against the slug-independent my-artists endpoint.
 async function oauthCallback({ query, headers, ip, origin }) {
   const o = origin;
   // Everything that can go wrong answers the visitor identically. The reason
@@ -161,9 +171,19 @@ async function oauthCallback({ query, headers, ip, origin }) {
   // and that looks the user up WITH password_hash IS NOT NULL and checks the
   // token against that hash. An account created through Google has no
   // password and a user token is keyed on APP_SECRET, so it always came back
-  // "Invalid or expired login link". `session=` is verified as what it is.
+  // "Invalid or expired login link". The session is verified as what it is.
   const next = artists.length > 1 ? '/workspaces' : `/${artists[0]?.slug || ''}/dashboard`;
-  return redirect(`${o}/login#session=${encodeURIComponent(userToken)}&hint=${hint}&next=${encodeURIComponent(next)}`);
+  cookie = { 'Set-Cookie': [CLEAR_NONCE, sessionCookie(userToken)] };
+  return redirect(`${o}/login#oauth=1&hint=${hint}&next=${encodeURIComponent(next)}`);
 }
 
-module.exports = { googleUrl, facebookUrl, oauthCallback };
+// POST action=oauth-session — hands the login page the session the callback
+// left in its cookie, once. SameSite=Strict keeps the cookie off requests other
+// sites start, and only a script on this origin can read the answer.
+async function oauthSession({ headers }) {
+  const m = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`).exec(headers?.cookie || '');
+  const out = m ? ok({ token: m[1] }) : fail(401, 'No sign-in to finish');
+  return { ...out, headers: { 'Set-Cookie': CLEAR_SESSION } };
+}
+
+module.exports = { googleUrl, facebookUrl, oauthCallback, oauthSession };

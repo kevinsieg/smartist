@@ -69,7 +69,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 |--------|---------------------|
 | `_db.js` | `getDb()` singleton, `getArtist(slug)` → null if not found, `insertAuditLog` silently swallows errors by design; `trimSongLogs` keeps each song's newest 20 history entries |
 | `_auth.js` | `requireAuth(req, res, slug)` → artist object or writes 401/404 and returns null |
-| `_handler.js` | `wrap(handler)` — **required on every handler**; catches unhandled errors → 500 |
+| `_handler.js` | `wrap(handler)` — **required on every handler**; catches unhandled errors → 500; logs the body size, `large_response` warning over 2 MB |
 | `_validate.js` | returns `null` (missing/empty), validated value, or `false` (invalid) |
 | `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
 | `_pdf.js` | `buildSetlistPdf(setlist, songs, artistName)` → Buffer; `setlistTitle(setlist)` |
@@ -161,7 +161,7 @@ Both compare by identity (`=== true`) because `config` is JSONB and a string `"t
 
 A stage link carries no token and ids are sequential, so with `publicStage` on anyone can walk that band's songs and setlists by id — that is why it is off by default. Every anonymous song read (catalogue list, `/api/config`, one song, a stage setlist) goes through `publicSong()` (`api/_domain/songs.js`), which drops `comment`. The `share_token` sketched in `scripts/schema.sql` would replace this with per-link access.
 
-**Abuse limits** (`api/_ratelimit.js`): mail to an address the caller chooses (invites, setlist shares) is capped per band and IP at the call site, and by `outboundMailLimited` per sender address and overall per day. Presigned uploads are capped per band per hour (`presignLimited`) — storage is only counted on confirm. AI lyrics suggestions are capped per band and overall per day (`api/_lyrics.js`).
+**Abuse limits** (`api/_ratelimit.js`): failed password sign-ins lock an address for 15 minutes after 10 from one IP, or 100 from all IPs together (`countLoginFailure`, read in `passwordLogin`'s first statement), so a stranger cannot lock the owner out from their own network. mail to an address the caller chooses (invites, setlist shares) is capped per band and IP at the call site, and by `outboundMailLimited` per sender address and overall per day. Presigned uploads are capped per band per hour (`presignLimited`) — storage is only counted on confirm. AI lyrics suggestions are capped per band and overall per day (`api/_lyrics.js`).
 
 **Free-form JSON** is capped by serialized size: song `extra` 32 KB per request, venue/organizer `social_links` and `extra` 16 KB (`F.object({ maxBytes })`), arrangement `rows` 128 KB. Anonymous `GET /api/config` carries only `plan.features` (the nav needs them), no limits or `usage`. A malformed `%` escape in an `/api` path answers 400.
 
@@ -200,7 +200,7 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 - Auth token: `smartist_token` (`AUTH_TOKEN_KEY` in `session.js`) — in `sessionStorage`, or `localStorage` with "remember me"; `apiFetch()` sends it as `Authorization: Bearer <token>`. `clearToken()` removes both copies. Change-password returns a replacement token (the old one stops verifying) — store it where the old one was.
 - **Do not call `loadLogs()` inside `renderTable()`** — `renderTable()` is also called by `discardAll()`. Logs only need refreshing after a real data change.
 - Songs table: toolbar is `position:sticky`; `table-wrap` has JS-computed `maxHeight` for independent scroll. `thead th` uses `box-shadow` instead of `border-bottom` to avoid the sticky/border-collapse disappearing-border bug.
-- OAuth login: Google/Facebook buttons appear on the login and signup pages only when `cfg.googleLogin`/`cfg.facebookLogin` are true (both variables of a provider set). On success the server redirects to `/login#session=<token>&hint=…&next=…` — a finished session in the fragment, never a query string. `state` is bound to an `oauth_nonce` cookie; Facebook signs into existing accounts only with `FACEBOOK_TRUST_EMAIL=true`. Setup: `docs/oauth-setup.md`.
+- OAuth login: Google/Facebook buttons appear on the login and signup pages only when `cfg.googleLogin`/`cfg.facebookLogin` are true (both variables of a provider set). On success the server sets the session in a short-lived HttpOnly `oauth_session` cookie (path `/api`, SameSite=Strict) and redirects to `/login#oauth=1&hint=…&next=…`; home.js redeems it once via `POST /api/config` `{action:"oauth-session"}`. No session ever travels in a URL. `state` is bound to an `oauth_nonce` cookie; Facebook signs into existing accounts only with `FACEBOOK_TRUST_EMAIL=true`. Setup: `docs/oauth-setup.md`.
 
 ---
 

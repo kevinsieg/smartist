@@ -108,8 +108,11 @@ and App Review, and an app cannot switch back) and the Business Mapping API.
 - The callback answers every failure the same way (`/login?oauth_error=1`); the
   reason is only logged, so the page does not reveal whether an address has an
   account.
-- A successful sign-in returns a normal session token in the URL fragment
-  (`/login#session=…`), never in a query string.
+- A successful sign-in never puts the session in the URL. The callback sets it
+  in a two-minute `oauth_session` cookie (HttpOnly, SameSite=Strict, path
+  `/api`) and redirects to `/login#oauth=1`; the login page redeems the cookie
+  once with `POST /api/config` `{action:"oauth-session"}`. A sign-in URL is
+  therefore worthless to anyone it is sent to.
 
 ---
 

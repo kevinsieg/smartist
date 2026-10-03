@@ -114,6 +114,13 @@ function fragment(url) {
   return new URLSearchParams(String(url).split('#')[1] || '');
 }
 
+// The session the callback left in its oauth_session cookie, or null.
+function sessionCookie(res) {
+  const set = [].concat((res._headers || {})['Set-Cookie'] || []);
+  const c = set.find(v => /^oauth_session=[^;]+/.test(v));
+  return c ? c.slice('oauth_session='.length, c.indexOf(';')) : null;
+}
+
 async function callback(opts = {}, query, cookie = `oauth_nonce=${NONCE}`) {
   const { oauth, state, token } = load(opts);
   const res = mockRes();
@@ -141,12 +148,42 @@ async function run(r) {
     assert(!f.get('magic'),
       'the session token is in the #magic= slot, where home.js posts it to the ' +
       'password-based magic endpoint and it is rejected');
-    assert(f.get('session'), `no session token in the redirect: ${res._url}`);
+    assert(sessionCookie(res), `no session cookie set: ${JSON.stringify(res._headers)}`);
+  });
+
+  // Login CSRF: a URL carrying a session is a login link anyone can forward.
+  await testAsync('no session token travels in the redirect URL', async () => {
+    const res = await callback();
+    const token = sessionCookie(res);
+    assert(!String(res._url).includes(token), `the session is in the URL: ${res._url}`);
+    assert(!fragment(res._url).get('session'), 'a #session= slot is back');
+    assertEq(fragment(res._url).get('oauth'), '1');
+  });
+
+  await testAsync('the session cookie is HttpOnly, Strict, short-lived and API-only', async () => {
+    const res = await callback();
+    const c = [].concat(res._headers['Set-Cookie']).find(v => v.startsWith('oauth_session='));
+    for (const attr of ['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/api', 'Max-Age=120'])
+      assert(c.includes(attr), `missing ${attr}: ${c}`);
+    assert([].concat(res._headers['Set-Cookie']).some(v => /^oauth_nonce=;.*Max-Age=0/.test(v)),
+      'the nonce cookie is no longer cleared');
+  });
+
+  await testAsync('oauth-session hands the cookie\'s token over once and clears it', async () => {
+    load();
+    const { oauthSession } = require(path.join(__dirname, '../../api/_domain/oauth'));
+    const got = await oauthSession({ headers: { cookie: 'a=b; oauth_session=tok.en-1_x; c=d' } });
+    assertEq(got.status, 200);
+    assertEq(got.body.token, 'tok.en-1_x');
+    assert(/^oauth_session=;.*Max-Age=0/.test(got.headers['Set-Cookie']), 'cookie not cleared');
+    const none = await oauthSession({ headers: {} });
+    assertEq(none.status, 401);
+    assert(!none.body.token, 'a token without a cookie');
   });
 
   await testAsync('that token verifies as a user token', async () => {
     const res = await callback();
-    const claims = res._token.verifyUserToken(fragment(res._url).get('session'));
+    const claims = res._token.verifyUserToken(sessionCookie(res));
     assert(claims, 'the emitted token does not verify with verifyUserToken');
     assertEq(claims.userId, 7);
     assertEq(claims.role, 'admin');
@@ -173,7 +210,7 @@ async function run(r) {
   await testAsync('several workspaces send the visitor to the chooser', async () => {
     const res = await callback({ artists: [{ slug: 'one' }, { slug: 'two' }] });
     const f = fragment(res._url);
-    assert(f.get('session'), 'no session token for a multi-workspace user');
+    assert(sessionCookie(res), 'no session token for a multi-workspace user');
     assertEq(f.get('next'), '/workspaces');
   });
 
@@ -184,7 +221,7 @@ async function run(r) {
     const res = await callback({ user: null });
     assert(String(res._url).startsWith('https://app.smartist.studio/onboarding#token='),
       `expected onboarding, got ${res._url}`);
-    assert(!fragment(res._url).get('session'), 'a session for an account that does not exist');
+    assert(!sessionCookie(res), 'a session for an account that does not exist');
     assert(logged.some(l => l.event === 'oauth_signup_started'), 'signup start not logged');
   });
 
@@ -242,13 +279,13 @@ async function run(r) {
   // browser that never started the flow, must not sign that browser in.
   await testAsync('a callback without the oauth_nonce cookie is refused', async () => {
     const res = await callback({}, undefined, null);
-    assert(!fragment(res._url).get('session'), `signed in without the cookie: ${res._url}`);
+    assert(!sessionCookie(res), `signed in without the cookie: ${res._url}`);
     assert(String(res._url).includes('oauth_error=1'), `expected the error redirect, got ${res._url}`);
   });
 
   await testAsync('a callback with another flow\'s nonce is refused', async () => {
     const res = await callback({}, undefined, `oauth_nonce=${'b'.repeat(32)}`);
-    assert(!fragment(res._url).get('session'), `signed in with a foreign nonce: ${res._url}`);
+    assert(!sessionCookie(res), `signed in with a foreign nonce: ${res._url}`);
   });
 }
 
