@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit, countLoginFailure, loginFailKey, LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
+const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
 const { ok, fail } = require('./http');
 const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
@@ -36,7 +36,8 @@ const since = secs => new Date(Date.now() - secs * 1000).toISOString();
 
 // Everything before bcrypt is one statement: count this attempt against the IP
 // (the upsert checkRateLimit makes), read the address's lock (LOGIN_FAIL_MAX
-// failures in LOGIN_FAIL_WINDOW, api/_ratelimit.js), and fetch the candidate
+// failures from this IP or LOGIN_FAIL_ADDRESS_MAX from all, in
+// LOGIN_FAIL_WINDOW, api/_ratelimit.js), and fetch the candidate
 // rows and the address's bands. Each statement costs two round-trips
 // (prepare: false, see api/_db.js), and these were four statements. The bands
 // are the same for every row of the address (getArtistsForUser goes by email),
@@ -68,8 +69,9 @@ async function passwordLogin({ body, ip }) {
       (SELECT count FROM ip_hit) > ${AUTH_IP_MAX}::int AS ip_limited,
       EXISTS (
         SELECT 1 FROM rate_limits
-        WHERE key = ${loginFailKey(clean)} AND window_start >= ${since(LOGIN_FAIL_WINDOW)}
-          AND count >= ${LOGIN_FAIL_MAX}::int
+        WHERE window_start >= ${since(LOGIN_FAIL_WINDOW)}
+          AND ((key = ${loginFailPairKey(clean, ip)} AND count >= ${LOGIN_FAIL_MAX}::int)
+            OR (key = ${loginFailKey(clean)} AND count >= ${LOGIN_FAIL_ADDRESS_MAX}::int))
       ) AS locked,
       COALESCE((
         SELECT json_agg(c ORDER BY c.id) FROM (
@@ -100,7 +102,7 @@ async function passwordLogin({ body, ip }) {
   // One message for an unknown address and a wrong password alike — otherwise
   // this endpoint tells anyone which emails have accounts.
   if (!user) {
-    await countLoginFailure(clean);
+    await countLoginFailure(clean, ip);
     await logger.info('login_failed', { email: clean });
     return fail(401, 'Invalid email or password');
   }

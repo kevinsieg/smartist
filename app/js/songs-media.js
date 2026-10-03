@@ -117,6 +117,20 @@ async function handleAudioFile(input, sid) {
 
 // --- Player modal ---
 
+// Framed pages come from URLs a band member typed. Sandboxed, they cannot
+// navigate this tab away (to a look-alike login page, say), open dialogs or
+// start downloads. allow-same-origin keeps the frame its own origin, which a
+// cross-site page needs for its scripts and cookies; it never becomes ours.
+var _EMBED_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation';
+
+// A PDF stays unsandboxed: browsers refuse to show a PDF in a sandboxed frame.
+function _sheetFrame(url) {
+  var u = safeUrl(url);
+  var pdf = /\.pdf(\?|#|$)/i.test(u);
+  return '<div class="sheet-embed"><iframe src="' + escHtml(u) + '" title="Sheet"' +
+    (pdf ? '' : ' sandbox="' + _EMBED_SANDBOX + ' allow-forms"') + '></iframe></div>';
+}
+
 function toEmbedUrl(url) {
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
   if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}?autoplay=1`;
@@ -143,8 +157,7 @@ function openPlayer(sid) {
   if (isAudio) {
     content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
-    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}"
-      allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
     content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }
@@ -246,7 +259,7 @@ async function handleReplaceFile(input) {
     if (isAudio) {
       content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     } else if (embedUrl) {
-      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
     } else {
       content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(publicUrl))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
     }
@@ -334,7 +347,7 @@ function openSheet(sid) {
   document.getElementById('sheet-title').textContent = `≡ ${title}`;
   document.getElementById('sheet-open-link').href = safeUrl(url);
   document.getElementById('sheet-content').innerHTML =
-    `<div class="sheet-embed"><iframe src="${escHtml(safeUrl(url))}" title="Sheet"></iframe></div>`;
+    _sheetFrame(url);
 
   document.getElementById('sheet-delete-confirm').style.display = 'none';
   if (getToken()) document.getElementById('sheet-delete-btn').style.display = '';
@@ -424,7 +437,7 @@ async function handleReplaceSheet(input) {
     if (song) song.extra = { ...(song.extra ?? {}), sheetUrl: publicUrl };
     const td = document.querySelector(`#row-${sid} .sheet-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
-    document.getElementById('sheet-content').innerHTML = `<div class="sheet-embed"><iframe src="${escHtml(safeUrl(publicUrl))}" title="Sheet"></iframe></div>`;
+    document.getElementById('sheet-content').innerHTML = _sheetFrame(publicUrl);
     apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderSheetHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.sheetReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
@@ -520,7 +533,7 @@ function openPlayback(sid) {
   if (isAudio) {
     content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
-    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
     content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }

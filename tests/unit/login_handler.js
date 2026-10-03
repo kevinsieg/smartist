@@ -32,6 +32,7 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
 
   const queries = [];
   const failures = [];
+  const failureIps = [];
   const sql = (strings, ...values) => {
     const text = Array.isArray(strings) ? strings.join(' ').replace(/\s+/g, ' ').trim() : String(strings);
     queries.push({ text, values });
@@ -45,8 +46,9 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
     exports: {
-      loginFailKey: email => `login-fail:${email}`, LOGIN_FAIL_MAX: 10, LOGIN_FAIL_WINDOW: 900,
-      countLoginFailure: async email => { failures.push(email); },
+      loginFailKey: email => `login-fail:${email}`, loginFailPairKey: (email, ip) => `login-fail:${email}|${ip}`,
+      LOGIN_FAIL_MAX: 10, LOGIN_FAIL_ADDRESS_MAX: 100, LOGIN_FAIL_WINDOW: 900,
+      countLoginFailure: async (email, ip) => { failures.push(email); failureIps.push(ip); },
       checkRateLimit: async () => rateLimited, clientIp: () => '127.0.0.1',
     },
   };
@@ -58,7 +60,7 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
       getSlug: req => (req.query && req.query.artist) || 'test',
     },
   };
-  return { handler: require(path.join(__dirname, '../../api/_config')), queries, failures };
+  return { handler: require(path.join(__dirname, '../../api/_config')), queries, failures, failureIps };
 }
 
 function mockRes() {
@@ -169,6 +171,7 @@ async function run(r) {
     await call(handler, { email: 'A@B.co', password: 'correct horse battery' });
     assert(queries[0].values.includes('auth:127.0.0.1'), 'the per-IP key');
     assert(queries[0].values.includes('login-fail:a@b.co'), 'the per-address lock key, normalised');
+    assert(queries[0].values.includes('login-fail:a@b.co|127.0.0.1'), 'the per-address-and-IP lock key');
   });
 
   await testAsync('a successful sign-in is one statement', async () => {
@@ -179,11 +182,12 @@ async function run(r) {
     assertEq(res._body.artists[0].slug, 'a', 'the bands come from that statement');
   });
 
-  await testAsync('a wrong password is counted against the address', async () => {
-    const { handler, failures } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
+  await testAsync('a wrong password is counted against the address and IP', async () => {
+    const { handler, failures, failureIps } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
     await call(handler, { email: 'a@b.co', password: 'not it' });
     assertEq(failures.length, 1);
     assertEq(failures[0], 'a@b.co');
+    assertEq(failureIps[0], '127.0.0.1');
   });
 
   await testAsync('an absurd password is refused before bcrypt runs', async () => {

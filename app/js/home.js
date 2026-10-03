@@ -24,7 +24,7 @@ async function init() {
   const hashParams   = new URLSearchParams(window.location.hash.slice(1));
   const qp           = function(k) { return hashParams.get(k) || params.get(k); };
   const magic        = qp('magic');
-  const session      = qp('session');
+  const oauthDone    = qp('oauth');
   const hint         = qp('hint');
   const invite       = qp('invite');
   const reset        = qp('reset');
@@ -35,24 +35,26 @@ async function init() {
   _loginNext = next; // survives the URL strip below
 
   const hasToken = !!(sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY));
-  if (path === '/' && !magic && !session && !oauthError && !invite && !reset && !hasToken) {
+  if (path === '/' && !magic && !oauthDone && !oauthError && !invite && !reset && !hasToken) {
     window.location.replace('/login' + window.location.search);
     return;
   }
 
-  if (magic || session || oauthError || invite || reset) history.replaceState(null, '', window.location.pathname);
+  if (magic || oauthDone || oauthError || invite || reset) history.replaceState(null, '', window.location.pathname);
 
-  // A finished session handed over by the OAuth callback. Handled before
+  // A finished session the OAuth callback left in an HttpOnly cookie, redeemed
+  // once. Handled before
   // loadConfig because it needs no workspace: verifySession authenticates
   // against the slug-independent my-artists endpoint. Doing it later would
   // break the multi-workspace case, where `next` is /workspaces and there is no
   // slug to load a config for.
-  if (session) {
-    storeToken(session, false);
+  if (oauthDone) {
+    const session = await _redeemOAuthSession();
+    if (session) storeToken(session, false);
     if (hint) {
       try { sessionStorage.setItem('smartist_admin_email', atob(hint.replace(/-/g, '+').replace(/_/g, '/'))); } catch (e) {}
     }
-    const { ok, artists } = await verifySession(session);
+    const { ok, artists } = session ? await verifySession(session) : { ok: false, artists: [] };
     if (ok) { renderLoggedIn(null, artists); return; }
     // Say so here rather than falling through: `next` may be /workspaces, which
     // is not a slug, so the code below would fail to load a config and render a
@@ -112,6 +114,19 @@ async function init() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   renderLogin(null, cfg);
+}
+
+// The session token the OAuth callback set as a cookie, or null.
+async function _redeemOAuthSession() {
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'oauth-session' }),
+    });
+    if (!r.ok) return null;
+    return (await r.json()).token || null;
+  } catch { return null; }
 }
 
 // A sign-in link names its account in `hint`; one without it cannot be redeemed.

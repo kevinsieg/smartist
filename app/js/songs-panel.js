@@ -29,7 +29,7 @@ function _openSongPanelContent(item, panelEl) {
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(playbackUrl)) + '"></audio>' + _spd + '</div>';
 
   var actions = '';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(\'' + sidEsc + '\')">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(' + onArg(sid) + ')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
     '</svg></button>';
@@ -37,13 +37,13 @@ function _openSongPanelContent(item, panelEl) {
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>' +
     '</svg></a>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" data-onclick="openLyrics(\'' + sidEsc + '\')">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" data-onclick="openLyrics(' + onArg(sid) + ')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/>' +
     '</svg></button>';
-  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" data-onclick="openPlayer(\'' + sidEsc + '\')">&#9654; ' + t('songs.listen') + '</button>';
-  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" data-onclick="openPlayback(\'' + sidEsc + '\')">&#9655; ' + t('songs.playback') + '</button>';
-  if (sheetUrl)   actions += '<button class="btn" data-onclick="openSheet(\'' + sidEsc + '\')">&#8801; ' + t('songs.sheet') + '</button>';
+  if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" data-onclick="openPlayer(' + onArg(sid) + ')">&#9654; ' + t('songs.listen') + '</button>';
+  if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" data-onclick="openPlayback(' + onArg(sid) + ')">&#9655; ' + t('songs.playback') + '</button>';
+  if (sheetUrl)   actions += '<button class="btn" data-onclick="openSheet(' + onArg(sid) + ')">&#8801; ' + t('songs.sheet') + '</button>';
   if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" data-onclick="_openSongArrangement(' + Number(sid) + ')">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>' +

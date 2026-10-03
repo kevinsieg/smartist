@@ -24,6 +24,14 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// A string argument for a data-on* handler, quotes included. The browser
+// decodes the attribute before core.js parses it, so escHtml alone turns a
+// ' back into a quote that ends the literal; this escapes for the parser
+// first, then for the attribute.
+function onArg(v) {
+  return escHtml("'" + String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'");
+}
+
 // Instrument fields a band hid in Settings (config.hiddenSongFields, e.g. 'extra.lead').
 // A band that never saved the list gets DEFAULT_HIDDEN_SONG_FIELDS.
 var DEFAULT_HIDDEN_SONG_FIELDS = ['extra.banjoCapo', 'extra.git2'];
