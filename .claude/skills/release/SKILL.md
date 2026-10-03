@@ -32,4 +32,5 @@ projects deploy `main`, each with its own database and env vars.
    branch name — and pass `expectedHeadSha`.
 6. **After deploy:** `GET https://<deployment>/api/config?action=health` on each
    production domain → 200, `"schema":"current"`, `missing: []`. Report any
-   deployment that is not.
+   deployment that is not. Cloud sessions cannot reach the production domains:
+   there, ask the user to run these checks and report back.
