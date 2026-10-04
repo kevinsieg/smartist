@@ -485,7 +485,6 @@ async function _saveHistEdit(sid) {
   var titleVal = (document.getElementById('hist-edit-title').value || '').trim();
   var gigId    = document.getElementById('hist-edit-gig').value || null;
   var comment  = (document.getElementById('hist-edit-comment').value || '').trim() || null;
-  var token    = getToken();
 
   if (!titleVal) {
     var errEl = document.getElementById('hist-edit-error');
@@ -500,20 +499,9 @@ async function _saveHistEdit(sid) {
   var songIds = (_editSongs || []).map(function(song) { return song.id; });
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists/' + sid, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ title: titleVal, gig_id: gigId ? Number(gigId) : null, comment: comment, song_ids: songIds })
-    });
-
-    if (r.status === 401) {
-      clearToken();
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      var errEl3 = document.getElementById('hist-edit-error');
-      if (errEl3) { errEl3.textContent = t('setlist.editSessionExpired'); errEl3.className = 'status-msg error'; }
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('setlist.saveBtn'); }
-      return;
-    }
+    // apiFetch sends an ended session to the login page and throws.
+    var r = await apiFetch('/api/' + artistSlug + '/setlists/' + sid, 'PUT',
+      { title: titleVal, gig_id: gigId ? Number(gigId) : null, comment: comment, song_ids: songIds });
 
     if (!r.ok) {
       var errEl4 = document.getElementById('hist-edit-error');
@@ -595,15 +583,11 @@ async function _confirmDeleteSetlist(sid) {
   var s = _histSets.find(function(x) { return String(x.id) === sid; });
   if (!s) return;
 
-  var token = getToken();
   var actionsEl = document.getElementById('hist-edit-actions');
   if (actionsEl) actionsEl.innerHTML = '<p style="font-size:0.85rem;color:var(--third-color);margin:0;">' + t('setlist.deleting') + '</p>';
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists/' + sid, {
-      method: 'DELETE',
-      headers: { 'Authorization': 'Bearer ' + token },
-    });
+    var r = await apiFetch('/api/' + artistSlug + '/setlists/' + sid, 'DELETE');
     if (!r.ok) throw new Error('Failed');
     _histSets = _histSets.filter(function(x) { return String(x.id) !== sid; });
     delete _histLoadedSongs[sid];
@@ -819,30 +803,16 @@ async function _histShareSend(sid) {
     return;
   }
 
-  var token = getToken();
-  if (!token) { window.location.assign(loginPageUrl()); return; }
+  if (!getToken()) { window.location.assign(loginPageUrl()); return; }
 
   var btn = document.getElementById('hist-share-send');
   if (btn) { btn.disabled = true; btn.textContent = t('setlist.shareSending'); }
   if (st) { st.textContent = ''; st.className = 'status-msg'; }
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/share', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ email: email })
-    });
-
-    if (r.status === 401) {
-      clearToken();
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      if (st) { st.textContent = t('setlist.shareWrongPassword'); st.className = 'status-msg error'; }
-      if (btn) { btn.disabled = false; btn.textContent = t('setlist.shareSendBtn'); }
-      return;
-    }
+    var r = await apiFetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/share', 'POST', { email: email });
 
     if (r.ok) {
-      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
       if (st) { st.textContent = t('setlist.shareSentTo', { email: email }); st.className = 'status-msg success'; st.style.display = 'block'; }
       if (btn) btn.disabled = true;
       setTimeout(function() { _histCancelEdit(sid); }, 1800);
@@ -859,11 +829,10 @@ async function _histShareSend(sid) {
 
 async function _histDuplicate(sid) {
   sid = String(sid);
-  var token = getToken();
 
   var dupBtn = document.querySelector('.vsp-actions button[onclick*="_histDuplicate"]');
 
-  if (!token) {
+  if (!getToken()) {
     if (dupBtn) {
       dupBtn.insertAdjacentHTML('afterend', '<span id="dup-status" style="font-size:0.78rem;color:var(--third-color);display:block;margin-top:0.4rem;">' + t('setlist.dupLoginFirst') + '</span>');
     }
@@ -873,17 +842,7 @@ async function _histDuplicate(sid) {
   if (dupBtn) { dupBtn.disabled = true; dupBtn.textContent = '…'; }
 
   try {
-    var r = await fetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/duplicate', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-
-    if (r.status === 401) {
-      clearToken();
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      if (dupBtn) { dupBtn.disabled = false; dupBtn.textContent = t('setlist.duplicateTooltip'); }
-      return;
-    }
+    var r = await apiFetch('/api/' + artistSlug + '/setlists/' + Number(sid) + '/duplicate', 'POST');
 
     if (r.ok) {
       var created = await r.json();

@@ -11,7 +11,7 @@ const logger = require('../_logger');
 const { ok, reply, fail } = require('./http');
 
 // A band's members: invites, roles, and each person's own password and login
-// address. api/_band/auth.js checks the session and the role, then calls these
+// address. api/_band/members.js checks the session and the role, then calls these
 // with a context:
 //
 //   { band, user, body, ip, origin, slug }   — user is { id, role } (id null for the demo)
@@ -87,7 +87,7 @@ async function acceptInvite({ band, body }) {
     `,
     getArtistsForUser(user.id, sql),
   ]);
-  const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
+  const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash, user.email);
   return ok({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
 }
 
@@ -164,7 +164,9 @@ async function confirmEmailChange({ body, ip, slug }) {
 async function listMembers({ band }) {
   const users = await getDb()`
     SELECT id, email, role, created_at, invite_expires_at,
-           (password_hash IS NOT NULL)                                                               AS accepted,
+           -- No open invite: a member who signs in with Google or Facebook (no
+           -- password), or an existing account added to this band.
+           (password_hash IS NOT NULL OR invite_token_hash IS NULL)                                  AS accepted,
            (invite_token_hash IS NOT NULL AND invite_expires_at >  now() AND password_hash IS NULL) AS invite_pending,
            (invite_token_hash IS NOT NULL AND invite_expires_at <= now() AND password_hash IS NULL) AS invite_expired
     FROM users WHERE artist_id = ${band.id}
@@ -183,26 +185,39 @@ async function invite({ band, user, body, ip, origin, slug }) {
   if (!ROLES.includes(role)) return fail(400, 'Invalid role');
 
   const sql = getDb();
-  const [existing] = await sql`SELECT id FROM users WHERE artist_id = ${band.id} AND email = ${cleanEmail.toLowerCase()}`;
-  if (existing) return fail(409, 'User already exists');
+  const addr = cleanEmail.toLowerCase();
+  // Membership goes by address, so an address that already has an account is
+  // a member the moment its row exists. It gets a notice, not a set-your-
+  // password link: accepting one wrote a new password to every band of the
+  // address and ended all of its sessions. The new row takes the address's
+  // password (one address, one password).
+  const [state] = await sql`
+    SELECT
+      EXISTS (SELECT 1 FROM users WHERE artist_id = ${band.id} AND email = ${addr}) AS here,
+      EXISTS (SELECT 1 FROM users WHERE email = ${addr}) AS known`;
+  if (state.here) return fail(409, 'User already exists');
   if (await inviteLimited(band, ip, user)) return fail(429, 'Too many invites — try again later');
 
-  const token   = linkToken();
-  const expires = new Date(Date.now() + INVITE_TTL_MS);
+  const token   = state.known ? null : linkToken();
+  const expires = state.known ? null : new Date(Date.now() + INVITE_TTL_MS);
   const [newUser] = await sql`
-    INSERT INTO users (artist_id, email, role, invite_token_hash, invite_expires_at, invited_by)
-    VALUES (${band.id}, ${cleanEmail.toLowerCase()}, ${role}, ${token.hash}, ${expires}, ${user.id})
+    INSERT INTO users (artist_id, email, role, invite_token_hash, invite_expires_at, invited_by, password_hash)
+    VALUES (${band.id}, ${addr}, ${role}, ${token ? token.hash : null}, ${expires}, ${user.id},
+            (SELECT password_hash FROM users WHERE email = ${addr} AND password_hash IS NOT NULL ORDER BY id LIMIT 1))
     RETURNING id, email, role
   `;
 
-  const link = `${origin}/login#invite=${token.raw}`;
+  const link = token ? `${origin}/login#invite=${token.raw}` : `${origin}/login`;
   try {
     await sendEmail({
       to: cleanEmail,
-      subject: `You've been invited to ${oneLine(band.name)}`,
-      html: `<p>You've been invited to access ${escHtml(band.name)} on smartist.</p>
+      subject: token ? `You've been invited to ${oneLine(band.name)}` : `You've been added to ${oneLine(band.name)}`,
+      html: token
+        ? `<p>You've been invited to access ${escHtml(band.name)} on smartist.</p>
              <p><a href="${link}">Accept invite and set your password</a></p>
-             <p>This link expires in 7 days.</p>`,
+             <p>This link expires in 7 days.</p>`
+        : `<p>You've been added to ${escHtml(band.name)} on smartist.</p>
+             <p><a href="${link}">Sign in</a> as usual to open it.</p>`,
     });
   } catch (err) {
     await logger.error('invite_email_failed', { band: slug, error: err.message });
@@ -219,7 +234,9 @@ async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
 
   const sql = getDb();
   const [user] = await sql`
-    SELECT * FROM users WHERE id = ${Number(userId)} AND artist_id = ${band.id} AND password_hash IS NULL
+    SELECT * FROM users
+    WHERE id = ${Number(userId)} AND artist_id = ${band.id} AND password_hash IS NULL
+      AND invite_token_hash IS NOT NULL
   `;
   if (!user) return fail(404, 'Pending invite not found');
   if (await inviteLimited(band, ip, sender)) return fail(429, 'Too many invites — try again later');
@@ -304,7 +321,7 @@ async function changePassword({ user, body, ip }) {
     WHERE email = ${row.email}`;
   // The new hash invalidates every session issued before it, this one
   // included — hand back a replacement so the caller stays signed in.
-  const token = generateUserToken(row.id, row.role, rememberMe ? TTL_30D : TTL_8H, hash);
+  const token = generateUserToken(row.id, row.role, rememberMe ? TTL_30D : TTL_8H, hash, row.email);
   return ok({ ok: true, token });
 }
 

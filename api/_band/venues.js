@@ -1,9 +1,8 @@
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
-const { validateStr, parseFields } = require('../_validate');
+const { validateStr, parseFields, F } = require('../_validate');
 const { VENUE_FIELDS } = require('../_domain/records');
-const { VENUE_PUBLIC_STATUSES } = require('../_constants');
 const { requireFeature } = require('../_plans');
 
 module.exports = wrap(async function handler(req, res) {
@@ -15,14 +14,12 @@ module.exports = wrap(async function handler(req, res) {
     // that up — a session is always required, as for organizers.
     const artist = await requireAuth(req, res, slug);
     if (!artist) return;
-    const viewOnly = false;
     if (!requireFeature(res, artist, 'venues')) return;
 
     if (req.query.slim) {
       const venues = await sql`
         SELECT id, name, city FROM venues
         WHERE artist_id = ${artist.id} AND deleted = false
-          AND (NOT ${viewOnly} OR LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES}))
         ORDER BY name ASC
       `;
       return res.json(venues);
@@ -33,7 +30,6 @@ module.exports = wrap(async function handler(req, res) {
       const rows = await sql`
         SELECT DISTINCT country FROM venues
         WHERE artist_id = ${artist.id} AND deleted = false AND country IS NOT NULL AND country <> ''
-          AND (NOT ${viewOnly} OR LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES}))
         ORDER BY country ASC`;
       return res.json(rows.map(r => r.country));
     }
@@ -49,7 +45,6 @@ module.exports = wrap(async function handler(req, res) {
         WHERE artist_id = ${artist.id} AND deleted = false
           AND lat IS NOT NULL AND lng IS NOT NULL
           AND (${statusFilter}::text IS NULL OR LOWER(status) = ${statusFilter})
-          AND (NOT ${viewOnly} OR LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES}))
         ORDER BY name ASC
       `;
       return res.json(venues);
@@ -94,7 +89,6 @@ module.exports = wrap(async function handler(req, res) {
           AND (${letter}::text IS NULL OR name ILIKE ${letter})
           AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
           AND (NOT ${favourite} OR heart)
-          AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
           AND EXISTS (
             SELECT 1 FROM gigs g
             WHERE g.venue_id = venues.id AND g.artist_id = venues.artist_id AND g.deleted = false
@@ -118,15 +112,11 @@ module.exports = wrap(async function handler(req, res) {
           AND (${letter}::text IS NULL OR name ILIKE ${letter})
           AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
           AND (NOT ${favourite} OR heart)
-          AND (NOT ${viewOnly} OR (deleted = false AND LOWER(status) = ANY(${VENUE_PUBLIC_STATUSES})))
         ORDER BY deleted ASC, ${orderBy}
         LIMIT ${limit} OFFSET ${offset}
       `;
     }
     const total = Number(rows[0]?.total ?? 0);
-    // Only the public (view-mode) response may be CDN-cached — authed responses
-    // contain non-public venues and must not be served from a shared cache.
-    if (viewOnly) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }
 
@@ -161,8 +151,9 @@ module.exports = wrap(async function handler(req, res) {
     // field → max length; dates are validated separately.
     const TEXT_FIELDS = { status: 50, category: 100, booking_channel: 50, remuneration: 100,
                           season: 50, preferred_period: 100, comment: 2000 };
-    const DATE_FIELDS = ['last_communication', 'deadline'];
-    const isDate = v => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v);
+    // Real calendar dates: a well-formed 2026-02-30 failed the ::date[] cast and
+    // took the whole batch down with a 500.
+    const DATE_FIELDS = { last_communication: F.date(), deadline: F.date() };
 
     const rejected = [];
     const accepted = [];
@@ -179,12 +170,10 @@ module.exports = wrap(async function handler(req, res) {
         if (value === false) { error = `${field} too long (max ${maxLen})`; break; }
         next[field] = value;
       }
-      for (const field of DATE_FIELDS) {
-        if (error) break;
-        if (!(field in update)) { next[field] = venue[field]; continue; }
-        const value = validateStr(update[field], 10);
-        if (value === false || !isDate(value)) { error = `${field} must be a date (YYYY-MM-DD)`; break; }
-        next[field] = value;
+      if (!error) {
+        const dates = parseFields(update, DATE_FIELDS, { partial: true });
+        if (dates.error) error = dates.error;
+        else for (const field of Object.keys(DATE_FIELDS)) next[field] = field in dates.value ? dates.value[field] : venue[field];
       }
       if (!error && 'heart' in update && typeof update.heart !== 'boolean') error = 'heart must be a boolean';
       next.heart = 'heart' in update ? update.heart : venue.heart;

@@ -110,7 +110,7 @@ async function setPassword({ body }) {
   // Setting the password is what logs them in; they are here because they could
   // not, and handing them back to the login form would be a joke.
   const anchor       = rows[0];
-  const sessionToken = generateUserToken(anchor.id, anchor.role, TTL_8H, hash);
+  const sessionToken = generateUserToken(anchor.id, anchor.role, TTL_8H, hash, anchor.email);
   const artists      = await getArtistsForUser(anchor.id, sql);
   await logger.info('password_set_via_reset', { email: addr, workspaces: rows.length });
   return ok({ ok: true, token: sessionToken, role: anchor.role, email: anchor.email, artists });

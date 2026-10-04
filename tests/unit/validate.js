@@ -161,6 +161,15 @@ function run(r) {
     assertEq(validateEmail('user@do main.com'), false);
   });
 
+  console.log(B('\nobjects where text is expected'));
+  test('validateStr refuses an object instead of storing "[object Object]"', () => {
+    assertEq(validateStr({ a: 1 }, 100), false);
+    assertEq(validateStr(['a'], 100), false);
+  });
+  test('a text field given an object is a 400, not a stored string', () => {
+    assert(/single value/.test(parseFields({ t: { a: 1 } }, { t: F.text(100) }).error));
+  });
+
   console.log(B('\nF.object maxBytes'));
   const SPEC = { links: F.object({ maxBytes: 100 }) };
   test('an object under the cap passes', () => {

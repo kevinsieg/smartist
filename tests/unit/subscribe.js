@@ -44,7 +44,7 @@ function mockRes() {
 }
 
 async function run(r) {
-  const { testAsync, assertEq } = r;
+  const { testAsync, assert, assertEq } = r;
 
   await testAsync('POST /api/config subscribe — missing email → 400', async () => {
     const handler = makeHandler((s, ...v) => Promise.resolve([]));
@@ -60,12 +60,13 @@ async function run(r) {
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config subscribe — duplicate email → 409', async () => {
-    const dupErr = Object.assign(new Error('unique violation'), { code: '23505' });
-    const handler = makeHandler((s, ...v) => Promise.reject(dupErr));
+  await testAsync('POST /api/config subscribe — an address already on the list answers 200 like a new one', async () => {
+    const seen = [];
+    const handler = makeHandler((s, ...v) => { seen.push(s.join('?')); return Promise.resolve([]); });
     const res = mockRes();
     await handler({ method: 'POST', body: { email: 'a@b.com' } }, res);
-    assertEq(res._status, 409);
+    assertEq(res._status, 200);
+    assert(seen.some(q => /ON CONFLICT \(email\) DO NOTHING/.test(q)), 'insert ignores an existing address');
   });
 
   await testAsync('POST /api/config subscribe — valid email → 200', async () => {

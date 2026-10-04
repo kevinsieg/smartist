@@ -5,6 +5,7 @@ const { ok, fail } = require('./http');
 const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const logger = require('../_logger');
+const { sessionRowId } = require('../_auth');
 
 // Log in without naming a band.
 //
@@ -103,7 +104,7 @@ async function passwordLogin({ body, ip }) {
 
   let user = null;
   for (const row of candidates) {
-    if (await bcrypt.compare(password, row.password_hash)) { user = row; break; }
+    if (await bcrypt.compare(String(password), row.password_hash)) { user = row; break; }
   }
   if (!candidates.length) await bcrypt.compare(String(password), DUMMY_HASH);
   // One message for an unknown address and a wrong password alike — otherwise
@@ -119,7 +120,7 @@ async function passwordLogin({ body, ip }) {
   if (!gate.ip_known_today) await sql`
     INSERT INTO rate_limits (key, window_start, count) VALUES (${loginOkKey(clean, ip)}, NOW(), 1)
     ON CONFLICT (key) DO UPDATE SET window_start = NOW()`;
-  const token   = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, user.password_hash);
+  const token   = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, user.password_hash, clean);
   const artists = gate.artists;
   await logger.info('login', { email: clean, artists: artists.length });
   return ok({ ok: true, token, role: user.role, email: clean, artists });
@@ -147,7 +148,7 @@ async function magicLogin({ body, ip }) {
   const user = rows.find(r => verifyMagicToken(String(magic), r.password_hash, 'login'));
   if (!user) return fail(401, 'Invalid or expired login link');
 
-  const token   = generateUserToken(user.id, user.role, TTL_8H, user.password_hash);
+  const token   = generateUserToken(user.id, user.role, TTL_8H, user.password_hash, addr);
   const artists = await getArtistsForUser(user.id, sql);
   await logger.info('login_link', { email: addr, artists: artists.length });
   return ok({ ok: true, token, role: user.role, email: addr, artists });
@@ -161,7 +162,7 @@ async function logoutEverywhere({ headers }) {
   if (!claim) return fail(401, 'Unauthorized');
   const sql = getDb();
   const [me] = await sql`
-    SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+    SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${sessionRowId(sql, claim)} LIMIT 1`;
   if (!me || !sessionValid(claim, me)) return fail(401, 'Unauthorized');
   // The function's own clock, which is what iat was taken from.
   const { count } = await sql`

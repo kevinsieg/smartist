@@ -2,8 +2,9 @@ const { getDb, getSlug } = require('../../_db');
 const { requireAuth } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { parseFields } = require('../../_validate');
-const { ORGANIZER_FIELDS, mergeJson } = require('../../_domain/records');
+const { ORGANIZER_FIELDS, updateSet, mergedTooLarge } = require('../../_domain/records');
 const { requireFeature } = require('../../_plans');
+const { removeGigFiles } = require('../gigs');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -43,9 +44,10 @@ module.exports = wrap(async function handler(req, res) {
     const { value, error } = parseFields(req.body, ORGANIZER_FIELDS, { partial: true });
     if (error) return res.status(400).json({ error });
     if (!Object.keys(value).length) return res.json(org);
-    mergeJson(value, org, ['social_links', 'extra']);
+    const tooLarge = mergedTooLarge(value, org, ['social_links', 'extra']);
+    if (tooLarge) return res.status(400).json({ error: `${tooLarge} is too large` });
     const [updated] = await sql`
-      UPDATE organizers SET ${sql(value)}, last_updated = NOW()
+      UPDATE organizers ${updateSet(sql, value, ['social_links', 'extra'])}
       WHERE id = ${id} AND artist_id = ${artist.id}
       RETURNING *
     `;
@@ -63,14 +65,18 @@ module.exports = wrap(async function handler(req, res) {
     }
     // One transaction: a refused delete (409) leaves the cascaded
     // gigs and setlists in place instead of already gone.
+    let deleted;
     try {
-      await sql.begin(tx => [
+      deleted = await sql.begin(tx => [
         ...(cascade?.includes('setlists') ? [tx`
           DELETE FROM setlists
           WHERE artist_id = ${artist.id}
             AND gig_id IN (SELECT id FROM gigs WHERE organizer_id = ${id} AND artist_id = ${artist.id})
         `] : []),
-        ...(cascade?.includes('gigs') ? [tx`DELETE FROM gigs WHERE organizer_id = ${id} AND artist_id = ${artist.id}`] : []),
+        ...(cascade?.includes('gigs') ? [tx`
+          DELETE FROM gigs WHERE organizer_id = ${id} AND artist_id = ${artist.id}
+          RETURNING poster_url, thumb_url
+        `] : []),
         tx`DELETE FROM organizers WHERE id = ${id} AND artist_id = ${artist.id}`,
       ]);
     } catch (e) {
@@ -78,6 +84,11 @@ module.exports = wrap(async function handler(req, res) {
         return res.status(409).json({ error: 'This organizer is still linked to one or more gigs. Remove the organizer from those gigs first, then delete.' });
       }
       throw e;
+    }
+    // Deleted gigs take their poster files with them.
+    if (cascade?.includes('gigs')) {
+      const gigs = deleted[deleted.length - 2];
+      await removeGigFiles(req, artist, gigs.flatMap(g => [g.poster_url, g.thumb_url]));
     }
     return res.json({ deleted: true, hard: true });
   }

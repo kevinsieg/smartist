@@ -651,13 +651,10 @@ function renderLogs(logs) {
 }
 
 async function restoreSong(songId) {
-  const token = getToken();
-  if (!token) return;
-  const r = await fetch(`/api/${artistSlug}/songs/${songId}/restore`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-  });
-  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+  if (!getToken()) return;
+  let r;
+  // apiFetch sends an ended session to the login page and throws.
+  try { r = await apiFetch(`/api/${artistSlug}/songs/${songId}/restore`, 'POST'); } catch { return; }
   if (r.ok) {
     invalidateConfigCache();
     await loadAndRender();

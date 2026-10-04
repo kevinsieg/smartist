@@ -2,7 +2,7 @@ const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr, unsafeKey } = require('./_validate');
 const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
-const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
+const { requireAuth, getAccess, canBrowseCatalogue, sessionRowId } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
 const { verifyUserToken, sessionValid } = require('./_token');
 const { isSlugAvailable } = require('./_domain/artist');
@@ -202,7 +202,7 @@ async function myArtists(req, res) {
           FROM users u JOIN artists a ON a.id = u.artist_id
           WHERE u.email = me.email
         ), '[]') AS artists
-      FROM users me WHERE me.id = ${claim.userId} LIMIT 1`;
+      FROM users me WHERE me.id = ${sessionRowId(sql, claim)} LIMIT 1`;
     if (!row || !sessionValid(claim, row) || !row.artists.length)
       return res.status(401).json({ error: 'Unauthorised' });
     return res.json({ artists: row.artists });
