@@ -57,6 +57,8 @@ const suites = [
   require('./unit/inline_handlers'),
   require('./unit/api_fetch'),
   require('./unit/backup'),
+  require('./unit/schema_scripts'),
+  require('./unit/health'),
 ];
 
 (async () => {

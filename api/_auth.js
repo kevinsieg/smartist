@@ -20,20 +20,7 @@ function demoRole(token, artist) {
 //
 // The band and the caller's membership in it come back from one statement:
 // every authenticated request starts here, and two queries cost twice the
-// round-trips (they do not overlap on the function's single connection).
-// The users row a session claim stands for, as a subquery: the row the token
-// was issued for, or, once that row is gone (its band removed this person or
-// was deleted), another row of the same address. Tokens name a row by id, and
-// one band's removal used to sign the person out of every band. Tokens from
-// before the address was carried in them match by id only.
-function sessionRowId(sql, claim) {
-  return sql`(
-    SELECT id FROM users
-    WHERE id = ${claim.userId} OR email = ${claim.email ?? null}
-    ORDER BY (id = ${claim.userId}) DESC, id
-    LIMIT 1)`;
-}
-
+// round-trips, on a connection other requests of the instance are waiting for.
 async function loadArtistAndMember(token, slug) {
   const claim = token ? verifyUserToken(token) : null;
   if (!claim) return { artist: await getArtist(slug), claim, member: null };
@@ -58,6 +45,19 @@ async function loadArtistAndMember(token, slug) {
     : { id: member_id, role: member_role, password_hash: member_password_hash,
         sessions_valid_after: member_sessions_valid_after, email: member_email };
   return { artist, claim, member };
+}
+
+// The users row a session claim stands for, as a subquery: the row the token
+// was issued for, or, once that row is gone (its band removed this person or
+// was deleted), another row of the same address. Tokens name a row by id, and
+// one band's removal used to sign the person out of every band. Tokens from
+// before the address was carried in them match by id only.
+function sessionRowId(sql, claim) {
+  return sql`(
+    SELECT id FROM users
+    WHERE id = ${claim.userId} OR email = ${claim.email ?? null}
+    ORDER BY (id = ${claim.userId}) DESC, id
+    LIMIT 1)`;
 }
 
 async function resolveUser(token, artist, claim, member) {

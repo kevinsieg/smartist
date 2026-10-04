@@ -42,6 +42,12 @@ async function inviteLimited(band, ip, user) {
       || (await outboundMailLimited(user.email || `user:${user.id}`));
 }
 
+// Does any users row carry this address (any band, invited or not)?
+async function addressTaken(sql, email) {
+  const [row] = await sql`SELECT 1 FROM users WHERE email = ${email} LIMIT 1`;
+  return !!row;
+}
+
 // The caller's own row, when currentPassword is its password; else null.
 async function ownRow(sql, user, currentPassword) {
   const [row] = await sql`SELECT * FROM users WHERE id = ${user.id}`;
@@ -117,14 +123,10 @@ async function confirmEmailChange({ body, ip, slug }) {
   const target   = pending.pending_email;
   try {
     await sql.begin(async tx => {
-      // Refuse if the address is already taken in any band this change touches.
-      const [clash] = await tx`
-        SELECT 1 FROM users u
-        WHERE u.email = ${target}
-          AND u.artist_id IN (SELECT artist_id FROM users WHERE email = ${oldEmail})
-        LIMIT 1
-      `;
-      if (clash) throw Object.assign(new Error('taken'), { taken: true });
+      // Refuse if the address has an account of its own anywhere — checked
+      // again here, since it may have signed up after the request. Moving onto
+      // it would merge two people into one identity (memberships join on email).
+      if (await addressTaken(tx, target)) throw Object.assign(new Error('taken'), { taken: true });
 
       // One statement moves every membership, so the person keeps all bands.
       await tx`UPDATE users SET email = ${target}, delete_token_hash = NULL, delete_token_expires = NULL WHERE email = ${oldEmail}`;
@@ -310,7 +312,13 @@ async function changePassword({ user, body, ip }) {
   // Every band of this address: after a compromise, a password changed in one
   // band must not keep working through another.
   const hash = await bcrypt.hash(String(newPassword), 12);
-  await sql`UPDATE users SET password_hash = ${hash} WHERE email = ${row.email}`;
+  // Links still outstanding (email change, account deletion) end with the old
+  // password: whoever held it may have requested them.
+  await sql`
+    UPDATE users SET password_hash = ${hash},
+        pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
+        delete_token_hash = NULL, delete_token_expires = NULL
+    WHERE email = ${row.email}`;
   // The new hash invalidates every session issued before it, this one
   // included — hand back a replacement so the caller stays signed in.
   const token = generateUserToken(row.id, row.role, rememberMe ? TTL_30D : TTL_8H, hash, row.email);
@@ -336,6 +344,10 @@ async function requestEmailChange({ user, body, ip, origin, slug }) {
   const row = await ownRow(sql, user, currentPassword);
   if (!row) return fail(401, 'Current password is incorrect');
   if (row.email.toLowerCase() === lower) return fail(400, 'That is already your email address');
+  // An address that already has an account belongs to someone: moving these
+  // rows onto it would merge the two accounts, so this password would open
+  // that person's bands (passwordLogin tries every hash of an address).
+  if (await addressTaken(sql, lower)) return fail(409, 'That email address is already in use');
 
   const token   = linkToken();
   const expires = new Date(Date.now() + EMAIL_CHANGE_TTL_MS).toISOString();

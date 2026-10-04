@@ -63,14 +63,14 @@ async function init() {
     // offer no way back in through the provider that just failed.
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
     let rootCfg;
-    try { rootCfg = await loadConfig(); } catch (e) {}
+    try { rootCfg = await loadConfig(undefined, { light: true }); } catch (e) {}
     renderLogin(t('home.invalidLink'), rootCfg);
     return;
   }
 
   let cfg;
   try {
-    cfg = await loadConfig(slugFromNext || undefined);
+    cfg = await loadConfig(slugFromNext || undefined, { light: true });
     artistSlug = cfg.slug || slugFromNext;
     if (!artistSlug) {
       // Multi-tenant root: nothing to brand the page with. Signup is a link on
@@ -183,7 +183,11 @@ function renderLoggedIn(cfg, artists) {
 
 // ── Login form ────────────────────────────────────────────────────────────────
 
+// A new session starts without any band's cached config.
 function storeToken(token, remember) {
+  Object.keys(sessionStorage)
+    .filter(function(k) { return k.indexOf('artist_config_cache_') === 0; })
+    .forEach(function(k) { sessionStorage.removeItem(k); });
   if (remember) {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -366,7 +370,7 @@ async function doLogin() {
   const btn = document.getElementById('pw-btn');
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
-    const cfg = await loadConfig();
+    const cfg = await loadConfig(undefined, { light: true });
     if (cfg.slug) artistSlug = cfg.slug;
     const body = { email, password: pw, rememberMe: remember };
     // Email is the identity: /api/login finds the account across workspaces,

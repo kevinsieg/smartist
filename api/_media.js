@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { getDb, insertAuditLog, getSlug } = require('./_db');
 const { requireAuth, refuseDemo } = require('./_auth');
 const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
+const { unsafeKey } = require('./_validate');
 const { isOwnMediaUrl } = require('./_ownership');
 const { storageLimitBytes } = require('./_plans');
 const { presignLimited } = require('./_ratelimit');
@@ -74,7 +75,7 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
   const base = process.env.R2_PUBLIC_URL;
   // Keys carry the band id (see presignMedia), so a band can only confirm —
   // and later delete — files it uploaded itself.
-  if (!base || !publicUrl.startsWith(`${base}/${keyPrefix}${band.id}/`))
+  if (!base || !publicUrl.startsWith(`${base}/${keyPrefix}${band.id}/`) || unsafeKey(keyFromUrl(publicUrl)))
     return out(400, { error: 'Invalid publicUrl' });
 
   // Independent: the storage HEAD and the song lookup overlap.

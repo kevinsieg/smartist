@@ -114,10 +114,13 @@ async function handleAudioFile(input, sid) {
 // cross-site page needs for its scripts and cookies; it never becomes ours.
 var _EMBED_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation';
 
-// A PDF stays unsandboxed: browsers refuse to show a PDF in a sandboxed frame.
+// A PDF from our own bucket (an uploaded sheet) stays unsandboxed: browsers
+// refuse to show a PDF in a sandboxed frame. Decided by where the file lives,
+// not by how the URL ends — `https://anywhere/page#.pdf` ends in .pdf too.
+// Any other sheet link is sandboxed; the "open" link still opens it.
 function _sheetFrame(url) {
   var u = safeUrl(url);
-  var pdf = /\.pdf(\?|#|$)/i.test(u);
+  var pdf = !!_mediaBase && u.indexOf(_mediaBase + '/sheets/') === 0 && /\.pdf$/i.test(u.split(/[?#]/)[0]);
   return '<div class="sheet-embed"><iframe src="' + escHtml(u) + '" title="Sheet"' +
     (pdf ? '' : ' sandbox="' + _EMBED_SANDBOX + ' allow-forms"') + '></iframe></div>';
 }

@@ -72,6 +72,13 @@ function siHandleFile(file) {
       document.getElementById('si-file-info').textContent = file.name + ' (' + Math.max(1, Math.round(file.size / 1024)) + ' KB)';
       document.getElementById('si-file-info').style.display = '';
       document.getElementById('si-drop-label').style.display = 'none';
+      // The server's limit (MAX_CSV in api/_domain/song_import.js): checked
+      // here too, so a large file is not uploaded only to be refused.
+      if (text.length > 1500000) {
+        _siStatus(_siErrorText({ error: 'file_too_large' }), true);
+        _siResetFile();
+        return;
+      }
       _siSend({ csv: text }, true);
     };
     reader.onerror = function() { _siStatus(t('songImport.readFailed'), true); };
@@ -93,7 +100,12 @@ async function _siSend(body, isFile) {
   var r, data;
   try {
     r = await apiFetch('/api/' + _siSlug + '/songs/import', 'POST', body);
-    data = await r.json();
+    // The platform answers a body over its 4.5 MB limit with a 413 of its own,
+    // not JSON.
+    data = await r.json().catch(function() {
+      if (r.status === 413) return { error: 'file_too_large' };
+      throw new Error('not json');
+    });
   } catch (e) {
     if (seq === _siSeq) _siStatus(t('common.networkError'), true);
     return null;
@@ -135,7 +147,10 @@ async function siImport(btn) {
   var r, data;
   try {
     r = await apiFetch('/api/' + _siSlug + '/songs/import', 'POST', { rows: _siPayloadRows(), commit: true });
-    data = await r.json();
+    data = await r.json().catch(function() {
+      if (r.status === 413) return { error: 'file_too_large' };
+      throw new Error('not json');
+    });
   } catch (e) {
     _siStatus(t('common.networkError'), true);
     btn.disabled = false;

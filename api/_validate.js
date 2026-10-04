@@ -141,4 +141,16 @@ function parseFields(body, spec, { partial = false } = {}) {
   return { value };
 }
 
-module.exports = { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };
+// Every ownership check on a bucket key is a prefix or pattern on the key as
+// written (`audio/<band id>/…`, `bands/<slug>/…`), so a key that a storage
+// layer could read differently — dot segments, empty segments, escaped
+// slashes or dots, backslashes — must never pass one: `bands/mine/../other`
+// starts with `bands/mine/`. A query string (a cache-busting `?v=`) is not
+// part of the key and is ignored.
+function unsafeKey(key) {
+  if (typeof key !== 'string') return true;
+  const path = key.split(/[?#]/)[0];
+  return !path || /(^|\/)\.{1,2}(\/|$)|\/\/|\\|%2e|%2f|%5c/i.test(path);
+}
+
+module.exports = { unsafeKey, validateSongIds, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };

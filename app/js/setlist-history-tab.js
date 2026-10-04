@@ -714,7 +714,7 @@ async function _histExportPdf(sid) {
   sid = String(sid);
   var s = _histSets.find(function(x) { return String(x.id) === sid; });
   await _loadHistSongs(sid);
-  var cfg = await loadConfig();
+  var cfg = await loadConfig(undefined, { light: true });
   printSetlistSongs(_histLoadedSongs[sid] || [], (s && s.title) || '', cfg);
 }
 

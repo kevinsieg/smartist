@@ -828,7 +828,7 @@ function renderPlan(cfg) {
       var nLinks = renderSupportLinks(donation.querySelector('[data-support-links]'));
       if (nLinks > 0) donation.style.display = '';
       // Unlock Pro-only nav items without forcing a reload.
-      try { var _fresh = await loadConfig(); applyPlanNavLocks((_fresh.plan && _fresh.plan.features) || []); } catch (e) {}
+      try { var _fresh = await loadConfig(undefined, { light: true }); applyPlanNavLocks((_fresh.plan && _fresh.plan.features) || []); } catch (e) {}
     } catch (e) {
       btn.disabled = false;
     }

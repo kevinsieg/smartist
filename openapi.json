@@ -301,6 +301,11 @@
             "type": "string",
             "nullable": true
           },
+          "setlist_titles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Titles of the setlists linked to this gig (empty string for an untitled one). Gig list, members only."
+          },
           "location": {
             "type": "string",
             "nullable": true,
@@ -1356,9 +1361,15 @@
                         },
                         "arrangements": {
                           "type": "array",
+                          "description": "Every version: id, name, is_active, updated_at.",
                           "items": {
                             "type": "object"
                           }
+                        },
+                        "active_arrangement": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "The active version in full (rows, hidden_instruments), or null."
                         }
                       }
                     }

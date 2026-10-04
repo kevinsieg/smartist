@@ -100,8 +100,10 @@ jobs:
           node-version: '24'
       - if: steps.cfg.outputs.ok == 'true'
         name: Install dependencies, Postgres client, age and rclone
+        # --ignore-scripts: this job's environment holds every production
+        # connection string and bucket key, and no install script needs them.
         run: |
-          npm ci
+          npm ci --ignore-scripts
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-common age rclone > /dev/null
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
