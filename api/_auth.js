@@ -20,7 +20,7 @@ function demoRole(token, artist) {
 //
 // The band and the caller's membership in it come back from one statement:
 // every authenticated request starts here, and two queries cost twice the
-// round-trips (they do not overlap on the function's single connection).
+// round-trips, on a connection other requests of the instance are waiting for.
 async function loadArtistAndMember(token, slug) {
   const claim = token ? verifyUserToken(token) : null;
   if (!claim) return { artist: await getArtist(slug), claim, member: null };

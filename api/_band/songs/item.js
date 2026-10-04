@@ -1,4 +1,4 @@
-const { getDb, getSlug, trimSongLogs } = require('../../_db');
+const { getDb, getSlug, trimSongLogs, purgeDeletedSongs } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
@@ -12,6 +12,9 @@ const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_dom
 // An arrangement's rows and hidden instruments are stored as sent; cap them so
 // one request cannot park megabytes that every stage view then loads.
 const ARRANGEMENT_MAX_BYTES = 128 * 1024;
+// Versions per song: each is up to ARRANGEMENT_MAX_BYTES, and the plan's song
+// count would not bound them otherwise.
+const ARRANGEMENTS_PER_SONG = 20;
 function arrangementError(rows, hidden) {
   if (rows !== undefined && jsonBytes(rows) > ARRANGEMENT_MAX_BYTES) return 'rows is too large';
   if (hidden !== undefined && jsonBytes(hidden) > 4 * 1024) return 'hidden_instruments is too large';
@@ -64,7 +67,7 @@ module.exports = wrap(async function handler(req, res) {
     const song = await writeLyrics(sql, band.id, songId, text,
       req.method === 'PUT' ? 'lyrics_update' : 'lyrics_delete');
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    await trimSongLogs(sql, band.id);
+    await trimSongLogs(sql, band.id, songId);
     return res.json({ ok: true });
   }
 
@@ -114,11 +117,17 @@ module.exports = wrap(async function handler(req, res) {
       sourceRows = src.rows;
       sourceHidden = src.hidden_instruments;
     }
+    // The count and the insert in one statement, so two requests at once
+    // cannot both pass a count taken before either of them.
     const [created] = await sql`
       INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
-      VALUES (${songId}, ${band.id}, ${name}, ${sql.json(sourceRows)}::jsonb, ${sql.json(sourceHidden)}::jsonb)
+      SELECT ${songId}, ${band.id}, ${name}, ${sql.json(sourceRows)}::jsonb, ${sql.json(sourceHidden)}::jsonb
+      WHERE (SELECT count(*) FROM song_arrangements
+             WHERE song_id = ${songId} AND artist_id = ${band.id}) < ${ARRANGEMENTS_PER_SONG}
       RETURNING *
     `;
+    if (!created)
+      return res.status(409).json({ error: `At most ${ARRANGEMENTS_PER_SONG} versions per song`, code: 'arrangement_limit' });
     return res.status(201).json(created);
   }
 
@@ -240,6 +249,7 @@ module.exports = wrap(async function handler(req, res) {
       SELECT id FROM s
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
+    await purgeDeletedSongs(sql, band.id);
     return res.status(204).end();
   }
 

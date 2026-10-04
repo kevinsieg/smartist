@@ -255,6 +255,11 @@ async function publicConfig(req, res, slugParam) {
   // Without a session the songs payload only ships for a public catalogue.
   const priv  = !user && !canBrowseCatalogue(band);
   const light = priv || req.query.light === '1';
+  // The anonymous full variant is the whole repertoire, unpaged. The CDN keeps
+  // it for a minute, but any extra query parameter skips that cache, so the
+  // requests that do reach the function are limited per address.
+  if (!user && !light && await checkRateLimit(`config-full:${clientIp(req)}`, 60, 600))
+    return res.status(429).json({ error: 'Too many requests' });
 
   const [songs, [counts]] = await Promise.all([
     light ? Promise.resolve([]) : configSongs(sql, band.id),

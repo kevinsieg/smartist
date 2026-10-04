@@ -360,6 +360,17 @@ async function testArrangementWrite(slug, token, song) {
     assert(json.is_active === true, 'is_active not set');
   });
 
+  await test('POST /:id/arrangements past 20 versions → 409', async () => {
+    const { json: list } = await GET(`/api/${slug}/songs/${sid}/arrangements`, AUTH);
+    for (let i = list.length; i < 20; i++) {
+      const r = await POST(`/api/${slug}/songs/${sid}/arrangements`, { name: `[TEST] v${i}` }, { token });
+      assertStatus(r.res, r.json, 201);
+    }
+    const { res, json } = await POST(`/api/${slug}/songs/${sid}/arrangements`, { name: '[TEST] one too many' }, { token });
+    assertStatus(res, json, 409);
+    assert(json.code === 'arrangement_limit', `code: ${json.code}`);
+  });
+
   // Clean up all created versions
   await test('DELETE /:id/arrangements/:arrId removes version → 204', async () => {
     const { res, json: list } = await GET(`/api/${slug}/songs/${sid}/arrangements`, AUTH);
