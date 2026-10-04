@@ -1,9 +1,9 @@
-const { getDb, getSlug, parsePage, trimSongLogs } = require('../_db');
+const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { validateStr, validateNum, jsonBytes } = require('../_validate');
 const { wrap } = require('../_handler');
 const { checkRateLimit } = require('../_ratelimit');
-const { MEDIA_LOG_ACTIONS } = require('../_constants');
+const { MEDIA_LOG_ACTIONS, SONG_LOG_KEEP } = require('../_constants');
 const { keyFromUrl } = require('../_r2');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
@@ -33,10 +33,13 @@ async function songValues(sql, artistId) {
 // otherwise a band could point its song at another band's file and have it
 // deleted by the next media replace, media delete or account deletion.
 const EXTRA_MAX_BYTES = 32 * 1024;
+// The cap is on what is stored after the merge (`extra || patch`): each request
+// alone fitting let repeated requests with new keys grow the row without end,
+// and extra ships with every song list.
 function extraError(extra, current = {}) {
   if (extra == null) return null;
   if (typeof extra !== 'object' || Array.isArray(extra)) return 'extra must be an object';
-  if (jsonBytes(extra) > EXTRA_MAX_BYTES) return 'extra is too large';
+  if (jsonBytes({ ...(current || {}), ...extra }) > EXTRA_MAX_BYTES) return 'extra is too large';
   for (const [k, v] of Object.entries(extra)) {
     if (!/Url$/.test(k) || v == null || v === '') continue;
     if (typeof v !== 'string' || !/^https?:\/\//i.test(v)) return `${k} must be an http(s) URL`;
@@ -181,7 +184,7 @@ module.exports = wrap(async function handler(req, res) {
       WITH s AS (
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            bpm, length_min, interpret, reference_interpret, comment, language, extra, tags)
-        VALUES (${band.id}, ${title}, ${active ?? true}, ${heart ?? false}, ${key},
+        VALUES (${band.id}, ${title}, ${toBool(active, true)}, ${toBool(heart, false)}, ${key},
                 ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
                 ${interpret}, ${reference_interpret},
                 ${comment}, ${language}, ${extra ?? {}},
@@ -291,8 +294,8 @@ module.exports = wrap(async function handler(req, res) {
       accepted.set(songId, value);
     }
 
-    // One statement for the whole batch — the rows, merged extra and one
-    // audit entry each — instead of two round-trips per song.
+    // One statement for the whole batch — the rows, merged extra, one audit
+    // entry each and the history trim — instead of two round-trips per song.
     let applied = 0;
     if (accepted.size) {
       const rows = [...accepted.values()];
@@ -323,12 +326,22 @@ module.exports = wrap(async function handler(req, res) {
         ), logged AS (
           INSERT INTO song_logs (artist_id, song_id, action, song_data)
           SELECT artist_id, id, 'update', to_jsonb(u) FROM u
+        ), trimmed AS (
+          -- This band's history of the songs written here, newest SONG_LOG_KEEP
+          -- kept. The entry added above is not visible yet: it rides along.
+          DELETE FROM song_logs WHERE id IN (
+            SELECT id FROM (
+              SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
+              FROM song_logs
+              WHERE artist_id = ${band.id} AND song_id IN (SELECT id FROM u)
+            ) ranked
+            WHERE n > ${SONG_LOG_KEEP}
+          )
         )
         SELECT id FROM u
       `;
       const done = new Set(updated.map(r => r.id));
       applied = done.size;
-      if (applied) await trimSongLogs(sql, band.id);
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
     return res.json({ ok: true, count: applied, rejected });

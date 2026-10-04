@@ -44,7 +44,7 @@ Workspace pages live at `/<slug>/…`.
 
 **Accounts** — sign up at `/signup` with email or Google (Facebook when enabled), then create a band at `/onboarding`. One login can belong to several bands (`/workspaces`). A new Google account that signs in from the login page also goes on to onboarding. `/demo` opens the public demo band; `/admin` is a cross-tenant overview for `SUPER_ADMIN_EMAILS`.
 
-**Plans** — Free: 100 songs, 30 MB storage, songs/setlists/gigs/hub. Pro: unlimited, plus venues, organizers and PRO import. There is no paid checkout yet: Settings upgrades a band to Pro for free, and `scripts/plans.js` or `/admin` set a plan by hand. `api/_plans.js` decides every feature and limit.
+**Plans** — Free: 100 songs, 30 MB storage, songs/setlists/gigs/hub. Pro: unlimited songs, 2 GB storage, plus venues, organizers and PRO import. There is no paid checkout yet: Settings upgrades a band to Pro for free, and `scripts/plans.js` or `/admin` set a plan by hand. `api/_plans.js` decides every feature and limit.
 
 ---
 
@@ -259,8 +259,9 @@ touches a remote database. It prints its sign-in: open
 To run against the Neon dev database instead:
 
 ```bash
-vercel env pull .env.local   # pulls Preview vars — copy values into .env (vercel dev reads .env, not .env.local)
-vercel dev                   # local server on port 3000
+vercel env pull .env.local                         # the Preview variables
+set -a; . ./.env.local; set +a                     # into this shell
+node tests/harness/server.js                       # the app on :3000, Vercel's routing, no Vercel login
 ```
 
 Seed the dev database with fake gigs, setlists, songs, and sample GEMA rows (targets the artist from `ARTIST_SLUG`, or the first artist in the DB if unset — run `setup.js` first):
@@ -269,7 +270,7 @@ Seed the dev database with fake gigs, setlists, songs, and sample GEMA rows (tar
 node scripts/seed.js --force
 ```
 
-Set `ARTIST_SLUG` in `.env` or `.env.local` to match the artist you created with `setup.js`. Restart `vercel dev` if you change env files.
+Set `ARTIST_SLUG` in `.env` or `.env.local` to match the artist you created with `setup.js`. Restart the server if you change env files.
 
 ---
 
@@ -306,7 +307,7 @@ UPDATE artists SET config = config || '{
 | `gemaIpNameNumber` | Your GEMA IP-Name-Nr — pre-fills the GEMA import and classifies your own compositions                    |
 | `publicCatalogue`  | `true` opens the song list, song details and gigs without a session (Settings; off by default)           |
 | `publicStage`      | `true` lets shared `/stage?id=N` links open without a session (Settings; off by default)                 |
-| `plan`             | `free` or `pro` — set only through the upgrade/downgrade actions, `/admin` or `scripts/plans.js`         |
+| `plan`             | `free` or `pro` — set only through `/api/config/upgrade` and `/downgrade`, `/admin` or `scripts/plans.js`         |
 
 
 ---
@@ -344,7 +345,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 ## API
 
-All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json` (`tests/unit/openapi.js` checks it against the route table and the `/api/config` actions); interactive docs at `/api/docs`.
+All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json` (`tests/unit/openapi.js` checks it against the route table); interactive docs at `/api/docs`.
 
 A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *stage* = also open without a session when the band turned on *public catalogue* / *public stage links* in Settings (both off by default); — = no session needed.
 
@@ -353,9 +354,14 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | GET    | `/api/config`                     | —    | Band name and branding; songs and counts only with a session or a public catalogue           |
 | GET    | `/api/config?action=health`       | —    | Missing env vars and schema state of the deployment                                          |
 | POST   | `/api/login`                      | —    | Log in with email + password across workspaces                                               |
-| GET    | `/api/config?action=google-url`   | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
-| POST   | `/api/config` `request-reset`     | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
-| POST   | `/api/config` `logout-everywhere` | ✓    | End every session of the signed-in address, on all devices and workspaces                    |
+| GET    | `/api/auth/google-url`            | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
+| POST   | `/api/auth/request-reset`         | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
+| POST   | `/api/auth/logout-everywhere`     | ✓    | End every session of the signed-in address, on all devices and workspaces                    |
+| GET    | `/api/auth/artists`               | ✓    | The workspaces of the signed-in address                                                      |
+| POST   | `/api/signup/link`                | —    | Email a sign-up link (`/api/signup/verify` checks it, `POST /api/signup` creates the workspace) |
+| POST   | `/api/auth/request-deletion`      | ✓    | Email a link that deletes the account (`confirm-deletion` redeems it)                        |
+| POST   | `/api/config/upgrade`             | ✓    | Switch the band to Pro (`downgrade` back to Free); `?slug=` names the band                   |
+| POST   | `/api/contact`                    | —    | Contact form (`/api/subscribe` for the demo sign-up)                                         |
 | POST   | `/api/:artist/members/…`          | ✓    | Admins invite and manage members; members change their password or address                   |
 | GET    | `/api/:artist/songs`              | ✓ / catalogue | Songs with play stats and GEMA data                                                 |
 | POST   | `/api/:artist/songs`              | ✓    | Create song                                                                                  |

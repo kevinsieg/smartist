@@ -48,53 +48,53 @@ function mockRes() {
 async function run(r) {
   const { testAsync, assertEq } = r;
 
-  await testAsync('POST /api/config contact — missing name → 400', async () => {
+  await testAsync('POST /api/contact — missing name → 400', async () => {
     const handler = makeHandler();
     const res = mockRes();
-    await handler({ method: 'POST', body: { source: 'contact', email: 'a@b.com', message: 'hello' } }, res);
+    await handler({ method: 'POST', query: { action: 'contact' }, body: { email: 'a@b.com', message: 'hello' } }, res);
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config contact — missing email → 400', async () => {
+  await testAsync('POST /api/contact — missing email → 400', async () => {
     const handler = makeHandler();
     const res = mockRes();
-    await handler({ method: 'POST', body: { source: 'contact', name: 'Alice', message: 'hello' } }, res);
+    await handler({ method: 'POST', query: { action: 'contact' }, body: { name: 'Alice', message: 'hello' } }, res);
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config contact — invalid email → 400', async () => {
+  await testAsync('POST /api/contact — invalid email → 400', async () => {
     const handler = makeHandler();
     const res = mockRes();
-    await handler({ method: 'POST', body: { source: 'contact', name: 'Alice', email: 'notanemail', message: 'hello' } }, res);
+    await handler({ method: 'POST', query: { action: 'contact' }, body: { name: 'Alice', email: 'notanemail', message: 'hello' } }, res);
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config contact — missing message → 400', async () => {
+  await testAsync('POST /api/contact — missing message → 400', async () => {
     const handler = makeHandler();
     const res = mockRes();
-    await handler({ method: 'POST', body: { source: 'contact', name: 'Alice', email: 'a@b.com' } }, res);
+    await handler({ method: 'POST', query: { action: 'contact' }, body: { name: 'Alice', email: 'a@b.com' } }, res);
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config contact — message too long → 400', async () => {
+  await testAsync('POST /api/contact — message too long → 400', async () => {
     const handler = makeHandler();
     const res = mockRes();
-    await handler({ method: 'POST', body: { source: 'contact', name: 'Alice', email: 'a@b.com', message: 'x'.repeat(5001) } }, res);
+    await handler({ method: 'POST', query: { action: 'contact' }, body: { name: 'Alice', email: 'a@b.com', message: 'x'.repeat(5001) } }, res);
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config contact — send failure → 500', async () => {
+  await testAsync('POST /api/contact — send failure → 500', async () => {
     const handler = makeHandler({ emailFn: async () => { throw new Error('smtp error'); } });
     const res = mockRes();
-    await handler({ method: 'POST', body: { source: 'contact', name: 'Alice', email: 'a@b.com', message: 'hello' } }, res);
+    await handler({ method: 'POST', query: { action: 'contact' }, body: { name: 'Alice', email: 'a@b.com', message: 'hello' } }, res);
     assertEq(res._status, 500);
   });
 
-  await testAsync('POST /api/config contact — success → 200', async () => {
+  await testAsync('POST /api/contact — success → 200', async () => {
     let sent = null;
     const handler = makeHandler({ emailFn: async (opts) => { sent = opts; } });
     const res = mockRes();
-    await handler({ method: 'POST', body: { source: 'contact', name: 'Alice', email: 'a@b.com', message: 'hello world' } }, res);
+    await handler({ method: 'POST', query: { action: 'contact' }, body: { name: 'Alice', email: 'a@b.com', message: 'hello world' } }, res);
     assertEq(res._status, 200);
     assertEq(res._body?.ok, true);
     assertEq(sent?.reply_to, 'a@b.com');

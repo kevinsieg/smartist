@@ -14,7 +14,10 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
   const sql = getDb();
   const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
   const sweep = Math.random() < 1 / SWEEP_EVERY
-    ? Promise.resolve(sql`DELETE FROM rate_limits WHERE window_start < now() - interval '1 day'`).catch(() => null)
+    ? Promise.resolve(sql`
+        DELETE FROM rate_limits
+        WHERE window_start < now() - interval '1 day'
+          AND (NOT starts_with(key, 'login-ok:') OR window_start < now() - ${`${LOGIN_OK_DAYS} days`}::interval)`).catch(() => null)
     : null;
   const [[row]] = await Promise.all([sql`
     INSERT INTO rate_limits (key, window_start, count)
@@ -38,9 +41,10 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
 // person out by typing ten wrong passwords for them. So failures count twice:
 // per address and IP, where ten lock that pair for fifteen minutes, and per
 // address overall, where a hundred (ten IPs' worth) lock the address
-// everywhere. Only failures count, so a person who signs in correctly is never
-// slowed down, and the owner on their own network stays out of a stranger's
-// lock. Password reset and emailed links are not affected by either. The lock
+// everywhere except on the IPs it signed in from lately (loginOkKey). Only
+// failures count, so a person who signs in correctly is never slowed down,
+// and the owner on their own network stays out of a stranger's lock.
+// Password reset and emailed links are not affected by either. The lock
 // is read in passwordLogin's first statement (api/_domain/login.js); a failure
 // is counted here.
 const LOGIN_FAIL_MAX = 10;
@@ -48,6 +52,12 @@ const LOGIN_FAIL_ADDRESS_MAX = 100;
 const LOGIN_FAIL_WINDOW = 15 * 60;
 const loginFailKey = email => `login-fail:${String(email || '').trim().toLowerCase()}`;
 const loginFailPairKey = (email, ip) => `${loginFailKey(email)}|${ip || 'unknown'}`;
+// An IP this address signed in from lately is the owner's own network: the
+// address-wide lock (LOGIN_FAIL_ADDRESS_MAX) does not apply to it, so a
+// stranger with ten IPs cannot keep the owner out. Only the pair lock does.
+// Kept LOGIN_OK_DAYS after the last sign-in; the sweep above clears it later.
+const LOGIN_OK_DAYS = 30;
+const loginOkKey = (email, ip) => `login-ok:${String(email || '').trim().toLowerCase()}|${ip || 'unknown'}`;
 async function countLoginFailure(email, ip) {
   const windowStart = new Date(Date.now() - LOGIN_FAIL_WINDOW * 1000).toISOString();
   // Both counters in one statement, with checkRateLimit's window reset.
@@ -74,9 +84,13 @@ async function outboundMailLimited(who) {
 // Presigned upload URLs. Storage is counted when an upload is confirmed, so an
 // upload that is never confirmed costs bucket space nobody is charged for; this
 // bounds how much of it one band can park.
+// The daily cap counts every band together: sign-up is open, so a per-band
+// limit alone is no limit.
 const PRESIGN_PER_HOUR = 60;
+const PRESIGN_DAILY = 2000;
 async function presignLimited(bandId) {
-  return checkRateLimit(`presign:${bandId}`, PRESIGN_PER_HOUR, 3600);
+  return (await checkRateLimit(`presign:${bandId}`, PRESIGN_PER_HOUR, 3600))
+      || (await checkRateLimit('presign-day', PRESIGN_DAILY, 86400));
 }
 
 function clientIp(req) {
@@ -88,6 +102,6 @@ function clientIp(req) {
 
 module.exports = {
   checkRateLimit, clientIp, countLoginFailure,
-  loginFailKey, loginFailPairKey, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW,
-  outboundMailLimited, MAIL_OUT_PERSON_DAILY, MAIL_OUT_DAILY, presignLimited, PRESIGN_PER_HOUR,
+  loginFailKey, loginFailPairKey, loginOkKey, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW,
+  outboundMailLimited, MAIL_OUT_PERSON_DAILY, MAIL_OUT_DAILY, presignLimited, PRESIGN_PER_HOUR, PRESIGN_DAILY,
 };

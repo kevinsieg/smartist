@@ -132,6 +132,8 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `declined` | boolean DEFAULT false | Venue declined to book |
 | `status` | text | Free-form status label (e.g. `Active`, `Prospect`, `Confirmed`) |
 | `category` | text | Type: `club`, `festival`, `placeholder`, `legacy`, … |
+| `street_number` | text | |
+| `street` | text | |
 | `postcode` | text | |
 | `city` | text | |
 | `state` | text | |
@@ -154,6 +156,7 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `main_genre` | text | Primary genre this venue books |
 | `size` | integer | Capacity |
 | `language` | text | |
+| `lat`, `lng` | double precision | Map position, from the address search |
 | `last_updated` | timestamptz DEFAULT NOW() | |
 
 **Indexes:** `venues_artist_id_idx`
@@ -201,9 +204,11 @@ A performance event. Setlists can be linked to a gig but the link is optional.
 | `type` | text | `Club show`, `Festival`, `Private`, … |
 | `time_start` | time | |
 | `time_end` | time | |
+| `location` | text | Free-text place, shown after the venue name |
 | `additional_link` | text | |
 | `additional_text` | text | |
 | `comment` | text | |
+| `poster_url`, `thumb_url` | text | Poster image and its thumbnail in R2 |
 | `deleted` | boolean NOT NULL DEFAULT false | Soft-delete |
 | `last_updated` | timestamptz DEFAULT NOW() | |
 
@@ -285,7 +290,7 @@ Versioned arrangement charts for a song. Each song can have multiple named versi
 
 ### `song_logs`
 
-Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries: about one logged write in ten trims the band's older ones (`trimSongLogs` in `api/_db.js`). Entries with `song_id` `NULL` are never trimmed.
+Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries (`SONG_LOG_KEEP`): every edit trims the history of the songs it wrote, in the same statement (or `trimSongLogs` in `api/_db.js` for media writes). Entries with `song_id` `NULL` are never trimmed.
 
 `song_id` is nullable — if a song is ever hard-deleted the FK goes `NULL` via `ON DELETE SET NULL` but the `song_data` snapshot is preserved.
 
@@ -385,12 +390,24 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `role` text | `admin`, `member` or `viewer` |
 | `invite_token_hash`, `invite_expires_at` | SHA-256 of the emailed invite token; 7 days |
 | `sessions_valid_after` timestamptz | Set by "log out everywhere" on every row of the address; session tokens issued earlier are refused |
-| `invited_by` FK → `users` SET NULL | |
+| `invited_by` FK → `users` SET NULL | Indexed (`users_invited_by_idx`) for that SET NULL |
 | `pending_email`, `email_change_token_hash`, `email_change_expires_at` | Email change waiting for confirmation from the new address (24 h) |
 | `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |
 | `created_at` timestamptz | |
 
 Every emailed token is stored only as a hash.
+
+---
+
+### `schema_migrations`
+
+The migration ledger: one row per dated block of `scripts/schema.sql`. The
+health check compares it with `SCHEMA_VERSION` in `api/_env.js`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | text PK | The block's date, e.g. `2026-10-06` |
+| `applied_at` | timestamptz DEFAULT now() | |
 
 ---
 
@@ -404,7 +421,7 @@ Row ids are one sequence across all artists, and a foreign key only proves that 
 
 ### Soft delete
 
-Songs, venues, organizers, and gigs use `deleted = true` rather than physical deletion. This preserves setlist history (songs), CRM history (venues/organizers), and linked setlists (gigs). The restore endpoint for songs (`POST /api/:artist/songs/:id/restore`) uses the `song_logs` snapshot as a fallback.
+Songs, venues, organizers, and gigs use `deleted = true` rather than physical deletion. This preserves setlist history (songs), CRM history (venues/organizers), and linked setlists (gigs). The restore endpoint for songs (`POST /api/:artist/songs/:id/restore`) clears the flag; a hard-deleted song cannot come back by id, since its `song_logs` rows lose the id. A song deleted more than 90 days ago that no setlist lists and that has no uploaded file is removed for good, with its history (`purgeDeletedSongs` in `api/_db.js`, run by about one song deletion in ten). A song has at most 20 arrangement versions.
 
 ### FK delete strategies
 

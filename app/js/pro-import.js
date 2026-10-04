@@ -118,7 +118,8 @@ async function callImport({ dryRun }) {
     dryRun,
     ownerIpNameNumber: document.getElementById('owner-ip').value.trim() || undefined,
   });
-  const data = await r.json();
+  // The platform answers a body over its 4.5 MB limit with a 413 of its own, not JSON.
+  const data = await r.json().catch(() => ({ error: r.status === 413 ? 'CSV too large (max 2 MB)' : null }));
   if (!r.ok) throw new Error(data.error || t('pro.importFailed'));
   return data;
 }

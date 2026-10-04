@@ -3,6 +3,7 @@
 // getArtistsForUser joins on email, so one person is several users rows tied
 // together by their address. Every decision here is made across those rows.
 'use strict';
+const { unsafeKey } = require('../_validate');
 
 // What deleting this address would do to each of its workspaces.
 //   destroy — nobody else is in it; it goes entirely, rows and files
@@ -74,6 +75,7 @@ async function collectR2Urls(artistIds, sql) {
   const owned = (u) => {
     if (!base || !u.startsWith(`${base}/`)) return true;   // not ours to judge; deleteFromR2 ignores it
     const key = u.slice(base.length + 1).split('?')[0];
+    if (unsafeKey(key)) return false;
     const m = /^(audio|sheets|playback)\/([^/]+)\/[^/]+$/.exec(key);
     if (m) return ids.has(m[2]);
     if (/^(audio|sheets|playback)\/[^/]+$/.test(key)) return true;   // legacy flat key
@@ -192,11 +194,13 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
     // bare email address outlives the account it belonged to. Every other key
     // is keyed on an IP, an artist id or a song. lower(key) because the key
     // was built from whatever casing the request carried. Failed sign-ins are
-    // also counted per address and IP, as `login-fail:<address>|<ip>`.
+    // also counted per address and IP, as `login-fail:<address>|<ip>`, and the
+    // IPs it signed in from are kept as `login-ok:<address>|<ip>`.
     await tx`DELETE FROM rate_limits WHERE lower(key) IN (
       'delete-req:' || ${addr}, 'signup-link:' || ${addr},
       'reset:' || ${addr}, 'login-fail:' || ${addr})
-      OR starts_with(lower(key), 'login-fail:' || ${addr} || '|')`;
+      OR starts_with(lower(key), 'login-fail:' || ${addr} || '|')
+      OR starts_with(lower(key), 'login-ok:' || ${addr} || '|')`;
   });
 
   // Outside the transaction on purpose: R2 has no rollback. An orphaned file is
@@ -216,4 +220,4 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
   return { ok: true, found: true, destroyed: plan.destroy.map(a => a.slug), left: plan.leave.map(a => a.slug) };
 }
 
-module.exports = { planDeletion, collectR2Urls, executeDeletion, removeFiles };
+module.exports = { planDeletion, collectR2Urls, executeDeletion };

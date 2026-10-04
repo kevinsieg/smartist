@@ -31,27 +31,27 @@ module.exports = wrap(async function handler(req, res) {
       // setlists stays private, so nobody can enumerate them from here.
       if (!user && !canOpenStage(band))
         return res.status(401).json({ error: 'Sign in to view this' });
-      const [[setlist], songs] = await Promise.all([
-        sql`
-          SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue
-          FROM setlists s
-          LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-          LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-          WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
-        `,
-        sql`
-          SELECT songs.*, ss.position,
-                 EXISTS (SELECT 1 FROM song_lyrics l WHERE l.song_id = songs.id) AS has_lyrics
-          FROM setlist_songs ss
-          JOIN songs ON ss.song_id = songs.id
-          WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${band.id}
-          ORDER BY ss.position
-        `,
-      ]);
+      // The setlist and its songs in one statement.
+      const [setlist] = await sql`
+        SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
+          COALESCE((
+            SELECT json_agg(to_jsonb(songs) || jsonb_build_object(
+                     'position', ss.position,
+                     'has_lyrics', EXISTS (SELECT 1 FROM song_lyrics l WHERE l.song_id = songs.id))
+                   ORDER BY ss.position)
+            FROM setlist_songs ss
+            JOIN songs ON ss.song_id = songs.id
+            WHERE ss.setlist_id = s.id AND songs.artist_id = s.artist_id
+          ), '[]') AS songs
+        FROM setlists s
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
+      `;
       if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
       // Visitors on a public stage link never see the band's private song
       // notes. The setlist's own comment stays: stage shows it as a subtitle.
-      return res.json({ ...setlist, songs: user ? songs : songs.map(publicSong) });
+      return res.json(user ? setlist : { ...setlist, songs: setlist.songs.map(publicSong) });
     }
 
     const band = await requireAuth(req, res, slug, 'member');
@@ -78,37 +78,43 @@ module.exports = wrap(async function handler(req, res) {
     const gigId = rawGigId != null ? Number(rawGigId) : null;
     if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
       return res.status(400).json({ error: 'Invalid gig_id' });
-    const [[setlist], owned] = await Promise.all([
-      sql`SELECT id FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}`,
-      ownsRefs(sql, band.id, { songIds: validIds, gigId }),
-    ]);
-    if (!setlist)     return res.status(404).json({ error: 'Setlist not found' });
+    const owned = await ownsRefs(sql, band.id, { songIds: validIds, gigId });
     if (!owned.songs) return res.status(400).json({ error: 'Invalid song_ids' });
     if (!owned.gig)   return res.status(400).json({ error: 'Invalid gig_id' });
 
-    // One transaction: a failed insert can no longer leave the
-    // setlist emptied by the delete before it.
-    const results = await sql.begin(tx => [
+    // One transaction of two statements. The first updates (and so locks) the
+    // row; the second takes its snapshot only after that lock, so a save that
+    // waited for another one sees all of that one's songs and replaces them
+    // cleanly (in one statement, the tail cut would miss rows the other save
+    // added). Positions 0..n-1 are upserted and the ones past the new end
+    // deleted: the two touch different rows, so they share a statement. Both
+    // are scoped to this band's setlist; no row back means it is not theirs.
+    const [, [updated]] = await sql.begin(tx => [
       tx`
         UPDATE setlists SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
         WHERE id = ${setlistId} AND artist_id = ${band.id}
       `,
-      tx`DELETE FROM setlist_songs WHERE setlist_id = ${setlistId}`,
-      ...(validIds.length ? [tx`
-        INSERT INTO setlist_songs (setlist_id, song_id, position)
-        SELECT ${setlistId}, u.song_id, u.ord - 1
-        FROM unnest(${validIds}::int[]) WITH ORDINALITY AS u(song_id, ord)
-      `] : []),
       tx`
+        WITH s AS (
+          SELECT * FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}
+        ), put AS (
+          INSERT INTO setlist_songs (setlist_id, song_id, position)
+          SELECT s.id, u.song_id, u.ord - 1
+          FROM s, unnest(${validIds}::int[]) WITH ORDINALITY AS u(song_id, ord)
+          ON CONFLICT (setlist_id, position) DO UPDATE SET song_id = EXCLUDED.song_id
+        ), cut AS (
+          DELETE FROM setlist_songs
+          WHERE setlist_id IN (SELECT id FROM s) AND position >= ${validIds.length}::int
+        )
         SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
                ${validIds.length}::int AS song_count
-        FROM setlists s
+        FROM s
         LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
         LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-        WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
       `,
     ]);
-    return res.json(results[results.length - 1][0]);
+    if (!updated) return res.status(404).json({ error: 'Setlist not found' });
+    return res.json(updated);
   }
 
   // ── POST /setlists/:id/duplicate — copy the row and its songs ─────────────

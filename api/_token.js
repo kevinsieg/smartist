@@ -92,9 +92,13 @@ function passwordFingerprint(passwordHash) {
     .update(`pwv:${passwordHash || ''}`).digest('hex').slice(0, 16);
 }
 
-function generateUserToken(userId, role, ttlMs, passwordHash = null) {
+// `email` names the person, not just the row: a session outlives the removal of
+// the users row it was issued for (one band removing them must not sign them
+// out of every other band). See loadArtistAndMember in api/_auth.js.
+function generateUserToken(userId, role, ttlMs, passwordHash = null, email = null) {
   const iat     = Date.now();
-  const payload = JSON.stringify({ userId, role, iat, exp: iat + ttlMs, pwv: passwordFingerprint(passwordHash) });
+  const payload = JSON.stringify({ userId, role, iat, exp: iat + ttlMs, pwv: passwordFingerprint(passwordHash),
+    ...(email ? { email: String(email).toLowerCase() } : {}) });
   const sig     = crypto.createHmac('sha256', secret())
     .update(payload).digest('hex');
   return Buffer.from(JSON.stringify({ payload, sig })).toString('base64url');
@@ -108,9 +112,9 @@ function verifyUserToken(token) {
       .update(payload).digest('hex');
     if (typeof sig !== 'string' || !/^[0-9a-f]{64}$/.test(sig)) return null;
     if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
-    const { userId, role, iat, exp, pwv } = JSON.parse(payload);
+    const { userId, role, iat, exp, pwv, email } = JSON.parse(payload);
     if (Date.now() > Number(exp)) return null;
-    return { userId, role, iat: Number(iat) || 0, pwv };
+    return { userId, role, iat: Number(iat) || 0, pwv, email: typeof email === 'string' ? email : null };
   } catch { return null; }
 }
 
@@ -128,5 +132,5 @@ function sessionValid(claim, row) {
 
 module.exports = {
   generateMagicToken, verifyMagicToken, demoSeed, passwordlessSeed, generateUserToken, verifyUserToken,
-  passwordFingerprint, sessionValid, TTL_8H, TTL_30D,
+  sessionValid, TTL_8H, TTL_30D,
 };

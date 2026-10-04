@@ -190,7 +190,7 @@ async function stepArtist(sql) {
   } else {
     ok(`Selected: ${B(artist.name)} ${D(`(${artist.slug})`)}`);
     if (artist.config && Object.keys(artist.config).length) {
-      warn('This artist already has a config — it will be replaced by the new one.');
+      warn('This artist already has a config — logo and fields will be overwritten, everything else is kept.');
       if (!await confirm('Continue?')) { process.exit(0); }
     }
   }
@@ -310,7 +310,7 @@ async function stepReview(sql, artist, { displayFields, filterFields, logoUrl })
   }
 
   const config = { logoUrl, displayFields, filterFields };
-  await sql`UPDATE artists SET config = ${config} WHERE id = ${artist.id}`;
+  await sql`UPDATE artists SET config = config || ${sql.json(config)} WHERE id = ${artist.id}`;
   ok(`Config saved for ${B(artist.name)}`);
 
   // Seed placeholder venues (idempotent)
@@ -352,7 +352,7 @@ async function main() {
     const fields = await stepFields();
     await stepReview(sql, artist, fields);
 
-    console.log(`\n  ${G('All done!')} ${D('Start the app with: vercel dev')}\n`);
+    console.log(`\n  ${G('All done!')} ${D('Deploy to use it (npm run dev:up runs a local copy on its own database)')}\n`);
   } catch (e) {
     console.log(`\n  ${R('Error:')} ${e.message}\n`);
     process.exit(1);

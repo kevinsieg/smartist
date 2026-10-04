@@ -888,7 +888,7 @@ async function expandVenue(v) {
       (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +
       escHtml(g.title) + '</div>';
   }).join('');
-  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
+  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLink_other' : 'venues.allGigsLink_one', { n: n });
   var link = '<a class="expansion-more-link" href="#" data-onclick="event.preventDefault();navigate(\'/gigs?venue=' +
     encodeURIComponent(v.name).replace(/'/g, '%27') + '\')">&#8594; ' + escHtml(allGigsLabel) + '</a>';
   return '<div class="expansion-label">' + t('venues.gigsAtVenueTitle') + '</div>' + rows + link;
@@ -978,7 +978,7 @@ async function renderVenueGigs(venueId, venueName) {
   }
 
   var n = refs.gigs.length;
-  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLinkPlural' : 'venues.allGigsLink', { n: n });
+  var allGigsLabel = t(n !== 1 ? 'venues.allGigsLink_other' : 'venues.allGigsLink_one', { n: n });
   list.innerHTML = refs.gigs.map(function(g) {
     return '<div class="related-gig-item">' +
       (g.date ? escHtml(formatDate(g.date)) + ' — ' : '') +

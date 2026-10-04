@@ -20,6 +20,9 @@ const lib  = require('./_lib');
 function connect(url) {
   const pg = lib.connect(url);
   const run = strings => pg.unsafe(strings.join(''));
+  // Several statements in one simple query: they run as one implicit
+  // transaction, which SET LOCAL needs.
+  run.simple = text => pg.unsafe(text).simple();
   run.end = () => pg.end();
   return run;
 }
@@ -104,13 +107,27 @@ async function main() {
   }
 }
 
+// Every deployment runs this against its live database while the old code
+// still serves it. A statement that has to wait for a table lock (an ALTER
+// behind a long query) would make every later query on that table queue
+// behind it, so it gives up after LOCK_TIMEOUT instead: the build fails, the
+// old code stays live, and a redeploy tries again. New indexes on big tables
+// are written CREATE INDEX CONCURRENTLY, which takes no write lock but cannot
+// run inside a transaction, so those statements run on their own.
+const LOCK_TIMEOUT = '5s';
+function withLockTimeout(stmt) {
+  return /\bCONCURRENTLY\b/i.test(stmt) ? null : `SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'; ${stmt}`;
+}
+
 // Runs every statement of schema.sql; "already exists" is not an error. Also
 // used by setup.js. `sql` is a raw runner from connect() above.
 async function applyStatements(sql, src) {
   let applied = 0, skipped = 0;
   for (const stmt of splitStatements(src)) {
     try {
-      await sql([stmt]);
+      const timed = sql.simple ? withLockTimeout(stmt) : null;
+      if (timed) await sql.simple(timed);
+      else await sql([stmt]);
       applied++;
     } catch (e) {
       if (e.message.toLowerCase().includes('already exists')) { skipped++; continue; }
@@ -123,4 +140,4 @@ async function applyStatements(sql, src) {
 
 if (require.main === module) main();
 
-module.exports = { splitStatements, migrationIds, applyStatements, connect };
+module.exports = { splitStatements, migrationIds, applyStatements, connect, withLockTimeout };

@@ -20,6 +20,10 @@ applied again and again to every database (CI applies it twice).
      splits on `;`. Constraints that cannot say `IF NOT EXISTS` are fine —
      "already exists" errors are skipped.
    - Two changes on one day: suffix the id (`2026-10-01b`).
+   - A new index on an existing table: `CREATE INDEX CONCURRENTLY IF NOT EXISTS`
+     (no write lock while live traffic runs). Every other statement runs with a
+     5 s `lock_timeout` (`scripts/apply_schema.js`): a deploy that cannot get its
+     lock fails and is redeployed, instead of queueing every query behind it.
 2. **Set `SCHEMA_VERSION`** in `api/_env.js` to the new id (`tests/unit/env.js`
    fails otherwise).
 3. **Update the code and docs together:** handlers, `api/_domain/*`, the

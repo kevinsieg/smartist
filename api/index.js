@@ -29,9 +29,6 @@ const HANDLERS = {
   venue:      () => require('./_band/venues/item'),
   organizers: () => require('./_band/organizers'),
   organizer:  () => require('./_band/organizers/item'),
-  // vercel.json rewrites /api/docs to the static page; should the function be
-  // matched first, it sends the browser there itself.
-  docs:       () => (req, res) => { res.writeHead(307, { Location: '/app/api-docs.html' }); res.end(); },
 };
 
 // [pattern, handler, fixed query]. First match wins. `:name` matches one
@@ -39,8 +36,30 @@ const HANDLERS = {
 /** @type {[string, string, object?][]} */
 const TABLE = [
   ['/api/config',                                          'config'],
+  ['/api/config/upgrade',                                  'config', { action: 'upgrade' }],
+  ['/api/config/downgrade',                                'config', { action: 'downgrade' }],
+  ['/api/config/photo-url',                                'config', { action: 'photo-url' }],
+  ['/api/config/favicon-url',                              'config', { action: 'favicon-url' }],
   ['/api/login',                                           'config', { action: 'login' }],
-  ['/api/docs',                                            'docs'],
+  ['/api/auth/magic-login',                                'config', { action: 'magic-login' }],
+  ['/api/auth/oauth-session',                              'config', { action: 'oauth-session' }],
+  ['/api/auth/google-url',                                 'config', { action: 'google-url' }],
+  ['/api/auth/facebook-url',                               'config', { action: 'facebook-url' }],
+  ['/api/auth/logout-everywhere',                          'config', { action: 'logout-everywhere' }],
+  ['/api/auth/request-reset',                              'config', { action: 'request-reset' }],
+  ['/api/auth/set-password',                               'config', { action: 'set-password' }],
+  ['/api/auth/artists',                                    'config', { action: 'my-artists' }],
+  ['/api/auth/deletion-preflight',                         'config', { action: 'deletion-preflight' }],
+  ['/api/auth/request-deletion',                           'config', { action: 'request-deletion' }],
+  ['/api/auth/confirm-deletion',                           'config', { action: 'confirm-deletion' }],
+  ['/api/signup',                                          'config', { action: 'signup' }],
+  ['/api/signup/link',                                     'config', { action: 'signup-link' }],
+  ['/api/signup/verify',                                   'config', { action: 'verify-signup-token' }],
+  ['/api/signup/check-slug',                               'config', { action: 'check-slug' }],
+  ['/api/admin/overview',                                  'config', { action: 'admin-overview' }],
+  ['/api/admin/set-plan',                                  'config', { action: 'admin-set-plan' }],
+  ['/api/subscribe',                                       'config', { action: 'subscribe' }],
+  ['/api/contact',                                         'config', { action: 'contact' }],
   // The OAuth provider returns to /auth/callback, rewritten here by vercel.json.
   ['/auth/callback',                                       'config', { action: 'oauth-callback' }],
 

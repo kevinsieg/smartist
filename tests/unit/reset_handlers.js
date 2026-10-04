@@ -98,7 +98,8 @@ function mockRes() {
   return r;
 }
 
-const post = (body) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: {}, url: '/api/_config' });
+// The action rides in the query, where the route table puts it.
+const post = ({ action, ...body }) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: { action } });
 
 async function run(r) {
   const { testAsync, assert, assertEq, B } = r;
