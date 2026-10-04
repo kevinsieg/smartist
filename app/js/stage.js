@@ -171,8 +171,9 @@ async function init() {
     const _stageSlug = _stageSeg === 'stage' ? '' : _stageSeg;
     // Light config: stage needs the band's name and settings, never its song
     // list (the setlist and song requests bring their own songs). Same cache
-    // key as loadConfig(…, { light: true }).
-    var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default') + '_light';
+    // key as loadConfig(…, { light: true }), signed-out answers apart (_anon).
+    var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default') + '_light' +
+      (_stageToken() ? '' : '_anon');
     const cfgFetch = fetch('/api/config?light=1' + (_stageSlug ? '&slug=' + encodeURIComponent(_stageSlug) : ''),
       { headers: _stageAuthHeaders() }
     ).then(r => { if (!r.ok) throw new Error(); return r.json(); });

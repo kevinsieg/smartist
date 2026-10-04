@@ -183,9 +183,11 @@ function renderLoggedIn(cfg, artists) {
 
 // ── Login form ────────────────────────────────────────────────────────────────
 
-// The signed-out config cached before sign-in must not render the first page.
+// A new session starts without any band's cached config.
 function storeToken(token, remember) {
-  invalidateConfigCache();
+  Object.keys(sessionStorage)
+    .filter(function(k) { return k.indexOf('artist_config_cache_') === 0; })
+    .forEach(function(k) { sessionStorage.removeItem(k); });
   if (remember) {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);

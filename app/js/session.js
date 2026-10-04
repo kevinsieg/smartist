@@ -51,7 +51,11 @@ function isViewMode() {
 async function loadConfig(slugOverride, opts) {
   var slug  = (slugOverride !== undefined) ? slugOverride : _artistSlug;
   var light = !!(opts && opts.light);
-  var key   = 'artist_config_cache_' + (slug || 'default') + (light ? '_light' : '');
+  // Send the token when present — private workspaces only serve full config
+  // (songs, counts) to authenticated members. A signed-out answer is cached
+  // apart (_anon), so a page after sign-in never renders from it.
+  var _cfgToken = getToken();
+  var key   = 'artist_config_cache_' + (slug || 'default') + (light ? '_light' : '') + (_cfgToken ? '' : '_anon');
   let cached = null;
   try { cached = JSON.parse(sessionStorage.getItem(key)); } catch {}
 
@@ -59,13 +63,11 @@ async function loadConfig(slugOverride, opts) {
   if (slug)  params.push('slug=' + encodeURIComponent(slug));
   if (light) params.push('light=1');
   var url = '/api/config' + (params.length ? '?' + params.join('&') : '');
-  // Send the token when present — private workspaces only serve full config
-  // (songs, counts) to authenticated members.
-  var _cfgToken = getToken();
   const fetchFresh = fetch(url, _cfgToken ? { headers: { Authorization: 'Bearer ' + _cfgToken } } : undefined)
     .then(r => { if (!r.ok) throw new Error('config unavailable'); return r.json(); })
     .then(cfg => {
-      try { sessionStorage.setItem(key, JSON.stringify(cfg)); } catch {}
+      // Not if the session changed while this was in flight.
+      if (getToken() === _cfgToken) { try { sessionStorage.setItem(key, JSON.stringify(cfg)); } catch {} }
       return cfg;
     });
 
