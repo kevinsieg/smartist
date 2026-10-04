@@ -82,31 +82,37 @@ module.exports = wrap(async function handler(req, res) {
     if (!owned.songs) return res.status(400).json({ error: 'Invalid song_ids' });
     if (!owned.gig)   return res.status(400).json({ error: 'Invalid gig_id' });
 
-    // The row, its songs and the list row the client shows, in one statement
-    // (atomic like a transaction, without BEGIN/COMMIT round-trips). Positions
-    // 0..n-1 are upserted and the ones past the new end deleted: the two touch
-    // different rows, so they can share a statement. No row back means the
-    // setlist is not this band's.
-    const [updated] = await sql`
-      WITH s AS (
+    // One transaction of two statements. The first updates (and so locks) the
+    // row; the second takes its snapshot only after that lock, so a save that
+    // waited for another one sees all of that one's songs and replaces them
+    // cleanly (in one statement, the tail cut would miss rows the other save
+    // added). Positions 0..n-1 are upserted and the ones past the new end
+    // deleted: the two touch different rows, so they share a statement. Both
+    // are scoped to this band's setlist; no row back means it is not theirs.
+    const [, [updated]] = await sql.begin(tx => [
+      tx`
         UPDATE setlists SET title = ${title}, comment = ${comment}, gig_id = ${gigId}
         WHERE id = ${setlistId} AND artist_id = ${band.id}
-        RETURNING *
-      ), put AS (
-        INSERT INTO setlist_songs (setlist_id, song_id, position)
-        SELECT s.id, u.song_id, u.ord - 1
-        FROM s, unnest(${validIds}::int[]) WITH ORDINALITY AS u(song_id, ord)
-        ON CONFLICT (setlist_id, position) DO UPDATE SET song_id = EXCLUDED.song_id
-      ), cut AS (
-        DELETE FROM setlist_songs
-        WHERE setlist_id IN (SELECT id FROM s) AND position >= ${validIds.length}::int
-      )
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
-             ${validIds.length}::int AS song_count
-      FROM s
-      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-    `;
+      `,
+      tx`
+        WITH s AS (
+          SELECT * FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id}
+        ), put AS (
+          INSERT INTO setlist_songs (setlist_id, song_id, position)
+          SELECT s.id, u.song_id, u.ord - 1
+          FROM s, unnest(${validIds}::int[]) WITH ORDINALITY AS u(song_id, ord)
+          ON CONFLICT (setlist_id, position) DO UPDATE SET song_id = EXCLUDED.song_id
+        ), cut AS (
+          DELETE FROM setlist_songs
+          WHERE setlist_id IN (SELECT id FROM s) AND position >= ${validIds.length}::int
+        )
+        SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
+               ${validIds.length}::int AS song_count
+        FROM s
+        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
+        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+      `,
+    ]);
     if (!updated) return res.status(404).json({ error: 'Setlist not found' });
     return res.json(updated);
   }

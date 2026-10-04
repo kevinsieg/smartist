@@ -146,9 +146,9 @@ async function run(r) {
     assert(!sql.calls.some(c => c.text.includes('setlist_songs')), 'the old list must survive');
   });
 
-  await testAsync('updating a setlist rewrites it and its songs in one statement', async () => {
+  await testAsync('updating a setlist locks the row, then rewrites its songs in one statement', async () => {
     const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
-      if (text.startsWith('WITH s AS ( UPDATE setlists')) return [{ id: 3, song_count: 2 }];
+      if (text.startsWith('WITH s AS ( SELECT * FROM setlists')) return [{ id: 3, song_count: 2 }];
       return ownershipRoute(text, values);
     });
     const res = mockRes();
@@ -157,9 +157,10 @@ async function run(r) {
     assertEq(res.statusCode, 200);
     assertEq(res.body.song_count, 2);
     const writes = sql.calls.filter(c => /UPDATE setlists|setlist_songs/.test(c.text));
-    assertEq(writes.length, 1);
-    const q = writes[0].text;
-    assert(/UPDATE setlists SET .* WHERE id = AND artist_id = RETURNING/.test(q), 'scoped to the band');
+    assertEq(writes.length, 2);
+    assert(/^UPDATE setlists SET .* WHERE id = AND artist_id =$/.test(writes[0].text), 'row locked first, scoped to the band');
+    const q = writes[1].text;
+    assert(/WITH s AS \( SELECT \* FROM setlists WHERE id = AND artist_id = \)/.test(q), 'songs scoped to the band');
     assert(q.includes('ON CONFLICT (setlist_id, position) DO UPDATE'), 'positions upserted');
     assert(/DELETE FROM setlist_songs WHERE setlist_id IN \(SELECT id FROM s\) AND position >=/.test(q),
       'the tail is cut, and only for a setlist the update found');
@@ -167,7 +168,7 @@ async function run(r) {
 
   await testAsync("updating another band's setlist → 404, nothing written", async () => {
     const { handler } = loadHandler('api/_band/setlists/item.js', (text, values) =>
-      text.startsWith('WITH s AS ( UPDATE setlists') ? [] : ownershipRoute(text, values));
+      text.startsWith('WITH s AS ( SELECT * FROM setlists') ? [] : ownershipRoute(text, values));
     const res = mockRes();
     await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
       body: { song_ids: [10] } }, res);

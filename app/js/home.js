@@ -183,7 +183,9 @@ function renderLoggedIn(cfg, artists) {
 
 // ── Login form ────────────────────────────────────────────────────────────────
 
+// The signed-out config cached before sign-in must not render the first page.
 function storeToken(token, remember) {
+  invalidateConfigCache();
   if (remember) {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
