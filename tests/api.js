@@ -2,9 +2,9 @@
 // API integration tests — runs against a live server (local or deployed).
 //
 // Usage:
-//   npm test                                    # needs vercel dev running
-//   BASE_URL=https://yourapp.example.com npm test    # against production
-//   ARTIST_EMAIL=… ARTIST_PASSWORD=… npm test     # enables reads and write tests
+//   node tests/api.js                           # a server on :3000 (npm run test:api starts one)
+//   BASE_URL=https://preview.example.com node tests/api.js
+//   ARTIST_EMAIL=… ARTIST_PASSWORD=… node tests/api.js   # enables reads and write tests
 
 const fs   = require('fs');
 const path = require('path');
@@ -668,7 +668,7 @@ async function testAuth(slug) {
   // The signed-in path ends the shared test user's sessions, so it is covered
   // by tests/unit/login_handler.js, not here.
   await test('POST logout-everywhere without token → 401', async () => {
-    const { res, json } = await POST('/api/config', { action: 'logout-everywhere' });
+    const { res, json } = await POST('/api/auth/logout-everywhere', {});
     assertStatus(res, json, 401);
   });
 
@@ -1056,7 +1056,7 @@ async function testSessions(slug, adminToken) {
   await test('log out everywhere ends every session, a new sign-in works', async () => {
     const signedIn = await login(pw2);
     assertStatus(signedIn.res, signedIn.json, 200);
-    const { res, json } = await POST('/api/config', { action: 'logout-everywhere' }, { token: second });
+    const { res, json } = await POST('/api/auth/logout-everywhere', {}, { token: second });
     assertStatus(res, json, 200);
     assertStatus((await songs(second)).res, null, 401);
     assertStatus((await songs(signedIn.json.token)).res, null, 401);
@@ -1080,7 +1080,7 @@ async function testSessions(slug, adminToken) {
 // arbitrary address, no files in the bucket.
 async function testDemoGate() {
   console.log(B('\nDemo gate'));
-  const { json: gate } = await POST('/api/config', { email: `demo-${Date.now()}@example.test`, source: 'demo' });
+  const { json: gate } = await POST('/api/subscribe', { email: `demo-${Date.now()}@example.test`, source: 'demo' });
   if (!gate?.token) return skip('demo gate', 'no demo band on this deployment');
   const demo = gate.slug, token = gate.token;
   const { json: songs } = await GET(`/api/${demo}/songs`, { token });
@@ -1110,7 +1110,7 @@ async function testDemoGate() {
 async function testImageUploadUrls(slug) {
   console.log(B('\nImage upload URLs'));
   if (!R2_BASE) return skip('photo/favicon upload URLs', 'R2_PUBLIC_URL not set');
-  const url = (action, q) => `/api/config?action=${action}&slug=${encodeURIComponent(slug)}${q}`;
+  const url = (action, q) => `/api/config/${action}?slug=${encodeURIComponent(slug)}${q}`;
   await test('photo-url without size → 400', async () => {
     const { res, json } = await GET(url('photo-url', '&type=image/png'), AUTH);
     assertStatus(res, json, 400);
@@ -1469,7 +1469,7 @@ async function testWrite(slug, token, firstSong, config) {
     authed = true;
     // Both lists come from one statement each (login's gate, my-artists' row).
     assert(json.artists.some(a => a.slug === slug && a.name && a.role), `band missing from ${JSON.stringify(json.artists)}`);
-    const mine = await GET('/api/config?action=my-artists', { token: json.token });
+    const mine = await GET('/api/auth/artists', { token: json.token });
     assertStatus(mine.res, mine.json, 200);
     assert(JSON.stringify(mine.json.artists) === JSON.stringify(json.artists),
       `my-artists differs from login — ${JSON.stringify(mine.json.artists)}`);
@@ -1987,13 +1987,13 @@ async function testSignup(sql) {
   const stamp = Date.now().toString(36);
   const email = `[test]signup_${stamp}@example.test`;
   const slug = `test-signup-${stamp}`;
-  const signup = body => POST('/api/config', { action: 'signup', ...body }, { headers: testIp() });
+  const signup = body => POST('/api/signup', body, { headers: testIp() });
   let token;
   try {
     const link = await createSignupToken(email, sql);
 
     await test('the link verifies and names its address', async () => {
-      const { res, json } = await POST('/api/config', { action: 'verify-signup-token', token: link }, { headers: testIp() });
+      const { res, json } = await POST('/api/signup/verify', { token: link }, { headers: testIp() });
       assertStatus(res, json, 200);
       assert(json.email === email, `expected ${email}, got ${json.email}`);
     });
@@ -2001,7 +2001,7 @@ async function testSignup(sql) {
       // The demo band's slug: the band under test may be shorter than a new slug can be (CI's "ci").
       const { res, json } = await signup({ token: link, name: '[TEST] Band', slug: process.env.DEMO_ARTIST_SLUG || 'demo' });
       assertStatus(res, json, 409);
-      const again = await POST('/api/config', { action: 'verify-signup-token', token: link }, { headers: testIp() });
+      const again = await POST('/api/signup/verify', { token: link }, { headers: testIp() });
       assertStatus(again.res, again.json, 200);
     });
     await test('the link creates the workspace with its admin → 201', async () => {
@@ -2016,7 +2016,7 @@ async function testSignup(sql) {
     await test('the new session opens the new band and lists it, no other → 401', async () => {
       const own = await GET(`/api/${slug}/songs`, { token });
       assertStatus(own.res, own.json, 200);
-      const mine = await GET('/api/config?action=my-artists', { token });
+      const mine = await GET('/api/auth/artists', { token });
       assert((mine.json?.artists || []).some(a => a.slug === slug), 'my-artists misses the new band');
       const other = await GET(`/api/${SLUG}/songs`, { token });
       assertStatus(other.res, other.json, 401);

@@ -74,7 +74,7 @@ Needs Postgres binaries (`initdb`, `pg_ctl`) and, for the smoke test,
 `npm i -g playwright && npx playwright install chromium`. Claude Code on the web
 sessions start with the stack already up (`.claude/hooks/session-start.sh`).
 
-### Against vercel dev or a deployment
+### Against another server or a deployment
 
 The suite loads `.env.local` then `.env` from the **repo root**; each key is applied only if not already set, and values exported in the shell win. Quote-wrapped lines (from `vercel env pull`) are stripped.
 
@@ -87,9 +87,7 @@ ARTIST_PASSWORD=yourpassword
 ```
 
 ```bash
-cd tests && npm test                       # vercel dev on port 3000
-npm run test:dev                           # the dev Preview deployment
-npm run test:prod                          # production (anonymous checks unless signed in)
+node tests/api.js                          # a server on port 3000 (README → Run locally)
 BASE_URL=https://your-preview.vercel.app node tests/api.js
 ```
 

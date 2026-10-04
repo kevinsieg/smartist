@@ -70,14 +70,14 @@ async function run(r) {
   await testAsync('missing email → 400', async () => {
     const handler = makeHandler(async () => []);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'signup-link' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'signup-link' }, body: {}, headers: {} }, res);
     assertEq(res._status, 400);
   });
 
   await testAsync('invalid email → 400', async () => {
     const handler = makeHandler(async () => []);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'signup-link', email: 'notvalid' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'signup-link' }, body: { email: 'notvalid' }, headers: {} }, res);
     assertEq(res._status, 400);
   });
 
@@ -89,7 +89,7 @@ async function run(r) {
     const res = mockRes();
     await handler({
       method: 'POST',
-      body: { action: 'signup-link', email: 'test@gmail.com' },
+      query: { action: 'signup-link' }, body: { email: 'test@gmail.com' },
       headers: { host: 'localhost:3000' },
     }, res);
     assertEq(res._status, 200);
@@ -103,7 +103,7 @@ async function run(r) {
     const res = mockRes();
     await handler({
       method: 'POST',
-      body: { action: 'signup-link', email: 'bot@mailinator.com' },
+      query: { action: 'signup-link' }, body: { email: 'bot@mailinator.com' },
       headers: { host: 'localhost:3000' },
     }, res);
     assertEq(res._status, 400);
@@ -123,7 +123,7 @@ async function run(r) {
     const res = mockRes();
     await handler({
       method: 'POST',
-      body: { action: 'signup-link', email: 'old@gmail.com' },
+      query: { action: 'signup-link' }, body: { email: 'old@gmail.com' },
       headers: { host: 'localhost:3000' },
     }, res);
     assertEq(res._status, 200);
@@ -143,7 +143,7 @@ async function run(r) {
     const res = mockRes();
     await handler({
       method: 'POST',
-      body: { action: 'signup-link', email: 'bot@gmail.com', website: 'http://spam.example' },
+      query: { action: 'signup-link' }, body: { email: 'bot@gmail.com', website: 'http://spam.example' },
       headers: { host: 'localhost:3000' },
     }, res);
     assertEq(res._status, 200);
@@ -157,14 +157,14 @@ async function run(r) {
   await testAsync('missing token → 400', async () => {
     const handler = makeHandler(async () => []);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'verify-signup-token' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'verify-signup-token' }, body: {}, headers: {} }, res);
     assertEq(res._status, 400);
   });
 
   await testAsync('unknown token → 400', async () => {
     const handler = makeHandler(async () => []);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'verify-signup-token', token: 'deadbeef' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'verify-signup-token' }, body: { token: 'deadbeef' }, headers: {} }, res);
     assertEq(res._status, 400);
   });
 
@@ -180,7 +180,7 @@ async function run(r) {
     };
     const handler = makeHandler(sql);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'verify-signup-token', token: rawToken }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'verify-signup-token' }, body: { token: rawToken }, headers: {} }, res);
     assertEq(res._status, 200);
     assertEq(res._body && res._body.ok, true);
     assertEq(res._body && res._body.email, 'user@test.com');
@@ -192,7 +192,7 @@ async function run(r) {
   await testAsync('missing token → 400', async () => {
     const handler = makeHandler(async () => []);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'signup', name: 'My Band', slug: 'my-band' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'signup' }, body: { name: 'My Band', slug: 'my-band' }, headers: {} }, res);
     assertEq(res._status, 400);
   });
 
@@ -208,7 +208,7 @@ async function run(r) {
     };
     const handler = makeHandler(sql);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'signup', token: rawToken, name: 'My Band', slug: 'MY BAND!!' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'signup' }, body: { token: rawToken, name: 'My Band', slug: 'MY BAND!!' }, headers: {} }, res);
     assertEq(res._status, 400);
   });
 
@@ -224,7 +224,7 @@ async function run(r) {
     };
     const handler = makeHandler(sql);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'signup', token: rawToken, name: 'My Band', slug: 'taken-slug' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'signup' }, body: { token: rawToken, name: 'My Band', slug: 'taken-slug' }, headers: {} }, res);
     assertEq(res._status, 409);
   });
 
@@ -244,7 +244,7 @@ async function run(r) {
     sql.begin = async fn => fn(sql);
     const handler = makeHandler(sql);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'signup', token: rawToken, name: 'My Band', slug: 'my-band' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'signup' }, body: { token: rawToken, name: 'My Band', slug: 'my-band' }, headers: {} }, res);
     assertEq(res._status, 201);
     assertEq(res._body && res._body.ok, true);
     assertEq(res._body && res._body.slug, 'my-band');
@@ -267,7 +267,7 @@ async function run(r) {
     sql.begin = async fn => fn(sql);
     const handler = makeHandler(sql);
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'signup', token: rawToken, name: 'My Band', slug: 'my-band' }, headers: {} }, res);
+    await handler({ method: 'POST', query: { action: 'signup' }, body: { token: rawToken, name: 'My Band', slug: 'my-band' }, headers: {} }, res);
     assertEq(res._status, 400);
     assert(!inserted, 'no workspace may be created from a spent link');
   });
@@ -445,7 +445,7 @@ async function run(r) {
     }));
     const res = mockRes();
     await handler({
-      method: 'POST', query: { slug: 'test' }, body: { action: 'downgrade' },
+      method: 'POST', query: { slug: 'test', action: 'downgrade' }, body: {},
       headers: { authorization: bearer() },
     }, res);
     assertEq(res._status, 200);
@@ -459,7 +459,7 @@ async function run(r) {
     }));
     const res = mockRes();
     await handler({
-      method: 'POST', query: { slug: 'test' }, body: { action: 'downgrade' },
+      method: 'POST', query: { slug: 'test', action: 'downgrade' }, body: {},
       headers: { authorization: bearer() },
     }, res);
     assertEq(res._status, 403);
@@ -473,7 +473,7 @@ async function run(r) {
     }));
     const res = mockRes();
     await handler({
-      method: 'POST', query: { slug: 'test' }, body: { action: 'upgrade' },
+      method: 'POST', query: { slug: 'test', action: 'upgrade' }, body: {},
       headers: { authorization: bearer() },
     }, res);
     assertEq(res._status, 200);
@@ -535,7 +535,7 @@ async function run(r) {
     let updated = false;
     const handler = makeHandler(superAdminSql('someone@example.com', (q) => { if (q.includes('UPDATE artists')) updated = true; }));
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'admin-set-plan', slug: 'a', plan: 'pro' }, headers: { authorization: bearer() } }, res);
+    await handler({ method: 'POST', query: { action: 'admin-set-plan' }, body: { slug: 'a', plan: 'pro' }, headers: { authorization: bearer() } }, res);
     assertEq(res._status, 403);
     assert(!updated, 'non-super-admin must not change plans');
   });
@@ -545,7 +545,7 @@ async function run(r) {
     let updated = false;
     const handler = makeHandler(superAdminSql('boss@example.com', (q) => { if (q.includes('UPDATE artists')) updated = true; }));
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'admin-set-plan', slug: 'a', plan: 'gold' }, headers: { authorization: bearer() } }, res);
+    await handler({ method: 'POST', query: { action: 'admin-set-plan' }, body: { slug: 'a', plan: 'gold' }, headers: { authorization: bearer() } }, res);
     assertEq(res._status, 400);
     assert(!updated, 'invalid plan must not be written');
   });

@@ -154,7 +154,7 @@ async function magicLogin({ body, ip }) {
   return ok({ ok: true, token, role: user.role, email: addr, artists });
 }
 
-// POST ?action=logout-everywhere — every session of this person ends: on every
+// POST /api/auth/logout-everywhere — every session of this person ends: on every
 // device, in every workspace (the address is the identity), this one included.
 // Sessions issued before the stored time no longer verify (sessionValid).
 async function logoutEverywhere({ headers }) {
@@ -174,4 +174,4 @@ async function logoutEverywhere({ headers }) {
   return ok({ ok: true });
 }
 
-module.exports = { passwordLogin, magicLogin, logoutEverywhere, DUMMY_HASH };
+module.exports = { passwordLogin, magicLogin, logoutEverywhere };

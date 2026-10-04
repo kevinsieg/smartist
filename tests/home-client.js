@@ -72,8 +72,9 @@ function makeContext(fetchImpl) {
     const res = await ctx.verifySession('tok-123');
     assertEq(res.ok, true);
     assertEq(res.artists.length, 1);
-    assert(request.url.indexOf('action=my-artists') !== -1, 'must call the my-artists endpoint, got ' + request.url);
-    assert(request.url.indexOf('/auth') === -1, 'must NOT post the token to the password/auth endpoint');
+    assert(request.url.indexOf('/api/auth/artists') !== -1, 'must call the my-artists endpoint, got ' + request.url);
+    assert(request.url.indexOf('/api/login') === -1 && (request.opts.method || 'GET') === 'GET',
+      'must NOT post the token to the password endpoint');
     assertEq(request.opts.headers.Authorization, 'Bearer tok-123');
   });
 
@@ -143,8 +144,8 @@ function makeContext(fetchImpl) {
     await vm.runInContext('init()', ctx);
     const post = calls.fetch.filter(c => c.opts.method === 'POST');
     assertEq(post.length, 1, 'one handover request');
-    assertEq(post[0].url, '/api/config');
-    assertEq(JSON.parse(post[0].opts.body), { action: 'oauth-session' });
+    assertEq(post[0].url, '/api/auth/oauth-session');
+    assertEq(JSON.parse(post[0].opts.body), {});
     assertEq(calls.stored, [['tok-oauth', false]]);
     const check = calls.fetch.find(c => c.opts.method !== 'POST');
     assertEq(check.opts.headers.Authorization, 'Bearer tok-oauth');

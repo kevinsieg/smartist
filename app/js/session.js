@@ -150,7 +150,7 @@ function getAuthRole() {
 // network failures included, counts as alive: never log out on a guess.
 async function _sessionAlive(token) {
   try {
-    const r = await fetch('/api/config?action=my-artists', { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch('/api/auth/artists', { headers: { Authorization: `Bearer ${token}` } });
     return r.status !== 401;
   } catch { return true; }
 }

@@ -132,6 +132,8 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `declined` | boolean DEFAULT false | Venue declined to book |
 | `status` | text | Free-form status label (e.g. `Active`, `Prospect`, `Confirmed`) |
 | `category` | text | Type: `club`, `festival`, `placeholder`, `legacy`, … |
+| `street_number` | text | |
+| `street` | text | |
 | `postcode` | text | |
 | `city` | text | |
 | `state` | text | |
@@ -154,6 +156,7 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `main_genre` | text | Primary genre this venue books |
 | `size` | integer | Capacity |
 | `language` | text | |
+| `lat`, `lng` | double precision | Map position, from the address search |
 | `last_updated` | timestamptz DEFAULT NOW() | |
 
 **Indexes:** `venues_artist_id_idx`
@@ -201,9 +204,11 @@ A performance event. Setlists can be linked to a gig but the link is optional.
 | `type` | text | `Club show`, `Festival`, `Private`, … |
 | `time_start` | time | |
 | `time_end` | time | |
+| `location` | text | Free-text place, shown after the venue name |
 | `additional_link` | text | |
 | `additional_text` | text | |
 | `comment` | text | |
+| `poster_url`, `thumb_url` | text | Poster image and its thumbnail in R2 |
 | `deleted` | boolean NOT NULL DEFAULT false | Soft-delete |
 | `last_updated` | timestamptz DEFAULT NOW() | |
 
@@ -391,6 +396,18 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `created_at` timestamptz | |
 
 Every emailed token is stored only as a hash.
+
+---
+
+### `schema_migrations`
+
+The migration ledger: one row per dated block of `scripts/schema.sql`. The
+health check compares it with `SCHEMA_VERSION` in `api/_env.js`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | text PK | The block's date, e.g. `2026-10-06` |
+| `applied_at` | timestamptz DEFAULT now() | |
 
 ---
 

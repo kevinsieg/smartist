@@ -16,7 +16,7 @@
     },
     {
       "url": "http://localhost:3000",
-      "description": "Local (vercel dev)"
+      "description": "Local (npm run dev:up)"
     }
   ],
   "components": {
@@ -739,9 +739,12 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "health"
+              ]
             },
-            "description": "`health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration. Other actions: `check-slug`, `my-artists`, `photo-url`, `favicon-url`, OAuth and admin actions."
+            "description": "`health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration."
           }
         ],
         "description": "Band slug, name, branding config, plan and usage. `songs` and `counts` are included only with a session or when the band has a public catalogue. `role` is the caller's role in this band (null without a session). The `slug` is the `{band}` path parameter for every other endpoint.",
@@ -808,15 +811,17 @@
             "$ref": "#/components/responses/500"
           }
         }
-      },
+      }
+    },
+    "/api/auth/request-reset": {
       "post": {
-        "summary": "Request a password-reset link (action: request-reset)",
+        "summary": "Request a password-reset link",
         "tags": [
           "Auth"
         ],
         "security": [],
         "parameters": [],
-        "description": "Emails a 30-minute link to set a new password; the password is set on every account of the address. Sent as `POST /api/config` with `action: \"request-reset\"`. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
+        "description": "Emails a 30-minute link to set a new password; the password is set on every account of the address. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
         "requestBody": {
           "required": true,
           "content": {
@@ -824,16 +829,9 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "action",
                   "email"
                 ],
                 "properties": {
-                  "action": {
-                    "type": "string",
-                    "enum": [
-                      "request-reset"
-                    ]
-                  },
                   "email": {
                     "type": "string",
                     "format": "email"

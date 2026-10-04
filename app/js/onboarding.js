@@ -33,7 +33,10 @@
 
   async function _checkSlug(slug) {
     if (!slug || !/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)) return false;
-    return checkSlug(slug);
+    // apiFetch-exempt: a public availability check during sign-up, no session.
+    const r = await fetch('/api/signup/check-slug?slug=' + encodeURIComponent(slug));
+    const data = await r.json();
+    return data.available === true;
   }
 
   function _renderExpired() {
@@ -120,13 +123,13 @@
       submitBtn.textContent = t('onboarding.creating');
       _showError('');
       try {
-        const r = await fetch('/api/config', {
+        const r = await fetch('/api/signup', {
           method: 'POST',
           headers: Object.assign(
             { 'Content-Type': 'application/json' },
             _authTok ? { Authorization: 'Bearer ' + _authTok } : {}
           ),
-          body: JSON.stringify({ action: 'signup', token: _token, name, slug }),
+          body: JSON.stringify({ token: _token, name, slug }),
         });
         const d = await r.json();
         if (!r.ok) {
@@ -160,10 +163,10 @@
   if (_token) {
     // Sign-up mode: verify the token
     try {
-      const r = await fetch('/api/config', {
+      const r = await fetch('/api/signup/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify-signup-token', token: _token }),
+        body: JSON.stringify({ token: _token }),
       });
       if (!r.ok) { _renderExpired(); return; }
       const d = await r.json();
@@ -175,7 +178,7 @@
     _authTok = _storedAuthToken();
     if (!_authTok) { window.location.replace('/signup'); return; }
     // Verify the session token is still valid
-    const r = await fetch('/api/config?action=my-artists', {
+    const r = await fetch('/api/auth/artists', {
       headers: { Authorization: 'Bearer ' + _authTok },
     });
     if (r.status === 401) { window.location.replace('/signup'); return; }

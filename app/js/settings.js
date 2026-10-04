@@ -528,7 +528,7 @@ function showFavicon(url) {
 function uploadFavicon(file) {
   var progress = document.getElementById('favicon-progress');
   progress.textContent = t('settings.gettingUploadUrl');
-  apiFetch('/api/config?action=favicon-url&slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size)
+  apiFetch('/api/config/favicon-url?slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size)
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d.uploadUrl) throw new Error(d.error || t('settings.failedGetUploadUrl'));
@@ -571,7 +571,7 @@ function showPhoto(url) {
 function uploadPhoto(file) {
   var progress = document.getElementById('photo-progress');
   progress.textContent = t('settings.gettingUploadUrl');
-  apiFetch('/api/config?action=photo-url&slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size)
+  apiFetch('/api/config/photo-url?slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size)
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d.uploadUrl) throw new Error(d.error || t('settings.failedGetUploadUrl'));
@@ -808,7 +808,7 @@ function renderPlan(cfg) {
     btn.disabled = true;
     if (target === 'free') {
       try {
-        var dr = await apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'POST', { action: 'downgrade' });
+        var dr = await apiFetch('/api/config/downgrade?slug=' + encodeURIComponent(_settingsSlug), 'POST');
         if (dr.ok) { invalidateConfigCache(); window.location.reload(); return; }
       } catch (e) {}
       btn.disabled = false;
@@ -816,7 +816,7 @@ function renderPlan(cfg) {
     }
     // Upgrade goes through the swappable seam.
     try {
-      var r = await apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'POST', { action: 'upgrade' });
+      var r = await apiFetch('/api/config/upgrade?slug=' + encodeURIComponent(_settingsSlug), 'POST');
       var data = await r.json().catch(function () { return {}; });
       if (!r.ok) { btn.disabled = false; return; }
       invalidateConfigCache();

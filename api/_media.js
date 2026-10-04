@@ -195,4 +195,4 @@ function makeMediaFn(config) {
   };
 }
 
-module.exports = { MEDIA_CONFIGS, makeMediaFn, presignMedia, confirmMedia, deleteMedia };
+module.exports = { MEDIA_CONFIGS, makeMediaFn };

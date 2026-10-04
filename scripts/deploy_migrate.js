@@ -18,8 +18,8 @@
 // not — stop using it in one release, drop it in a later one (CI's "Live code
 // on the new schema" job runs main's API suite on the new schema).
 //
-// Only runs inside a Vercel build: anywhere else (a local or CI npm install,
-// vercel dev) it does nothing. Locally use apply_schema.js, which asks.
+// Only runs inside a Vercel build: anywhere else (a local or CI npm install)
+// it does nothing. Locally use apply_schema.js, which asks.
 
 const fs = require('fs');
 const path = require('path');

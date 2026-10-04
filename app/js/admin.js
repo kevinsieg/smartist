@@ -1,7 +1,7 @@
 const TOKEN = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token') || '';
 
 async function load() {
-  const r = await fetch('/api/config?action=admin-overview', {
+  const r = await fetch('/api/admin/overview', {
     headers: { Authorization: 'Bearer ' + TOKEN }
   });
   if (!r.ok) { document.body.textContent = 'Not authorised'; return; }
@@ -45,13 +45,13 @@ async function load() {
     });
     sel.onchange = async function () {
       sel.disabled = true;
-      await fetch('/api/config', {
+      await fetch('/api/admin/set-plan', {
         method: 'POST',
         headers: {
           Authorization: 'Bearer ' + TOKEN,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: 'admin-set-plan', slug: b.slug, plan: sel.value })
+        body: JSON.stringify({ slug: b.slug, plan: sel.value })
       });
       load();
     };

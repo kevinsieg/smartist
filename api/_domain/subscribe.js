@@ -6,7 +6,7 @@ const { sendEmail } = require('../_email');
 const { generateMagicToken, demoSeed } = require('../_token');
 const logger = require('../_logger');
 
-// POST { source: 'contact' } — landing-page contact form.
+// POST /api/contact — the contact form.
 async function contact({ body, ip }) {
   const name = validateStr(body.name, 200);
   if (!name) return fail(400, 'Name is required');
@@ -58,7 +58,7 @@ async function sweepSubscribers(sql) {
   }
 }
 
-// POST (default) — email capture: demo signup issues a demo-workspace token;
+// POST /api/subscribe — email capture: demo signup issues a demo-workspace token;
 // landing just records the subscriber.
 async function subscribe({ body, headers, ip }) {
   const email = validateEmail(body.email);

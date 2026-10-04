@@ -56,4 +56,4 @@ function envReport(env = process.env.VERCEL_ENV) {
   return { missing, warnings };
 }
 
-module.exports = { REQUIRED, RECOMMENDED, PRODUCTION, PAIRS, SCHEMA_VERSION, envReport, usesNeonPooler };
+module.exports = { REQUIRED, RECOMMENDED, PAIRS, SCHEMA_VERSION, envReport, usesNeonPooler };

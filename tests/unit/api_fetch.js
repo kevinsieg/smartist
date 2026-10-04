@@ -50,7 +50,7 @@ function run(r) {
                        "fetch('/api/config?slug=' + encodeURIComponent(s), {"])
       assert(WORKSPACE_FETCH.test(src), src);
     for (const src of ["apiFetch('/api/' + artistSlug + '/songs')", "fetch(json.uploadUrl, { method: 'PUT' })",
-                       "fetch('/api/config?action=my-artists', {"])
+                       "fetch('/api/auth/artists', {"])
       assert(!WORKSPACE_FETCH.test(src), src);
   });
 }
