@@ -3,7 +3,6 @@ const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('..
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
 const { validateStr, jsonBytes } = require('../../_validate');
-const { energyToScale } = require('../../_song_values');
 const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
 const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
@@ -269,39 +268,13 @@ module.exports = wrap(async function handler(req, res) {
     `;
     if (restored) return res.status(201).json(restored);
 
-    // The row is gone (hard-deleted before soft delete existed): rebuild it
-    // from the last delete snapshot — unless the song is live, when there is
-    // nothing to restore.
-    const [[log], [live]] = await Promise.all([
-      sql`
-        SELECT song_data FROM song_logs
-        WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete'
-        ORDER BY changed_at DESC
-        LIMIT 1
-      `,
-      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id}`,
-    ]);
-    if (!log) return res.status(404).json({ error: 'No delete record found for this song' });
+    // Nothing came back: the song is live, or there is no deleted row. A
+    // hard-deleted song cannot be restored by id: song_logs.song_id is
+    // ON DELETE SET NULL, so its snapshots no longer carry the id.
+    const [live] = await sql`
+      SELECT 1 FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (live) return res.status(409).json({ error: 'Song is not deleted' });
-    const d = log.song_data;
-    const [song] = await sql`
-      WITH s AS (
-        INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
-                           bpm, length_min, interpret, reference_interpret, comment, language, extra)
-        VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.heart ?? false}, ${d.key ?? null},
-                ${d.genre ?? null}, ${energyToScale(d.energy) ?? null}, ${d.time_signature ?? null},
-                ${d.bpm ?? null}, ${d.length_min ?? null},
-                ${d.interpret ?? null}, ${d.reference_interpret ?? null},
-                ${d.comment ?? null}, ${d.language ?? null},
-                ${d.extra ?? {}})
-        RETURNING *
-      ), logged AS (
-        INSERT INTO song_logs (artist_id, song_id, action, song_data)
-        SELECT artist_id, id, 'create', to_jsonb(s) FROM s
-      )
-      SELECT * FROM s
-    `;
-    return res.status(201).json(song);
+    return res.status(404).json({ error: 'No delete record found for this song' });
   }
 
   // ── GET setlist appearances ───────────────────────────────────────────────

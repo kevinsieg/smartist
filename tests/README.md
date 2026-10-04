@@ -60,7 +60,8 @@ seeded Pro band with one admin, and the API + pages on `:3000`
 npm run test:api     # starts the stack if needed, then tests/api.js
 npm run test:smoke   # browser: sign in, every page, SPA nav, stage; then the multi-tenant
                      # root (smoke-root.js: /login, mailed sign-in and reset links). Needs playwright
-npm run test:all     # unit + api + smoke
+npm run test:schema  # an upgraded database ends up with a fresh one's schema (tests/schema-upgrade.js)
+npm run test:all     # unit + api + smoke + schema
 npm run dev:up       # just start it and print the env; npm run dev:down stops it
 npm run dev:restart  # after changing api/ code
 ```
@@ -123,6 +124,8 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
 | `GET /api/:artist/export` | 200, a `.zip` attachment holding `artist.csv`, `songs.csv`, … |
 | Setlist share | the mailed attachment is a PDF (local stack only) |
+| Setlist search, venue lists, song restore | `?song_q=` (literal `%`/`_`), venue country facet / map payload (no notes) / `has_gigs`, restore → 201 / 409 / 404 |
+| Local database (local stack only) | sign-up from a planted link (taken address, spent link, new band only); another band's song/gig/venue/organizer ids → 400; sign-in lockout per address+IP and per address, and its window; export by role (no member list or hashes for a member); `publicStage`; GEMA works and rightholders import |
 | Sessions, roles, tenancy | local stack only: an invited `[TEST]` member signs in from the mailed link; admin endpoints → 403; a role change applies to a live session; neither session opens another band; a password change and "log out everywhere" end the old sessions; removal ends access |
 
 > **Note:** write tests create `[TEST]` rows (songs, setlists, venues, organizers, gigs, a user) and delete them again at the end. An interrupted run can leave some behind — remove them from the matching page.
@@ -132,4 +135,4 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 ### Exit codes
 
 - `0` — all tests passed
-- `1` — one or more tests failed or `ARTIST_SLUG` is not set
+- `1` — one or more tests failed or `ARTIST_SLUG` is not set. On the local stack a skipped test counts as a failure: everything is set up there, so a skip means the setup broke.
