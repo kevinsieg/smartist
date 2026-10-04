@@ -1,8 +1,5 @@
 // Shared domain constants used by API handlers.
 
-// Statuses visible to unauthenticated (view-mode) visitors.
-const VENUE_PUBLIC_STATUSES = ['active', 'confirmed'];
-
 const GEMA_ROLE_TYPES = ['composer', 'lyricist', 'author'];
 
 const MEDIA_LOG_ACTIONS = [
@@ -19,6 +16,6 @@ const MEDIA_LOG_ACTIONS = [
 const FB_GRAPH_VERSION = 'v25.0';
 
 module.exports = {
-  VENUE_PUBLIC_STATUSES, GEMA_ROLE_TYPES,
+  GEMA_ROLE_TYPES,
   MEDIA_LOG_ACTIONS, FB_GRAPH_VERSION,
 };

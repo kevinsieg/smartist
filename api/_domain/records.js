@@ -4,7 +4,7 @@
 // Create and update use the same table, so they cannot drift apart again.
 // Lengths match the bulk-edit limits in venues.js.
 
-const { F } = require('../_validate');
+const { F, jsonBytes } = require('../_validate');
 
 // Free-form JSON (social links, extra) per record.
 const JSON_MAX = 16 * 1024;
@@ -76,10 +76,28 @@ const GIG_FIELDS = {
   location:        F.text(200),
 };
 
-// JSONB fields an update merges into the stored object instead of replacing.
-function mergeJson(value, stored, keys) {
-  for (const k of keys) if (value[k]) value[k] = { ...(stored[k] || {}), ...value[k] };
-  return value;
+// The SET clause of a record update, keyword included: plain columns as sent,
+// and the JSONB columns in `jsonKeys` merged into the stored object in SQL
+// (`social_links = social_links || $patch`), not read, merged in JS and
+// written whole: an edit saved meanwhile is no longer lost. Always sets
+// last_updated = NOW(). (One `col = $n` fragment per column: sql(object)
+// only builds a SET list right after the word `update` in the same fragment.)
+function updateSet(sql, value, jsonKeys) {
+  let set = sql`last_updated = NOW()`;
+  for (const [k, v] of Object.entries(value)) {
+    if (!jsonKeys.includes(k)) set = sql`${sql(k)} = ${v}, ${set}`;
+    else if (v) set = sql`${sql(k)} = ${sql(k)} || ${v}::jsonb, ${set}`;
+  }
+  return sql`SET ${set}`;
 }
 
-module.exports = { VENUE_FIELDS, ORGANIZER_FIELDS, GIG_FIELDS, mergeJson };
+// Would merging `value`'s JSONB keys into `stored` push one past maxBytes? Each
+// request is capped, but merges add up; the stored object ships with every row.
+function mergedTooLarge(value, stored, keys, maxBytes = JSON_MAX) {
+  for (const k of keys) {
+    if (value[k] && jsonBytes({ ...(stored[k] || {}), ...value[k] }) > maxBytes) return k;
+  }
+  return null;
+}
+
+module.exports = { VENUE_FIELDS, ORGANIZER_FIELDS, GIG_FIELDS, JSON_MAX, updateSet, mergedTooLarge };

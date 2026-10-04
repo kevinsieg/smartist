@@ -55,6 +55,7 @@ const suites = [
   require('./unit/csp'),
   require('./unit/ignore_build'),
   require('./unit/inline_handlers'),
+  require('./unit/api_fetch'),
   require('./unit/backup'),
 ];
 

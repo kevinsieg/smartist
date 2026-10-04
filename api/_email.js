@@ -33,6 +33,8 @@ async function sendEmail({ to, subject, text, html, attachments, reply_to }) {
     method:  'POST',
     headers: { 'Authorization': PROVIDER.auth(apiKey), 'Content-Type': 'application/json' },
     body:    JSON.stringify(PROVIDER.buildBody({ from: FROM, to, subject, text, html, attachments, reply_to })),
+    // A stalled provider must not hold the function until the platform kills it.
+    signal:  AbortSignal.timeout(10000),
   });
 
   if (!r.ok) {

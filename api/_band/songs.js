@@ -33,10 +33,13 @@ async function songValues(sql, artistId) {
 // otherwise a band could point its song at another band's file and have it
 // deleted by the next media replace, media delete or account deletion.
 const EXTRA_MAX_BYTES = 32 * 1024;
+// The cap is on what is stored after the merge (`extra || patch`): each request
+// alone fitting let repeated requests with new keys grow the row without end,
+// and extra ships with every song list.
 function extraError(extra, current = {}) {
   if (extra == null) return null;
   if (typeof extra !== 'object' || Array.isArray(extra)) return 'extra must be an object';
-  if (jsonBytes(extra) > EXTRA_MAX_BYTES) return 'extra is too large';
+  if (jsonBytes({ ...(current || {}), ...extra }) > EXTRA_MAX_BYTES) return 'extra is too large';
   for (const [k, v] of Object.entries(extra)) {
     if (!/Url$/.test(k) || v == null || v === '') continue;
     if (typeof v !== 'string' || !/^https?:\/\//i.test(v)) return `${k} must be an http(s) URL`;
@@ -181,7 +184,7 @@ module.exports = wrap(async function handler(req, res) {
       WITH s AS (
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            bpm, length_min, interpret, reference_interpret, comment, language, extra, tags)
-        VALUES (${band.id}, ${title}, ${active ?? true}, ${heart ?? false}, ${key},
+        VALUES (${band.id}, ${title}, ${toBool(active, true)}, ${toBool(heart, false)}, ${key},
                 ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
                 ${interpret}, ${reference_interpret},
                 ${comment}, ${language}, ${extra ?? {}},

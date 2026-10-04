@@ -14,7 +14,34 @@ const FREE_ARTIST = { id: 1, slug: 'test', name: 'Test Band', config: { plan: 'f
 const ORG = { id: 5, artist_id: 1, name: 'Giesserei', city: 'Konstanz', deleted: false, social_links: {} };
 
 // The columns an INSERT/UPDATE writes through sql({ … }).
-const written = c => (c.values.find(v => v && v.helper) || {}).helper || {};
+// INSERTs pass sql({ … }); record updates nest one `col = $n` fragment per
+// column (api/_domain/records.js updateSet).
+const written = c => {
+  const out = {};
+  const find = vs => {
+    for (const v of vs || []) {
+      if (v && v.helper) return Object.assign(out, v.helper);
+      // updateSet: one `col = $n` fragment per column, nested.
+      if (v && v.values && v.values[0] && 'fragment' in v.values[0] && !v.values[0].values
+          && /^= ,/.test(v.fragment || '')) out[v.values[0].fragment] = v.values[1];
+      if (v && v.values) find(v.values);
+    }
+  };
+  find(c.values);
+  return out;
+};
+// The patch a JSONB column is merged with in SQL (`col = col || $patch`).
+const mergedInto = (c, col) => {
+  const find = vs => {
+    for (const v of vs || []) {
+      if (v && v.values && v.values[0] && v.values[0].fragment === col && /\|\|/.test(v.fragment)) return v.values[2];
+      const inner = v && v.values && find(v.values);
+      if (inner !== undefined) return inner;
+    }
+    return undefined;
+  };
+  return find(c.values);
+};
 
 function mp(rel) { return require.resolve(path.join(__dirname, '../..', rel)); }
 
@@ -36,10 +63,13 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
     if (strings && typeof strings === 'object' && !Array.isArray(strings)) return { helper: strings };
     if (!Array.isArray(strings)) return { fragment: String(strings) };
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
+    // sql`…` nested in another statement (a SET list) is a fragment, not a query.
+    if (!/^(SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(text)) return { fragment: text, values };
     calls.push({ text, values });
     return Promise.resolve(route(text));
   };
-  sql.begin = async fn => fn(sql);
+  // postgres.js awaits an array of queries returned from begin().
+  sql.begin = async fn => { const r = await fn(sql); return Array.isArray(r) ? Promise.all(r) : r; };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
     exports: {
@@ -189,7 +219,8 @@ async function run(r) {
       { body: { name: 'Renamed', social_links: { instagram: 'ig' } } });
     assertEq(res.statusCode, 200);
     const update = calls.find(c => c.text.startsWith('UPDATE organizers'));
-    assertEq(written(update).social_links, { facebook: 'fb', instagram: 'ig' }, 'social links should merge, not replace');
+    assertEq(mergedInto(update, 'social_links'), { instagram: 'ig' }, 'social links merge in SQL, not replace');
+    assertEq(written(update).social_links, undefined, 'the stored object is never written whole');
   });
 
   // ── delete ─────────────────────────────────────────────────────────────────

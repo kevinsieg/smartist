@@ -341,7 +341,8 @@ CREATE INDEX IF NOT EXISTS gema_rightholders_work_id_idx ON gema_rightholders(ge
 -- ── rate_limits ─────────────────────────────────────────────────────────────
 -- Sliding-window rate limiting for auth, request-reset, and share endpoints.
 -- One row per (endpoint, IP) key; the window resets on the next request after
--- it expires. No background cleanup needed — rows are self-managing.
+-- it expires. checkRateLimit (api/_ratelimit.js) now and then sweeps rows idle
+-- for over a day.
 
 CREATE TABLE IF NOT EXISTS rate_limits (
   key          TEXT PRIMARY KEY,        -- e.g. "auth:1.2.3.4", "reset:1.2.3.4"

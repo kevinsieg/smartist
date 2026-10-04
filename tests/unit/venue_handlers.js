@@ -71,7 +71,22 @@ async function call(handler, method, url, body) {
 }
 
 // The columns an INSERT/UPDATE writes through sql({ … }).
-const written = c => (c.values.find(v => v && v.helper) || {}).helper || {};
+// INSERTs pass sql({ … }); record updates nest one `col = $n` fragment per
+// column (api/_domain/records.js updateSet).
+const written = c => {
+  const out = {};
+  const find = vs => {
+    for (const v of vs || []) {
+      if (v && v.helper) return Object.assign(out, v.helper);
+      // updateSet: one `col = $n` fragment per column, nested.
+      if (v && v.values && v.values[0] && 'fragment' in v.values[0] && !v.values[0].values
+          && /^= ,/.test(v.fragment || '')) out[v.values[0].fragment] = v.values[1];
+      if (v && v.values) find(v.values);
+    }
+  };
+  find(c.values);
+  return out;
+};
 
 const STORED = { id: 5, artist_id: 1, name: 'Old', deleted: false, phone: '+49 1', contact_name: 'Anna', social_links: {} };
 const byId = text => (text.startsWith('SELECT * FROM venues') ? [STORED] : [{ ...STORED }]);
@@ -304,6 +319,17 @@ async function run(r) {
     assertEq(res.statusCode, 400);
     assert(/^phone too long/.test(res.body?.error), res.body?.error);
   });
+
+  await testAsync('PATCH with an impossible calendar date rejects that row instead of failing the batch', async () => {
+    const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
+      season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null };
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => [stored]);
+    const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, deadline: '2026-02-30' }]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.rejected?.[0]?.id, 5);
+    assert(!calls.some(c => c.text.startsWith('UPDATE venues')), 'an impossible date reached the database');
+  });
+
 }
 
 if (require.main === module) {

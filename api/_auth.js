@@ -21,6 +21,19 @@ function demoRole(token, artist) {
 // The band and the caller's membership in it come back from one statement:
 // every authenticated request starts here, and two queries cost twice the
 // round-trips (they do not overlap on the function's single connection).
+// The users row a session claim stands for, as a subquery: the row the token
+// was issued for, or, once that row is gone (its band removed this person or
+// was deleted), another row of the same address. Tokens name a row by id, and
+// one band's removal used to sign the person out of every band. Tokens from
+// before the address was carried in them match by id only.
+function sessionRowId(sql, claim) {
+  return sql`(
+    SELECT id FROM users
+    WHERE id = ${claim.userId} OR email = ${claim.email ?? null}
+    ORDER BY (id = ${claim.userId}) DESC, id
+    LIMIT 1)`;
+}
+
 async function loadArtistAndMember(token, slug) {
   const claim = token ? verifyUserToken(token) : null;
   if (!claim) return { artist: await getArtist(slug), claim, member: null };
@@ -33,7 +46,7 @@ async function loadArtistAndMember(token, slug) {
       SELECT u2.id, u2.role, u1.password_hash, u1.sessions_valid_after, u1.email
       FROM users u1
       JOIN users u2 ON u2.email = u1.email AND u2.artist_id = a.id
-      WHERE u1.id = ${claim.userId}
+      WHERE u1.id = ${sessionRowId(sql, claim)}
       LIMIT 1
     ) m ON true
     WHERE a.slug = ${slug}
@@ -128,4 +141,4 @@ function canOpenStage(artist) {
   return !!(artist && artist.config && artist.config.publicStage === true);
 }
 
-module.exports = { requireAuth, requireRole, refuseDemo, getAccess, canBrowseCatalogue, canOpenStage };
+module.exports = { sessionRowId, requireAuth, requireRole, refuseDemo, getAccess, canBrowseCatalogue, canOpenStage };

@@ -90,7 +90,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, outboundMailLimited: async () => false, clientIp: () => '127.0.0.1' },
   };
   require.cache[bcryptPath] = {
     id: bcryptPath, filename: bcryptPath, loaded: true,
@@ -456,6 +456,27 @@ async function run(r) {
     assertEq(res.statusCode, 409);
     assertEq(sql.calls.filter(c => c.text.includes('SET email')).length, 0);
   });
+
+  console.log(B('\ninviting an address that already has an account'));
+  for (const known of [true, false]) {
+    await testAsync(known
+      ? 'an existing account is added with a notice: no set-password link, its password kept'
+      : 'a new address gets an invite link to set a password', async () => {
+      const sql = makeSqlStub([
+        { match: t => t.includes('AS here'), rows: () => [{ here: false, known }] },
+        { match: t => t.startsWith('INSERT INTO users'), rows: () => [{ id: 99, email: 'p@example.com', role: 'member' }] },
+      ]);
+      const handler = makeHandler({ sql });
+      const res = mockRes();
+      await handler(authReq('POST', '/api/test/members/invite', { email: 'P@example.com', role: 'member' }), res);
+      assertEq(res.statusCode, 201);
+      const insert = sql.calls.find(c => c.text.startsWith('INSERT INTO users'));
+      assert(/SELECT password_hash FROM users WHERE email = \?/.test(insert.text), 'row does not take the address\'s password');
+      assertEq(insert.values[3] === null, known, 'invite token hash');
+      assertEq(/#invite=/.test(sentMail.html), !known, 'set-password link in the mail');
+    });
+  }
+
 }
 
 if (require.main === module) {

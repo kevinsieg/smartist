@@ -4,6 +4,7 @@ const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
 const { validateStr, jsonBytes } = require('../../_validate');
 const { energyToScale } = require('../../_song_values');
+const { songLimit } = require('../../_plans');
 const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
 const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
@@ -99,6 +100,8 @@ module.exports = wrap(async function handler(req, res) {
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
     const tooBig = arrangementError(rows, hidden_instruments);
     if (tooBig) return res.status(400).json({ error: tooBig });
+    if (copy_from != null && !(Number.isInteger(Number(copy_from)) && Number(copy_from) > 0))
+      return res.status(400).json({ error: 'Invalid copy_from' });
     const [[song], [src]] = await Promise.all([
       sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
       copy_from
@@ -252,6 +255,14 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
 
     const sql = getDb();
+    // A restored song counts towards the plan's song limit like a new one:
+    // delete, add, restore otherwise went past it.
+    const max = songLimit(band);
+    if (max != null) {
+      const [{ count }] = await sql`
+        SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      if (count >= max) return res.status(402).json({ error: 'song_limit', limit: max });
+    }
     // The common case — the row is still there, flagged — is one statement:
     // clear the flag and log it, if a delete record exists.
     const [restored] = await sql`

@@ -9,8 +9,10 @@ function validateSongIds(song_ids) {
 }
 
 // Returns trimmed string if valid, null if empty/missing, false if exceeds maxLen.
+// Objects and arrays are invalid (false), not "[object Object]".
 function validateStr(val, maxLen) {
   if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'object') return false;
   const s = String(val).trim();
   if (!s) return null;
   if (s.length > maxLen) return false;
@@ -72,6 +74,8 @@ function parseField(name, f, raw) {
     if (f.nullable === false) return { error: `${name} cannot be empty` };
     return { value: null };
   }
+  if (typeof raw === 'object' && !(raw instanceof Date) && f.type !== 'object')
+    return { error: `${name} must be a ${f.type === 'bool' ? 'boolean' : 'single value'}` };
   switch (f.type) {
     case 'text': {
       const v = validateStr(raw, f.max);

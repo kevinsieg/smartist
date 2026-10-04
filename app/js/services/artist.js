@@ -1,4 +1,5 @@
 async function checkSlug(slug) {
+  // apiFetch-exempt: a public availability check during sign-up, no session.
   const r = await fetch('/api/config?action=check-slug&slug=' + encodeURIComponent(slug));
   const data = await r.json();
   return data.available === true;

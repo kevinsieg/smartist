@@ -163,7 +163,7 @@ async function oauthCallback({ query, headers, ip, origin }) {
   if (untrustedFacebook) return failed('facebook_email_not_trusted');
 
   const artists = await getArtistsForUser(firstUser.id, sql);
-  const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash);
+  const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash, email);
   const hint = Buffer.from(email.toLowerCase()).toString('base64url');
   await logger.info('oauth_login', { provider, email });
   // This is a finished session, not a link to be redeemed. It used to travel
