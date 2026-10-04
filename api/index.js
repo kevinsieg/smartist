@@ -48,7 +48,7 @@ const TABLE = [
   ['/api/auth/logout-everywhere',                          'config', { action: 'logout-everywhere' }],
   ['/api/auth/request-reset',                              'config', { action: 'request-reset' }],
   ['/api/auth/set-password',                               'config', { action: 'set-password' }],
-  ['/api/auth/artists',                                    'config', { action: 'my-artists' }],
+  ['/api/auth/artists',                                    'config', { action: 'artists' }],
   ['/api/auth/deletion-preflight',                         'config', { action: 'deletion-preflight' }],
   ['/api/auth/request-deletion',                           'config', { action: 'request-deletion' }],
   ['/api/auth/confirm-deletion',                           'config', { action: 'confirm-deletion' }],
@@ -118,6 +118,10 @@ module.exports = async function route(req, res) {
   if (!found) return res.status(404).json({ error: 'Not found' });
   const query = Object.fromEntries(url.searchParams);
   delete query.__path;
+  // The action is a URL path (the route table sets it). The one query-string
+  // action left is the health check the monitors call; any other `?action=`
+  // would be a second, undocumented copy of a route.
+  if (query.action !== 'health') delete query.action;
   req.query = { ...query, ...found.params };
   return HANDLERS[found.handler]()(req, res);
 };

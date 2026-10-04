@@ -11,10 +11,12 @@ const PLANS = {
   pro: {
     label: 'Pro',
     // Pro is a free self-serve switch until paid billing exists, so its
-    // storage is capped: unlimited space in a public bucket is free file
-    // hosting for anyone who signs up. null = unlimited.
-    limits: { storageMB: 2048, songs: null },
-    features: ['songs', 'setlists', 'gigs', 'hub', 'venues', 'organizers', 'pro-import', 'booking'],
+    // limits are finite: unlimited space in a public bucket is free file
+    // hosting, and unlimited songs (each with lyrics, arrangements and
+    // history) fill the shared database, for anyone who signs up.
+    // null = unlimited.
+    limits: { storageMB: 2048, songs: 5000 },
+    features: ['songs', 'setlists', 'gigs', 'hub', 'venues', 'organizers', 'pro-import'],
   },
 };
 
@@ -39,12 +41,6 @@ function songLimit(artist) {
   return getPlan(artist).limits.songs;
 }
 
-function wouldExceedStorage(artist, usedBytes, addBytes) {
-  const limit = storageLimitBytes(artist);
-  if (limit == null) return false;
-  return Number(usedBytes) + Number(addBytes) > limit;
-}
-
 function planSummary(artist) {
   const key = planKey(artist);
   const p = PLANS[key];
@@ -60,5 +56,5 @@ function requireFeature(res, artist, key) {
 
 module.exports = {
   PLANS, getPlan, hasFeature, storageLimitBytes, songLimit,
-  wouldExceedStorage, planSummary, requireFeature,
+  planSummary, requireFeature,
 };

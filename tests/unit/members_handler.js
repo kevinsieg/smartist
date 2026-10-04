@@ -90,7 +90,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, outboundMailLimited: async () => false, clientIp: () => '127.0.0.1' },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, outboundMailLimited: async () => false, clientIp: () => '127.0.0.1', loginOkPrefix: e => `login-ok:${e}|` },
   };
   require.cache[bcryptPath] = {
     id: bcryptPath, filename: bcryptPath, loaded: true,
@@ -436,7 +436,7 @@ async function run(r) {
     assert(sentMail && sentMail.to === 'old@example.com', 'notice goes to the OLD address');
   });
 
-  await testAsync('POST request-email-change refuses an address that already has an account', async () => {
+  await testAsync('POST request-email-change moves nothing onto an address that already has an account', async () => {
     // Moving onto it would merge the accounts: this password would then open
     // the other person's bands.
     const sql = makeSqlStub([
@@ -451,9 +451,12 @@ async function run(r) {
       currentPassword: 'correct-password', newEmail: 'someone@example.com',
     }, { authorization: 'Bearer member' }), res);
 
-    assertEq(res.statusCode, 409);
+    // The same answer as for a free address, so the request reveals nothing;
+    // the address's own inbox is told why nothing changed.
+    assertEq(res.statusCode, 200);
     assert(!sql.calls.some(c => c.text.includes('UPDATE users')), 'nothing stored');
-    assertEq(sentMail, null, 'no mail sent');
+    assert(sentMail && sentMail.to === 'someone@example.com', 'the address is told');
+    assert(!/confirm-email/.test(sentMail.html), 'no confirm link');
   });
 
   await testAsync('POST confirm-email-change refuses an address with an account in any band', async () => {

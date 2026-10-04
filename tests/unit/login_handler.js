@@ -47,7 +47,7 @@ function makeHandler(rows, { rateLimited = false, locked = false, ipKnown = true
     id: rlPath, filename: rlPath, loaded: true,
     exports: {
       loginFailKey: email => `login-fail:${email}`, loginFailPairKey: (email, ip) => `login-fail:${email}|${ip}`,
-      loginOkKey: (email, ip) => `login-ok:${email}|${ip}`, LOGIN_OK_DAYS: 30,
+      loginOkKey: (email, ip) => `login-ok:${email}|${ip}`, loginOkPrefix: email => `login-ok:${email}|`, LOGIN_OK_DAYS: 30,
       LOGIN_FAIL_MAX: 10, LOGIN_FAIL_ADDRESS_MAX: 100, LOGIN_FAIL_WINDOW: 900,
       countLoginFailure: async (email, ip) => { failures.push(email); failureIps.push(ip); },
       checkRateLimit: async () => rateLimited, clientIp: () => '127.0.0.1',

@@ -618,7 +618,12 @@ async function _saveQuickSong() {
       length_min: length,
       active:     true,
     });
-    if (!r.ok) throw new Error('create failed');
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      const err = new Error(d.error || 'create failed');
+      if (d.error === 'song_limit') err.limit = d.limit;
+      throw err;
+    }
     const song = await r.json();
     invalidateConfigCache();
     allSongs.push(song);
@@ -626,8 +631,8 @@ async function _saveQuickSong() {
     _splitAt = null;
     _closeQuickSong();
     renderResult(currentSet);
-  } catch {
-    errEl.textContent = t('songs.saveFailed');
+  } catch (err) {
+    errEl.textContent = err && err.limit ? t('songs.limitReached', { limit: err.limit }) : t('songs.saveFailed');
     errEl.className   = 'status-msg error';
   } finally {
     btn.disabled = false;
@@ -824,18 +829,16 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   const comment = document.getElementById('setlist-comment').value.trim() || null;
   const songIds = currentSet.map(s => s.id).filter(id => Number.isInteger(id) && id > 0);
 
+  const titleEl = document.getElementById('setlist-title');
+  titleEl.setAttribute('aria-invalid', String(!title));
   if (!title) {
-    const err = document.getElementById('save-error');
-    err.textContent = t('setlist.nameRequired');
-    err.className = 'status-msg error';
-    document.getElementById('setlist-title').focus();
+    setStatus('save-error', t('setlist.nameRequired'), true);
+    titleEl.focus();
     return;
   }
 
   if (songIds.length !== currentSet.length) {
-    const err = document.getElementById('save-error');
-    err.textContent = t('setlist.missingIds');
-    err.className = 'status-msg error';
+    setStatus('save-error', t('setlist.missingIds'), true);
     return;
   }
 
@@ -851,9 +854,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     _histPendingOpenId = String(saved.id);
     switchTab('history');
   } else {
-    const err = document.getElementById('save-error');
-    err.textContent = t('setlist.saveFailed');
-    err.className = 'status-msg error';
+    setStatus('save-error', t('setlist.saveFailed'), true);
   }
 });
 

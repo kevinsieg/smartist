@@ -179,6 +179,7 @@ async function _arrLoadVersions() {
     var _arrUrl = '/api/' + window._arrSlug + '/songs/' + _arrEditorSongId + '/arrangements';
     var r = typeof apiFetch === 'function'
       ? await apiFetch(_arrUrl)
+      // apiFetch-exempt: stage has no session.js
       : await fetch(_arrUrl, { headers: _arrAuthHeaders() });
     var data = await r.json();
     _arrEditorVersions = Array.isArray(data) ? data : [];
@@ -302,7 +303,7 @@ function _arrRenderGrid() {
   var thInst = visible.map(function(v) {
     return '<th class="arr-th arr-th--inst">' + escHtml(v.label) + '</th>';
   }).join('');
-  var thActions = '<th class="arr-th arr-th--actions"></th>';
+  var thActions = '<th class="arr-th arr-th--actions"><span class="sr-only">' + _arrT('arr.colActions', 'Actions') + '</span></th>';
 
   _arrRowCount = rows.length;
   var bodyHtml = rows.map(function(row, ri) {
@@ -533,17 +534,33 @@ function arrOpenHarmPicker(cell, ri) {
     if (item) arrToggleHarm(Number(item.dataset.ri), item.dataset.name);
   });
 
-  // Escape closes the picker (not the editor) and goes back to the cell.
+  // Escape closes the picker (not the editor) and goes back to the cell;
+  // ↑/↓ move between members.
   picker.addEventListener('keydown', function(e) {
-    if (e.key !== 'Escape') return;
-    e.preventDefault(); e.stopPropagation();
-    _arrCloseHarmPicker();
-    cell.focus();
+    var list = [].slice.call(picker.querySelectorAll('.arr-harm-item'));
+    var i = list.indexOf(document.activeElement);
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation();
+      _arrCloseHarmPicker();
+      cell.focus();
+    } else if (e.key === 'ArrowDown' && list.length) { e.preventDefault(); (list[i + 1] || list[0]).focus(); }
+    else if (e.key === 'ArrowUp' && list.length)   { e.preventDefault(); (list[i - 1] || list[list.length - 1]).focus(); }
   });
 
+  // Tab out of the picker closes it. A press inside may blur the focused item
+  // without focusing another (Safari), so that does not count.
+  var pressing = false;
+  picker.addEventListener('pointerdown', function() { pressing = true; });
+  picker.addEventListener('click', function() { pressing = false; });
+  picker.addEventListener('focusout', function(e) {
+    if (!picker.isConnected || pressing || picker.contains(e.relatedTarget) || e.relatedTarget === cell) return;
+    _arrCloseHarmPicker();
+  });
+
+  // Inside the dialog, so its focus trap lets Tab move through the members.
   var rect = cell.getBoundingClientRect();
   picker.style.cssText = 'position:fixed;top:' + (rect.bottom + 2) + 'px;left:' + rect.left + 'px;z-index:1001';
-  document.body.appendChild(picker);
+  (cell.closest('.arr-modal') || document.body).appendChild(picker);
   cell.setAttribute('aria-expanded', 'true');
   var focusName = _arrHarmFocusName;
   _arrHarmFocusName = null;
@@ -563,7 +580,9 @@ var _arrHarmFocusName = null;
 
 function _arrCloseHarmPicker() {
   var picker = document.getElementById('arr-harm-picker');
-  if (picker) picker.remove();
+  // Removing the focused item fires focusout, which closes again: unnamed
+  // first, the nested call finds nothing left to remove.
+  if (picker) { picker.removeAttribute('id'); picker.remove(); }
   if (_arrHarmPickerCloseFn) { document.removeEventListener('click', _arrHarmPickerCloseFn); _arrHarmPickerCloseFn = null; }
   var cell = document.querySelector('.arr-harm-cell[aria-expanded="true"]');
   if (cell) cell.setAttribute('aria-expanded', 'false');

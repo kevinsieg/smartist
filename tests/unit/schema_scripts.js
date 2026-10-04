@@ -13,14 +13,16 @@ const ROOT = path.join(__dirname, '../..');
 // A raw runner like apply_schema's connect(): sql([text]). `have` is the
 // schema_migrations ledger (null: no ledger table yet); an INSERT INTO
 // schema_migrations statement adds its id, as running it would, unless that id
-// is `lost` (a block whose INSERT did not take).
-function fakeDb(have, lost = null) {
+// is `lost` (a block whose INSERT did not take). `invalid` names the indexes
+// pg_index reports as invalid.
+function fakeDb(have, lost = null, invalid = []) {
   const ran = [];
   const sql = async ([text]) => {
     if (text === 'SELECT id FROM schema_migrations') {
       if (have === null) throw new Error('relation "schema_migrations" does not exist');
       return have.map(id => ({ id }));
     }
+    if (/FROM pg_index/.test(text)) return invalid.map(name => ({ name }));
     ran.push(text);
     const m = /INSERT INTO schema_migrations \(id\) VALUES \('([^']+)'\)/.exec(text);
     if (m && m[1] !== lost) { have = have || []; have.push(m[1]); }
@@ -42,7 +44,7 @@ INSERT INTO schema_migrations (id) VALUES ('2026-01-02') ON CONFLICT DO NOTHING;
 async function run(r) {
   const { test, testAsync, assert, assertEq, B } = r;
   const { decide, migrate } = require(path.join(ROOT, 'scripts/deploy_migrate'));
-  const { splitStatements, migrationIds } = require(path.join(ROOT, 'scripts/apply_schema'));
+  const { splitStatements, migrationIds, pendingStatements, withLockTimeout } = require(path.join(ROOT, 'scripts/apply_schema'));
 
   console.log(B('\ndeploy_migrate: which builds migrate'));
 
@@ -68,18 +70,27 @@ async function run(r) {
     assertEq(db.ran, []);
   });
 
-  await testAsync('one pending → every statement runs, "already exists" is skipped', async () => {
+  await testAsync('one pending → only its block runs', async () => {
     const db = fakeDb(['2026-01-01']);
     const out = await migrate(db.sql, SRC);
     assertEq(out.pending, ['2026-01-02']);
+    assertEq(db.ran.length, 2);
+    assert(/^ALTER TABLE t/.test(db.ran[0]), `ran ${db.ran[0]}`);
+  });
+
+  await testAsync('a database without the ledger table runs everything, "already exists" is skipped', async () => {
+    const db = fakeDb(null);
+    const out = await migrate(db.sql, SRC);
+    assertEq(out.pending, ['2026-01-01', '2026-01-02']);
     assertEq(db.ran.length, 5);
     assertEq(out.skipped, 1);
   });
 
-  await testAsync('a database without the ledger table is migrated from scratch', async () => {
-    const db = fakeDb(null);
-    const out = await migrate(db.sql, SRC);
-    assertEq(out.pending, ['2026-01-01', '2026-01-02']);
+  await testAsync('an invalid index left behind fails the build', async () => {
+    const db = fakeDb(['2026-01-01'], null, ['idx_songs_x']);
+    let err = null;
+    try { await migrate(db.sql, SRC); } catch (e) { err = e; }
+    assert(err && /invalid index.*idx_songs_x/.test(err.message), `got ${err && err.message}`);
   });
 
   await testAsync('the pending ids are logged before any statement runs', async () => {
@@ -125,6 +136,42 @@ async function run(r) {
 
   test('migration ids come from statements, not from comments', () => {
     assertEq(migrationIds(SRC), ['2026-01-01', '2026-01-02']);
+  });
+
+  console.log(B('\napply_schema: pendingStatements'));
+
+  test('a new database gets every statement', () => {
+    assertEq(pendingStatements(SRC, []).length, 5);
+  });
+
+  test('recorded blocks are left out', () => {
+    assertEq(pendingStatements(SRC, ['2026-01-01']), [
+      'ALTER TABLE t ADD COLUMN IF NOT EXISTS c text',
+      "INSERT INTO schema_migrations (id) VALUES ('2026-01-02') ON CONFLICT DO NOTHING",
+    ]);
+    assertEq(pendingStatements(SRC, ['2026-01-01', '2026-01-02']), []);
+  });
+
+  test('a base ending in several ids runs while any of them is missing', () => {
+    const src = "CREATE TABLE a (x int);\nINSERT INTO schema_migrations (id) VALUES ('a');\nINSERT INTO schema_migrations (id) VALUES ('b');\n";
+    assertEq(pendingStatements(src, ['a']).length, 3);
+    assertEq(pendingStatements(src, ['a', 'b']), []);
+  });
+
+  test('statements after the last id always run', () => {
+    const src = "INSERT INTO schema_migrations (id) VALUES ('a');\nCREATE INDEX x;\n";
+    assertEq(pendingStatements(src, ['a']), ['CREATE INDEX x']);
+  });
+
+  console.log(B('\napply_schema: withLockTimeout'));
+
+  test('a statement gets a lock timeout', () => {
+    assertEq(withLockTimeout('ALTER TABLE t ADD c int'), "SET LOCAL lock_timeout = '5s'; ALTER TABLE t ADD c int");
+  });
+
+  test('CREATE INDEX CONCURRENTLY runs on its own', () => {
+    assertEq(withLockTimeout('CREATE INDEX CONCURRENTLY IF NOT EXISTS i ON t (c)'), null);
+    assertEq(withLockTimeout('create index concurrently if not exists i on t (c)'), null);
   });
 }
 

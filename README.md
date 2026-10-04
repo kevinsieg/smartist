@@ -44,7 +44,7 @@ Workspace pages live at `/<slug>/…`.
 
 **Accounts** — sign up at `/signup` with email or Google (Facebook when enabled), then create a band at `/onboarding`. One login can belong to several bands (`/workspaces`). A new Google account that signs in from the login page also goes on to onboarding. `/demo` opens the public demo band; `/admin` is a cross-tenant overview for `SUPER_ADMIN_EMAILS`.
 
-**Plans** — Free: 100 songs, 30 MB storage, songs/setlists/gigs/hub. Pro: unlimited songs, 2 GB storage, plus venues, organizers and PRO import. There is no paid checkout yet: Settings upgrades a band to Pro for free, and `scripts/plans.js` or `/admin` set a plan by hand. `api/_plans.js` decides every feature and limit.
+**Plans** — Free: 100 songs, 30 MB storage, songs/setlists/gigs/hub. Pro: 5,000 songs, 2 GB storage, plus venues, organizers and PRO import. There is no paid checkout yet: Settings upgrades a band to Pro for free, and `scripts/plans.js` or `/admin` set a plan by hand. `api/_plans.js` decides every feature and limit.
 
 ---
 

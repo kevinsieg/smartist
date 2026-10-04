@@ -18,7 +18,7 @@ async function run(r) {
     ['/api/config',                         'config', {}],
     ['/api/login',                          'config', { action: 'login' }],
     ['/api/auth/magic-login',               'config', { action: 'magic-login' }],
-    ['/api/auth/artists',                   'config', { action: 'my-artists' }],
+    ['/api/auth/artists',                   'config', { action: 'artists' }],
     ['/api/signup',                         'config', { action: 'signup' }],
     ['/api/signup/verify',                  'config', { action: 'verify-signup-token' }],
     ['/api/config/upgrade',                 'config', { action: 'upgrade' }],

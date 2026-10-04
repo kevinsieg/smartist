@@ -57,6 +57,11 @@ function run(r) {
     assertEq(lines(csv), ['id,isrc,lead', '1,X1,', '2,,Kev']);
   });
 
+  test('extra keys in the header are escaped like cells', () => {
+    const csv = toCsv([{ id: 1, extra: { '=HYPERLINK("x")': 'a', 'a,b': 'c' } }]);
+    assertEq(lines(csv)[0], 'id,"\'=HYPERLINK(""x"")","a,b"');
+  });
+
   test('an extra key that clashes with a column is prefixed', () => {
     const csv = toCsv([{ id: 1, key: 'Am', extra: { key: 'C' } }]);
     assertEq(lines(csv), ['id,key,extra_key', '1,Am,C']);

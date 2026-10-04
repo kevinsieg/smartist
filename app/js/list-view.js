@@ -86,7 +86,9 @@ function createListView(opts) {
         (a.desktopOnly  ? ' btn-desktop-only' : '') +
         (a.authRequired ? ' auth-only'        : '') +
         (a.icon         ? ' icon-btn'         : '');
-      var titleAttr = a.title ? ' title="' + escHtml(a.title) + '"' : '';
+      // An icon-only button is named by aria-label: a title alone is invisible on touch.
+      var titleAttr = a.title ? ' title="' + escHtml(a.title) + '"' + (a.icon ? ' aria-label="' + escHtml(a.title) + '"' : '') : '';
+      if (a.popup) titleAttr += ' aria-haspopup="true" aria-expanded="false"';
       var content   = a.icon  ? a.icon : escHtml(a.label);
       return '<button class="' + cls + '" data-lv-action="' + escHtml(a.label) + '"' + titleAttr + '>' +
         content + '</button>';

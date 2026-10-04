@@ -2,7 +2,8 @@ const { getDb } = require('../_db');
 const { validateEmail, validateStr } = require('../_validate');
 const { checkRateLimit } = require('../_ratelimit');
 const { sendEmail } = require('../_email');
-const { generateMagicToken, generateUserToken, TTL_8H } = require('../_token');
+const { generateMagicToken, generateUserToken, verifyUserToken, sessionValid, TTL_8H } = require('../_token');
+const { sessionRowId } = require('../_auth');
 const logger = require('../_logger');
 const { isSlugAvailable } = require('./artist');
 const { createSignupToken, verifySignupToken, redeemSignupToken, checkEmailDeliverable } = require('./registration');
@@ -90,18 +91,23 @@ async function verifySignup({ body, ip }) {
 }
 
 // POST /api/signup — consumes the token, creates the workspace + admin user,
-// returns a session token.
-async function signup({ body, ip }) {
+// returns a session token. Without a token, a signed-in person adds a
+// workspace of their own ("+ New workspace"): the session stands in for the
+// mailed link, since its address is already proven.
+async function signup({ body, headers, ip }) {
   if (await checkRateLimit(`signup-consume:${ip}`, 10, 60))
     return fail(429, 'Too many requests');
   const { token, name, slug: rawSlug } = body;
-  if (!token) return fail(400, 'token required');
+  const auth = String(headers?.authorization || '');
+  const claim = !token && auth.startsWith('Bearer ') ? verifyUserToken(auth.slice(7)) : null;
+  if (!token && !claim) return fail(400, 'token required');
   const bandName = validateStr(name, 200);
   if (!bandName) return fail(400, 'Band name required');
   const slug = String(rawSlug || '').trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug))
     return fail(400, 'Slug must be 3–50 lowercase letters, numbers, or hyphens');
   const sql = getDb();
+  if (claim) return addWorkspace(sql, claim, bandName, slug);
   const verified = await verifySignupToken(String(token), sql);
   if (!verified) return fail(400, 'Invalid or expired link');
   const available = await isSlugAvailable(slug, sql);
@@ -119,6 +125,40 @@ async function signup({ body, ip }) {
   const sessionToken = generateUserToken(created.userId, 'admin', TTL_8H, null, created.email);
   await logger.info('signup_complete', { slug, email: created.email });
   return reply(201, { ok: true, token: sessionToken, slug, role: 'admin', email: created.email });
+}
+
+// The new admin row takes the address's password and its newest "log out
+// everywhere", so it opens with the same sign-in and revives no ended session.
+async function addWorkspace(sql, claim, bandName, slug) {
+  const [me] = await sql`
+    SELECT id, email, password_hash, sessions_valid_after FROM users
+    WHERE id = ${sessionRowId(sql, claim)}
+  `;
+  if (!me || !sessionValid(claim, me)) return fail(401, 'Unauthorized');
+  if (await checkRateLimit(`workspace-create:${me.email}`, 10, 86400))
+    return fail(429, 'Too many new workspaces today');
+  if (!(await isSlugAvailable(slug, sql))) return fail(409, 'That URL is already taken');
+  let created;
+  try {
+    created = await sql.begin(async tx => {
+      const [artist] = await tx`
+        INSERT INTO artists (slug, name, config) VALUES (${slug}, ${bandName}, '{}') RETURNING id
+      `;
+      const [user] = await tx`
+        INSERT INTO users (artist_id, email, role, password_hash, sessions_valid_after)
+        SELECT ${artist.id}, ${me.email}, 'admin', ${me.password_hash}, max(sessions_valid_after)
+        FROM users WHERE email = ${me.email}
+        RETURNING id
+      `;
+      return { userId: user.id };
+    });
+  } catch (err) {
+    if (err.code === '23505') return fail(409, 'That URL is already taken');
+    throw err;
+  }
+  const sessionToken = generateUserToken(created.userId, 'admin', TTL_8H, me.password_hash, me.email);
+  await logger.info('workspace_added', { slug });
+  return reply(201, { ok: true, token: sessionToken, slug, role: 'admin', email: me.email });
 }
 
 module.exports = { signupLink, verifySignup, signup };

@@ -57,7 +57,7 @@ module.exports = wrap(async function handler(req, res) {
   // client and the /auth/callback rewrite never send one).
   if (action === 'health')             return health(req, res);
   if (action === 'check-slug')         return checkSlug(req, res);
-  if (action === 'my-artists')         return myArtists(req, res);
+  if (action === 'artists')            return myArtists(req, res);
   if (action === 'deletion-preflight') return run(deletion.preflight, req, res);
   if (action === 'admin-overview')     return run(admin.overview, req, res);
   if (action === 'google-url')         return run(oauth.googleUrl, req, res);
@@ -86,6 +86,8 @@ module.exports = wrap(async function handler(req, res) {
 // Which required variables are missing (names only, never values), whether the
 // database answers, and whether it has the newest schema migration. 503 when
 // any of that is wrong, so a deploy script or uptime monitor can alert on it.
+// An index an interrupted CREATE INDEX CONCURRENTLY left invalid is a warning:
+// queries still work, only slower.
 async function health(req, res) {
   const { missing, warnings } = envReport();
   let database = 'not configured';
@@ -93,9 +95,11 @@ async function health(req, res) {
   if (process.env.DATABASE_URL) {
     try {
       const [row] = await getDb()`
-        SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE id = ${SCHEMA_VERSION}) AS current`;
+        SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE id = ${SCHEMA_VERSION}) AS current,
+               (SELECT array_agg(indexrelid::regclass::text) FROM pg_index WHERE NOT indisvalid) AS invalid`;
       database = 'ok';
       schema = row.current ? 'current' : 'behind';
+      if (row.invalid) warnings.push(`invalid index: ${row.invalid.join(', ')}`);
     } catch (e) {
       // No ledger table yet: the database answers but predates it.
       if (e.code === '42P01') { database = 'ok'; schema = 'behind'; }

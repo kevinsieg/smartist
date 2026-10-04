@@ -275,6 +275,9 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
   let _openId = null;
 
   const colWidths    = columns.map(c => c.width || '1fr').join(' ');
+  // Expandable rows: the first plain text column is a disclosure button (the
+  // keyboard and screen-reader way in); a click anywhere on the row still works.
+  const expandCol    = onExpand ? (columns.find(c => !c.render && !c.actions) || columns.find(c => !c.actions)) : null;
   const filterFields = columns.filter(c => c.filterable).map(c => c.field);
   const sortableCols = columns.filter(c => c.sortable);
 
@@ -340,11 +343,16 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     });
   }
 
+  function _setExpanded(rowEl, open) {
+    rowEl.classList.toggle('sl-row--expanded', open);
+    rowEl.querySelector('.sl-expand-btn')?.setAttribute('aria-expanded', String(open));
+  }
+
   async function _loadExpansion(rowEl, row) {
-    rowEl.classList.add('sl-row--expanded');
-    rowEl.setAttribute('aria-expanded', 'true');
+    _setExpanded(rowEl, true);
     const expEl = document.createElement('div');
     expEl.className = 'sl-expansion';
+    expEl.id = containerId + '-exp-' + row.id;
     expEl.setAttribute('data-for', String(row.id));
     expEl.innerHTML = '<div class="sl-expansion-inner">' + skeletonHtml(2) + '</div>';
     rowEl.after(expEl);
@@ -360,8 +368,7 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
       const containerEl = document.getElementById(containerId);
       const prevRowEl = containerEl ? containerEl.querySelector('.sl-row[data-id="' + _openId + '"]') : null;
       if (prevRowEl) {
-        prevRowEl.classList.remove('sl-row--expanded');
-        prevRowEl.setAttribute('aria-expanded', 'false');
+        _setExpanded(prevRowEl, false);
         const prevExp = prevRowEl.nextElementSibling;
         if (prevExp && prevExp.classList.contains('sl-expansion')) prevExp.remove();
       }
@@ -387,6 +394,14 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
     return `<div class="${cls}">${val}</div>`;
   }
 
+  function _expandCellHtml(col, row) {
+    const html = _cellHtml(col, row);
+    const open = html.indexOf('>') + 1, close = html.lastIndexOf('</div>');
+    return html.slice(0, open) +
+      `<button type="button" class="sl-expand-btn" aria-expanded="false" aria-controls="${containerId}-exp-${row.id}">` +
+      (html.slice(open, close) || '—') + '</button></div>';
+  }
+
   function _render() {
     const el = document.getElementById(containerId);
     if (!el) return;
@@ -407,8 +422,8 @@ function createSortableList({ containerId, sortBarId, filterInputId, columns, de
 
     el.innerHTML = visible.map(row => {
       const cls = ['sl-row', rowClass ? rowClass(row) : ''].filter(Boolean).join(' ');
-      const cells = columns.map(col => _cellHtml(col, row)).join('');
-      const focusable = onRowClick || onExpand ? ' tabindex="0"' + (onExpand ? ' aria-expanded="false"' : '') : '';
+      const cells = columns.map(col => col === expandCol ? _expandCellHtml(col, row) : _cellHtml(col, row)).join('');
+      const focusable = onRowClick && !onExpand ? ' tabindex="0"' : '';
       return `<div class="${cls}" style="grid-template-columns:${colWidths}" data-id="${row.id}"${focusable}>${cells}</div>`;
     }).join('');
 
@@ -675,8 +690,11 @@ function wirePopupMenu(btn, menu) {
   var items = function() { return [].slice.call(menu.querySelectorAll('button:not([disabled])')); };
   btn.setAttribute('aria-haspopup', 'true');
   btn.setAttribute('aria-expanded', 'true');
+  var closed = false;
   function close(refocus) {
-    if (!menu.isConnected) return;
+    // Removing the focused item fires focusout, which calls this again.
+    if (closed || !menu.isConnected) return;
+    closed = true;
     menu.remove();
     btn.setAttribute('aria-expanded', 'false');
     document.removeEventListener('click', onDocClick);
@@ -689,11 +707,18 @@ function wirePopupMenu(btn, menu) {
     else if (e.key === 'ArrowDown') { e.preventDefault(); (list[i + 1] || list[0]).focus(); }
     else if (e.key === 'ArrowUp')   { e.preventDefault(); (list[i - 1] || list[list.length - 1]).focus(); }
   });
+  // Focus leaving the menu closes it, also when it leaves the document (Tab
+  // past the last item of a menu at the end of <body>). A press inside may blur
+  // the focused item without focusing another (Safari), so that does not count.
+  var pressing = false;
+  menu.addEventListener('pointerdown', function() { pressing = true; });
   menu.addEventListener('focusout', function(e) {
-    if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget !== btn) close(false);
+    if (pressing || menu.contains(e.relatedTarget) || e.relatedTarget === btn) return;
+    close(false);
   });
   // Choosing an item closes the menu (items may close it themselves first).
   menu.addEventListener('click', function(e) {
+    pressing = false;
     var b = e.target.closest('button');
     if (b && !b.hasAttribute('data-keep-open')) setTimeout(function() { close(false); }, 0);
   });

@@ -18,14 +18,19 @@ const { presignLimited } = require('./_ratelimit');
 //   maxBytes      — max upload size in bytes
 //   actionPrefix  — audit log prefix, e.g. 'audio' → events 'audio_replace', 'audio_delete'
 //   allowedExts   — Set of lowercase extensions; if absent only .pdf is accepted
-//   mimePrefix    — expected MIME prefix for server-side verification, e.g. 'audio/'
+//   types         — the exact content types accepted at presign and at confirm
 
 const AUDIO_EXTS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac']);
+// Exact types, no parameters: the bucket serves back whatever type the upload
+// carried, and "audio/mpeg,text/html" passed a prefix check while browsers
+// read it as HTML.
+const AUDIO_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/ogg',
+  'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/flac', 'audio/x-flac']);
 
 const MEDIA_CONFIGS = {
-  audio:    { keyPrefix: 'audio/',    extraKey: 'listenUrl',   maxBytes: 50 * 1024 * 1024, actionPrefix: 'audio',    allowedExts: AUDIO_EXTS, mimePrefix: 'audio/' },
-  sheet:    { keyPrefix: 'sheets/',   extraKey: 'sheetUrl',    maxBytes: 20 * 1024 * 1024, actionPrefix: 'sheet',    mimePrefix: 'application/pdf' },
-  playback: { keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50 * 1024 * 1024, actionPrefix: 'playback', allowedExts: AUDIO_EXTS, mimePrefix: 'audio/' },
+  audio:    { keyPrefix: 'audio/',    extraKey: 'listenUrl',   maxBytes: 50 * 1024 * 1024, actionPrefix: 'audio',    allowedExts: AUDIO_EXTS, types: AUDIO_TYPES },
+  sheet:    { keyPrefix: 'sheets/',   extraKey: 'sheetUrl',    maxBytes: 20 * 1024 * 1024, actionPrefix: 'sheet',    types: new Set(['application/pdf']) },
+  playback: { keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50 * 1024 * 1024, actionPrefix: 'playback', allowedExts: AUDIO_EXTS, types: AUDIO_TYPES },
 };
 
 const out = (status, body) => ({ status, body });
@@ -38,15 +43,15 @@ const out = (status, body) => ({ status, body });
  * @param {{ filename?: string, contentType?: string, size?: number }} [file]
  */
 async function presignMedia(sql, band, songId, config, { filename, contentType, size } = {}) {
-  const { keyPrefix, maxBytes, allowedExts, mimePrefix } = config;
+  const { keyPrefix, maxBytes, allowedExts, types } = config;
   if (!filename || typeof filename !== 'string') return out(400, { error: 'filename required' });
 
   if (allowedExts) {
     const ext = filename.split('.').pop().toLowerCase();
     if (!allowedExts.has(ext))
       return out(400, { error: `Unsupported file type. Allowed: ${[...allowedExts].join(', ')}` });
-    if (!contentType || !String(contentType).startsWith(mimePrefix))
-      return out(400, { error: `contentType must be ${mimePrefix}*` });
+    if (!types.has(String(contentType || '').toLowerCase()))
+      return out(400, { error: `Unsupported audio type: ${String(contentType || '').slice(0, 50) || 'none'}` });
   } else if (!filename.toLowerCase().endsWith('.pdf')) {
     return out(400, { error: 'Only PDF files are allowed' });
   }
@@ -63,13 +68,13 @@ async function presignMedia(sql, band, songId, config, { filename, contentType, 
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
   // The band id in the key is what confirmMedia checks.
   const key = `${keyPrefix}${band.id}/${crypto.randomUUID()}-${safeName}`;
-  return out(200, await createPresignedUrl(key, allowedExts ? contentType : 'application/pdf', Number(size)));
+  return out(200, await createPresignedUrl(key, allowedExts ? String(contentType).toLowerCase() : 'application/pdf', Number(size)));
 }
 
 // Confirm an upload: store its URL on the song, drop the file it replaces, and
 // move the band's storage counter by the net change.
 async function confirmMedia(sql, band, songId, config, publicUrl) {
-  const { keyPrefix, extraKey, maxBytes, actionPrefix, mimePrefix } = config;
+  const { keyPrefix, extraKey, maxBytes, actionPrefix, types } = config;
   if (!publicUrl || typeof publicUrl !== 'string') return out(400, { error: 'publicUrl required' });
 
   const base = process.env.R2_PUBLIC_URL;
@@ -84,9 +89,9 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
     sql`SELECT extra->>${extraKey} AS url FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
   ]);
   if (!head) return out(400, { error: 'Uploaded file not found in storage' });
-  if (!head.contentType.startsWith(mimePrefix)) {
+  if (!types.has(String(head.contentType).toLowerCase())) {
     await deleteFromR2(publicUrl);
-    return out(400, { error: `Uploaded file content type does not match ${mimePrefix}` });
+    return out(400, { error: 'Uploaded file has an unsupported content type' });
   }
   if (head.size > maxBytes) {
     await deleteFromR2(publicUrl);

@@ -16,6 +16,9 @@ const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
 // What a new song is checked against: the band's live song count (plan
 // limit), genres (spelling) and tags (casing), in one statement.
+// pg_advisory_xact_lock namespace for "count, then add songs" per band.
+const SONG_LIMIT_LOCK = 1;
+
 async function songValues(sql, artistId) {
   const [row] = await sql`
     SELECT
@@ -180,7 +183,7 @@ module.exports = wrap(async function handler(req, res) {
     if (extraErr) return res.status(400).json({ error: extraErr });
 
     // Song, lyrics and audit entry in one statement.
-    const [song] = await sql`
+    const insertSong = q => q`
       WITH s AS (
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            bpm, length_min, interpret, reference_interpret, comment, language, extra, tags)
@@ -199,6 +202,14 @@ module.exports = wrap(async function handler(req, res) {
       )
       SELECT s.*, (${lyrics.value}::text IS NOT NULL) AS has_lyrics FROM s
     `;
+    // With a plan limit, the count and the insert run under the band's lock:
+    // the count read above was taken before any parallel create committed.
+    const song = _max == null ? (await insertSong(sql))[0] : await sql.begin(async tx => {
+      await tx`SELECT pg_advisory_xact_lock(${SONG_LIMIT_LOCK}::int, ${band.id}::int)`;
+      const [{ n }] = await tx`SELECT count(*)::int AS n FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      return n >= _max ? null : (await insertSong(tx))[0];
+    });
+    if (!song) return res.status(402).json({ error: 'song_limit', limit: _max });
     return res.status(201).json(song);
   }
 

@@ -55,7 +55,10 @@ async function run(r) {
     }
     assertEq(PURGE_AFTER_DAYS, 90);
     assert(/s\.deleted/.test(calls[0].text), 'deleted songs only');
-    assert(/NOT EXISTS \(SELECT 1 FROM setlist_songs/.test(calls[0].text), 'setlists keep their songs');
+    assert(/WHERE NOT listed/.test(calls[0].text), 'setlists keep their songs');
+    assert(/DELETE FROM song_lyrics WHERE song_id IN \(SELECT id FROM old WHERE listed\)/.test(calls[0].text)
+      && /DELETE FROM song_arrangements WHERE song_id IN \(SELECT id FROM old WHERE listed\)/.test(calls[0].text),
+      'a song kept by a setlist loses its lyrics and arrangements');
     assert(/listenUrl/.test(calls[0].text), 'songs with files stay');
     assert(/DELETE FROM song_logs/.test(calls[0].text), 'their history goes too');
   });

@@ -24,7 +24,7 @@
 const fs = require('fs');
 const path = require('path');
 const lib = require('./_lib');
-const { migrationIds, applyStatements, connect } = require('./apply_schema');
+const { migrationIds, applyStatements, invalidIndexes, connect } = require('./apply_schema');
 
 // What this install does about the database, from the build's environment:
 // 'skip' outside a Vercel build (a local or CI install, vercel dev) and for a
@@ -50,10 +50,12 @@ async function migrate(sql, src, log = () => {}) {
   const pending = ids.filter(id => !have.includes(id));
   if (!pending.length) return { latest: ids[ids.length - 1], pending };
   log(`schema: applying ${pending.join(', ')}`);
-  const { applied, skipped } = await applyStatements(sql, src);
+  const { applied, skipped } = await applyStatements(sql, src, { have });
   const after = await migratedIds(sql);
   const still = ids.filter(id => !after.includes(id));
   if (still.length) throw new Error(`still pending after apply: ${still.join(', ')}`);
+  const invalid = await invalidIndexes(sql);
+  if (invalid.length) throw new Error(`invalid index left by an interrupted CREATE INDEX CONCURRENTLY: ${invalid.join(', ')} — DROP INDEX it and deploy again`);
   return { latest: ids[ids.length - 1], pending, applied, skipped };
 }
 

@@ -190,7 +190,7 @@ async function savePlatform(btn) {
   }
 
   setStatus('pm-status', '');
-  const r = await withBusy(btn, () => apiFetch('/api/config', 'PATCH', { config: { platforms } }));
+  const r = await withBusy(btn, () => apiFetch('/api/config?slug=' + encodeURIComponent(_artistSlug), 'PATCH', { config: { platforms } }));
   if (!r) return;
   if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || t('hub.errorFallback'), true); return; }
 
@@ -207,7 +207,7 @@ async function disconnectPlatform(btn) {
   delete platforms[_editingId];
 
   setStatus('pm-status', '');
-  const r = await withBusy(btn, () => apiFetch('/api/config', 'PATCH', { config: { platforms } }));
+  const r = await withBusy(btn, () => apiFetch('/api/config?slug=' + encodeURIComponent(_artistSlug), 'PATCH', { config: { platforms } }));
   if (!r) return;
   if (!r.ok) { const j = await r.json(); setStatus('pm-status', j.error || t('hub.errorFallback'), true); return; }
 

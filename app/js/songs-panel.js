@@ -397,7 +397,7 @@ async function _commitNewSong(formId) {
   }
 
   var r = await apiFetch('/api/' + artistSlug + '/songs', 'POST', data);
-  if (!r.ok) throw new Error('create failed');
+  if (!r.ok) throw await _songCreateError(r);
   var newSong = await r.json();
 
   var staged = [['audio', 'pf-audio-'], ['sheet', 'pf-sheet-'], ['playback', 'pf-playback-']];
@@ -454,9 +454,12 @@ async function _savePanelSong(formId, isNew, realSid) {
     await fetchSongsList(true);
     if (_songsView) { _songsView.refresh(); _songsView.select(targetId); }
     loadLogs();
-  } catch {
+  } catch (err) {
     var errEl = document.getElementById('song-panel-edit-error');
-    if (errEl) { errEl.textContent = t('songs.saveFailed'); errEl.className = 'status-msg error'; }
+    if (errEl) {
+      errEl.textContent = err && err.limit ? t('songs.limitReached', { limit: err.limit }) : t('songs.saveFailed');
+      errEl.className = 'status-msg error';
+    }
     if (btn) { btn.disabled = false; btn.textContent = isNew ? t('songs.add') : t('songs.save'); }
   }
 }

@@ -80,7 +80,11 @@ async function createPresignedUrl(key, contentType, contentLength) {
   if (Number.isInteger(contentLength) && contentLength > 0) params.ContentLength = contentLength;
   const { PutObjectCommand, getSignedUrl } = sdk();
   const command = new PutObjectCommand(params);
-  const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 300 });
+  // The type is signed too: unsigned, the uploader could send text/html or
+  // SVG under a URL presigned for an image or audio file, and the bucket
+  // serves back whatever type the upload carried.
+  const uploadUrl = await getSignedUrl(getR2Client(), command,
+    { expiresIn: 300, signableHeaders: new Set(['content-type']) });
   const publicUrl = `${STORAGE.publicUrl()}/${key}`;
   return { uploadUrl, publicUrl };
 }

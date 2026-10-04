@@ -97,10 +97,12 @@ async function trimSongLogs(sql, artistId, songIds) {
 // Deleted songs stay restorable from the change log, but they never left the
 // database: row, lyrics, arrangements and history piled up for good, outside
 // the plan's song count. A song deleted more than PURGE_AFTER_DAYS ago goes
-// for good, with its history, unless a saved setlist still lists it (setlist
-// history keeps those) or it still has an uploaded file (those count towards
-// the band's storage, and removing them is the media endpoints' job). About
-// one deletion in PURGE_EVERY sweeps the band; a failed sweep never fails the
+// for good, with its history, unless it still has an uploaded file (those
+// count towards the band's storage, and removing them is the media endpoints'
+// job). A saved setlist that still lists it keeps the row (setlist history
+// shows its title), but its lyrics, arrangements and history go: otherwise
+// "create, save as a setlist, delete" would store without bound. About one
+// deletion in PURGE_EVERY sweeps the band; a failed sweep never fails the
 // request.
 const PURGE_AFTER_DAYS = 90;
 const PURGE_EVERY = 10;
@@ -109,16 +111,20 @@ async function purgeDeletedSongs(sql, artistId, { always = false } = {}) {
   try {
     await sql`
       WITH old AS (
-        SELECT s.id FROM songs s
+        SELECT s.id, EXISTS (SELECT 1 FROM setlist_songs ss WHERE ss.song_id = s.id) AS listed
+        FROM songs s
         WHERE s.artist_id = ${artistId} AND s.deleted
-          AND NOT EXISTS (SELECT 1 FROM setlist_songs ss WHERE ss.song_id = s.id)
           AND NOT (s.extra ?| ARRAY['listenUrl', 'sheetUrl', 'playbackUrl'])
           AND (SELECT max(l.changed_at) FROM song_logs l WHERE l.song_id = s.id)
               < now() - make_interval(days => ${PURGE_AFTER_DAYS})
       ), logs AS (
         DELETE FROM song_logs WHERE song_id IN (SELECT id FROM old)
+      ), lyrics AS (
+        DELETE FROM song_lyrics WHERE song_id IN (SELECT id FROM old WHERE listed) AND artist_id = ${artistId}
+      ), charts AS (
+        DELETE FROM song_arrangements WHERE song_id IN (SELECT id FROM old WHERE listed) AND artist_id = ${artistId}
       )
-      DELETE FROM songs WHERE id IN (SELECT id FROM old) AND artist_id = ${artistId}
+      DELETE FROM songs WHERE id IN (SELECT id FROM old WHERE NOT listed) AND artist_id = ${artistId}
     `;
   } catch (err) {
     console.error('[songs] failed to purge deleted songs:', err.message);

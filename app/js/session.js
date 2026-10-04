@@ -3,7 +3,7 @@
 
 const AUTH_TOKEN_KEY = 'smartist_token';
 
-var _GLOBAL_PAGES = new Set(['login','signup','onboarding','workspaces','demo','contact','profile']);
+var _GLOBAL_PAGES = new Set(['login','signup','onboarding','workspaces','demo','contact','profile','privacy','confirm-email','admin']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
 // artist's dashboard).
@@ -146,7 +146,7 @@ function getAuthRole() {
 
 // Authenticated fetch. Adds the auth header when a token exists. On 401 clears
 // the token and redirects to login (then throws so callers abort cleanly).
-// my-artists answers 401 once the token's user is gone. Anything else,
+// /api/auth/artists answers 401 once the token's user is gone. Anything else,
 // network failures included, counts as alive: never log out on a guess.
 async function _sessionAlive(token) {
   try {

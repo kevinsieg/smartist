@@ -21,6 +21,9 @@ const EXEMPT_FILES = new Set(['session.js', 'stage.js', 'share-utils.js', 'home.
 // fetch( whose URL names a band: a slug in the path, or a slug= parameter.
 const WORKSPACE_FETCH = /(?<![\w.$])fetch\(\s*(?:['"`]\/api\/(?:\$\{|['"]\s*\+)|[^)\n]*[?&]slug=)/;
 
+// A variable holding a workspace URL.
+const URL_VAR = /(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:['"`]\/api\/(?:\$\{|['"]\s*\+)|[^;\n]*[?&]slug=)/g;
+
 function jsFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
     e.isDirectory() ? jsFiles(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []);
@@ -34,9 +37,13 @@ function run(r) {
     const hits = [];
     for (const f of jsFiles(JS_DIR)) {
       if (EXEMPT_FILES.has(path.basename(f))) continue;
-      const lines = fs.readFileSync(f, 'utf8').split('\n');
+      const src = fs.readFileSync(f, 'utf8');
+      const lines = src.split('\n');
+      // A URL built first and fetched by name: `var url = '/api/' + slug …; fetch(url, …)`.
+      const named = [...src.matchAll(URL_VAR)].map(m => m[1]);
+      const byName = named.length ? new RegExp(`(?<![\\w.$])fetch\\(\\s*(?:${named.join('|')})\\b`) : null;
       lines.forEach((line, i) => {
-        if (!WORKSPACE_FETCH.test(line)) return;
+        if (!WORKSPACE_FETCH.test(line) && !(byName && byName.test(line))) return;
         if (/apiFetch-exempt:/.test(lines[i - 1] || '')) return;
         hits.push(`${path.relative(JS_DIR, f)}:${i + 1}`);
       });
@@ -49,6 +56,8 @@ function run(r) {
                        'fetch(`/api/${artistSlug}/songs/${sid}`, {',
                        "fetch('/api/config?slug=' + encodeURIComponent(s), {"])
       assert(WORKSPACE_FETCH.test(src), src);
+    const named = [..."var url = '/api/' + _slug + '/venues/' + v.id;".matchAll(URL_VAR)].map(m => m[1]);
+    assert(named.join() === 'url', 'a URL built into a variable is tracked: ' + named.join());
     for (const src of ["apiFetch('/api/' + artistSlug + '/songs')", "fetch(json.uploadUrl, { method: 'PUT' })",
                        "fetch('/api/auth/artists', {"])
       assert(!WORKSPACE_FETCH.test(src), src);
