@@ -285,7 +285,7 @@ Versioned arrangement charts for a song. Each song can have multiple named versi
 
 ### `song_logs`
 
-Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries: about one logged write in ten trims the band's older ones (`trimSongLogs` in `api/_db.js`). Entries with `song_id` `NULL` are never trimmed.
+Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries (`SONG_LOG_KEEP`): every edit trims the history of the songs it wrote, in the same statement (or `trimSongLogs` in `api/_db.js` for media writes). Entries with `song_id` `NULL` are never trimmed.
 
 `song_id` is nullable — if a song is ever hard-deleted the FK goes `NULL` via `ON DELETE SET NULL` but the `song_data` snapshot is preserved.
 
@@ -389,6 +389,8 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `pending_email`, `email_change_token_hash`, `email_change_expires_at` | Email change waiting for confirmation from the new address (24 h) |
 | `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |
 | `created_at` timestamptz | |
+
+**Indexes:** `users_email_idx (email)` — membership lookups on every request; `users_invited_by_idx (invited_by)`, so deleting a user does not scan the table for its `SET NULL`.
 
 Every emailed token is stored only as a hash.
 

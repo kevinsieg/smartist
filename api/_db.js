@@ -1,4 +1,5 @@
 const postgres = require('postgres');
+const { SONG_LOG_KEEP } = require('./_constants');
 
 // ── Database provider ─────────────────────────────────────────────────────────
 // Current: postgres.js (standard PostgreSQL wire protocol, supports transactions)
@@ -57,26 +58,27 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
   } catch (err) {
     console.error('[audit] failed to log:', err.message);
   }
-  await trimSongLogs(sql, artistId);
+  await trimSongLogs(sql, artistId, [songId]);
 }
 
 // Each entry is a full snapshot of the song, so the history would grow with
-// every edit forever. A song keeps its newest SONG_LOG_KEEP entries: the last
-// one is what restore reads, and the list shows 20 at most. Entries of songs
-// that no longer exist (song_id NULL) are left alone. About one logged write
-// in TRIM_EVERY trims the whole band, like the rate_limits sweep; a failed
-// trim never fails the request.
-const SONG_LOG_KEEP = 20;
-const TRIM_EVERY = 10;
-async function trimSongLogs(sql, artistId, { always = false } = {}) {
-  if (!always && Math.random() >= 1 / TRIM_EVERY) return;
+// every edit forever. A song keeps its newest SONG_LOG_KEEP entries
+// (api/_constants.js). Only the songs a write touched are trimmed
+// (song_logs_song_id_idx), so it is cheap enough to run on every write. The
+// song edits do it inside their own statement (a `trimmed` CTE); this is for
+// the writes that log separately (media).
+// Entries of songs that no longer exist (song_id NULL) are left alone. A
+// failed trim never fails the request.
+async function trimSongLogs(sql, artistId, songIds) {
+  const ids = (songIds || []).map(Number).filter(Number.isInteger);
+  if (!ids.length) return;
   try {
     await sql`
       DELETE FROM song_logs WHERE id IN (
         SELECT id FROM (
           SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
           FROM song_logs
-          WHERE artist_id = ${artistId} AND song_id IS NOT NULL
+          WHERE artist_id = ${artistId} AND song_id = ANY(${ids}::int[])
         ) ranked
         WHERE n > ${SONG_LOG_KEEP}
       )

@@ -138,35 +138,40 @@ async function run(r) {
   });
 
   await testAsync("updating a setlist cannot pull in another band's song", async () => {
-    const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
-      if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
-      return ownershipRoute(text, values);
-    });
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
       body: { song_ids: [11, 777] } }, res);
     assertEq(res.statusCode, 400);
-    assert(!sql.calls.some(c => c.text.startsWith('DELETE FROM setlist_songs')), 'the old list must survive');
+    assert(!sql.calls.some(c => c.text.includes('setlist_songs')), 'the old list must survive');
   });
 
-  await testAsync('updating a setlist rewrites its songs in one transaction', async () => {
+  await testAsync('updating a setlist rewrites it and its songs in one statement', async () => {
     const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
-      if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
-      if (text.startsWith('SELECT s.*, g.title AS gig_name')) return [{ id: 3, song_count: 2 }];
+      if (text.startsWith('WITH s AS ( UPDATE setlists')) return [{ id: 3, song_count: 2 }];
       return ownershipRoute(text, values);
     });
-    let inTx = false;
-    const begin = sql.begin;
-    sql.begin = async fn => { inTx = true; const out = await begin(fn); inTx = false; return out; };
     const res = mockRes();
     await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
       body: { song_ids: [10, 11] } }, res);
     assertEq(res.statusCode, 200);
     assertEq(res.body.song_count, 2);
-    assert(inTx === false, 'transaction closed');
-    const del = sql.calls.findIndex(c => c.text.startsWith('DELETE FROM setlist_songs'));
-    const ins = sql.calls.findIndex(c => c.text.startsWith('INSERT INTO setlist_songs'));
-    assert(del >= 0 && ins > del, 'delete then insert');
+    const writes = sql.calls.filter(c => /UPDATE setlists|setlist_songs/.test(c.text));
+    assertEq(writes.length, 1);
+    const q = writes[0].text;
+    assert(/UPDATE setlists SET .* WHERE id = AND artist_id = RETURNING/.test(q), 'scoped to the band');
+    assert(q.includes('ON CONFLICT (setlist_id, position) DO UPDATE'), 'positions upserted');
+    assert(/DELETE FROM setlist_songs WHERE setlist_id IN \(SELECT id FROM s\) AND position >=/.test(q),
+      'the tail is cut, and only for a setlist the update found');
+  });
+
+  await testAsync("updating another band's setlist → 404, nothing written", async () => {
+    const { handler } = loadHandler('api/_band/setlists/item.js', (text, values) =>
+      text.startsWith('WITH s AS ( UPDATE setlists') ? [] : ownershipRoute(text, values));
+    const res = mockRes();
+    await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
+      body: { song_ids: [10] } }, res);
+    assertEq(res.statusCode, 404);
   });
 
   await testAsync('reading a setlist only joins this band\'s songs', async () => {

@@ -88,15 +88,31 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
-    // A PUT's fields are validated first; its venue/organizer ownership checks
-    // don't depend on the gig row, so they run alongside it.
-    const isUpdate = req.method === 'PUT' && req.query.sub !== 'poster';
-    const parsed = isUpdate ? parseFields(req.body, GIG_FIELDS, { partial: true }) : null;
-    if (parsed?.error) return res.status(400).json({ error: parsed.error });
-    const [[gig], refs] = await Promise.all([
-      sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`,
-      isUpdate ? refsOwned(sql, artist.id, parsed.value) : null,
-    ]);
+
+    // ── PUT /gigs/:id — only the fields sent are written; an empty value clears one.
+    // The venue/organizer check, then the update itself, which refuses a
+    // deleted gig: no read of the row first. Only a refused update looks the
+    // gig up, to tell "not found" from "deleted".
+    if (req.method === 'PUT' && req.query.sub !== 'poster') {
+      const parsed = parseFields(req.body, GIG_FIELDS, { partial: true });
+      if (parsed.error) return res.status(400).json({ error: parsed.error });
+      const value = parsed.value;
+      const refs = await refsOwned(sql, artist.id, value);
+      if (!refs.venue)     return res.status(400).json({ error: 'Invalid venue_id' });
+      if (!refs.organizer) return res.status(400).json({ error: 'Invalid organizer_id' });
+      const [updated] = Object.keys(value).length
+        ? await sql`
+            UPDATE gigs SET ${sql(value)}, last_updated = NOW()
+            WHERE id = ${gigId} AND artist_id = ${artist.id} AND deleted = false
+            RETURNING *`
+        : await sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id} AND deleted = false`;
+      if (updated) return res.json(updated);
+      const [gone] = await sql`SELECT deleted FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
+      if (!gone) return res.status(404).json({ error: 'Gig not found' });
+      return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
+    }
+
+    const [gig] = await sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
     if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
     // ── POST /gigs/:id/poster-url — get presigned upload URLs ──────────────────
@@ -164,21 +180,6 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
         WHERE id = ${gigId} AND artist_id = ${artist.id}
       `;
       return res.json({ ok: true, posterUrl, thumbUrl });
-    }
-
-    if (req.method === 'PUT') {
-      if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
-      if (!refs.venue)     return res.status(400).json({ error: 'Invalid venue_id' });
-      if (!refs.organizer) return res.status(400).json({ error: 'Invalid organizer_id' });
-      // Only the fields sent are written; an empty value clears one.
-      const value = parsed.value;
-      if (!Object.keys(value).length) return res.json(gig);
-      const [updated] = await sql`
-        UPDATE gigs SET ${sql(value)}, last_updated = NOW()
-        WHERE id = ${gigId} AND artist_id = ${artist.id}
-        RETURNING *
-      `;
-      return res.json(updated);
     }
 
     // ── DELETE /gigs/:id/poster — remove poster files and clear DB ─────────────
@@ -307,10 +308,16 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const { limit, offset } = parsePage(req);
+    // Members also get each gig's setlist titles: the "has setlist" button and
+    // the setlist filter, without loading every setlist of the band.
     const rows = await sql`
       SELECT g.*,
              v.name AS venue_name,
              o.name AS organizer_name,
+             ${user ? sql`ARRAY(
+               SELECT COALESCE(sl.title, '') FROM setlists sl
+               WHERE sl.gig_id = g.id AND sl.artist_id = g.artist_id
+               ORDER BY sl.id) AS setlist_titles,` : sql``}
              COUNT(*) OVER() AS total
       FROM gigs g
       LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
@@ -326,8 +333,8 @@ module.exports = wrap(async function handler(req, res) {
     // Only the public variant may be CDN-cached.
     if (!user) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json({
-      rows: rows.map(({ total: _, comment, organizer_id, organizer_name, ...r }) =>
-        (user ? { comment, organizer_id, organizer_name, ...r } : r)),
+      rows: rows.map(({ total: _, comment, organizer_id, organizer_name, setlist_titles, ...r }) =>
+        (user ? { comment, organizer_id, organizer_name, setlist_titles, ...r } : r)),
       total, limit, offset,
     });
   }

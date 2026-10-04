@@ -1,4 +1,4 @@
-const { getDb, getSlug, trimSongLogs } = require('../../_db');
+const { getDb, getSlug } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
@@ -65,7 +65,6 @@ module.exports = wrap(async function handler(req, res) {
     const song = await writeLyrics(sql, band.id, songId, text,
       req.method === 'PUT' ? 'lyrics_update' : 'lyrics_delete');
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    await trimSongLogs(sql, band.id);
     return res.json({ ok: true });
   }
 
@@ -205,18 +204,10 @@ module.exports = wrap(async function handler(req, res) {
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
     const sql = getDb();
-    const [song, arrangements] = await Promise.all([
-      songDetail(sql, band.id, songId),
-      sql`
-        SELECT id, name, is_active, updated_at
-        FROM song_arrangements
-        WHERE song_id = ${songId} AND artist_id = ${band.id}
-        ORDER BY created_at ASC
-      `,
-    ]);
+    const song = await songDetail(sql, band.id, songId);
     if (!song) return res.status(404).json({ error: 'Song not found' });
     // A visitor without a session never sees the band's private notes.
-    return res.json({ ...(user ? song : publicSong(song)), arrangements });
+    return res.json(user ? song : publicSong(song));
   }
 
   // ── DELETE song ───────────────────────────────────────────────────────────

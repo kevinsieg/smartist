@@ -2,7 +2,7 @@ const path = require('path');
 
 // api/_db.js trimSongLogs: a song keeps its newest SONG_LOG_KEEP history
 // entries. The statement itself is checked on a real database by hand; here:
-// who it touches, how often it runs, and that a failure never fails a request.
+// who it touches, and that a failure never fails a request.
 const { trimSongLogs, SONG_LOG_KEEP } = require(path.join(__dirname, '../../api/_db'));
 
 function fakeSql(fail = false) {
@@ -19,29 +19,21 @@ async function run(r) {
 
   console.log(B('\nsong history trim'));
 
-  await testAsync('keeps the newest 20 per song, scoped to the band, orphans untouched', async () => {
+  await testAsync('keeps the newest 20 per song, only for the songs written, scoped to the band', async () => {
     const { sql, calls } = fakeSql();
-    await trimSongLogs(sql, 7, { always: true });
+    await trimSongLogs(sql, 7, [3, 4]);
     assertEq(calls.length, 1);
     assertEq(SONG_LOG_KEEP, 20);
-    assertEq(calls[0].values, [7, 20]);
+    assertEq(calls[0].values, [7, [3, 4], 20]);
     assert(/PARTITION BY song_id ORDER BY changed_at DESC, id DESC/.test(calls[0].text), 'newest first');
-    assert(/song_id IS NOT NULL/.test(calls[0].text), 'entries of songs that no longer exist stay');
+    assert(/song_id = ANY\(/.test(calls[0].text), 'only the songs the write touched');
   });
 
-  await testAsync('runs on about one write in ten', async () => {
+  await testAsync('no songs, no statement', async () => {
     const { sql, calls } = fakeSql();
-    const random = Math.random;
-    try {
-      Math.random = () => 0.5;
-      await trimSongLogs(sql, 7);
-      assertEq(calls.length, 0);
-      Math.random = () => 0.05;
-      await trimSongLogs(sql, 7);
-      assertEq(calls.length, 1);
-    } finally {
-      Math.random = random;
-    }
+    await trimSongLogs(sql, 7, []);
+    await trimSongLogs(sql, 7);
+    assertEq(calls.length, 0);
   });
 
   await testAsync('a failed trim never fails the request', async () => {
@@ -49,7 +41,7 @@ async function run(r) {
     const error = console.error;
     console.error = () => {};
     try {
-      await trimSongLogs(sql, 7, { always: true });
+      await trimSongLogs(sql, 7, [3]);
     } finally {
       console.error = error;
     }
