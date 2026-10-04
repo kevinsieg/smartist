@@ -29,6 +29,13 @@ async function run(r) {
     assert(/song_id = ANY\(/.test(calls[0].text), 'only the songs the write touched');
   });
 
+  await testAsync('one bare song id works like a list of one', async () => {
+    const { sql, calls } = fakeSql();
+    await trimSongLogs(sql, 7, 3);
+    assertEq(calls.length, 1);
+    assertEq(calls[0].values, [7, [3], 20]);
+  });
+
   await testAsync('no songs, no statement', async () => {
     const { sql, calls } = fakeSql();
     await trimSongLogs(sql, 7, []);

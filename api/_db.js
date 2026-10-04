@@ -68,9 +68,9 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
 // song edits do it inside their own statement (a `trimmed` CTE); this is for
 // the writes that log separately (media).
 // Entries of songs that no longer exist (song_id NULL) are left alone. A
-// failed trim never fails the request.
+// failed trim never fails the request. Takes one song id or a list.
 async function trimSongLogs(sql, artistId, songIds) {
-  const ids = (songIds || []).map(Number).filter(Number.isInteger);
+  const ids = [].concat(songIds ?? []).map(Number).filter(Number.isInteger);
   if (!ids.length) return;
   try {
     await sql`
