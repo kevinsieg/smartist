@@ -9,13 +9,14 @@
     "postinstall": "node scripts/deploy_migrate.js",
     "lint": "eslint .",
     "typecheck": "tsc -p jsconfig.json",
-    "test:unit": "node tests/unit.js && node tests/history-client.js && node tests/home-client.js && node tests/viewmode-client.js && node tests/gigs-client.js && node tests/songs-client.js && node tests/songs-split-client.js && node tests/map-client.js && node tests/workspaces-client.js && node tests/logout-client.js",
+    "test:unit": "node tests/unit.js && node tests/history-client.js && node tests/home-client.js && node tests/viewmode-client.js && node tests/gigs-client.js && node tests/songs-client.js && node tests/songs-split-client.js && node tests/map-client.js && node tests/workspaces-client.js && node tests/logout-client.js && node tests/session-guard-client.js",
     "dev:up": "bash scripts/dev_up.sh up",
     "dev:restart": "bash scripts/dev_up.sh restart",
     "dev:down": "bash scripts/dev_up.sh down",
     "test:api": "bash scripts/dev_up.sh run node tests/api.js",
     "test:smoke": "bash scripts/dev_up.sh run node tests/smoke.js && bash scripts/dev_up.sh run node tests/smoke-root.js",
-    "test:all": "npm run test:unit && npm run test:api && npm run test:smoke"
+    "test:schema": "bash scripts/dev_up.sh run node tests/schema-upgrade.js",
+    "test:all": "npm run test:unit && npm run test:api && npm run test:smoke && npm run test:schema"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1143.0",

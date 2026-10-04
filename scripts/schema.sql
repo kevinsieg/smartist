@@ -423,7 +423,19 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-06') ON CONFLICT DO NOTHING;
 -- GET /api/config?action=health then says whether a database is behind, and
 -- `node scripts/apply_schema.js --check` lists what a database is missing.
 --
+-- Each statement runs with a 5 s lock_timeout (scripts/apply_schema.js), so a
+-- deploy fails instead of freezing a table that a long query holds. A new
+-- index on an existing table is CREATE INDEX CONCURRENTLY IF NOT EXISTS: it
+-- takes no write lock. Should one fail half-way it stays behind INVALID, and
+-- IF NOT EXISTS then skips it: DROP INDEX it and deploy again.
+--
 -- Example:
---   -- 2026-10-07: add public share token to setlists
+--   -- 2026-10-08: add public share token to setlists
 --   ALTER TABLE setlists ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE;
---   INSERT INTO schema_migrations (id) VALUES ('2026-10-07') ON CONFLICT DO NOTHING;
+--   INSERT INTO schema_migrations (id) VALUES ('2026-10-08') ON CONFLICT DO NOTHING;
+
+-- 2026-10-07: index users.invited_by. Removing a user sets invited_by to NULL
+-- on the rows it invited (ON DELETE SET NULL), which scanned the whole users
+-- table once per removed user. CONCURRENTLY: no write lock on a live table.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS users_invited_by_idx ON users(invited_by);
+INSERT INTO schema_migrations (id) VALUES ('2026-10-07') ON CONFLICT DO NOTHING;

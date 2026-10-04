@@ -1,6 +1,6 @@
 const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
-const { validateStr } = require('./_validate');
+const { validateStr, unsafeKey } = require('./_validate');
 const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
@@ -160,7 +160,7 @@ async function patchConfig(req, res) {
       if (typeof update[k] !== 'string' || !/^https?:\/\//i.test(update[k]))
         return res.status(400).json({ error: `${k} must be an http(s) URL` });
       const key = keyFromUrl(update[k]);
-      if (key !== null && !key.startsWith(`bands/${band.slug}/`))
+      if (key !== null && (!key.startsWith(`bands/${band.slug}/`) || unsafeKey(key)))
         return res.status(400).json({ error: `Invalid ${k}` });
     }
     // artists.* is read on every authenticated request of the band, so its
@@ -255,6 +255,11 @@ async function publicConfig(req, res, slugParam) {
   // Without a session the songs payload only ships for a public catalogue.
   const priv  = !user && !canBrowseCatalogue(band);
   const light = priv || req.query.light === '1';
+  // The anonymous full variant is the whole repertoire, unpaged. The CDN keeps
+  // it for a minute, but any extra query parameter skips that cache, so the
+  // requests that do reach the function are limited per address.
+  if (!user && !light && await checkRateLimit(`config-full:${clientIp(req)}`, 60, 600))
+    return res.status(429).json({ error: 'Too many requests' });
 
   const [songs, [counts]] = await Promise.all([
     light ? Promise.resolve([]) : configSongs(sql, band.id),
@@ -298,5 +303,8 @@ async function publicConfig(req, res, slugParam) {
     googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
     singleTenant:  !!process.env.ARTIST_SLUG,
+    // Where uploaded media lives (it is in every media URL anyway): the songs
+    // page frames only this bucket's PDFs without a sandbox.
+    mediaBase:     (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '') || null,
   });
 }

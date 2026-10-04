@@ -436,7 +436,27 @@ async function run(r) {
     assert(sentMail && sentMail.to === 'old@example.com', 'notice goes to the OLD address');
   });
 
-  await testAsync('POST confirm-email-change refuses an address already used in an affected band', async () => {
+  await testAsync('POST request-email-change refuses an address that already has an account', async () => {
+    // Moving onto it would merge the accounts: this password would then open
+    // the other person's bands.
+    const sql = makeSqlStub([
+      { match: text => text.includes('SELECT * FROM users'), rows: () => [{ id: 7, email: 'old@example.com', password_hash: 'stored-hash' }] },
+      { match: text => text.includes('SELECT 1 FROM users WHERE email'), rows: () => [{ '?column?': 1 }] },
+    ]);
+    const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
+    const res = mockRes();
+    sentMail = null;
+
+    await handler(authReq('POST', '/api/test/members/request-email-change', {
+      currentPassword: 'correct-password', newEmail: 'someone@example.com',
+    }, { authorization: 'Bearer member' }), res);
+
+    assertEq(res.statusCode, 409);
+    assert(!sql.calls.some(c => c.text.includes('UPDATE users')), 'nothing stored');
+    assertEq(sentMail, null, 'no mail sent');
+  });
+
+  await testAsync('POST confirm-email-change refuses an address with an account in any band', async () => {
     const rawToken = 'd'.repeat(64);
     const sql = makeSqlStub([
       {
@@ -455,6 +475,8 @@ async function run(r) {
 
     assertEq(res.statusCode, 409);
     assertEq(sql.calls.filter(c => c.text.includes('SET email')).length, 0);
+    const check = sql.calls.find(c => c.text.includes('SELECT 1 FROM users'));
+    assert(!/artist_id/.test(check.text), 'not limited to the bands the change touches');
   });
 }
 

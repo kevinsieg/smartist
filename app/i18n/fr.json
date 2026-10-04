@@ -1131,7 +1131,7 @@
   "songImport.file.duplicate_column": "La colonne « {column} » apparaît deux fois. N’en gardez qu’une.",
   "songImport.file.no_rows": "Le fichier ne contient aucune chanson sous la ligne d'en-tête.",
   "songImport.file.too_many_rows": "Trop de lignes : {max} chansons au maximum par fichier.",
-  "songImport.file.file_too_large": "Le fichier est trop volumineux (4 Mo max).",
+  "songImport.file.file_too_large": "Le fichier est trop volumineux (1,5 Mo max). Divisez-le en plusieurs fichiers.",
   "songImport.file.song_limit": "Votre formule ne permet plus que {room} chansons. Ignorez des lignes ou passez à Pro.",
   "songImport.err.required": "Le titre est obligatoire.",
   "songImport.err.too_long": "Trop long ({max} caractères max).",
