@@ -170,7 +170,7 @@ function _openAuthMenu(btn) {
   menu.id = 'nav-auth-menu';
   menu.className = 'nav-auth-menu';
   menu.innerHTML =
-    '<div class="nav-auth-menu-item" data-onclick="_navFromAuthMenu(\'' + _profilePath + '\')">' +
+    '<div class="nav-auth-menu-item" data-onclick="_navFromAuthMenu(' + onArg(_profilePath) + ')">' +
       t('nav.profile') +
     '</div>' +
     (_showSwitch
@@ -242,8 +242,14 @@ function _isShellScript(el) {
 var _navVersion = 0;
 var _htmlCache  = new Map(); // href → HTML string, populated by warmPage
 
+// navigate() and warmPage() fetch a page and run its scripts here: only this
+// site's own pages, never an address that reached them from data.
+function _ownPage(href) {
+  try { return new URL(href, location.href).origin === location.origin; } catch { return false; }
+}
+
 async function warmPage(href) {
-  if (_htmlCache.has(href)) return;
+  if (!_ownPage(href) || _htmlCache.has(href)) return;
   _htmlCache.set(href, null); // mark in-flight so concurrent calls skip
   try {
     const r = await fetch(href);
@@ -287,6 +293,7 @@ function _markMainContent() {
 }
 
 async function navigate(href) {
+  if (!_ownPage(href)) return;
   // Remap bare artist-page paths to slugged paths when on a slugged page
   if (_artistSlug) {
     var _navUrl  = new URL(href, location.origin);

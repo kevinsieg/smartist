@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
 const { wrap } = require('../_handler');
-const { parseFields } = require('../_validate');
+const { parseFields, unsafeKey } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
 const { ownsRefs } = require('../_ownership');
@@ -137,9 +137,9 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       // This gig's own keys first: asking storage about any other key would
       // tell the caller whether that file exists.
       const expectedPrefix = `gigs/${artist.slug}/${gigId}-`;
-      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix))
+      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix) || unsafeKey(keyFromUrl(posterUrl)))
         return res.status(400).json({ error: 'Invalid poster URL' });
-      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix))
+      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix) || unsafeKey(keyFromUrl(thumbUrl)))
         return res.status(400).json({ error: 'Invalid thumb URL' });
       const [posterOk, thumbOk] = await Promise.all([
         verifyUpload(keyFromUrl(posterUrl)),

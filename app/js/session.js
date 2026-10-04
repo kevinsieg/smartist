@@ -9,7 +9,12 @@ var _GLOBAL_PAGES = new Set(['login','signup','onboarding','workspaces','demo','
 // artist's dashboard).
 var _pathParts    = window.location.pathname.split('/').filter(Boolean);
 var _rawSegment   = _pathParts[0] || '';
-var _artistSlug   = (_GLOBAL_PAGES.has(_rawSegment) && _pathParts.length === 1) ? '' : _rawSegment;
+// The segment is only a slug when it looks like one (signup's format, plus the
+// short and underscore slugs scripts/setup.js allows): it is built into URLs
+// and markup, and the address bar is anyone's to write — /x');apiFetch(…)… is
+// a path too.
+var _SLUG_RE      = /^[a-z0-9_-]{1,64}$/;
+var _artistSlug   = (_GLOBAL_PAGES.has(_rawSegment) && _pathParts.length === 1) || !_SLUG_RE.test(_rawSegment) ? '' : _rawSegment;
 var _CONFIG_KEY       = 'artist_config_cache_' + (_artistSlug || 'default');
 var _CONFIG_KEY_LIGHT = _CONFIG_KEY + '_light';
 
@@ -48,6 +53,10 @@ function isViewMode() {
 
 // opts.light skips the songs payload — use it on pages that only need
 // name/config/counts. Light and full responses are cached under separate keys.
+// The media bucket's base URL, from the last config loaded (songs-media.js
+// frames only its own bucket's PDFs without a sandbox).
+var _mediaBase = '';
+
 async function loadConfig(slugOverride, opts) {
   var slug  = (slugOverride !== undefined) ? slugOverride : _artistSlug;
   var light = !!(opts && opts.light);
@@ -66,10 +75,12 @@ async function loadConfig(slugOverride, opts) {
     .then(r => { if (!r.ok) throw new Error('config unavailable'); return r.json(); })
     .then(cfg => {
       try { sessionStorage.setItem(key, JSON.stringify(cfg)); } catch {}
+      _mediaBase = (cfg && cfg.mediaBase) || '';
       return cfg;
     });
 
   if (cached) {
+    _mediaBase = cached.mediaBase || '';
     fetchFresh.catch(() => {});
     return cached;
   }
@@ -150,6 +161,11 @@ function _endDeadSession() {
 }
 
 async function apiFetch(url, method = 'GET', body) {
+  // The session token goes to this site's own API and nowhere else, whatever
+  // URL a caller (or markup calling it through data-on*) hands in.
+  var _target = new URL(url, location.href);
+  if (_target.origin !== location.origin || !_target.pathname.startsWith('/api/'))
+    throw new Error('apiFetch: not this site\'s API');
   const opts = { method, headers: {} };
   const token = getToken();
   if (token) opts.headers.Authorization = `Bearer ${token}`;

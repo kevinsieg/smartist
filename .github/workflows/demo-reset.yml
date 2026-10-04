@@ -30,7 +30,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
-      - run: npm ci
+      # No install scripts: the next step holds a production connection string.
+      - run: npm ci --ignore-scripts
       - name: Reset
         env:
           DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}

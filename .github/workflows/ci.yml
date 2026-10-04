@@ -214,11 +214,12 @@ jobs:
           node-version: '24'
 
       # tests/ has no dependencies of its own; it resolves from the root install.
+      # No install scripts: VERCEL_TOKEN is in this job's environment.
       - name: Install Vercel CLI and dependencies
         if: steps.creds.outputs.ok == 'true'
         run: |
-          npm install -g vercel@59.26.0
-          npm ci
+          npm install -g --ignore-scripts vercel@59.26.0
+          npm ci --ignore-scripts
 
       - name: Deploy preview
         id: deploy

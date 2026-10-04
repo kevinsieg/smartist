@@ -1,5 +1,5 @@
 const path = require('path');
-const { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields } =
+const { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields, unsafeKey } =
   require(path.join(__dirname, '../../api/_validate'));
 
 function run(r) {
@@ -169,6 +169,13 @@ function run(r) {
   test('an object over the cap is refused', () => {
     assertEq(parseFields({ links: { a: 'x'.repeat(200) } }, SPEC).error, 'links is too large');
   });
+
+  console.log(B('\nunsafeKey'));
+  for (const k of ['audio/12/uuid-take.mp3', 'bands/my-band/photo', 'bands/my-band/photo?v=123', 'gigs/my-band/4-uuid-poster.jpg'])
+    test(`a plain key passes: ${k}`, () => assertEq(unsafeKey(k), false));
+  for (const k of ['bands/mine/../other/photo', 'audio/12/../99/x.mp3', 'audio/..', './audio/1/x', 'audio//1/x',
+                   'bands/mine/%2e%2e/other/photo', 'bands/mine%2fother/photo', 'bands\\mine/x', '', null])
+    test(`a key a storage layer could read differently is refused: ${k}`, () => assertEq(unsafeKey(k), true));
 }
 
 if (require.main === module) {
