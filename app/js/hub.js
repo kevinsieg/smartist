@@ -67,9 +67,9 @@ function renderCustom(conn) {
   var addTile =
     `<div class="platform-card pc-add" data-onclick="openAddModal()">
        <div class="pc-top">
-         <span class="pc-icon pc-icon-add">+</span>
+         <span class="pc-icon pc-icon-add" aria-hidden="true">+</span>
          <div class="pc-info">
-           <div class="pc-name">${t('hub.addPlatform')}</div>
+           <button type="button" class="pc-name">${t('hub.addPlatform')}</button>
            <div class="pc-status">${t('hub.customIntegration')}</div>
          </div>
        </div>
@@ -87,7 +87,7 @@ function platformCard(p, conn) {
       <div class="pc-top">
         <span class="pc-icon">${escHtml(initials)}</span>
         <div class="pc-info">
-          <div class="pc-name">${escHtml(p.label)}</div>
+          <button type="button" class="pc-name">${escHtml(p.label)}</button>
           <div class="pc-status"><span class="pc-dot${on ? ' pc-dot-on' : ''}"></span>${on ? t('hub.connected') : t('hub.notConnected')}</div>
         </div>
       </div>
@@ -107,7 +107,7 @@ function customCard(id, conn) {
       <div class="pc-top">
         <span class="pc-icon">${escHtml(initials)}</span>
         <div class="pc-info">
-          <div class="pc-name">${escHtml(label)}</div>
+          <button type="button" class="pc-name">${escHtml(label)}</button>
           <div class="pc-status"><span class="pc-dot pc-dot-on"></span>${t('hub.connected')}</div>
         </div>
       </div>

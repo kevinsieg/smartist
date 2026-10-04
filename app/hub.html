@@ -10,8 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <link rel="stylesheet" href="/app/css/app.css?v=48">
-  <script src="/app/js/i18n.js?v=54"></script>
+  <link rel="stylesheet" href="/app/css/app.css?v=49">
+  <script src="/app/js/i18n.js?v=55"></script>
   <style>
     .hub-wrap { max-width: 960px; margin: 0 auto; padding: 4.5rem 1.25rem 4rem; }
 
@@ -41,7 +41,9 @@
     }
     .pc-icon-add { font-size: 1.1rem; font-weight: 300; font-family: inherit; }
     .pc-info { min-width: 0; }
-    .pc-name { font-size: 0.82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* The name is the card's button: keyboard users reach the card through it,
+       a click anywhere on the card bubbles to the card's handler as before. */
+    .pc-name { display: block; max-width: 100%; padding: 0; border: none; background: none; color: inherit; font-family: inherit; text-align: left; cursor: pointer; font-size: 0.82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pc-status { font-size: 0.65rem; color: var(--third-color); display: flex; align-items: center; gap: 0.3rem; margin-top: 1px; }
     .pc-dot { width: 6px; height: 6px; border-radius: 50%; background: #d0d0d0; flex-shrink: 0; }
     .pc-dot-on { background: #4a9a6a; }
@@ -67,14 +69,14 @@
     .status-msg.error { color: #e55; }
 
   </style>
-  <link rel="stylesheet" href="/app/css/footer.css?v=4">
+  <link rel="stylesheet" href="/app/css/footer.css?v=5">
 </head>
 <body>
 <script src="/app/js/footer.js?v=3"></script>
-<script src="/app/js/core.js?v=11"></script>
+<script src="/app/js/core.js?v=12"></script>
 <script src="/app/js/session.js?v=10"></script>
-<script src="/app/js/ui.js?v=9"></script>
-<script src="/app/js/shell.js?v=10"></script>
+<script src="/app/js/ui.js?v=10"></script>
+<script src="/app/js/shell.js?v=11"></script>
 
 <div class="app-wrap hub-wrap">
   <h1 data-i18n="hub.title">Artist Hub</h1>
@@ -156,6 +158,6 @@
   </div>
 </div>
 
-<script src="/app/js/hub.js?v=5"></script>
+<script src="/app/js/hub.js?v=6"></script>
 </body>
 </html>

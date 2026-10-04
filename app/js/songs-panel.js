@@ -10,8 +10,8 @@ function _openSongPanelContent(item, panelEl) {
 
   var title = escHtml(song.title || t('songs.untitled'));
   var activeDot = song.active
-    ? '<span class="vsp-active-dot vsp-active-dot--on">&#9679; ' + t('songs.active') + '</span>'
-    : '<span class="vsp-active-dot vsp-active-dot--off">&#9679; ' + t('songs.inactive') + '</span>';
+    ? '<span class="vsp-active-dot vsp-active-dot--on"><span class="vsp-dot" aria-hidden="true">&#9679;</span> ' + t('songs.active') + '</span>'
+    : '<span class="vsp-active-dot vsp-active-dot--off"><span class="vsp-dot" aria-hidden="true">&#9679;</span> ' + t('songs.inactive') + '</span>';
 
   var listenUrl   = getVal(song, 'extra.listenUrl');
   var playbackUrl = getVal(song, 'extra.playbackUrl');
@@ -21,7 +21,7 @@ function _openSongPanelContent(item, panelEl) {
   var sidEsc      = escHtml(sid);
   var audioRe     = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
 
-  var _spd = '<div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
+  var _spd = '<div class="audio-speed-btns"><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
   var audioHtml = '';
   if (listenUrl  && audioRe.test(listenUrl))
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(listenUrl)) + '"></audio>' + _spd + '</div>';
@@ -29,23 +29,23 @@ function _openSongPanelContent(item, panelEl) {
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(playbackUrl)) + '"></audio>' + _spd + '</div>';
 
   var actions = '';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(' + onArg(sid) + ')">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" aria-label="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(' + onArg(sid) + ')">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
     '</svg></button>';
-  actions += '<a class="btn icon-btn" data-tooltip="' + t('songs.stageView') + '" href="/' + _artistSlug + '/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  actions += '<a class="btn icon-btn" data-tooltip="' + t('songs.stageView') + '" aria-label="' + t('songs.stageView') + '" href="/' + _artistSlug + '/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>' +
     '</svg></a>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" data-onclick="openLyrics(' + onArg(sid) + ')">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" aria-label="' + t('songs.lyricsTitle') + '" data-onclick="openLyrics(' + onArg(sid) + ')">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/>' +
     '</svg></button>';
   if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" data-onclick="openPlayer(' + onArg(sid) + ')">&#9654; ' + t('songs.listen') + '</button>';
   if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" data-onclick="openPlayback(' + onArg(sid) + ')">&#9655; ' + t('songs.playback') + '</button>';
   if (sheetUrl)   actions += '<button class="btn" data-onclick="openSheet(' + onArg(sid) + ')">&#8801; ' + t('songs.sheet') + '</button>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" data-onclick="_openSongArrangement(' + Number(sid) + ')">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" aria-label="' + t('songs.colTitleArrangement') + '" data-onclick="_openSongArrangement(' + Number(sid) + ')">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>' +
     '</svg></button>';
 
@@ -128,7 +128,7 @@ function _openSongPanelContent(item, panelEl) {
     '<div data-sid="' + escHtml(sid) + '">' +
     '<div class="vsp-header">' +
       '<div class="vsp-header-text">' +
-        '<h3 class="vsp-title">' + title + '</h3>' + activeDot +
+        '<h2 class="vsp-title">' + title + '</h2>' + activeDot +
       '</div>' +
       '<button class="vsp-close" data-onclick="_songsDeselect()" aria-label="' + t('songs.close') + '">&#215;</button>' +
     '</div>' +
@@ -275,7 +275,7 @@ function _openSongEditForm(sid, panelEl) {
 
   panelEl.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h3 class="vsp-title">' + (isNew ? t('songs.newSong') : escHtml(song.title || t('songs.editSong'))) + '</h3></div>' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + (isNew ? t('songs.newSong') : escHtml(song.title || t('songs.editSong'))) + '</h2></div>' +
       (!isNew ? '<button class="vsp-close" data-onclick="_openSongPanelById(' + sid + ')" aria-label="' + t('songs.cancel') + '">&#215;</button>' : '') +
     '</div>' +
     '<div style="padding:0 0.5rem;" data-sid="' + id + '">' +

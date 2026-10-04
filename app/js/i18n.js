@@ -3,7 +3,7 @@
 (function () {
   var SUPPORTED_LOCALES = ['en', 'fr', 'de'];
   var DEFAULT_LOCALE = 'en';
-  var I18N_VERSION = 54;
+  var I18N_VERSION = 55;
 
   function resolveLocale(stored, navLangs, supported, def) {
     supported = supported || SUPPORTED_LOCALES;
@@ -163,6 +163,14 @@
       e.preventDefault();
       var open = wrap.classList.toggle('open');
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) { var cur = menu.querySelector('.current') || menu.firstChild; if (cur) cur.focus(); }
+    });
+    wrap.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !wrap.classList.contains('open')) return;
+      e.preventDefault();
+      wrap.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.focus();
     });
     wrap.appendChild(btn);
     wrap.appendChild(menu);

@@ -317,4 +317,4 @@ function hideById(id) { var el = document.getElementById(id); if (el) el.style.d
 function removeParent(el) { if (el && el.parentElement) el.parentElement.remove(); }
 // A click on the backdrop itself, not on the dialog inside it.
 function hideOnBackdrop(e, el) { if (e.target === el) el.style.display = 'none'; }
-function closeShareMenu() { var m = document.getElementById('share-menu-popup'); if (m) m.remove(); }
+function closeShareMenu() { var m = document.getElementById('share-menu-popup'); if (m) { if (m._close) m._close(m.contains(document.activeElement)); else m.remove(); } }

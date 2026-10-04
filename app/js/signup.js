@@ -66,7 +66,7 @@
         '</div>' +
         // Honeypot — visually hidden, bots fill it, server then skips the email
         '<input id="signup-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">' +
-        '<div class="auth-error" id="signup-error">' + errorMsg + '</div>' +
+        '<div class="auth-error" id="signup-error" role="alert">' + errorMsg + '</div>' +
         '<button type="button" class="btn active auth-submit" id="signup-btn">' + _esc(t('signup.sendBtn')) + '</button>' +
         '<p class="auth-hint">' + _esc(t('signup.alreadyHave')) + ' <a href="/login">' + _esc(t('signup.loginLink')) + '</a></p>' +
       '</div>';

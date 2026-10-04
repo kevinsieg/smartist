@@ -10,9 +10,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
-    <link rel="stylesheet" href="/app/css/app.css?v=48">
-    <script src="/app/js/i18n.js?v=54"></script>
-  <link rel="stylesheet" href="/app/css/footer.css?v=4">
+    <link rel="stylesheet" href="/app/css/app.css?v=49">
+    <script src="/app/js/i18n.js?v=55"></script>
+  <link rel="stylesheet" href="/app/css/footer.css?v=5">
     <style>
         .si-page .app-wrap { max-width: 100%; }
         .si-page .si-intro { color: var(--muted-ink); font-size: var(--text-md); margin-bottom: 1rem; max-width: 60rem; }
@@ -64,7 +64,7 @@
                 </details>
 
                 <div id="si-upload">
-                    <div id="si-drop" class="gema-drop-zone" data-onclick="clickById('si-file')" data-ondragover="event.preventDefault()" data-ondrop="siHandleDrop(event)">
+                    <div id="si-drop" class="gema-drop-zone" role="button" tabindex="0" data-onclick="clickById('si-file')" data-ondragover="event.preventDefault()" data-ondrop="siHandleDrop(event)">
                         <input type="file" id="si-file" accept=".csv,text/csv" style="display:none" data-onchange="siHandleFile(this.files[0])">
                         <div id="si-drop-label" class="gema-drop-label" data-i18n="songImport.dropLabel">Drop your CSV file here or click to choose it</div>
                         <div id="si-file-info" class="gema-file-info" style="display:none"></div>
@@ -102,10 +102,10 @@
 </main>
 
 <script src="/app/js/footer.js?v=3"></script>
-<script src="/app/js/core.js?v=11"></script>
+<script src="/app/js/core.js?v=12"></script>
 <script src="/app/js/session.js?v=10"></script>
-<script src="/app/js/ui.js?v=9"></script>
-<script src="/app/js/shell.js?v=10"></script>
+<script src="/app/js/ui.js?v=10"></script>
+<script src="/app/js/shell.js?v=11"></script>
 <script src="/app/js/song-import.js?v=2"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 
 // arrangement.js — per-song arrangement editor, read-only table, and stage popup.
-// Loaded by songs.html (editor + panel) and stage.html (popup only).
+// Requires: escHtml (core.js), apiFetch + setStatus + announce + registerModal (session.js / ui.js, songs page only).
 // Requires: escHtml (core.js), apiFetch + setStatus (session.js / ui.js, songs page only).
 // Caller must set window._arrSlug before calling openArrangementEditor.
 
@@ -142,12 +142,12 @@ function _ensureArrModal() {
   el.id        = 'arr-modal';
   el.className = 'arr-modal-overlay';
   el.innerHTML =
-    '<div class="arr-modal">' +
+    '<div class="arr-modal" role="dialog" aria-modal="true" aria-labelledby="arr-modal-title">' +
       '<div class="arr-modal-header">' +
         '<span class="arr-modal-title" id="arr-modal-title"></span>' +
         '<div class="arr-modal-header-actions">' +
           '<button class="btn active" id="arr-save-btn" data-onclick="arrSave()">' + _arrT('arr.save', 'Save') + '</button>' +
-          '<button class="btn" data-onclick="closeArrangementEditor()">&#215;</button>' +
+          '<button class="btn" data-onclick="closeArrangementEditor()" aria-label="' + _arrT('songs.close', 'Close') + '">&#215;</button>' +
         '</div>' +
       '</div>' +
       '<div class="arr-version-bar" id="arr-version-bar"></div>' +
@@ -160,6 +160,9 @@ function _ensureArrModal() {
     '</div>';
   document.body.appendChild(el);
   el.addEventListener('click', function(e) { if (e.target === el) closeArrangementEditor(); });
+  // ui.js treats this overlay as a dialog (focus, Tab, Escape); Escape closes
+  // through the editor's own close, which asks about unsaved changes.
+  registerModal('arr-modal', closeArrangementEditor);
 }
 
 async function _arrLoadVersions() {
@@ -221,8 +224,9 @@ function _arrRenderVersionBar() {
     var isCurrent = i === _arrEditorActive;
     var tabCls    = 'arr-tab' + (isCurrent ? ' arr-tab--current' : '');
     var dot       = v.is_active ? '<span class="arr-active-dot" title="' + _arrT('arr.activeOnStage', 'Active on stage') + '">●</span>' : '';
-    var closeBtn  = '<span class="arr-tab-close" data-onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="' + _arrT('arr.deleteVersion', 'Delete version') + '">×</span>';
-    return '<button class="' + tabCls + '" data-onclick="arrSwitchVersion(' + i + ')">' +
+    // Mouse shortcut only: "Delete version" below is the accessible control.
+    var closeBtn  = '<span class="arr-tab-close" aria-hidden="true" data-onclick="event.stopPropagation();arrDeleteVersion(' + i + ')" title="' + _arrT('arr.deleteVersion', 'Delete version') + '">×</span>';
+    return '<button class="' + tabCls + '"' + (isCurrent ? ' aria-current="true"' : '') + ' data-onclick="arrSwitchVersion(' + i + ')">' +
       dot +
       '<span class="arr-tab-name" data-ondblclick="event.stopPropagation();arrRenameVersion(' + i + ')">' +
         escHtml(v.name) +
@@ -231,7 +235,8 @@ function _arrRenderVersionBar() {
     '</button>';
   }).join('');
 
-  html += '<button class="arr-tab arr-tab--add" data-onclick="arrNewVersion()" title="' + _arrT('arr.newVersion', 'New version') + '">+</button>';
+  html += '<button class="arr-tab arr-tab--add" data-onclick="arrNewVersion()" title="' + _arrT('arr.newVersion', 'New version') + '" aria-label="' + _arrT('arr.newVersion', 'New version') + '">+</button>';
+  html += '<button class="btn arr-rename-btn" data-onclick="arrRenameVersion(' + _arrEditorActive + ')">' + _arrT('arr.rename', 'Rename') + '</button>';
 
   var cur = _arrEditorVersions[_arrEditorActive];
   if (cur && !cur.is_active) {
@@ -288,7 +293,7 @@ function _arrRenderGrid() {
   var colCount    = 1 + 2 + 4 + visible.length + 1; // drag + fixed(struct,part,lead,harm,licks) + inst + actions
 
   var thFixed =
-    '<th class="arr-th"></th>' + // drag handle
+    '<th class="arr-th"><span class="sr-only">' + _arrT('arr.dragToReorder', 'Drag to reorder') + '</span></th>' + // drag handle
     '<th class="arr-th">' + _arrT('arr.colStructure', 'STRUCTURE') + '</th>' +
     '<th class="arr-th">' + _arrT('arr.colPart', 'PART') + '</th>' +
     '<th class="arr-th">' + _arrT('arr.colLead', 'LEAD') + '</th>' +
@@ -299,6 +304,7 @@ function _arrRenderGrid() {
   }).join('');
   var thActions = '<th class="arr-th arr-th--actions"></th>';
 
+  _arrRowCount = rows.length;
   var bodyHtml = rows.map(function(row, ri) {
     return _arrEditorRowHtml(row, ri, visible, members, instruments);
   }).join('');
@@ -317,6 +323,11 @@ function _arrRenderGrid() {
   _arrWireDrag();
 }
 
+// Grid fields sit in table cells, which give them no name of their own.
+function _arrCellLabel(col, ri) {
+  return escHtml(_arrT('arr.cellLabel', '{col}, row {n}', { col: col, n: ri + 1 }));
+}
+
 function _arrEditorRowHtml(row, ri, visible, members, instruments) {
   // LEAD grouped select: value encodes "type:name" e.g. "person:Ludo"
   var leadVal = row.lead ? (row.lead_type + ':' + row.lead) : '';
@@ -332,7 +343,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
     return '<option value="instrument:' + escHtml(inst.key) + '"' + sel + '>' + escHtml(inst.key) + '</option>';
   }).join('');
   var leadSel =
-    '<select class="arr-sel arr-lead-sel" data-ri="' + ri + '" data-onchange="arrLeadChange(this)" ' + leadColor + '>' +
+    '<select class="arr-sel arr-lead-sel" data-ri="' + ri + '" aria-label="' + _arrCellLabel(_arrT('arr.colLead', 'LEAD'), ri) + '" data-onchange="arrLeadChange(this)" ' + leadColor + '>' +
       '<option value="">—</option>' +
       '<optgroup label="' + _arrT('arr.people', 'People') + '">'      + membersOpts + '</optgroup>' +
       '<optgroup label="' + _arrT('arr.instruments', 'Instruments') + '">' + instOpts    + '</optgroup>' +
@@ -341,7 +352,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
   // HARM chip display + clickable cell
   var harmStr = _arrHarmDisplay(row.harmony, members);
   var harmEl =
-    '<div class="arr-harm-cell" data-ri="' + ri + '" data-onclick="arrOpenHarmPicker(this,' + ri + ')">' +
+    '<div class="arr-harm-cell" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-label="' + _arrCellLabel(_arrT('arr.colHarm', 'HARM'), ri) + (harmStr ? ': ' + escHtml(harmStr) : '') + '" data-ri="' + ri + '" data-onclick="arrOpenHarmPicker(this,' + ri + ')">' +
       (harmStr
         ? '<span class="arr-harm-value">' + escHtml(harmStr) + '</span>'
         : '<span class="arr-harm-placeholder">—</span>') +
@@ -353,7 +364,7 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
     return '<option value="' + escHtml(inst.key) + '"' + sel + '>' + escHtml(inst.key) + '</option>';
   }).join('');
   var licksSel =
-    '<select class="arr-sel" data-ri="' + ri + '" data-field="licks" data-onchange="arrCellChange(this)">' +
+    '<select class="arr-sel" data-ri="' + ri + '" data-field="licks" aria-label="' + _arrCellLabel(_arrT('arr.colLicks', 'LICKS'), ri) + '" data-onchange="arrCellChange(this)">' +
       '<option value="">—</option>' + licksOpts +
     '</select>';
 
@@ -370,23 +381,26 @@ function _arrEditorRowHtml(row, ri, visible, members, instruments) {
       return '<option value="' + escHtml(t) + '"' + sel + '>' + escHtml(t) + '</option>';
     }).join('');
     return '<td class="arr-td arr-td--inst">' +
-      '<select class="arr-sel" data-ri="' + ri + '" data-field="parts.' + escHtml(v.key) + '" data-onchange="arrCellChange(this)">' +
+      '<select class="arr-sel" data-ri="' + ri + '" data-field="parts.' + escHtml(v.key) + '" aria-label="' + _arrCellLabel(v.label || v.key, ri) + '" data-onchange="arrCellChange(this)">' +
         '<option value="">—</option>' + techOpts +
       '</select>' +
     '</td>';
   }).join('');
 
   return '<tr class="arr-tr" draggable="true" data-ri="' + ri + '">' +
-    '<td class="arr-td arr-td--drag" title="' + _arrT('arr.dragToReorder', 'Drag to reorder') + '">&#10021;</td>' +
-    '<td class="arr-td"><input class="arr-inp" data-ri="' + ri + '" data-field="structure" value="' + escHtml(row.structure || '') + '" data-onchange="arrCellChange(this)" data-onkeydown="arrKeydown(event,' + ri + ')"></td>' +
-    '<td class="arr-td"><input class="arr-inp arr-inp--sm" data-ri="' + ri + '" data-field="part" value="' + escHtml(row.part || '') + '" data-onchange="arrCellChange(this)" data-onkeydown="arrKeydown(event,' + ri + ')"></td>' +
+    '<td class="arr-td arr-td--drag" title="' + _arrT('arr.dragToReorder', 'Drag to reorder') + '"><span aria-hidden="true">&#10021;</span></td>' +
+    '<td class="arr-td"><input class="arr-inp" data-ri="' + ri + '" data-field="structure" aria-label="' + _arrCellLabel(_arrT('arr.colStructure', 'STRUCTURE'), ri) + '" value="' + escHtml(row.structure || '') + '" data-onchange="arrCellChange(this)" data-onkeydown="arrKeydown(event,' + ri + ')"></td>' +
+    '<td class="arr-td"><input class="arr-inp arr-inp--sm" data-ri="' + ri + '" data-field="part" aria-label="' + _arrCellLabel(_arrT('arr.colPart', 'PART'), ri) + '" value="' + escHtml(row.part || '') + '" data-onchange="arrCellChange(this)" data-onkeydown="arrKeydown(event,' + ri + ')"></td>' +
     '<td class="arr-td">' + leadSel + '</td>' +
     '<td class="arr-td">' + harmEl  + '</td>' +
     '<td class="arr-td">' + licksSel + '</td>' +
     instCells +
     '<td class="arr-td arr-td--actions">' +
-      '<button class="arr-row-btn" data-onclick="arrDuplicateRow(' + ri + ')" title="' + _arrT('arr.duplicate', 'Duplicate') + '">&#10066;</button>' +
-      '<button class="arr-row-btn arr-row-btn--del" data-onclick="arrDeleteRow(' + ri + ')" title="' + _arrT('arr.deleteRow', 'Delete') + '">&#215;</button>' +
+      // Move buttons: the keyboard and touch alternative to dragging a row.
+      '<button class="arr-row-btn" data-move="-1" data-onclick="arrMoveRow(' + ri + ',-1)"' + (ri === 0 ? ' disabled' : '') + ' aria-label="' + escHtml(_arrT('setlist.moveUp', 'Move up') + ' (' + (ri + 1) + ')') + '">&#8593;</button>' +
+      '<button class="arr-row-btn" data-move="1" data-onclick="arrMoveRow(' + ri + ',1)"' + (ri === _arrRowCount - 1 ? ' disabled' : '') + ' aria-label="' + escHtml(_arrT('setlist.moveDown', 'Move down') + ' (' + (ri + 1) + ')') + '">&#8595;</button>' +
+      '<button class="arr-row-btn" data-onclick="arrDuplicateRow(' + ri + ')" title="' + _arrT('arr.duplicate', 'Duplicate') + '" aria-label="' + escHtml(_arrT('arr.duplicate', 'Duplicate') + ' (' + (ri + 1) + ')') + '">&#10066;</button>' +
+      '<button class="arr-row-btn arr-row-btn--del" data-onclick="arrDeleteRow(' + ri + ')" title="' + _arrT('arr.deleteRow', 'Delete') + '" aria-label="' + escHtml(_arrT('arr.deleteRow', 'Delete') + ' (' + (ri + 1) + ')') + '">&#215;</button>' +
     '</td>' +
   '</tr>';
 }
@@ -489,9 +503,9 @@ var _arrHarmPickerCloseFn  = null; // tracked so closeArrangementEditor can remo
 function arrOpenHarmPicker(cell, ri) {
   var existing = document.getElementById('arr-harm-picker');
   if (existing) {
-    existing.remove();
-    if (_arrHarmPickerCloseFn) { document.removeEventListener('click', _arrHarmPickerCloseFn); _arrHarmPickerCloseFn = null; }
-    if (_arrHarmPickerRi === ri) { _arrHarmPickerRi = -1; return; }
+    var wasRi = _arrHarmPickerRi;
+    _arrCloseHarmPicker();
+    if (wasRi === ri) return;
   }
   _arrHarmPickerRi = ri;
   var cur     = _arrEditorVersions[_arrEditorActive];
@@ -506,11 +520,11 @@ function arrOpenHarmPicker(cell, ri) {
   picker.innerHTML = members.length
     ? members.map(function(m) {
         var isSel = selected.has(m.name);
-        return '<div class="arr-harm-item' + (isSel ? ' arr-harm-item--sel' : '') + '" data-ri="' + ri + '" data-name="' + escHtml(m.name) + '">' +
-          '<span class="arr-harm-abbr">' + escHtml(m.abbr) + '</span>' +
+        return '<button type="button" class="arr-harm-item' + (isSel ? ' arr-harm-item--sel' : '') + '" aria-pressed="' + isSel + '" data-ri="' + ri + '" data-name="' + escHtml(m.name) + '">' +
+          '<span class="arr-harm-abbr" aria-hidden="true">' + escHtml(m.abbr) + '</span>' +
           '<span>' + escHtml(m.name) + '</span>' +
-          (isSel ? '<span style="margin-left:auto;color:var(--arr-lead-person,#3d6bce)">✓</span>' : '') +
-        '</div>';
+          (isSel ? '<span aria-hidden="true" style="margin-left:auto;color:var(--arr-lead-person,#3d6bce)">✓</span>' : '') +
+        '</button>';
       }).join('')
     : '<div style="padding:0.5rem;color:var(--third-color);font-size:0.8rem">' + _arrT('arr.noMembers', 'No members configured in Hub') + '</div>';
 
@@ -519,21 +533,41 @@ function arrOpenHarmPicker(cell, ri) {
     if (item) arrToggleHarm(Number(item.dataset.ri), item.dataset.name);
   });
 
+  // Escape closes the picker (not the editor) and goes back to the cell.
+  picker.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault(); e.stopPropagation();
+    _arrCloseHarmPicker();
+    cell.focus();
+  });
+
   var rect = cell.getBoundingClientRect();
   picker.style.cssText = 'position:fixed;top:' + (rect.bottom + 2) + 'px;left:' + rect.left + 'px;z-index:1001';
   document.body.appendChild(picker);
+  cell.setAttribute('aria-expanded', 'true');
+  var focusName = _arrHarmFocusName;
+  _arrHarmFocusName = null;
+  var items = picker.querySelectorAll('.arr-harm-item');
+  var target = [].find.call(items, function(it) { return focusName && it.dataset.name === focusName; }) || items[0];
+  if (target && (focusName || cell === document.activeElement)) target.focus();
 
   setTimeout(function() {
     _arrHarmPickerCloseFn = function close(e) {
-      if (!picker.contains(e.target) && e.target !== cell) {
-        picker.remove();
-        _arrHarmPickerRi      = -1;
-        _arrHarmPickerCloseFn = null;
-        document.removeEventListener('click', close);
-      }
+      if (!picker.contains(e.target) && e.target !== cell && !cell.contains(e.target)) _arrCloseHarmPicker();
     };
     document.addEventListener('click', _arrHarmPickerCloseFn);
   }, 0);
+}
+
+var _arrHarmFocusName = null;
+
+function _arrCloseHarmPicker() {
+  var picker = document.getElementById('arr-harm-picker');
+  if (picker) picker.remove();
+  if (_arrHarmPickerCloseFn) { document.removeEventListener('click', _arrHarmPickerCloseFn); _arrHarmPickerCloseFn = null; }
+  var cell = document.querySelector('.arr-harm-cell[aria-expanded="true"]');
+  if (cell) cell.setAttribute('aria-expanded', 'false');
+  _arrHarmPickerRi = -1;
 }
 
 function arrToggleHarm(ri, name) {
@@ -553,13 +587,36 @@ function arrToggleHarm(ri, name) {
     cell.innerHTML = harmStr
       ? '<span class="arr-harm-value">' + escHtml(harmStr) + '</span>'
       : '<span class="arr-harm-placeholder">—</span>';
-    // Refresh picker
+    var members2 = harmStr ? ': ' + harmStr : '';
+    cell.setAttribute('aria-label', _arrT('arr.cellLabel', '{col}, row {n}', { col: _arrT('arr.colHarm', 'HARM'), n: ri + 1 }) + members2);
+    // Refresh picker, keeping focus on the member just toggled
     var picker = document.getElementById('arr-harm-picker');
-    if (picker) arrOpenHarmPicker(cell, ri);
+    if (picker) {
+      if (picker.contains(document.activeElement)) _arrHarmFocusName = name;
+      _arrCloseHarmPicker();
+      arrOpenHarmPicker(cell, ri);
+    }
   }
 }
 
-// ── Drag-to-reorder ───────────────────────────────────────────────────────────
+// ── Reorder: move buttons and drag ────────────────────────────────────────────
+
+var _arrRowCount = 0;
+
+// Moves a row one step; focus stays on the same button of the moved row.
+function arrMoveRow(ri, dir) {
+  var cur = _arrEditorVersions[_arrEditorActive];
+  if (!cur || !cur.rows[ri] || !cur.rows[ri + dir]) return;
+  var moved = cur.rows.splice(ri, 1)[0];
+  cur.rows.splice(ri + dir, 0, moved);
+  _arrEditorDirty = true;
+  _arrRenderGrid();
+  var rows = document.querySelectorAll('#arr-tbody .arr-tr');
+  var row = rows[ri + dir];
+  var btn = row && (row.querySelector('[data-move="' + dir + '"]:not([disabled])') || row.querySelector('[data-move]:not([disabled])'));
+  if (btn) btn.focus();
+  announce(_arrT('arr.rowMoved', 'Row moved to position {n} of {total}', { n: ri + dir + 1, total: cur.rows.length }));
+}
 
 var _arrDragRi = -1;
 
@@ -734,10 +791,7 @@ function closeArrangementEditor() {
   if (_arrEditorDirty && !confirm(_arrT('arr.unsavedCloseConfirm', 'Unsaved changes. Close without saving?'))) return;
   var modal = document.getElementById('arr-modal');
   if (modal) modal.classList.remove('open');
-  var picker = document.getElementById('arr-harm-picker');
-  if (picker) picker.remove();
-  if (_arrHarmPickerCloseFn) { document.removeEventListener('click', _arrHarmPickerCloseFn); _arrHarmPickerCloseFn = null; }
-  _arrHarmPickerRi = -1;
+  _arrCloseHarmPicker();
   _arrEditorDirty  = false;
 }
 

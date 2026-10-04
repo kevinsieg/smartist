@@ -62,7 +62,7 @@
           '</div>' +
           '<p class="slug-status" id="slug-status"></p>' +
         '</div>' +
-        '<div class="auth-error" id="onboarding-error"></div>' +
+        '<div class="auth-error" id="onboarding-error" role="alert"></div>' +
         '<button type="button" id="ob-submit" class="btn active auth-submit" disabled>' + t('onboarding.createBtn') + '</button>' +
       '</div>';
 
