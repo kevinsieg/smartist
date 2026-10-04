@@ -42,12 +42,14 @@ async function migratedIds(sql) {
 }
 
 // Brings the database up to `src`. Nothing pending → no statement runs. Throws
-// when a migration is still missing afterwards.
-async function migrate(sql, src) {
+// when a migration is still missing afterwards. `log` hears the pending ids
+// before anything runs, so a failed build's log still names them.
+async function migrate(sql, src, log = () => {}) {
   const ids = migrationIds(src);
   const have = await migratedIds(sql);
   const pending = ids.filter(id => !have.includes(id));
   if (!pending.length) return { latest: ids[ids.length - 1], pending };
+  log(`schema: applying ${pending.join(', ')}`);
   const { applied, skipped } = await applyStatements(sql, src);
   const after = await migratedIds(sql);
   const still = ids.filter(id => !after.includes(id));
@@ -73,9 +75,9 @@ async function main() {
 
   const sql = connect(url);
   try {
-    const { latest, pending, applied, skipped } = await migrate(sql, src);
+    const { latest, pending, applied, skipped } = await migrate(sql, src, console.log);
     if (!pending.length) console.log(`schema: up to date (${latest})`);
-    else console.log(`schema: applied ${pending.join(', ')} (${applied} statements run, ${skipped} already existed)`);
+    else console.log(`schema: done (${applied} statements run, ${skipped} already existed)`);
   } catch (e) {
     console.error(`schema: FAILED — ${e.message}`);
     if (e.statement) console.error(`  in: ${e.statement.slice(0, 200)}`);

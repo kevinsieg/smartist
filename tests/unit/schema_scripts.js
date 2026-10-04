@@ -82,6 +82,14 @@ async function run(r) {
     assertEq(out.pending, ['2026-01-01', '2026-01-02']);
   });
 
+  await testAsync('the pending ids are logged before any statement runs', async () => {
+    const db = fakeDb(['2026-01-01']);
+    const events = [];
+    const sql = async q => { if (q[0] !== 'SELECT id FROM schema_migrations') events.push('statement'); return db.sql(q); };
+    await migrate(sql, SRC, line => events.push(line));
+    assertEq(events[0], 'schema: applying 2026-01-02');
+  });
+
   await testAsync('a migration still missing after the run fails the build', async () => {
     const db = fakeDb([], '2026-01-02');
     let err = null;

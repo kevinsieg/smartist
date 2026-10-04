@@ -1941,7 +1941,11 @@ async function testSongRestore(slug, token) {
 // works to clean up. The local stack's database is right here; a deployment's
 // is never touched (no outbox there).
 async function localDb() {
-  if (!process.env.DATABASE_URL || !await outbox('nobody@example.test')) return null;
+  // A local server only: .env.local may hold a remote DATABASE_URL while the
+  // local stack answers on :3000.
+  const url = process.env.DATABASE_URL;
+  if (!url || !/@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)) return null;
+  if (!await outbox('nobody@example.test')) return null;
   return require('postgres')(process.env.DATABASE_URL, { max: 2, onnotice: () => {} });
 }
 
@@ -2271,7 +2275,7 @@ async function testGema(sql, slug, token, config) {
 
 async function testOnLocalDb(slug, token, config, firstSong) {
   const sql = await localDb();
-  if (!sql) return skip('tests on the local database', 'needs the local stack');
+  if (!sql) return skip('tests on the local database', 'needs the local stack and its local DATABASE_URL');
   try {
     await testSignup(sql);
     await testCrossBandIds(sql, slug, token, firstSong);

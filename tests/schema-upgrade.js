@@ -103,8 +103,11 @@ async function main() {
   try {
     base = execFileSync('git', ['show', `${BASE_REF}:scripts/schema.sql`], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   } catch {
-    console.error(R(`Cannot read scripts/schema.sql at ${BASE_REF} (git fetch origin ${BASE_REF.replace(/^origin\//, '')}).`));
-    process.exit(1);
+    // CI always has the base; a clone that only fetched dev may not.
+    const msg = `Cannot read scripts/schema.sql at ${BASE_REF} (git fetch origin ${BASE_REF.replace(/^origin\//, '')}).`;
+    if (process.env.CI) { console.error(R(msg)); process.exit(1); }
+    console.log(`schema upgrade check skipped: ${msg}`);
+    process.exit(0);
   }
   const head = fs.readFileSync(path.join(ROOT, 'scripts/schema.sql'), 'utf8');
 
