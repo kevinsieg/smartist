@@ -15,7 +15,8 @@
     "dev:down": "bash scripts/dev_up.sh down",
     "test:api": "bash scripts/dev_up.sh run node tests/api.js",
     "test:smoke": "bash scripts/dev_up.sh run node tests/smoke.js && bash scripts/dev_up.sh run node tests/smoke-root.js",
-    "test:all": "npm run test:unit && npm run test:api && npm run test:smoke"
+    "test:schema": "bash scripts/dev_up.sh run node tests/schema-upgrade.js",
+    "test:all": "npm run test:unit && npm run test:api && npm run test:smoke && npm run test:schema"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1143.0",
