@@ -9,10 +9,11 @@ var _GLOBAL_PAGES = new Set(['login','signup','onboarding','workspaces','demo','
 // artist's dashboard).
 var _pathParts    = window.location.pathname.split('/').filter(Boolean);
 var _rawSegment   = _pathParts[0] || '';
-// The segment is only a slug when it looks like one (the format signup
-// enforces): it is built into URLs and markup, and the address bar is anyone's
-// to write — /x');apiFetch(…)… is a path too.
-var _SLUG_RE      = /^[a-z0-9][a-z0-9-]{2,49}$/;
+// The segment is only a slug when it looks like one (signup's format, plus the
+// short and underscore slugs scripts/setup.js allows): it is built into URLs
+// and markup, and the address bar is anyone's to write — /x');apiFetch(…)… is
+// a path too.
+var _SLUG_RE      = /^[a-z0-9_-]{1,64}$/;
 var _artistSlug   = (_GLOBAL_PAGES.has(_rawSegment) && _pathParts.length === 1) || !_SLUG_RE.test(_rawSegment) ? '' : _rawSegment;
 var _CONFIG_KEY       = 'artist_config_cache_' + (_artistSlug || 'default');
 var _CONFIG_KEY_LIGHT = _CONFIG_KEY + '_light';

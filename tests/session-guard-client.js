@@ -53,7 +53,14 @@ function load(pathname) {
   await test('a global page is no workspace', async () => assertEq(load('/profile').slug, ''));
   await test('markup in the segment is no workspace', async () =>
     assertEq(load("/x');apiFetch(this.ownerDocument.referrer);clickById('/contact").slug, ''));
-  await test('upper case or symbols are no workspace', async () => assertEq(load('/My_Band/songs').slug, ''));
+  await test('short and underscore slugs from setup are workspaces', async () => {
+    assertEq(load('/ci/songs').slug, 'ci');
+    assertEq(load('/my_band/songs').slug, 'my_band');
+  });
+  await test('upper case or symbols are no workspace', async () => {
+    assertEq(load('/My-Band/songs').slug, '');
+    assertEq(load('/a.b/songs').slug, '');
+  });
 
   console.log(B('\napiFetch'));
   await test('sends the token to this site\'s API', async () => {

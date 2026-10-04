@@ -167,7 +167,7 @@ A stage link carries no token and ids are sequential, so with `publicStage` on a
 
 **Song `extra.*Url` values** must be http(s); a URL into our bucket is only accepted when it is the one already stored (uploads go through presign → confirm). New media keys are `audio|sheets|playback/<artist id>/<uuid>-<name>`, and confirm checks that prefix. Every key check also refuses dot segments, empty segments and escaped slashes (`unsafeKey`, `api/_validate.js`), since the checks are prefixes. The songs page frames a sheet without a sandbox only when it is a PDF in our bucket (`mediaBase` in `/api/config`).
 
-**Login email changes** refuse an address that already has an account anywhere: memberships join on email, so the change would merge two people. A password change or "log out everywhere" also ends pending email-change and deletion links. **`apiFetch`** only sends the session to this site's `/api/`; `navigate()` only loads this site's pages; the workspace slug is read from the path only in the slug format.
+**Login email changes** refuse an address that already has an account anywhere: memberships join on email, so the change would merge two people. A password change or "log out everywhere" also ends pending email-change and deletion links. **`apiFetch`** only sends the session to this site's `/api/`; `navigate()` only loads this site's pages; the workspace slug is read from the path only when it is lowercase letters, digits, `-` and `_`.
 
 Venues and organizers are CRM-style reference tables linked to gigs via `venue_id`/`organizer_id` (FK `ON DELETE RESTRICT`). Both support soft-delete (`deleted` flag).
 
