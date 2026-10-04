@@ -283,6 +283,7 @@ initPage(async function(config) {
     _copyEl.addEventListener('click', function() {
       navigator.clipboard.writeText(this.dataset.url).then(function() {
         _copyEl.textContent = t('gigs.copiedMsg');
+        announce(t('gigs.copiedMsg'));
         setTimeout(function() { _copyEl.textContent = t('gigs.copyLink'); }, 2000);
       });
     });

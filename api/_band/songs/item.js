@@ -119,15 +119,19 @@ module.exports = wrap(async function handler(req, res) {
       sourceRows = src.rows;
       sourceHidden = src.hidden_instruments;
     }
-    // The count and the insert in one statement, so two requests at once
-    // cannot both pass a count taken before either of them.
-    const [created] = await sql`
-      INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
-      SELECT ${songId}, ${band.id}, ${name}, ${sql.json(sourceRows)}::jsonb, ${sql.json(sourceHidden)}::jsonb
-      WHERE (SELECT count(*) FROM song_arrangements
-             WHERE song_id = ${songId} AND artist_id = ${band.id}) < ${ARRANGEMENTS_PER_SONG}
-      RETURNING *
-    `;
+    // The song row is locked first: a count inside the INSERT alone reads the
+    // statement's snapshot, so two requests at once could both see 19.
+    const created = await sql.begin(async tx => {
+      await tx`SELECT 1 FROM songs WHERE id = ${songId} AND artist_id = ${band.id} FOR UPDATE`;
+      const [row] = await tx`
+        INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
+        SELECT ${songId}, ${band.id}, ${name}, ${tx.json(sourceRows)}::jsonb, ${tx.json(sourceHidden)}::jsonb
+        WHERE (SELECT count(*) FROM song_arrangements
+               WHERE song_id = ${songId} AND artist_id = ${band.id}) < ${ARRANGEMENTS_PER_SONG}
+        RETURNING *
+      `;
+      return row;
+    });
     if (!created)
       return res.status(409).json({ error: `At most ${ARRANGEMENTS_PER_SONG} versions per song`, code: 'arrangement_limit' });
     return res.status(201).json(created);

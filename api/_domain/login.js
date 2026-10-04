@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, loginOkKey, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
+const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, loginOkKey, loginOkPrefix, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
 const { ok, fail } = require('./http');
 const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
@@ -165,11 +165,17 @@ async function logoutEverywhere({ headers }) {
     SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${sessionRowId(sql, claim)} LIMIT 1`;
   if (!me || !sessionValid(claim, me)) return fail(401, 'Unauthorized');
   // The function's own clock, which is what iat was taken from.
-  const { count } = await sql`
-    UPDATE users SET sessions_valid_after = ${new Date()},
-        pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
-        delete_token_hash = NULL, delete_token_expires = NULL
-    WHERE email = ${me.email}`;
+  // So does the known-IP exemption from the address-wide login lock.
+  const [{ count }] = await sql`
+    WITH u AS (
+      UPDATE users SET sessions_valid_after = ${new Date()},
+          pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
+          delete_token_hash = NULL, delete_token_expires = NULL
+      WHERE email = ${me.email} RETURNING 1
+    ), forget AS (
+      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(me.email)})
+    )
+    SELECT count(*)::int AS count FROM u`;
   await logger.info('logout_everywhere', { userId: claim.userId, rows: count });
   return ok({ ok: true });
 }

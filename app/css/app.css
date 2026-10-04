@@ -259,7 +259,7 @@ h2 { font-weight: 600; font-size: clamp(1.05rem, 3vw, 1.3rem); line-height: 1.25
     -webkit-tap-highlight-color: transparent;
 }
 .nav-auth-menu-item:last-child { border-bottom: none; }
-.nav-auth-menu-item:hover, .nav-auth-menu-item:focus-visible { background: var(--secondary-color); }
+.nav-auth-menu-item:hover, .nav-auth-menu-item:focus-visible { background: var(--secondary-color); color: var(--black); }
 
 /* View-mode login in nav */
 .nav-auth-vm { display: flex; flex-direction: row; align-items: center; gap: 0.4rem; }
@@ -1554,6 +1554,11 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 }
 .sl-sets-btn { font-size: 0.75rem; padding: 0.2rem 0.4rem; display: inline-flex; align-items: center; justify-content: center; }
 .sl-row--expanded { background: #f0f4ff; border-color: var(--secondary-color); }
+.sl-expand-btn {
+    display: block; width: 100%; min-height: 24px; padding: 0; border: 0; background: none;
+    font: inherit; color: inherit; text-align: left; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: inherit;
+}
 .sl-edit-btn { padding: 0.35rem 0.45rem; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .sl-expansion {
     background: #fafafa;
@@ -1728,6 +1733,8 @@ body.brand-page .landing-main { flex: 1 0 auto; }
   font-size: 1.3rem; color: #5a5550;
   cursor: pointer; padding: 0 0.2rem;
   line-height: 1; flex-shrink: 0; margin-left: 0.5rem;
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .vsp-close:hover { color: var(--secondary-ink); }
 .vsp-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -1992,10 +1999,13 @@ span.heart-btn    { cursor: default; }
 @media (max-width: 639px) {
     #upcoming-list .sl-row,
     #past-list     .sl-row { grid-template-columns: 44px 75px 1fr auto !important; align-items: center; }
+    /* A deleted gig's badge and Erase stack instead of widening the row. */
+    #upcoming-list .sl-cell--actions,
+    #past-list     .sl-cell--actions { flex-wrap: wrap; }
     #upcoming-list .sl-cell--type, #upcoming-list .sl-cell--venue_name,
     #past-list     .sl-cell--type, #past-list     .sl-cell--venue_name { display: none; }
     #upcoming-list .sl-cell--title,
-    #past-list     .sl-cell--title { white-space: normal; overflow: visible; text-overflow: clip; padding: 0.15rem 0; }
+    #past-list     .sl-cell--title { white-space: normal; overflow: visible; text-overflow: clip; padding: 0.15rem 0; min-width: 0; overflow-wrap: anywhere; }
 }
 
 @media (max-width: 639px) {
@@ -2070,8 +2080,8 @@ span.heart-btn    { cursor: default; }
 .arr-tab-name { pointer-events: none; }
 .arr-active-dot { color: var(--secondary-color); font-size: 0.6rem; }
 .arr-set-active-btn { font-size: 0.75rem; padding: 3px 8px; margin-left: 6px; }
-.arr-delete-btn { font-size: 0.75rem; padding: 3px 8px; margin-left: auto; color: var(--danger-color); border-color: var(--danger-color); opacity: 0.7; }
-.arr-delete-btn:hover { background: var(--danger-color); color: #fff; opacity: 1; }
+.arr-delete-btn { font-size: 0.75rem; padding: 3px 8px; margin-left: auto; color: var(--danger-color); border-color: var(--danger-color); }
+.arr-delete-btn:hover { background: var(--danger-color); color: #fff; }
 .arr-col-toggles { display: flex; align-items: center; gap: 10px; padding: 5px 12px; border-bottom: 1px solid var(--border-color); font-size: 0.78rem; flex-wrap: wrap; flex-shrink: 0; }
 .arr-col-label { color: var(--third-color); font-size: 0.7rem; letter-spacing: 0.06em; }
 .arr-col-toggle { display: flex; align-items: center; gap: 3px; cursor: pointer; color: var(--arr-lead-inst); }
@@ -2193,7 +2203,7 @@ span.heart-btn    { cursor: default; }
 @keyframes share-menu-in { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
 .share-menu-item { display:flex; align-items:center; gap:0.65rem; width:100%; min-height:44px; background:none; border:none; border-bottom:1px solid var(--border-color); text-align:left; font-family:inherit; padding:0.65rem 1rem; font-size:0.84rem; cursor:pointer; color:var(--secondary-ink); border-bottom:1px solid var(--border-color); }
 .share-menu-item:last-child { border-bottom:none; }
-.share-menu-item:hover, .share-menu-item:focus-visible { background:var(--secondary-color); }
+.share-menu-item:hover, .share-menu-item:focus-visible { background:var(--secondary-color); color:var(--black); }
 .share-menu-icon { font-size:1rem; flex-shrink:0; }
 
 /* ── Dashboard help ── */

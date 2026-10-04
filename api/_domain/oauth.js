@@ -80,7 +80,7 @@ async function facebookUrl({ query, origin }) {
 // by the vercel.json rewrite). Validates state, exchanges code for
 // email, and on success sets the oauth_session cookie and redirects to
 // /login#oauth=1, where home.js redeems the cookie (oauthSession below) and
-// verifies the token against the slug-independent my-artists endpoint.
+// verifies the token against the slug-independent /api/auth/artists endpoint.
 async function oauthCallback({ query, headers, ip, origin }) {
   const o = origin;
   // Everything that can go wrong answers the visitor identically. The reason

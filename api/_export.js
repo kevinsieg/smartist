@@ -54,7 +54,8 @@ function toCsv(rows) {
     }
   }
   const cols = order.filter(k => filled.has(k));
-  const lines = [cols.join(','), ...flat.map(r => cols.map(c => cell(r[c])).join(','))];
+  // Header cells go through cell() too: extra keys are member-chosen text.
+  const lines = [cols.map(cell).join(','), ...flat.map(r => cols.map(c => cell(r[c])).join(','))];
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 

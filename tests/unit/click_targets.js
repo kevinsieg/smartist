@@ -35,6 +35,22 @@ function clickProblems(src) {
   return problems;
 }
 
+// Elements given a click handler by id from a script
+// (getElementById('x').addEventListener('click', …)) must be controls too.
+const CONTROL_TAGS = new Set(['button', 'a', 'input', 'select', 'textarea', 'summary', 'label']);
+function scriptClickProblems(jsSrc, htmlSrc) {
+  const problems = [];
+  const re = /getElementById\(\s*'([\w-]+)'\s*\)\??\.addEventListener\(\s*'click'/g;
+  for (const m of jsSrc.matchAll(re)) {
+    const tag = new RegExp(`<([a-z0-9]+)\\b[^>]*\\bid="${m[1]}"[^>]*>`).exec(htmlSrc);
+    if (!tag || CONTROL_TAGS.has(tag[1])) continue;
+    if (/\btabindex=/.test(tag[0]) && /\brole="button"/.test(tag[0])) continue;
+    if (/overlay|modal/.test(tag[0])) continue;
+    problems.push(`#${m[1]} is a <${tag[1]}>`);
+  }
+  return problems;
+}
+
 function run(r) {
   const { test, assert, B } = r;
   console.log(B('\nkeyboard-reachable click targets'));
@@ -50,6 +66,15 @@ function run(r) {
     const p = clickProblems(fs.readFileSync(f, 'utf8'));
     if (!p.length) continue;
     test(`${path.relative(APP_DIR, f)}: click targets reachable by keyboard`, () => assert(false, p.join('\n        ')));
+  }
+  test('the check catches a span given a click handler by id', () =>
+    assert(scriptClickProblems("document.getElementById('x').addEventListener('click', f)", '<span id="x">').length === 1, 'not caught'));
+  const allHtml = fs.readdirSync(APP_DIR).filter(f => f.endsWith('.html'))
+    .map(f => fs.readFileSync(path.join(APP_DIR, f), 'utf8')).join('\n');
+  for (const f of fs.readdirSync(JS_DIR).filter(f => f.endsWith('.js'))) {
+    const p = scriptClickProblems(fs.readFileSync(path.join(JS_DIR, f), 'utf8'), allHtml);
+    if (!p.length) continue;
+    test(`js/${f}: elements with a click listener are controls`, () => assert(false, p.join('\n        ')));
   }
   test('no app file has a click-only element', () => assert(true));
 }

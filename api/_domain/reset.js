@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit } = require('../_ratelimit');
+const { checkRateLimit, loginOkPrefix } = require('../_ratelimit');
 const { generateMagicToken, verifyMagicToken, generateUserToken, passwordlessSeed, TTL_8H } = require('../_token');
 const { sendEmail } = require('../_email');
 const { getArtistsForUser } = require('./artist');
@@ -100,12 +100,18 @@ async function setPassword({ body }) {
     return fail(400, 'Invalid or expired link');
 
   const hash = await bcrypt.hash(String(password), 12);
-  // Email-change and deletion links still outstanding end with the old password.
+  // Email-change and deletion links still outstanding end with the old password,
+  // and so does the known-IP exemption of whoever signed in with it.
   await sql`
-    UPDATE users SET password_hash = ${hash},
-        pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
-        delete_token_hash = NULL, delete_token_expires = NULL
-    WHERE email = ${addr}`;
+    WITH u AS (
+      UPDATE users SET password_hash = ${hash},
+          pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
+          delete_token_hash = NULL, delete_token_expires = NULL
+      WHERE email = ${addr} RETURNING 1
+    ), forget AS (
+      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(addr)})
+    )
+    SELECT count(*) FROM u`;
 
   // Setting the password is what logs them in; they are here because they could
   // not, and handing them back to the login form would be a joke.

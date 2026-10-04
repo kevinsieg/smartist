@@ -299,13 +299,13 @@ async function run(r) {
     assertEq(res._body && res._body.available, false);
   });
 
-  // ── GET ?action=my-artists ──────────────────────────────────────────────────
-  console.log(B('\nGET ?action=my-artists'));
+  // ── GET /api/auth/artists ──────────────────────────────────────────────────
+  console.log(B('\nGET /api/auth/artists'));
 
   await testAsync('no token → 401', async () => {
     const handler = makeHandler(async () => []);
     const res = mockRes();
-    await handler({ method: 'GET', query: { action: 'my-artists' }, headers: {} }, res);
+    await handler({ method: 'GET', query: { action: 'artists' }, headers: {} }, res);
     assertEq(res._status, 401);
   });
 
@@ -322,7 +322,7 @@ async function run(r) {
     const res = mockRes();
     await handler({
       method: 'GET',
-      query:  { action: 'my-artists' },
+      query:  { action: 'artists' },
       headers: { authorization: 'Bearer ' + token },
     }, res);
     assertEq(res._status, 200);
@@ -337,7 +337,7 @@ async function run(r) {
     const res = mockRes();
     await handler({
       method: 'GET',
-      query:  { action: 'my-artists' },
+      query:  { action: 'artists' },
       headers: { authorization: 'Bearer ' + token },
     }, res);
     assertEq(res._status, 401);
@@ -349,7 +349,7 @@ async function run(r) {
     const res = mockRes();
     await handler({
       method: 'GET',
-      query:  { action: 'my-artists' },
+      query:  { action: 'artists' },
       headers: { authorization: 'Bearer ' + token },
     }, res);
     assertEq(res._status, 401);

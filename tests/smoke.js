@@ -176,6 +176,42 @@ async function main() {
     }
   });
 
+  // Page scripts share one global scope: one that redefines a shared function
+  // (PRO's own setStatus once did) breaks every page visited after it.
+  await check('after PRO, in-app navigation to Gigs still opens the add-gig form', async () => {
+    await page.goto(`${BASE}/${SLUG}/pro-import`);
+    await settle(page);
+    await page.click(`.nav-links a[href="/${SLUG}/gigs"]`);
+    await page.waitForURL(`**/${SLUG}/gigs`, { timeout: 10000 });
+    await settle(page);
+    await page.click('#gig-add-btn:not([disabled])', { timeout: 10000 });
+    await page.waitForSelector('#gig-modal.open', { timeout: 5000 });
+    assertClean(log.take(), 'PRO → gigs');
+    await page.keyboard.press('Escape');
+  });
+
+  // 1.4.10 Reflow: nothing scrolls sideways on a 320 px screen.
+  await check('no page scrolls sideways at 320 px', async () => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const wide = [];
+    try {
+      for (const p of PAGES) {
+        await page.goto(`${BASE}/${SLUG}/${p}`);
+        await settle(page);
+        const w = await page.evaluate(() => {
+          const el = [...document.body.querySelectorAll('*')].find(e => e.getBoundingClientRect().right > 321);
+          return { w: document.documentElement.scrollWidth,
+                   el: el && `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.className ? '.' + String(el.className).split(' ')[0] : ''}` };
+        });
+        if (w.w > 320) wide.push(`${p} (${w.w}px, ${w.el})`);
+      }
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      log.take();
+    }
+    if (wide.length) throw new Error(`wider than the screen: ${wide.join(', ')}`);
+  });
+
   await check('a stage link opens a saved setlist', async () => {
     await page.goto(`${BASE}/${SLUG}/dashboard`);
     await settle(page);

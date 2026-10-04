@@ -324,7 +324,7 @@ module.exports = wrap(async function handler(req, res) {
         const desc = [
           g.type            ? `Type: ${g.type}`           : '',
           g.additional_link ? `Link: ${g.additional_link}` : '',
-        ].filter(Boolean).join('\\n');
+        ].filter(Boolean).join('\n');
         return ['BEGIN:VEVENT', `UID:gig-${g.id}@smartist`, `DTSTAMP:${now}`,
           dtstart, dtend, `SUMMARY:${esc(g.title)}`,
           loc  ? `LOCATION:${esc(loc)}`    : '',
@@ -334,7 +334,7 @@ module.exports = wrap(async function handler(req, res) {
       const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Smartist//EN',
         'CALSCALE:GREGORIAN','METHOD:PUBLISH',
         icsFold(`X-WR-CALNAME:${esc(artist.name)} — Upcoming Gigs`),
-        ...events, 'END:VCALENDAR'].join('\r\n');
+        ...events, 'END:VCALENDAR'].join('\r\n') + '\r\n';
       res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${slug}-gigs.ics"`);
       // A signed-in request may cover a private band: never let a shared cache keep it.

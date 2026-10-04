@@ -11,10 +11,12 @@ const { makeRunner } = require('./_runner');
 
 const ROOT = path.join(__dirname, '../..');
 
-function csp() {
+// The policy for every path, and the one /api/docs replaces it with (the
+// later header rule wins): only the API reference page may load its bundle.
+function csp(source = '/(.*)') {
   const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
   for (const h of vercel.headers) for (const kv of h.headers)
-    if (kv.key === 'Content-Security-Policy') {
+    if (kv.key === 'Content-Security-Policy' && h.source === source) {
       const out = {};
       for (const part of kv.value.split(';')) {
         const [name, ...sources] = part.trim().split(/\s+/);
@@ -25,13 +27,15 @@ function csp() {
   return null;
 }
 
-function externalAssets() {
+const DOCS_PAGE = 'api-docs.html';
+
+function externalAssets(only) {
   const scripts = new Set(), styles = new Set(), tags = [];
   const app = path.join(ROOT, 'app');
   const files = [
     ...fs.readdirSync(app).filter(f => f.endsWith('.html')).map(f => path.join(app, f)),
     ...fs.readdirSync(path.join(app, 'js')).filter(f => f.endsWith('.js')).map(f => path.join(app, 'js', f)),
-  ];
+  ].filter(f => (path.basename(f) === DOCS_PAGE) === (only === 'docs'));
   for (const f of files) {
     const src = fs.readFileSync(f, 'utf8');
     for (const m of src.matchAll(/<script[^>]+src="(https:[^"]+)"/g)) scripts.add(m[1]);
@@ -46,7 +50,9 @@ function run(r) {
   const { test, assert, B } = r;
   console.log(B('\ncontent security policy'));
   const policy = csp();
+  const docs = csp('/api/docs');
   const { scripts, styles, tags } = externalAssets();
+  const docsAssets = externalAssets('docs');
 
   test('vercel.json sets a Content-Security-Policy', () => assert(policy, 'no CSP header'));
   test("script-src allows no inline script and no eval", () => {
@@ -63,8 +69,17 @@ function run(r) {
   });
   // Pages share their origin with the session token: a script that changes
   // under an unversioned URL runs with the power to read it.
+  test('the docs page has its own policy: the app\'s plus its own bundle', () => {
+    assert(docs, 'no CSP for /api/docs');
+    const missing = [...docsAssets.scripts].filter(u => !docs['script-src'].includes(u));
+    assert(missing.length === 0, `not in the /api/docs script-src: ${missing.join(', ')}`);
+    const extra = docs['script-src'].filter(s => !policy['script-src'].includes(s) && !docsAssets.scripts.has(s));
+    assert(extra.length === 0, `/api/docs allows more than its bundle: ${extra.join(', ')}`);
+    for (const [k, v] of Object.entries(policy))
+      if (k !== 'script-src') assert(JSON.stringify(docs[k]) === JSON.stringify(v), `/api/docs differs in ${k}`);
+  });
   test('every external script names an exact version and carries a hash', () => {
-    const loose = tags.filter(t => !/@\d+\.\d+\.\d+\//.test(t) || !/integrity="sha(384|512)-/.test(t));
+    const loose = [...tags, ...docsAssets.tags].filter(t => !/@\d+\.\d+\.\d+\//.test(t) || !/integrity="sha(384|512)-/.test(t));
     assert(loose.length === 0, `unpinned or without integrity: ${loose.join(' | ')}`);
   });
   test('every external stylesheet the app loads is listed exactly', () => {

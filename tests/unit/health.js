@@ -49,6 +49,12 @@ async function run(r) {
 
   console.log(B('\nhealth check'));
 
+  await testAsync('an invalid index is a warning, not an outage', async () => {
+    const res = await health(async () => [{ current: true, invalid: ['idx_x'] }], ENV);
+    assertEq(res._status, 200);
+    assert(res._body.warnings.some(w => /invalid index: idx_x/.test(w)), JSON.stringify(res._body.warnings));
+  });
+
   await testAsync('database on the newest migration → 200 "current"', async () => {
     const res = await health(answers(true), ENV);
     assertEq(res._status, 200);

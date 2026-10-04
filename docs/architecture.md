@@ -26,7 +26,6 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   (see `api/_db.js`).
 - **`api/_*.js`**: infrastructure (db, email, storage, logger, tokens, rate
   limits). Each swappable provider sits behind one block at the top of its file.
-- **`app/js/services/`**: API client wrappers used by the standalone pages.
 
 The whole API is one serverless function, `api/index.js`: a table of
 paths, each sent to a handler in `api/_config.js` or `api/_band/`. Files and

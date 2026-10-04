@@ -360,6 +360,15 @@ async function testArrangementWrite(slug, token, song) {
     assert(json.is_active === true, 'is_active not set');
   });
 
+  await test('GET /songs/:id carries the active version in full (stage reads it)', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/${sid}`, AUTH);
+    assertStatus(res, json, 200);
+    const a = json.active_arrangement;
+    assert(a && a.id === arr.id && Array.isArray(a.rows) && a.is_active === true,
+      `active_arrangement ${JSON.stringify(a).slice(0, 120)}`);
+    assert(json.arrangements.some(v => v.id === arr.id && !('rows' in v)), 'versions should carry names only');
+  });
+
   await test('POST /:id/arrangements past 20 versions → 409', async () => {
     const { json: list } = await GET(`/api/${slug}/songs/${sid}/arrangements`, AUTH);
     for (let i = list.length; i < 20; i++) {
@@ -644,6 +653,13 @@ async function testAuth(slug) {
   await test('POST /login wrong password → 401', async () => {
     const { res, json } = await POST('/api/login', { email: 'nobody@example.test', password: '__wrong__' });
     assertStatus(res, json, 401);
+  });
+
+  // Account actions are URL paths; the old `?action=` on /api/config is gone
+  // (only the health check keeps it).
+  await test('POST /api/config?action=login is not a login → 404', async () => {
+    const { res, json } = await POST('/api/config?action=login', { email: 'nobody@example.test', password: '__wrong__' });
+    assertStatus(res, json, 404);
   });
 
   // The shared band password is retired: a password alone is no login, and
@@ -960,7 +976,8 @@ async function testIcsFeed(slug, token) {
   const made = [];
   await test('GET ?format=ics lists upcoming gigs with iCalendar dates', async () => {
     for (const body of [
-      { title: '[TEST] Club, Night; late', date: '2099-12-31', time_start: '20:30' },
+      { title: '[TEST] Club, Night; late', date: '2099-12-31', time_start: '20:30', type: 'Club',
+        additional_link: 'https://example.test/x' },
       { title: '[TEST] All day', date: '2099-12-31' },
     ]) {
       const { res, json } = await POST(`/api/${slug}/gigs`, body, { token });
@@ -977,6 +994,10 @@ async function testIcsFeed(slug, token) {
     assert(timed.includes('SUMMARY:[TEST] Club\\, Night\\; late'), 'summary not escaped');
     assert(allDay.includes('DTSTART;VALUE=DATE:20991231\r\n'), `all-day start: ${allDay.slice(0, 120)}`);
     assert(allDay.includes('DTEND;VALUE=DATE:21000101\r\n'), 'all-day end is the next day');
+    // One escaped newline between the parts, not a literal backslash-n.
+    assert(timed.replace(/\r\n /g, '').includes('DESCRIPTION:Type: Club\\nLink: https://example.test/x\r\n'),
+      `description: ${timed.slice(timed.indexOf('DESCRIPTION'), timed.indexOf('DESCRIPTION') + 80)}`);
+    assert(ics.endsWith('END:VCALENDAR\r\n'), 'the feed ends with CRLF');
   });
   for (const id of made)
     await DELETE(`/api/${slug}/gigs?id=${id}`, { body: { hard: true }, token });
@@ -1462,17 +1483,17 @@ async function testWrite(slug, token, firstSong, config) {
 
   // Verify password
   let authed = false;
-  await test('POST /login with correct password → 200 and the bands; my-artists lists the same', async () => {
+  await test('POST /login with correct password → 200 and the bands; /api/auth/artists lists the same', async () => {
     const { res, json } = await POST('/api/login', { email: EMAIL, password: PASSWORD });
     assertStatus(res, json, 200);
     assert(json.ok === true, 'expected ok:true');
     authed = true;
-    // Both lists come from one statement each (login's gate, my-artists' row).
+    // Both lists come from one statement each (login's gate, /api/auth/artists' row).
     assert(json.artists.some(a => a.slug === slug && a.name && a.role), `band missing from ${JSON.stringify(json.artists)}`);
     const mine = await GET('/api/auth/artists', { token: json.token });
     assertStatus(mine.res, mine.json, 200);
     assert(JSON.stringify(mine.json.artists) === JSON.stringify(json.artists),
-      `my-artists differs from login — ${JSON.stringify(mine.json.artists)}`);
+      `/api/auth/artists differs from login — ${JSON.stringify(mine.json.artists)}`);
   });
 
   if (!authed) {
@@ -2017,7 +2038,7 @@ async function testSignup(sql) {
       const own = await GET(`/api/${slug}/songs`, { token });
       assertStatus(own.res, own.json, 200);
       const mine = await GET('/api/auth/artists', { token });
-      assert((mine.json?.artists || []).some(a => a.slug === slug), 'my-artists misses the new band');
+      assert((mine.json?.artists || []).some(a => a.slug === slug), '/api/auth/artists misses the new band');
       const other = await GET(`/api/${SLUG}/songs`, { token });
       assertStatus(other.res, other.json, 401);
     });
@@ -2284,6 +2305,134 @@ async function testGema(sql, slug, token, config) {
   }
 }
 
+// Behaviour no other section pins down: response headers the CDN relies on, the
+// list fields the pages read, the anonymous catalogue's per-address limit and
+// a second workspace for a signed-in person.
+async function testRound3(sql, slug, token, firstSong) {
+  console.log(B('\nHeaders, list fields, limits, second workspace'));
+
+  await test('every response varies on Authorization', async () => {
+    for (const [path, opts] of [[`/api/${slug}/songs`, { token }], [`/api/${slug}/gigs`, {}], [CONFIG_URL, {}]]) {
+      const { res } = await GET(path, opts);
+      assert(/\bAuthorization\b/i.test(res.headers.get('vary') || ''), `${path}: Vary ${res.headers.get('vary')}`);
+    }
+  });
+
+  const gig = (await POST(`/api/${slug}/gigs`, { title: '[TEST] gig with set', date: '2099-12-30' }, { token })).json;
+  let setlist;
+  try {
+    if (!firstSong) skip('setlist titles on gigs', 'no song of our own');
+    else await test('GET /gigs lists each gig\'s setlist titles for members only', async () => {
+      setlist = (await POST(`/api/${slug}/setlists`, { title: '[TEST] gig set', gig_id: gig.id, song_ids: [firstSong.id] }, { token })).json;
+      assert(setlist?.id, 'setlist not created');
+      const { res, json } = await GET(`/api/${slug}/gigs?limit=500`, { token });
+      assertStatus(res, json, 200);
+      const row = json.rows.find(g => g.id === gig.id);
+      assert(row && Array.isArray(row.setlist_titles) && row.setlist_titles.includes('[TEST] gig set'),
+        `setlist_titles ${JSON.stringify(row?.setlist_titles)}`);
+      assert(json.rows.every(g => Array.isArray(g.setlist_titles)), 'a row without setlist_titles');
+    });
+  } finally {
+    if (setlist?.id) await DELETE(`/api/${slug}/setlists/${setlist.id}`, { token });
+    if (gig?.id) await sql`DELETE FROM gigs WHERE id = ${gig.id}`;
+  }
+
+  const before = (await GET(CONFIG_URL, { token })).json?.config?.publicCatalogue === true;
+  const ip = testIp();
+  try {
+    await PATCH(CONFIG_URL, { config: { publicCatalogue: true } }, { token });
+    await test('the anonymous full catalogue is limited per address → 429', async () => {
+      const first = await GET(`${CONFIG_URL}&_t=${Date.now()}`, { headers: ip });
+      assertStatus(first.res, first.json, 200);
+      await sql`UPDATE rate_limits SET count = 600 WHERE key = ${'config-full:' + ip['X-Real-IP']}`;
+      const { res, json } = await GET(`${CONFIG_URL}&_t=${Date.now()}`, { headers: ip });
+      assertStatus(res, json, 429);
+      const signedIn = await GET(`${CONFIG_URL}&_t=${Date.now()}`, { token, headers: ip });
+      assertStatus(signedIn.res, signedIn.json, 200);
+    });
+  } finally {
+    await PATCH(CONFIG_URL, { config: { publicCatalogue: before } }, { token });
+    await sql`DELETE FROM rate_limits WHERE key = ${'config-full:' + ip['X-Real-IP']}`;
+  }
+
+  const user = await throwawayUser(sql, slug, 'viewer', 'ws');
+  const newSlug = `test-ws-${Date.now().toString(36)}`;
+  try {
+    await test('a signed-in person creates a second workspace and administers it → 201', async () => {
+      const login = await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() });
+      assertStatus(login.res, login.json, 200);
+      const { res, json } = await POST('/api/signup', { name: '[TEST] Second band', slug: newSlug },
+        { token: login.json.token, headers: testIp() });
+      assertStatus(res, json, 201);
+      assert(json.slug === newSlug && json.role === 'admin' && json.token, `unexpected answer ${JSON.stringify(json).slice(0, 120)}`);
+      const rows = await sql`
+        SELECT a.slug, u.role FROM users u JOIN artists a ON a.id = u.artist_id
+        WHERE lower(u.email) = lower(${user.email}) ORDER BY a.slug`;
+      assert(rows.length === 2 && rows.some(r => r.slug === newSlug && r.role === 'admin'), JSON.stringify(rows));
+      const again = await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() });
+      assertStatus(again.res, again.json, 200);
+      const own = await GET(`/api/${newSlug}/songs`, { token: json.token });
+      assertStatus(own.res, own.json, 200);
+    });
+    await test('without a session or link → 400 or 401, nothing created', async () => {
+      const { res } = await POST('/api/signup', { name: '[TEST] Nobody', slug: `${newSlug}-x` }, { headers: testIp() });
+      assert(res.status === 400 || res.status === 401, `got ${res.status}`);
+      const [row] = await sql`SELECT 1 FROM artists WHERE slug = ${newSlug + '-x'}`;
+      assert(!row, 'a workspace was created without a session');
+    });
+
+    // Reset and deletion on real rows (the unit tests match SQL text only).
+    const pw2 = `pw-reset-${Date.now()}`;
+    await test('a mailed reset link sets the password on every row of the address, once', async () => {
+      const { res } = await POST('/api/auth/request-reset', { email: user.email }, { headers: testIp() });
+      assertStatus(res, null, 200);
+      const mail = (await outbox(user.email)).slice(-1)[0];
+      const m = /#reset=([^&"]+)&(?:amp;)?hint=([\w-]+)/.exec(mail?.html || '');
+      assert(m, 'no reset link in the mail');
+      const body = { token: decodeURIComponent(m[1]), hint: m[2], password: pw2 };
+      const set = await POST('/api/auth/set-password', body, { headers: testIp() });
+      assertStatus(set.res, set.json, 200);
+      const old = await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() });
+      assertStatus(old.res, old.json, 401);
+      const fresh = await POST('/api/login', { email: user.email, password: pw2 }, { headers: testIp() });
+      assertStatus(fresh.res, fresh.json, 200);
+      assert(fresh.json.artists?.length === 2, 'the new password does not open both workspaces');
+      const reused = await POST('/api/auth/set-password', { ...body, password: 'pw-third-attempt' }, { headers: testIp() });
+      assertStatus(reused.res, reused.json, 400);
+    });
+    await test('account deletion: preview, mailed link, confirm → own band gone, shared band kept', async () => {
+      const t = (await POST('/api/login', { email: user.email, password: pw2 }, { headers: testIp() })).json.token;
+      const pre = await GET('/api/auth/deletion-preflight', { token: t });
+      assertStatus(pre.res, pre.json, 200);
+      assert(pre.json.destroy.some(a => a.slug === newSlug) && pre.json.leave.some(a => a.slug === slug),
+        `preflight ${JSON.stringify(pre.json).slice(0, 160)}`);
+      const asked = await POST('/api/auth/request-deletion', undefined, { token: t });
+      assertStatus(asked.res, asked.json, 200);
+      const mail = (await outbox(user.email)).slice(-1)[0];
+      const m = /#delete-token=([\w-]+)/.exec(mail?.html || '');
+      assert(m, 'no deletion link in the mail');
+      const ip = testIp();
+      const preview = await POST('/api/auth/confirm-deletion', { token: m[1] }, { headers: ip });
+      assertStatus(preview.res, preview.json, 200);
+      assert(preview.json.preview === true, 'the preview deleted');
+      const [still] = await sql`SELECT 1 FROM artists WHERE slug = ${newSlug}`;
+      assert(still, 'the preview removed the band');
+      const done = await POST('/api/auth/confirm-deletion', { token: m[1], confirm: true }, { headers: ip });
+      assertStatus(done.res, done.json, 200);
+      const [band] = await sql`SELECT 1 FROM artists WHERE slug = ${newSlug}`;
+      const users = await sql`SELECT 1 FROM users WHERE lower(email) = lower(${user.email})`;
+      const [kept] = await sql`SELECT 1 FROM artists WHERE slug = ${slug}`;
+      assert(!band && users.length === 0 && kept, `band ${!!band}, ${users.length} user rows, shared band ${!!kept}`);
+      const again = await POST('/api/auth/confirm-deletion', { token: m[1], confirm: true }, { headers: ip });
+      assertStatus(again.res, again.json, 400);
+    });
+  } finally {
+    await sql`DELETE FROM artists WHERE slug LIKE ${newSlug + '%'}`;
+    await sql`DELETE FROM users WHERE id = ${user.id}`;
+    await sql`DELETE FROM rate_limits WHERE key LIKE ${'%' + user.email.toLowerCase() + '%'}`;
+  }
+}
+
 async function testOnLocalDb(slug, token, config, firstSong) {
   const sql = await localDb();
   if (!sql) return skip('tests on the local database', 'needs the local stack and its local DATABASE_URL');
@@ -2294,6 +2443,7 @@ async function testOnLocalDb(slug, token, config, firstSong) {
     await testExportScope(sql, slug, token);
     await testPublicStage(sql, slug, token, firstSong);
     await testGema(sql, slug, token, config);
+    await testRound3(sql, slug, token, firstSong);
   } finally {
     await sql.end();
   }

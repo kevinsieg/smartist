@@ -13,6 +13,7 @@ async function sendSetlistEmail(slug, setlistId, email, token) {
     });
     if (r.status === 401) {
       sessionStorage.removeItem('smartist_token');
+      localStorage.removeItem('smartist_token');
       return { ok: false, unauthorized: true, error: _shareT('share.signInAgain', 'Your session has ended — sign in again.') };
     }
     if (r.ok) return { ok: true };

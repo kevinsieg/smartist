@@ -55,13 +55,18 @@ async function runAbuseLimits(r) {
       counts[key] = (counts[key] || 0) + 1;
       return Promise.resolve([{ count: counts[key] }]);
     };
-    const saved = { db: require.cache[dbPath], rl: require.cache[rlPath] };
+    const alarms = [];
+    const logPath = require.resolve(path.join(__dirname, '../../api/_logger'));
+    const saved = { db: require.cache[dbPath], rl: require.cache[rlPath], log: require.cache[logPath] };
     require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getDb: () => sql } };
+    require.cache[logPath] = { id: logPath, filename: logPath, loaded: true,
+      exports: { error: async (event, data) => { alarms.push(data); }, warn: async () => {}, info: async () => {} } };
     delete require.cache[rlPath];
     const mod = require(rlPath);
-    require.cache[dbPath] = saved.db; require.cache[rlPath] = saved.rl;
+    require.cache[dbPath] = saved.db; require.cache[rlPath] = saved.rl; require.cache[logPath] = saved.log;
     if (!saved.db) delete require.cache[dbPath];
-    return { mod, counts };
+    if (!saved.log) delete require.cache[logPath];
+    return { mod, counts, alarms };
   }
   const realRandom = Math.random;
   Math.random = () => 0.5;   // no sweep
@@ -73,16 +78,28 @@ async function runAbuseLimits(r) {
       assertEq(await mod.outboundMailLimited('a@x.test'), true);
       assertEq(await mod.outboundMailLimited('b@x.test'), false);
     });
-    await testAsync('everyone together is stopped after MAIL_OUT_DAILY mails', async () => {
-      const { mod } = load();
-      for (let i = 0; i < mod.MAIL_OUT_DAILY; i++) await mod.outboundMailLimited(`p${i}@x.test`);
-      assertEq(await mod.outboundMailLimited('fresh@x.test'), true);
+    // As a hard stop, ten free accounts could block every band's invites for
+    // the day; the deployment-wide count now only raises an alarm.
+    await testAsync('everyone together past MAIL_OUT_DAILY alarms once, and nobody is blocked', async () => {
+      const { mod, alarms } = load();
+      for (let i = 0; i <= mod.MAIL_OUT_DAILY + 5; i++) await mod.outboundMailLimited(`p${i}@x.test`);
+      assertEq(await mod.outboundMailLimited('fresh@x.test'), false);
+      assertEq(alarms.filter(a => a.key === 'mail-out-day').length, 1);
     });
     await testAsync('presigns are capped per band per hour', async () => {
       const { mod } = load();
       for (let i = 0; i < mod.PRESIGN_PER_HOUR; i++) assertEq(await mod.presignLimited(1), false);
       assertEq(await mod.presignLimited(1), true);
       assertEq(await mod.presignLimited(2), false);
+    });
+    await testAsync('presigns are capped per band per day, and one band cannot block the others', async () => {
+      const { mod, counts, alarms } = load();
+      counts['presign-day:1'] = mod.PRESIGN_BAND_DAILY;
+      counts['presign-day'] = mod.PRESIGN_DAILY;
+      assertEq(await mod.presignLimited(1), true);
+      assertEq(await mod.presignLimited(2), false);
+      assertEq(alarms.filter(a => a.key === 'presign-day').length, 1);
+      assert(mod.PRESIGN_BAND_DAILY * 2 < mod.PRESIGN_DAILY, 'two bands must not reach the alarm');
     });
     // A lock per address alone let anyone lock a person out by typing ten
     // wrong passwords for them; passwordLogin compares these counts with

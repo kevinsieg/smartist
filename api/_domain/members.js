@@ -5,7 +5,7 @@ const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const { sendEmail } = require('../_email');
 const { escHtml } = require('../_html');
-const { checkRateLimit, outboundMailLimited } = require('../_ratelimit');
+const { checkRateLimit, outboundMailLimited, loginOkPrefix } = require('../_ratelimit');
 const { validateStr, validateEmail } = require('../_validate');
 const logger = require('../_logger');
 const { ok, reply, fail } = require('./http');
@@ -194,16 +194,24 @@ async function invite({ band, user, body, ip, origin, slug }) {
   const [state] = await sql`
     SELECT
       EXISTS (SELECT 1 FROM users WHERE artist_id = ${band.id} AND email = ${addr}) AS here,
-      EXISTS (SELECT 1 FROM users WHERE email = ${addr}) AS known`;
+      -- An account someone can sign in to: a password, or no open invite
+      -- (Google/Facebook). Rows that are only other bands' unaccepted invites
+      -- do not count; that address still needs a link to set a password.
+      EXISTS (SELECT 1 FROM users WHERE email = ${addr}
+              AND (password_hash IS NOT NULL OR invite_token_hash IS NULL)) AS known`;
   if (state.here) return fail(409, 'User already exists');
   if (await inviteLimited(band, ip, user)) return fail(429, 'Too many invites — try again later');
 
   const token   = state.known ? null : linkToken();
   const expires = state.known ? null : new Date(Date.now() + INVITE_TTL_MS);
   const [newUser] = await sql`
-    INSERT INTO users (artist_id, email, role, invite_token_hash, invite_expires_at, invited_by, password_hash)
-    VALUES (${band.id}, ${addr}, ${role}, ${token ? token.hash : null}, ${expires}, ${user.id},
-            (SELECT password_hash FROM users WHERE email = ${addr} AND password_hash IS NOT NULL ORDER BY id LIMIT 1))
+    INSERT INTO users (artist_id, email, role, invite_token_hash, invite_expires_at, invited_by,
+                       password_hash, sessions_valid_after)
+    SELECT ${band.id}, ${addr}, ${role}, ${token ? token.hash : null}, ${expires}, ${user.id},
+           -- The address's password and its newest "log out everywhere": a
+           -- session ended there must not come back through this row.
+           (SELECT password_hash FROM users WHERE email = ${addr} AND password_hash IS NOT NULL ORDER BY id LIMIT 1),
+           (SELECT max(sessions_valid_after) FROM users WHERE email = ${addr})
     RETURNING id, email, role
   `;
 
@@ -314,11 +322,17 @@ async function changePassword({ user, body, ip }) {
   const hash = await bcrypt.hash(String(newPassword), 12);
   // Links still outstanding (email change, account deletion) end with the old
   // password: whoever held it may have requested them.
+  // The known-IP exemption from the login lock goes with the old password.
   await sql`
-    UPDATE users SET password_hash = ${hash},
-        pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
-        delete_token_hash = NULL, delete_token_expires = NULL
-    WHERE email = ${row.email}`;
+    WITH u AS (
+      UPDATE users SET password_hash = ${hash},
+          pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
+          delete_token_hash = NULL, delete_token_expires = NULL
+      WHERE email = ${row.email} RETURNING 1
+    ), forget AS (
+      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(row.email)})
+    )
+    SELECT count(*) FROM u`;
   // The new hash invalidates every session issued before it, this one
   // included — hand back a replacement so the caller stays signed in.
   const token = generateUserToken(row.id, row.role, rememberMe ? TTL_30D : TTL_8H, hash, row.email);
@@ -347,7 +361,22 @@ async function requestEmailChange({ user, body, ip, origin, slug }) {
   // An address that already has an account belongs to someone: moving these
   // rows onto it would merge the two accounts, so this password would open
   // that person's bands (passwordLogin tries every hash of an address).
-  if (await addressTaken(sql, lower)) return fail(409, 'That email address is already in use');
+  // The answer is the same either way, or this would tell anyone with an
+  // account which addresses have one: the inbox learns why nothing happened.
+  if (await addressTaken(sql, lower)) {
+    try {
+      await sendEmail({
+        to: lower,
+        subject: 'Your smartist address',
+        html: `<p>Someone asked to move another smartist login to this address. It already has an
+               account, so nothing was changed.</p>
+               <p>If that was you, sign in with this address instead.</p>`,
+      });
+    } catch (err) {
+      await logger.error('email_change_request_failed', { band: slug, error: err.message });
+    }
+    return ok({ ok: true });
+  }
 
   const token   = linkToken();
   const expires = new Date(Date.now() + EMAIL_CHANGE_TTL_MS).toISOString();

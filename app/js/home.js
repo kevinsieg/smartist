@@ -45,7 +45,7 @@ async function init() {
   // A finished session the OAuth callback left in an HttpOnly cookie, redeemed
   // once. Handled before
   // loadConfig because it needs no workspace: verifySession authenticates
-  // against the slug-independent my-artists endpoint. Doing it later would
+  // against the slug-independent /api/auth/artists endpoint. Doing it later would
   // break the multi-workspace case, where `next` is /workspaces and there is no
   // slug to load a config for.
   if (oauthDone) {
@@ -148,7 +148,7 @@ async function verifyToken(token, hint) {
 }
 
 // Validate a stored session token on page load. The Bearer-authenticated
-// my-artists endpoint returns the user's workspaces. Posting it to the
+// /api/auth/artists returns the user's workspaces. Posting it to the
 // password-login endpoint (as the magic flow does) would reject a valid JWT and
 // silently log the user out — defeating "Remember me".
 async function verifySession(token) {
@@ -227,12 +227,12 @@ function renderLogin(errorMsg, cfg) {
       oauthHtml +
       '<div class="auth-field">' +
         '<label class="auth-label" for="email-input">' + t('home.emailLabel') + '</label>' +
-        '<input type="email" id="email-input" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
+        '<input type="email" id="email-input" aria-describedby="auth-error" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
       '</div>' +
       '<div class="auth-field">' +
         '<label class="auth-label" for="pw-input">' + t('home.passwordLabel') + '</label>' +
         '<div class="pw-wrapper">' +
-          '<input type="password" id="pw-input" placeholder="••••••••" autocomplete="current-password">' +
+          '<input type="password" id="pw-input" aria-describedby="auth-error" placeholder="••••••••" autocomplete="current-password">' +
           '<button type="button" class="pw-toggle" id="pw-toggle">' + t('home.showPw') + '</button>' +
         '</div>' +
       '</div>' +
@@ -290,7 +290,7 @@ function renderSetPassword(token, cfg, resetHint) {
       '<div class="auth-field">' +
         '<label class="auth-label" for="pw-new">' + t('home.choosePassword') + '</label>' +
         '<div class="pw-wrapper">' +
-          '<input type="password" id="pw-new" placeholder="' + t('home.pwPlaceholder') + '" autocomplete="new-password">' +
+          '<input type="password" id="pw-new" aria-describedby="auth-error" placeholder="' + t('home.pwPlaceholder') + '" autocomplete="new-password">' +
           '<button type="button" class="pw-toggle" id="pw-toggle-new">' + t('home.showPw') + '</button>' +
         '</div>' +
       '</div>' +
@@ -315,6 +315,7 @@ async function doSetPassword(token, hint, cfg) {
   const pw  = document.getElementById('pw-new').value;
   const btn = document.getElementById('accept-btn');
   const err = document.getElementById('auth-error');
+  document.getElementById('pw-new').setAttribute('aria-invalid', String(!pw));
   if (!pw) { err.textContent = t('home.enterPassword'); return; }
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   const restore = () => { btn.disabled = false; btn.textContent = t('home.savePassword'); };
@@ -339,6 +340,7 @@ async function doAcceptInvite(inviteToken, cfg) {
   const pw  = document.getElementById('pw-new').value;
   const btn = document.getElementById('accept-btn');
   const err = document.getElementById('auth-error');
+  document.getElementById('pw-new').setAttribute('aria-invalid', String(!pw));
   if (!pw) { err.textContent = t('home.enterPassword'); return; }
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
@@ -365,6 +367,8 @@ async function doLogin() {
   const remember = document.getElementById('remember-me')?.checked || false;
   const err = document.getElementById('auth-error');
   // Every login is a named user: the shared band password is retired.
+  document.getElementById('email-input')?.setAttribute('aria-invalid', String(!email));
+  document.getElementById('pw-input').setAttribute('aria-invalid', 'false');
   if (!email) { err.textContent = t('home.emailRequired'); document.getElementById('email-input')?.focus(); return; }
   if (!pw) return;
   const btn = document.getElementById('pw-btn');
@@ -381,7 +385,7 @@ async function doLogin() {
       body: JSON.stringify(body),
     });
     const data = await r.json();
-    if (!r.ok) { err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); document.getElementById('pw-input')?.focus(); return; }
+    if (!r.ok) { document.getElementById('pw-input')?.setAttribute('aria-invalid', 'true'); err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); document.getElementById('pw-input')?.focus(); return; }
     storeToken(data.token, remember);
     sessionStorage.setItem('smartist_admin_email', data.email || '');
     applyNav(cfg.name, cfg.config);

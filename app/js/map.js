@@ -329,7 +329,6 @@
     if (!ungeocoded.length) return;
     var btn      = document.getElementById('map-geocode-btn');
     var progress = document.getElementById('map-geocode-progress');
-    var token    = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
     if (btn)      btn.disabled = true;
     if (progress) progress.style.display = '';
 
@@ -364,11 +363,7 @@
         var afterDelay = function() { done++; next(); };
         if (!result) { failed++; setTimeout(afterDelay, 1100); return; }
 
-        var url  = '/api/' + _slug + '/venues/' + v.id;
-        var opts = { method: 'PUT', headers: { 'Content-Type': 'application/json' } };
-        if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-        opts.body = JSON.stringify({ name: v.name, lat: result.lat, lng: result.lng });
-        fetch(url, opts)
+        apiFetch('/api/' + _slug + '/venues/' + v.id, 'PUT', { name: v.name, lat: result.lat, lng: result.lng })
           .then(function(r) { return r.ok ? r.json() : null; })
           .then(function(updated) {
             if (updated) {

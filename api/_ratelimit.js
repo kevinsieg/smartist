@@ -1,16 +1,23 @@
 'use strict';
 const { getDb } = require('./_db');
+const logger = require('./_logger');
 
 // Keys carry an IP, an address or a song id, so most are used once and never
 // again: their rows would pile up forever. About one call in SWEEP_EVERY also
-// clears rows idle for longer than any window used here (the longest is an
-// hour). A failed sweep never fails the request.
+// clears rows idle for longer than any window used here (the longest is a
+// day; login-ok rows are kept LOGIN_OK_DAYS). A failed sweep never fails the
+// request.
 const SWEEP_EVERY = 200;
 
 // Sliding-window rate limiter backed by the rate_limits table.
 // Returns true if the request should be blocked (limit exceeded).
 // Each key gets one row; the window resets automatically when it expires.
 async function checkRateLimit(key, maxRequests, windowSecs) {
+  return (await countInWindow(key, windowSecs)) > maxRequests;
+}
+
+// This request's number within the key's current window.
+async function countInWindow(key, windowSecs) {
   const sql = getDb();
   const windowStart = new Date(Date.now() - windowSecs * 1000).toISOString();
   const sweep = Math.random() < 1 / SWEEP_EVERY
@@ -33,7 +40,15 @@ async function checkRateLimit(key, maxRequests, windowSecs) {
       END
     RETURNING count
   `, sweep]);
-  return row.count > maxRequests;
+  return row.count;
+}
+
+// A deployment-wide daily count that raises an alarm instead of refusing:
+// as a hard stop, a few free sign-ups could use it up and block every band
+// for the day. The per-band and per-person caps are the stops.
+async function dailyAlarm(key, threshold) {
+  const n = await countInWindow(key, 86400);
+  if (n === threshold + 1) await logger.error('daily_cap_alarm', { key, threshold });
 }
 
 // Failed sign-ins per account. The per-IP limit alone let a botnet try one
@@ -57,7 +72,8 @@ const loginFailPairKey = (email, ip) => `${loginFailKey(email)}|${ip || 'unknown
 // stranger with ten IPs cannot keep the owner out. Only the pair lock does.
 // Kept LOGIN_OK_DAYS after the last sign-in; the sweep above clears it later.
 const LOGIN_OK_DAYS = 30;
-const loginOkKey = (email, ip) => `login-ok:${String(email || '').trim().toLowerCase()}|${ip || 'unknown'}`;
+const loginOkPrefix = email => `login-ok:${String(email || '').trim().toLowerCase()}|`;
+const loginOkKey = (email, ip) => `${loginOkPrefix(email)}${ip || 'unknown'}`;
 async function countLoginFailure(email, ip) {
   const windowStart = new Date(Date.now() - LOGIN_FAIL_WINDOW * 1000).toISOString();
   // Both counters in one statement, with checkRateLimit's window reset.
@@ -72,25 +88,29 @@ async function countLoginFailure(email, ip) {
 
 // Mail a session sends to an address of its choosing (invites, setlist
 // shares). The per-band and per-IP limits at each call site stop one band;
-// these stop one person spread over many bands, and everyone together, from
-// turning the app's sender into a relay. `who` is the sender's address.
+// the per-person cap stops one person spread over many bands from turning
+// the app's sender into a relay. `who` is the sender's address. The
+// deployment-wide count only alarms (dailyAlarm).
 const MAIL_OUT_PERSON_DAILY = 50;
 const MAIL_OUT_DAILY = 500;
 async function outboundMailLimited(who) {
-  return (await checkRateLimit(`mail-out:${String(who || '').toLowerCase()}`, MAIL_OUT_PERSON_DAILY, 86400))
-      || (await checkRateLimit('mail-out-day', MAIL_OUT_DAILY, 86400));
+  if (await checkRateLimit(`mail-out:${String(who || '').toLowerCase()}`, MAIL_OUT_PERSON_DAILY, 86400)) return true;
+  await dailyAlarm('mail-out-day', MAIL_OUT_DAILY);
+  return false;
 }
 
 // Presigned upload URLs. Storage is counted when an upload is confirmed, so an
 // upload that is never confirmed costs bucket space nobody is charged for; this
-// bounds how much of it one band can park.
-// The daily cap counts every band together: sign-up is open, so a per-band
-// limit alone is no limit.
+// bounds how much of it one band can park: an hourly and a daily cap per band,
+// and an alarm when all bands together pass PRESIGN_DAILY.
 const PRESIGN_PER_HOUR = 60;
+const PRESIGN_BAND_DAILY = 200;
 const PRESIGN_DAILY = 2000;
 async function presignLimited(bandId) {
-  return (await checkRateLimit(`presign:${bandId}`, PRESIGN_PER_HOUR, 3600))
-      || (await checkRateLimit('presign-day', PRESIGN_DAILY, 86400));
+  if (await checkRateLimit(`presign:${bandId}`, PRESIGN_PER_HOUR, 3600)) return true;
+  if (await checkRateLimit(`presign-day:${bandId}`, PRESIGN_BAND_DAILY, 86400)) return true;
+  await dailyAlarm('presign-day', PRESIGN_DAILY);
+  return false;
 }
 
 function clientIp(req) {
@@ -102,6 +122,7 @@ function clientIp(req) {
 
 module.exports = {
   checkRateLimit, clientIp, countLoginFailure,
-  loginFailKey, loginFailPairKey, loginOkKey, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW,
-  outboundMailLimited, MAIL_OUT_PERSON_DAILY, MAIL_OUT_DAILY, presignLimited, PRESIGN_PER_HOUR, PRESIGN_DAILY,
+  loginFailKey, loginFailPairKey, loginOkKey, loginOkPrefix, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW,
+  outboundMailLimited, MAIL_OUT_PERSON_DAILY, MAIL_OUT_DAILY,
+  presignLimited, PRESIGN_PER_HOUR, PRESIGN_BAND_DAILY, PRESIGN_DAILY,
 };

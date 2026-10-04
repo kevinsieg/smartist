@@ -61,6 +61,32 @@ function migrationIds(src) {
   return [...splitStatements(src).join(';\n').matchAll(re)].map(m => m[1]);
 }
 
+// The statements a database still needs. schema.sql is a base (the tables,
+// ending in the ids folded into it) and dated blocks, each ending in its own
+// schema_migrations insert; a block whose ids are all recorded is left out.
+// Re-running long-applied statements was not free: CREATE INDEX IF NOT EXISTS
+// and ADD COLUMN IF NOT EXISTS take their table lock before they find there
+// is nothing to do. `have` empty (a new database) → every statement.
+function pendingStatements(src, have) {
+  const chunks = [];
+  let cur = { stmts: [], ids: [] };
+  for (const stmt of splitStatements(src)) {
+    const m = /^INSERT INTO schema_migrations \(id\) VALUES \('([^']+)'\)/i.exec(stmt);
+    if (!m && cur.ids.length) { chunks.push(cur); cur = { stmts: [], ids: [] }; }
+    cur.stmts.push(stmt);
+    if (m) cur.ids.push(m[1]);
+  }
+  if (cur.stmts.length) chunks.push(cur);
+  const done = new Set(have);
+  return chunks.filter(c => !c.ids.length || c.ids.some(id => !done.has(id))).flatMap(c => c.stmts);
+}
+
+// Indexes a failed or cancelled CREATE INDEX CONCURRENTLY left behind. IF NOT
+// EXISTS skips them on the next run, so nothing else would notice.
+async function invalidIndexes(sql) {
+  return (await sql(['SELECT indexrelid::regclass::text AS name FROM pg_index WHERE NOT indisvalid'])).map(r => r.name);
+}
+
 async function check(sql, src) {
   const ids = migrationIds(src);
   let have = [];
@@ -119,11 +145,12 @@ function withLockTimeout(stmt) {
   return /\bCONCURRENTLY\b/i.test(stmt) ? null : `SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'; ${stmt}`;
 }
 
-// Runs every statement of schema.sql; "already exists" is not an error. Also
+// Runs every statement of schema.sql, or with `have` (the recorded migration
+// ids) only the blocks still pending; "already exists" is not an error. Also
 // used by setup.js. `sql` is a raw runner from connect() above.
-async function applyStatements(sql, src) {
+async function applyStatements(sql, src, { have } = {}) {
   let applied = 0, skipped = 0;
-  for (const stmt of splitStatements(src)) {
+  for (const stmt of have ? pendingStatements(src, have) : splitStatements(src)) {
     try {
       const timed = sql.simple ? withLockTimeout(stmt) : null;
       if (timed) await sql.simple(timed);
@@ -140,4 +167,4 @@ async function applyStatements(sql, src) {
 
 if (require.main === module) main();
 
-module.exports = { splitStatements, migrationIds, applyStatements, connect, withLockTimeout };
+module.exports = { splitStatements, migrationIds, pendingStatements, invalidIndexes, applyStatements, connect, withLockTimeout };

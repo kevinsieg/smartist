@@ -60,6 +60,11 @@
     var cf  = document.getElementById('pw-confirm').value;
     var msg = document.getElementById('pw-msg');
     msg.className = 'save-msg';
+    // aria-invalid marks the field the message is about (the message is the fields' description).
+    var bad = !cur ? 'pw-current' : !nw ? 'pw-new' : !cf ? 'pw-confirm' : nw.length < 8 ? 'pw-new' : nw !== cf ? 'pw-confirm' : null;
+    ['pw-current', 'pw-new', 'pw-confirm'].forEach(function(id) {
+      document.getElementById(id).setAttribute('aria-invalid', String(id === bad));
+    });
     if (!cur || !nw || !cf) { msg.textContent = t('profile.fillAll');     msg.className = 'save-msg err'; return; }
     if (nw.length < 8)      { msg.textContent = t('profile.minChars');    msg.className = 'save-msg err'; return; }
     if (nw !== cf)          { msg.textContent = t('profile.pwMismatch');  msg.className = 'save-msg err'; return; }

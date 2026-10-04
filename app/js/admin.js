@@ -4,7 +4,7 @@ async function load() {
   const r = await fetch('/api/admin/overview', {
     headers: { Authorization: 'Bearer ' + TOKEN }
   });
-  if (!r.ok) { document.body.textContent = 'Not authorised'; return; }
+  if (!r.ok) { document.querySelector('main').replaceChildren(Object.assign(document.createElement('h1'), { textContent: 'Not authorised' })); return; }
   const { totals, bands } = await r.json();
 
   document.getElementById('totals').textContent =

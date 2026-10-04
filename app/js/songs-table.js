@@ -432,7 +432,7 @@ async function saveAll() {
     for (const data of toInsert) {
       if (!data.title) continue;
       const r = await apiFetch(`/api/${artistSlug}/songs`, 'POST', data);
-      if (!r.ok) throw new Error('insert failed');
+      if (!r.ok) throw await _songCreateError(r);
     }
 
     dirty.clear();
@@ -449,8 +449,8 @@ async function saveAll() {
       setTimeout(() => _setBulkStatus('', ''), 3000);
     }
 
-  } catch {
-    _setBulkStatus('error', t('songs.saveFailed'));
+  } catch (err) {
+    _setBulkStatus('error', err && err.limit ? t('songs.limitReached', { limit: err.limit }) : t('songs.saveFailed'));
   } finally {
     const b = document.getElementById('save-btn');
     if (b) { b.disabled = false; b.textContent = t('songs.save'); }

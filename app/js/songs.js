@@ -119,14 +119,6 @@ function _ensureSongsFooter() {
 
 async function loadAndRender(viewMode) {
   try {
-    if (!artistSlug) {
-      // Try to read slug synchronously from session cache so songs fetch
-      // can start in parallel with the config network request.
-      try {
-        const _c = JSON.parse(sessionStorage.getItem('artist_config_cache'));
-        if (_c?.slug) artistSlug = _c.slug;
-      } catch {}
-    }
     const cfgPromise = getConfig();
     const songsPromise = artistSlug ? fetchSongsList(true) : null;
     const cfg = await cfgPromise;
@@ -389,7 +381,7 @@ function _renderSongsListView() {
         title: t('songs.bulkEdit'),
         onClick: toggleBulkEdit,
         desktopOnly: true },
-      { label: t('songs.share'), icon: SHARE_ICON, title: t('songs.share'), onClick: _songsShareMenu },
+      { label: t('songs.share'), icon: SHARE_ICON, title: t('songs.share'), popup: true, onClick: _songsShareMenu },
     ],
     getData:   _getSongsForFactory,
     getTotal:  function() { return getToken() ? songs.length : _songsTotal; },
@@ -642,6 +634,15 @@ function renderLogs(logs) {
   el.innerHTML = `<div class="logs-wrap"><h2 class="logs-heading">${t('songs.changeLog')}</h2>${items}</div>`;
 }
 
+// A failed song create as an Error; `limit` is set when the plan's song limit
+// refused it, so the caller can say that instead of "try again".
+async function _songCreateError(r) {
+  const d = await r.json().catch(() => ({}));
+  const err = new Error(d.error || 'create failed');
+  if (d.error === 'song_limit') err.limit = d.limit;
+  return err;
+}
+
 async function restoreSong(songId) {
   if (!getToken()) return;
   let r;
@@ -651,7 +652,8 @@ async function restoreSong(songId) {
     invalidateConfigCache();
     await loadAndRender();
   } else {
-    _setBulkStatus('error', t('songs.couldNotRestore'));
+    const d = await r.json().catch(() => ({}));
+    _setBulkStatus('error', d.error === 'song_limit' ? t('songs.limitReached', { limit: d.limit }) : t('songs.couldNotRestore'));
   }
 }
 
