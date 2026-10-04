@@ -3,14 +3,16 @@
 
 // Tell screen readers about a change that has no visible focus of its own
 // (a song moved, a row removed). One polite live region per page.
-function announce(msg) {
-  var live = document.getElementById('app-live');
+// Errors go to a second, assertive region so they interrupt.
+function announce(msg, urgent) {
+  var id = urgent ? 'app-live-alert' : 'app-live';
+  var live = document.getElementById(id);
   if (!live) {
     live = document.createElement('div');
-    live.id = 'app-live';
+    live.id = id;
     live.className = 'sr-only';
-    live.setAttribute('role', 'status');
-    live.setAttribute('aria-live', 'polite');
+    live.setAttribute('role', urgent ? 'alert' : 'status');
+    live.setAttribute('aria-live', urgent ? 'assertive' : 'polite');
     document.body.appendChild(live);
   }
   // Clearing first makes the same text announced twice in a row.
@@ -207,6 +209,7 @@ function setStatus(elementId, msg, isError = false) {
   if (!el) return;
   el.textContent = msg;
   el.className = 'status-msg' + (isError ? ' error' : '');
+  if (msg) announce(msg, isError);
 }
 
 // Generic modal open/close by element ID.
@@ -657,10 +660,48 @@ if (typeof document !== 'undefined' && !window._rowKeysInit) {
   document.addEventListener('keydown', function(e) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     var row = e.target;
-    if (!row || !row.matches || !row.matches('[data-id][tabindex="0"]')) return;
+    // Rows, and non-button elements marked up as buttons (drop zones, cards).
+    if (!row || !row.matches || !row.matches('[data-id][tabindex="0"], [role="button"][tabindex="0"]:not(button)')) return;
     e.preventDefault();
     row.click();
   });
+}
+
+// ── Popup menus (account, share) ──────────────────────────────────────────────
+// A menu of <button>s opened from a toggle: the toggle reports aria-expanded,
+// focus moves to the first item, ↑/↓ move between items, Escape or Tab away
+// closes it, and Escape gives focus back to the toggle.
+function wirePopupMenu(btn, menu) {
+  var items = function() { return [].slice.call(menu.querySelectorAll('button:not([disabled])')); };
+  btn.setAttribute('aria-haspopup', 'true');
+  btn.setAttribute('aria-expanded', 'true');
+  function close(refocus) {
+    if (!menu.isConnected) return;
+    menu.remove();
+    btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', onDocClick);
+    if (refocus) btn.focus();
+  }
+  function onDocClick(e) { if (!menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) close(false); }
+  menu.addEventListener('keydown', function(e) {
+    var list = items(), i = list.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); (list[i + 1] || list[0]).focus(); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); (list[i - 1] || list[list.length - 1]).focus(); }
+  });
+  menu.addEventListener('focusout', function(e) {
+    if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget !== btn) close(false);
+  });
+  // Choosing an item closes the menu (items may close it themselves first).
+  menu.addEventListener('click', function(e) {
+    var b = e.target.closest('button');
+    if (b && !b.hasAttribute('data-keep-open')) setTimeout(function() { close(false); }, 0);
+  });
+  menu._close = close;
+  setTimeout(function() { document.addEventListener('click', onDocClick); }, 0);
+  var first = items()[0];
+  if (first) first.focus();
+  return close;
 }
 
 // ── Dialog behaviour for every .modal-overlay ─────────────────────────────────
@@ -676,8 +717,12 @@ function _modalFocusables(dialog) {
   function(el) { return el.offsetParent !== null || el.getClientRects().length > 0; });
 }
 
+function _dialogOf(overlay) {
+  return overlay.querySelector('.modal, .arr-modal') || overlay;
+}
+
 function _onModalOpen(overlay) {
-  var dialog = overlay.querySelector('.modal') || overlay;
+  var dialog = _dialogOf(overlay);
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
   if (!dialog.hasAttribute('aria-labelledby') && !dialog.hasAttribute('aria-label')) {
@@ -707,8 +752,11 @@ function _onModalClose(overlay) {
   if (opener && opener.isConnected && (!active || active === document.body || overlay.contains(active))) opener.focus();
 }
 
+// The arrangement editor has its own overlay class but behaves the same.
+var _MODAL_CLASSES = ['modal-overlay', 'arr-modal-overlay'];
+
 function _topModal() {
-  var open = document.querySelectorAll('.modal-overlay.open');
+  var open = document.querySelectorAll('.modal-overlay.open, .arr-modal-overlay.open');
   return open.length ? open[open.length - 1] : null;
 }
 
@@ -717,7 +765,7 @@ if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined' &
   new MutationObserver(function(muts) {
     muts.forEach(function(m) {
       var el = m.target;
-      if (!el.classList || !el.classList.contains('modal-overlay')) return;
+      if (!el.classList || !_MODAL_CLASSES.some(function(c) { return el.classList.contains(c); })) return;
       var isOpen = el.classList.contains('open');
       var wasOpen = (' ' + (m.oldValue || '') + ' ').indexOf(' open ') >= 0;
       if (isOpen && !wasOpen) _onModalOpen(el);
@@ -735,7 +783,7 @@ if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined' &
       return;
     }
     if (e.key !== 'Tab') return;
-    var items = _modalFocusables(overlay.querySelector('.modal') || overlay);
+    var items = _modalFocusables(_dialogOf(overlay));
     if (!items.length) return;
     var first = items[0], last = items[items.length - 1];
     if (!overlay.contains(document.activeElement)) { e.preventDefault(); first.focus(); }

@@ -571,33 +571,26 @@ async function exportCsv() {
 // Share menu on the toolbar — same popover pattern as setlist history.
 function _songsShareMenu(btn) {
   var existing = document.getElementById('share-menu-popup');
-  if (existing) { existing.remove(); return; }
+  if (existing) { closeShareMenu(); return; }
 
   var menu = document.createElement('div');
   menu.id = 'share-menu-popup';
   menu.className = 'share-menu';
   menu.innerHTML =
-    '<div class="share-menu-item" data-onclick="exportCsv();closeShareMenu()">' +
-      '<span class="share-menu-icon">&#10515;</span><span class="share-menu-label">' + t('songs.exportCsv') + '</span>' +
-    '</div>' +
+    '<button type="button" class="share-menu-item" data-onclick="exportCsv();closeShareMenu()">' +
+      '<span class="share-menu-icon" aria-hidden="true">&#10515;</span><span class="share-menu-label">' + t('songs.exportCsv') + '</span>' +
+    '</button>' +
     (getAuthRole() === 'viewer' ? '' :
-    '<div class="share-menu-item" data-onclick="closeShareMenu();navigate(\'/song-import\')">' +
-      '<span class="share-menu-icon">&#10514;</span><span class="share-menu-label">' + t('songs.importCsv') + '</span>' +
-    '</div>');
+    '<button type="button" class="share-menu-item" data-onclick="closeShareMenu();navigate(\'/song-import\')">' +
+      '<span class="share-menu-icon" aria-hidden="true">&#10514;</span><span class="share-menu-label">' + t('songs.importCsv') + '</span>' +
+    '</button>');
 
   var rect = btn.getBoundingClientRect();
   menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;left:' + rect.left + 'px';
   document.body.appendChild(menu);
   var overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
   if (overflow > 0) menu.style.left = Math.max(8, rect.left - overflow) + 'px';
-
-  function closeMenu(e) {
-    if (!menu.contains(e.target) && e.target !== btn) {
-      menu.remove();
-      document.removeEventListener('click', closeMenu);
-    }
-  }
-  setTimeout(function() { document.addEventListener('click', closeMenu); }, 0);
+  wirePopupMenu(btn, menu);
 }
 
 // --- Logs ---
@@ -775,8 +768,9 @@ function _setAudioSpeed(btn, rate) {
   var wrap = btn.closest('.vsp-audio-block, .audio-speed-wrap, .song-stage-rec');
   var audio = wrap && wrap.querySelector('audio');
   if (audio) audio.playbackRate = rate;
-  btn.parentNode.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+  btn.parentNode.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
   btn.classList.add('active');
+  btn.setAttribute('aria-pressed', 'true');
 }
 
 init();

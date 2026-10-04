@@ -400,6 +400,8 @@ function createListView(opts) {
     });
   }
 
+  var _panelOpener = null;
+
   function _openPanel(id) {
     id = String(id);
 
@@ -424,6 +426,11 @@ function createListView(opts) {
     var inner = document.getElementById('view-side-panel-inner');
     if (!panel || !inner) return;
 
+    // Opened from the list (click or Enter on a row): focus follows into the
+    // panel, which covers the list on phones, and returns to the row on close.
+    var fromList = opts.container.contains(document.activeElement);
+    if (fromList) _panelOpener = id;
+
     // Loading placeholder while onOpen runs
     inner.innerHTML = skeletonHtml(4);
     panel.classList.add('open');
@@ -437,6 +444,11 @@ function createListView(opts) {
           if (_selectedId === id) {
             inner.innerHTML = '<p style="color:var(--third-color);padding:1rem;">' + t('list.couldNotLoadDetails') + '</p>';
           }
+        }).then(function() {
+          if (!fromList || _selectedId !== id) return;
+          var h = inner.querySelector('h2, h3') || inner;
+          h.setAttribute('tabindex', '-1');
+          h.focus();
         });
       }
     }
@@ -444,6 +456,9 @@ function createListView(opts) {
 
   function _closePanel() {
     var panel = document.getElementById('view-side-panel');
+    var refocus = _panelOpener && panel &&
+      (panel.contains(document.activeElement) || document.activeElement === document.body);
+    var openerRow = refocus && opts.container.querySelector('[data-id="' + _panelOpener + '"][tabindex]');
     if (panel) panel.classList.remove('open');
     opts.container.classList.remove('side-panel-open');
     document.body.style.overflow = '';
@@ -453,6 +468,8 @@ function createListView(opts) {
 
     _selectedId = null;
     if (opts.onClose) opts.onClose();
+    if (openerRow) openerRow.focus();
+    _panelOpener = null;
   }
 
   function _setFilterValue(id, v) {
@@ -491,8 +508,13 @@ function createListView(opts) {
   _wireBodyEvents();
   _runPipeline();
 
-  opts.container.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && _selectedId) _closePanel();
+  // Escape closes the panel from the list or from inside the panel (unless a
+  // dialog on top of it took the key first).
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' || !_selectedId || e.defaultPrevented) return;
+    var panel = document.getElementById('view-side-panel');
+    if (!opts.container.isConnected) return;
+    if (opts.container.contains(e.target) || (panel && panel.contains(e.target))) _closePanel();
   });
 
   return _public;

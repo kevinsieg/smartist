@@ -314,4 +314,4 @@ if (typeof document !== 'undefined' && !window._onDispatch) {
 // Small actions markup needs that are not a call to one app function.
 function clickById(id) { var el = document.getElementById(id); if (el) el.click(); }
 function removeParent(el) { if (el && el.parentElement) el.parentElement.remove(); }
-function closeShareMenu() { var m = document.getElementById('share-menu-popup'); if (m) m.remove(); }
+function closeShareMenu() { var m = document.getElementById('share-menu-popup'); if (m) { if (m._close) m._close(m.contains(document.activeElement)); else m.remove(); } }

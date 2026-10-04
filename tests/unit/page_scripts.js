@@ -157,9 +157,9 @@ function run(r) {
 
       // arrangement.js is shared between the songs page (which has all the
       // shared scripts) and stage (core.js only). Its editing paths — the only callers of
-      // apiFetch/setStatus — are unreachable on the read-only stage view, as its
-      // own header states. Anything else it reaches for is a real bug.
-      const KNOWN_UNREACHABLE = { 'arrangement': new Set(['apiFetch', 'setStatus']) };
+      // apiFetch/setStatus/announce/registerModal — are unreachable on the read-only
+      // stage view, as its own header states. Anything else it reaches for is a real bug.
+      const KNOWN_UNREACHABLE = { 'arrangement': new Set(['apiFetch', 'setStatus', 'announce', 'registerModal']) };
 
       sources.forEach(({ name, src }) => {
         commonFns.forEach(fn => {
