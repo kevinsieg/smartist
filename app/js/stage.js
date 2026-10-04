@@ -169,8 +169,12 @@ async function init() {
     // lets /api/config fall back to the deployment's ARTIST_SLUG.
     const _stageSeg  = window.location.pathname.split('/').filter(Boolean)[0] || '';
     const _stageSlug = _stageSeg === 'stage' ? '' : _stageSeg;
-    var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default');
-    const cfgFetch = fetch('/api/config' + (_stageSlug ? '?slug=' + encodeURIComponent(_stageSlug) : ''),
+    // Light config: stage needs the band's name and settings, never its song
+    // list (the setlist and song requests bring their own songs). Same cache
+    // key as loadConfig(…, { light: true }), signed-out answers apart (_anon).
+    var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default') + '_light' +
+      (_stageToken() ? '' : '_anon');
+    const cfgFetch = fetch('/api/config?light=1' + (_stageSlug ? '&slug=' + encodeURIComponent(_stageSlug) : ''),
       { headers: _stageAuthHeaders() }
     ).then(r => { if (!r.ok) throw new Error(); return r.json(); });
     var cfg;
@@ -269,16 +273,9 @@ async function initSong(params, el, cfg) {
       : Promise.resolve(null),
   ]);
 
-  // Fetch active arrangement if one exists
-  var activeArr   = null;
+  // The active arrangement comes with the song's details.
+  var activeArr   = song.active_arrangement || null;
   var arrConfig   = (cfg.config && cfg.config.arrangementConfig) || null;
-  var activeArrMeta = (song.arrangements || []).find(function(a) { return a.is_active; });
-  if (activeArrMeta) {
-    try {
-      var arrVersions = await fetch('/api/' + cfg.slug + '/songs/' + songId + '/arrangements', { headers: _stageAuthHeaders() }).then(function(r) { if (!r.ok) throw new Error(); return r.json(); });
-      activeArr = Array.isArray(arrVersions) ? arrVersions.find(function(v) { return v.is_active; }) || null : null;
-    } catch (_) {}
-  }
   window._stageActiveArr = activeArr;
   window._stageArrConfig = arrConfig;
 

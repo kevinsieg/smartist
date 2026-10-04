@@ -1,4 +1,5 @@
 const postgres = require('postgres');
+const { SONG_LOG_KEEP } = require('./_constants');
 
 // ── Database provider ─────────────────────────────────────────────────────────
 // Current: postgres.js (standard PostgreSQL wire protocol, supports transactions)
@@ -67,12 +68,13 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
 }
 
 // Each entry is a full snapshot of the song, so the history would grow with
-// every edit forever. A song keeps its newest SONG_LOG_KEEP entries: the last
-// one is what restore reads, and the list shows 20 at most. Only the songs a
-// write touched are trimmed, on every write: song_logs_song_id_idx finds their
-// rows, so the cost does not grow with the band. A failed trim never fails the
-// request.
-const SONG_LOG_KEEP = 20;
+// every edit forever. A song keeps its newest SONG_LOG_KEEP entries
+// (api/_constants.js): the last one is what restore reads, and the list shows
+// 20 at most. Only the songs a write touched are trimmed, on every write:
+// song_logs_song_id_idx finds their rows, so the cost does not grow with the
+// band. The song edits do it inside their own statement (a `trimmed` CTE);
+// this is for the writes that log separately (media). Takes one song id or a
+// list. A failed trim never fails the request.
 async function trimSongLogs(sql, artistId, songIds) {
   const ids = (Array.isArray(songIds) ? songIds : [songIds]).map(Number).filter(n => Number.isInteger(n) && n > 0);
   if (!ids.length) return;

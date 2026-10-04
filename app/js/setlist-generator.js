@@ -878,6 +878,7 @@ document.getElementById('accept-modal').addEventListener('click', e => {
 // --- PDF export ---
 
 async function printSetlist() {
-  var cfg = await loadConfig();
+  // The header needs the band's name, logo and field settings, not its songs.
+  var cfg = await loadConfig(undefined, { light: true });
   printSetlistSongs(currentSet, '', cfg, { headings: _groupByTagOn() ? tagGroupStarts(currentSet) : null });
 }

@@ -37,7 +37,12 @@ function wrap(handler) {
     const { method, url } = req;
     const requestId = crypto.randomUUID().slice(0, 8);
     const inContext = logger.withContext || ((_ctx, fn) => fn());
-    if (typeof res.setHeader === 'function') res.setHeader('X-Request-Id', requestId);
+    if (typeof res.setHeader === 'function') {
+      res.setHeader('X-Request-Id', requestId);
+      // Anonymous reads of a public band are CDN-cached (s-maxage) under the
+      // same URL a member's request uses; the answer depends on the session.
+      res.setHeader('Vary', 'Authorization');
+    }
 
     let failed = false;
     let ending = null;

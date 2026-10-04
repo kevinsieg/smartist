@@ -20,7 +20,6 @@ function _gigTypeLabel(type) {
 }
 
 var _gigFilters = { gig: '', venue: '', setlist: '', song: '' };
-var _gigAllSetlists = [];
 var _gigSongTimer = null;
 var _gigSongMatchGigIds = null;  // null = no filter; Set<gigId>
 var cfg = null;
@@ -200,7 +199,7 @@ var GIG_COLUMNS = [
     var vm = isViewMode();
     if (g.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>' +
       (vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.permanentlyDeleteTitle') + '" style="color:#e55;" data-onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">' + t('gigs.eraseBtn') + '</button>');
-    var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
+    var hasSetlist = (g.setlist_titles || []).length > 0;
     var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="' + t('gigs.viewSetlistsTitle') + '" data-onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
@@ -304,8 +303,8 @@ initPage(async function(config) {
     emptyHint:       t('gigs.noPastGigs'),
   });
 
-  // The setlists for the cross-entity filter load alongside the gigs.
-  var _setsPromise = apiFetch('/api/' + artistSlug + '/setlists').catch(function() { return null; });
+  // Each gig row carries its setlists' titles (setlist_titles) for the
+  // "has setlist" button and the setlist filter.
   await loadGigs();
 
   // Re-insert year dividers after sort bar re-renders the past list
@@ -315,13 +314,6 @@ initPage(async function(config) {
       if (e.target.closest('.sort-btn')) setTimeout(function() { _insertYearDividers('past-list'); }, 0);
     });
   }
-
-  // Fetch setlists for cross-entity filter
-  try {
-    var setsRes = await _setsPromise;
-    _gigAllSetlists = await setsRes.json();
-    if (!Array.isArray(_gigAllSetlists)) _gigAllSetlists = [];
-  } catch { _gigAllSetlists = []; }
 
   // Filter toggle
   var _filterPanelOpen = false;
@@ -410,9 +402,9 @@ function _applyGigsFilter() {
   var visible = allGigs.filter(function(g) {
     if (f.gig      && !(g.title          || '').toLowerCase().includes(f.gig))      return false;
     if (f.venue    && !(g.venue_name     || '').toLowerCase().includes(f.venue))    return false;
-if (f.setlist) {
-      var hasSet = _gigAllSetlists.some(function(s) {
-        return s.gig_id === g.id && (s.name || '').toLowerCase().includes(f.setlist);
+    if (f.setlist) {
+      var hasSet = (g.setlist_titles || []).some(function(title) {
+        return (title || '').toLowerCase().includes(f.setlist);
       });
       if (!hasSet) return false;
     }
