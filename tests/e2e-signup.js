@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// End-to-end signup flow test — runs against a live server (vercel dev or a
+// End-to-end signup flow test — runs against a live server (npm run dev:up or a
 // deployed preview) plus direct DB access to plant the signup token (the real
 // flow delivers it by email, which a test can't intercept).
 //
@@ -8,7 +8,7 @@
 // REJECTED on a foreign workspace (cross-tenant regression) → cleanup.
 //
 // Usage:
-//   node tests/e2e-signup.js                  # needs vercel dev on :3000 + DATABASE_URL
+//   node tests/e2e-signup.js                  # needs the app on :3000 + DATABASE_URL
 //   BASE_URL=https://preview.url node tests/e2e-signup.js
 
 const fs   = require('fs');
@@ -72,10 +72,10 @@ async function main() {
     const rawToken = await createSignupToken(email, sql);
 
     await test('verify-signup-token: valid token → 200 + email', async () => {
-      const r = await fetch(`${BASE_URL}/api/config`, {
+      const r = await fetch(`${BASE_URL}/api/signup/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify-signup-token', token: rawToken }),
+        body: JSON.stringify({ token: rawToken }),
       });
       assert(r.status === 200, `expected 200, got ${r.status}`);
       const d = await r.json();
@@ -83,28 +83,28 @@ async function main() {
     });
 
     await test('verify-signup-token: garbage token → 400', async () => {
-      const r = await fetch(`${BASE_URL}/api/config`, {
+      const r = await fetch(`${BASE_URL}/api/signup/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify-signup-token', token: 'deadbeef'.repeat(8) }),
+        body: JSON.stringify({ token: 'deadbeef'.repeat(8) }),
       });
       assert(r.status === 400, `expected 400, got ${r.status}`);
     });
 
     await test('signup: invalid slug → 400', async () => {
-      const r = await fetch(`${BASE_URL}/api/config`, {
+      const r = await fetch(`${BASE_URL}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'signup', token: rawToken, name: 'E2E Band', slug: 'NO SPACES!!' }),
+        body: JSON.stringify({ token: rawToken, name: 'E2E Band', slug: 'NO SPACES!!' }),
       });
       assert(r.status === 400, `expected 400, got ${r.status}`);
     });
 
     await test('signup: valid → 201 + session token + slug', async () => {
-      const r = await fetch(`${BASE_URL}/api/config`, {
+      const r = await fetch(`${BASE_URL}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'signup', token: rawToken, name: 'E2E Band', slug }),
+        body: JSON.stringify({ token: rawToken, name: 'E2E Band', slug }),
       });
       const text = await r.text();
       assert(r.status === 201, `expected 201, got ${r.status}: ${text}`);
@@ -116,10 +116,10 @@ async function main() {
     });
 
     await test('signup token is single-use → second signup 400/409', async () => {
-      const r = await fetch(`${BASE_URL}/api/config`, {
+      const r = await fetch(`${BASE_URL}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'signup', token: rawToken, name: 'E2E Band 2', slug: `${slug}-2` }),
+        body: JSON.stringify({ token: rawToken, name: 'E2E Band 2', slug: `${slug}-2` }),
       });
       assert(r.status === 400 || r.status === 409, `expected 400/409, got ${r.status}`);
     });
@@ -132,7 +132,7 @@ async function main() {
     });
 
     await test('my-artists lists the new workspace', async () => {
-      const r = await fetch(`${BASE_URL}/api/config?action=my-artists`, {
+      const r = await fetch(`${BASE_URL}/api/auth/artists`, {
         headers: { Authorization: `Bearer ${sessionToken}` },
       });
       assert(r.status === 200, `expected 200, got ${r.status}`);

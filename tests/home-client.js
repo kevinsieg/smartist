@@ -72,8 +72,9 @@ function makeContext(fetchImpl) {
     const res = await ctx.verifySession('tok-123');
     assertEq(res.ok, true);
     assertEq(res.artists.length, 1);
-    assert(request.url.indexOf('action=my-artists') !== -1, 'must call the my-artists endpoint, got ' + request.url);
-    assert(request.url.indexOf('/auth') === -1, 'must NOT post the token to the password/auth endpoint');
+    assert(request.url.indexOf('/api/auth/artists') !== -1, 'must call the my-artists endpoint, got ' + request.url);
+    assert(request.url.indexOf('/api/login') === -1 && (request.opts.method || 'GET') === 'GET',
+      'must NOT post the token to the password endpoint');
     assertEq(request.opts.headers.Authorization, 'Bearer tok-123');
   });
 

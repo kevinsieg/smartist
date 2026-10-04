@@ -229,7 +229,6 @@ var filters = { text: '', active: true, heart: false, lead: '', genre: '', inter
 
 var _setlistFilterIds   = null;   // null = no filter; Set<songId>
 var _setlistFilterOrder = [];     // song IDs in setlist position order
-var _setlistFilterTimer = null;
 var _allSetlistsMeta    = null;   // [{id, name}] fetched once on demand
 var _songsView          = null;
 

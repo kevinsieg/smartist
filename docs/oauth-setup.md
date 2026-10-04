@@ -11,7 +11,7 @@ its variables are set; `GET /api/config` then reports `googleLogin` /
 
 | | Value | Where it comes from |
 |---|---|---|
-| Redirect URI | `<APP_ORIGIN>/auth/callback` | `callbackUri()` in `api/_domain/oauth.js`; `/auth/callback` is rewritten to `/api/config?action=oauth-callback` in `vercel.json` |
+| Redirect URI | `<APP_ORIGIN>/auth/callback` | `callbackUri()` in `api/_domain/oauth.js`; `/auth/callback` is rewritten to the API function in `vercel.json` and routed to `oauthCallback` by `api/index.js` |
 | Google scopes | `openid email` | `googleUrl()` in `api/_domain/oauth.js` |
 | Facebook scope | `email` (with `auth_type=rerequest`) | `facebookUrl()` in `api/_domain/oauth.js` |
 | Env vars | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, optionally `FACEBOOK_TRUST_EMAIL` | `api/_domain/identity.js`, `api/_domain/oauth.js` |
@@ -111,7 +111,7 @@ and App Review, and an app cannot switch back) and the Business Mapping API.
 - A successful sign-in never puts the session in the URL. The callback sets it
   in a two-minute `oauth_session` cookie (HttpOnly, SameSite=Strict, path
   `/api`) and redirects to `/login#oauth=1`; the login page redeems the cookie
-  once with `POST /api/config` `{action:"oauth-session"}`. A sign-in URL is
+  once with `POST /api/auth/oauth-session`. A sign-in URL is
   therefore worthless to anyone it is sent to.
 
 ---

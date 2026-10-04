@@ -16,7 +16,7 @@ async function superAdminDenied(headers, sql) {
   return null;
 }
 
-// POST ?action=admin-set-plan — super-admin flips any band's plan.
+// POST /api/admin/set-plan — super-admin flips any band's plan.
 async function setPlan({ headers, body }) {
   const sql = getDb();
   const denied = await superAdminDenied(headers, sql);
@@ -30,7 +30,7 @@ async function setPlan({ headers, body }) {
   return ok({ ok: true });
 }
 
-// GET ?action=admin-overview — global band list + usage totals (super-admin).
+// GET /api/admin/overview — global band list + usage totals (super-admin).
 async function overview({ headers }) {
   const sql = getDb();
   const denied = await superAdminDenied(headers, sql);
@@ -52,4 +52,4 @@ async function overview({ headers }) {
   return ok({ totals, bands });
 }
 
-module.exports = { superAdminDenied, setPlan, overview };
+module.exports = { setPlan, overview };

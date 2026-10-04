@@ -431,6 +431,6 @@ async function songImport(sql, artistId, input, { maxSongs = null } = {}) {
 }
 
 module.exports = {
-  COLUMNS, cleanCell, MAX_ROWS, parseCsvText, parseSongCsv, checkCell, checkRows, titleKey,
+  COLUMNS, cleanCell, MAX_ROWS, parseCsvText, parseSongCsv, checkRows,
   normKey, normLength, songImport,
 };

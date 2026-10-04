@@ -18,8 +18,8 @@
 // not — stop using it in one release, drop it in a later one
 // (tests/unit/schema_drops.js).
 //
-// Only runs inside a Vercel build: anywhere else (a local or CI npm install,
-// vercel dev) it does nothing. Locally use apply_schema.js, which asks.
+// Only runs inside a Vercel build: anywhere else (a local or CI npm install)
+// it does nothing. Locally use apply_schema.js, which asks.
 
 const fs = require('fs');
 const path = require('path');

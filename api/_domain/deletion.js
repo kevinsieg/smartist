@@ -216,4 +216,4 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
   return { ok: true, found: true, destroyed: plan.destroy.map(a => a.slug), left: plan.leave.map(a => a.slug) };
 }
 
-module.exports = { planDeletion, collectR2Urls, executeDeletion, removeFiles };
+module.exports = { planDeletion, collectR2Urls, executeDeletion };

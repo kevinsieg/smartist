@@ -42,7 +42,7 @@ function _seed(row) {
   return row.password_hash || passwordlessSeed(row.id);
 }
 
-// POST ?action=request-reset
+// POST /api/auth/request-reset
 async function requestReset({ body, ip, origin }) {
   const addr = String(body.email ?? '').trim().toLowerCase();
   // Always the same answer, with or without an account — otherwise this endpoint
@@ -80,7 +80,7 @@ async function requestReset({ body, ip, origin }) {
   return ok({ ok: true });
 }
 
-// POST ?action=set-password
+// POST /api/auth/set-password
 async function setPassword({ body }) {
   const { token, hint, password } = body;
   if (!token || !hint || !password)   return fail(400, 'token, hint and password required');

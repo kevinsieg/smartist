@@ -93,4 +93,4 @@ async function verifyUpload(key) {
   }
 }
 
-module.exports = { getR2Client, keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload };
+module.exports = { keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload };

@@ -37,7 +37,7 @@ function readNonceCookie(headers) {
   return m ? m[1] : null;
 }
 
-// GET ?action=google-url — start Google OAuth flow.
+// GET /api/auth/google-url — start Google OAuth flow.
 async function googleUrl({ query, origin }) {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
     return fail(503, 'Google login is not configured');
@@ -54,7 +54,7 @@ async function googleUrl({ query, origin }) {
   return { ...ok({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` }), headers: { 'Set-Cookie': header } };
 }
 
-// GET ?action=facebook-url — start Facebook OAuth flow.
+// GET /api/auth/facebook-url — start Facebook OAuth flow.
 async function facebookUrl({ query, origin }) {
   if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET)
     return fail(503, 'Facebook login is not configured');
@@ -76,8 +76,8 @@ async function facebookUrl({ query, origin }) {
   return { ...ok({ url: `https://www.facebook.com/${FB_GRAPH_VERSION}/dialog/oauth?${params}` }), headers: { 'Set-Cookie': header } };
 }
 
-// GET ?action=oauth-callback — OAuth provider redirects here (routed from
-// /auth/callback via vercel.json rewrite). Validates state, exchanges code for
+// GET /auth/callback — OAuth provider redirects here (routed to the function
+// by the vercel.json rewrite). Validates state, exchanges code for
 // email, and on success sets the oauth_session cookie and redirects to
 // /login#oauth=1, where home.js redeems the cookie (oauthSession below) and
 // verifies the token against the slug-independent my-artists endpoint.
@@ -177,7 +177,7 @@ async function oauthCallback({ query, headers, ip, origin }) {
   return redirect(`${o}/login#oauth=1&hint=${hint}&next=${encodeURIComponent(next)}`);
 }
 
-// POST action=oauth-session — hands the login page the session the callback
+// POST /api/auth/oauth-session — hands the login page the session the callback
 // left in its cookie, once. SameSite=Strict keeps the cookie off requests other
 // sites start, and only a script on this origin can read the answer.
 async function oauthSession({ headers }) {

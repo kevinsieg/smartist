@@ -21,7 +21,7 @@ async function _sessionEmail(headers, sql) {
   return row && sessionValid(claim, row) ? String(row.email).toLowerCase() : null;
 }
 
-// GET ?action=deletion-preflight — what would happen, in the person's own words.
+// GET /api/auth/deletion-preflight — what would happen, in the person's own words.
 async function preflight({ headers }) {
   const sql   = getDb();
   const email = await _sessionEmail(headers, sql);
@@ -35,7 +35,7 @@ async function preflight({ headers }) {
   });
 }
 
-// POST ?action=request-deletion — store a hash, email the link.
+// POST /api/auth/request-deletion — store a hash, email the link.
 async function requestDeletion({ headers, origin }) {
   const sql   = getDb();
   const email = await _sessionEmail(headers, sql);
@@ -97,7 +97,7 @@ async function requestDeletion({ headers, origin }) {
   return ok({ ok: true });
 }
 
-// POST ?action=confirm-deletion — the link. Authenticated by the token alone,
+// POST /api/auth/confirm-deletion — the link. Authenticated by the token alone,
 // because it may well be opened in a different browser from the one that asked.
 //
 // Two-phase, exactly like auth.js's confirm-email-change: without `confirm:true`

@@ -72,9 +72,8 @@ function mockRes() {
   return res;
 }
 
-// The rewrite /api/login → /api/config?action=login delivers the action in the
-// QUERY. Exercising only the body shape is exactly what let a rewritten login
-// fall through to the subscribe handler in production.
+// The route table turns /api/login into action 'login' in the QUERY; an action
+// in the body is not read at all.
 async function call(handler, body, { via = 'query' } = {}) {
   const res = mockRes();
   const req = via === 'query'
@@ -198,10 +197,11 @@ async function run(r) {
   });
 
 
-  await testAsync('the action is honoured in the body too, as the app sends it', async () => {
-    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+  await testAsync('an action in the body is ignored: actions are URL paths', async () => {
+    const { handler, queries } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
     const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' }, { via: 'body' });
-    assertEq(res._status, 200);
+    assertEq(res._status, 404);
+    assertEq(queries.length, 0);
   });
 
   await testAsync('a rewritten login never reaches another action', async () => {
@@ -220,7 +220,7 @@ async function run(r) {
   const hint = addr => Buffer.from(addr).toString('base64url');
   async function magic(handler, body) {
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'magic-login', ...body }, headers: {}, query: {} }, res);
+    await handler({ method: 'POST', body, headers: {}, query: { action: 'magic-login' } }, res);
     return res;
   }
 
@@ -268,8 +268,8 @@ async function run(r) {
   const { generateUserToken, TTL_8H } = require('../../api/_token');
   async function logoutAll(handler, token) {
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'logout-everywhere' },
-      headers: token ? { authorization: `Bearer ${token}` } : {}, query: {} }, res);
+    await handler({ method: 'POST', body: {}, query: { action: 'logout-everywhere' },
+      headers: token ? { authorization: `Bearer ${token}` } : {} }, res);
     return res;
   }
 

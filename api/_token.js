@@ -128,5 +128,5 @@ function sessionValid(claim, row) {
 
 module.exports = {
   generateMagicToken, verifyMagicToken, demoSeed, passwordlessSeed, generateUserToken, verifyUserToken,
-  passwordFingerprint, sessionValid, TTL_8H, TTL_30D,
+  sessionValid, TTL_8H, TTL_30D,
 };

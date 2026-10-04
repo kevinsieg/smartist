@@ -119,10 +119,10 @@ async function init() {
 // The session token the OAuth callback set as a cookie, or null.
 async function _redeemOAuthSession() {
   try {
-    const r = await fetch('/api/config', {
+    const r = await fetch('/api/auth/oauth-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'oauth-session' }),
+      body: '{}',
     });
     if (!r.ok) return null;
     return (await r.json()).token || null;
@@ -133,10 +133,10 @@ async function _redeemOAuthSession() {
 async function verifyToken(token, hint) {
   if (!hint) return { ok: false, artists: [] };
   try {
-    const r = await fetch('/api/config', {
+    const r = await fetch('/api/auth/magic-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'magic-login', magic: token, hint }),
+      body: JSON.stringify({ magic: token, hint }),
     });
     if (!r.ok) return { ok: false, artists: [] };
     const data = await r.json();
@@ -153,7 +153,7 @@ async function verifyToken(token, hint) {
 // silently log the user out — defeating "Remember me".
 async function verifySession(token) {
   try {
-    const r = await fetch('/api/config?action=my-artists', {
+    const r = await fetch('/api/auth/artists', {
       headers: { Authorization: 'Bearer ' + token },
     });
     if (!r.ok) return { ok: false, artists: [] };
@@ -315,10 +315,10 @@ async function doSetPassword(token, hint, cfg) {
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   const restore = () => { btn.disabled = false; btn.textContent = t('home.savePassword'); };
   try {
-    const r    = await fetch('/api/config', {
+    const r    = await fetch('/api/auth/set-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'set-password', token, hint, password: pw }),
+      body: JSON.stringify({ token, hint, password: pw }),
     });
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); restore(); return; }
@@ -392,7 +392,7 @@ async function startOAuth(provider) {
   const btn = document.getElementById(`${provider}-btn`);
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const r    = await fetch(`/api/config?action=${provider}-url`);
+    const r    = await fetch(`/api/auth/${provider}-url`);
     const data = await r.json();
     if (data.url) {
       window.location.href = data.url;
@@ -416,10 +416,10 @@ async function doRequestReset() {
   btn.disabled = true; btn.textContent = '…'; msg.textContent = '';
   try {
     // The account is found by address, whichever band this page shows.
-    await fetch('/api/config', {
+    await fetch('/api/auth/request-reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'request-reset', email }),
+      body: JSON.stringify({ email }),
     });
     msg.style.color = 'var(--secondary-color)';
     msg.textContent = t('home.resetSent');

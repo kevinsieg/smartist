@@ -176,6 +176,6 @@ function publicSong(row) {
 }
 
 module.exports = {
-  LYRICS_MAX, PRIVATE_SONG_KEYS, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
+  LYRICS_MAX, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
   splitMovedKeys, writeLyrics, lyricsSearchInfo,
 };

@@ -8,7 +8,7 @@ const { isSlugAvailable } = require('./artist');
 const { createSignupToken, verifySignupToken, redeemSignupToken, checkEmailDeliverable } = require('./registration');
 const { reply, ok, fail } = require('./http');
 
-// POST ?action=signup-link — emails a workspace-setup link (or a login link if
+// POST /api/signup/link — emails a workspace-setup link (or a login link if
 // the address already has an account). The response is identical either way so
 // the page can't be used to enumerate accounts.
 async function signupLink({ body, ip, origin }) {
@@ -77,7 +77,7 @@ async function signupLink({ body, ip, origin }) {
   return ok({ ok: true });
 }
 
-// POST ?action=verify-signup-token — checks a link token, returns its email.
+// POST /api/signup/verify — checks a link token, returns its email.
 async function verifySignup({ body, ip }) {
   if (await checkRateLimit(`signup-consume:${ip}`, 10, 60))
     return fail(429, 'Too many requests');
@@ -89,7 +89,7 @@ async function verifySignup({ body, ip }) {
   return ok({ ok: true, email: result.email });
 }
 
-// POST ?action=signup — consumes the token, creates the workspace + admin user,
+// POST /api/signup — consumes the token, creates the workspace + admin user,
 // returns a session token.
 async function signup({ body, ip }) {
   if (await checkRateLimit(`signup-consume:${ip}`, 10, 60))
