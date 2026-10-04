@@ -1,5 +1,7 @@
 'use strict';
 
+const { SONG_LOG_KEEP } = require('../_constants');
+
 // Song reads and writes shared by api/_band/songs.js and api/_band/songs/item.js.
 //
 // Lyrics live in song_lyrics, not in songs.extra: a band's lyrics run to
@@ -78,11 +80,26 @@ function configSongs(sql, artistId) {
   `;
 }
 
-// One live song with its lyrics — the song panel, the lyrics modal and stage.
+// One live song with its lyrics and its arrangement versions (newest last),
+// in one statement — the song panel, the lyrics modal and stage. The versions
+// carry names only; the active one comes in full as active_arrangement, so
+// stage draws its chart without a second request.
 async function songDetail(sql, artistId, songId) {
   const [song] = await sql`
     SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language,
-      l.lyrics, (l.song_id IS NOT NULL) AS has_lyrics
+      l.lyrics, (l.song_id IS NOT NULL) AS has_lyrics,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', a.id, 'name', a.name, 'is_active', a.is_active,
+                                          'updated_at', a.updated_at) ORDER BY a.created_at, a.id)
+        FROM song_arrangements a
+        WHERE a.song_id = s.id AND a.artist_id = s.artist_id
+      ), '[]') AS arrangements,
+      (SELECT json_build_object('id', a.id, 'name', a.name, 'is_active', a.is_active,
+                                'hidden_instruments', a.hidden_instruments, 'rows', a.rows,
+                                'created_at', a.created_at, 'updated_at', a.updated_at)
+       FROM song_arrangements a
+       WHERE a.song_id = s.id AND a.artist_id = s.artist_id AND a.is_active
+       LIMIT 1) AS active_arrangement
     FROM songs s
     LEFT JOIN song_lyrics l ON l.song_id = s.id
     ${gemaJoin(sql)}
@@ -122,8 +139,8 @@ function splitMovedKeys(extra) {
   return { extra: rest, lyrics: moved.lyrics, language: moved.language };
 }
 
-// Saves (or, with null, removes) one song's lyrics and writes the audit entry,
-// in one statement. Returns the song ({ id, title }) or null when the song is
+// Saves (or, with null, removes) one song's lyrics, writes the audit entry and
+// trims the song's history, in one statement. Returns the song ({ id, title }) or null when the song is
 // not a live song of this band.
 async function writeLyrics(sql, artistId, songId, lyrics, action = 'lyrics_update') {
   const [song] = await sql`
@@ -140,6 +157,16 @@ async function writeLyrics(sql, artistId, songId, lyrics, action = 'lyrics_updat
     ), logged AS (
       INSERT INTO song_logs (artist_id, song_id, action, song_data)
       SELECT ${artistId}, id, ${action}, jsonb_build_object('title', title) FROM s
+    ), trimmed AS (
+      -- The song's history, newest SONG_LOG_KEEP kept (the entry above rides along).
+      DELETE FROM song_logs WHERE id IN (
+        SELECT id FROM (
+          SELECT id, row_number() OVER (ORDER BY changed_at DESC, id DESC) AS n
+          FROM song_logs
+          WHERE artist_id = ${artistId} AND song_id IN (SELECT id FROM s)
+        ) ranked
+        WHERE n > ${SONG_LOG_KEEP}
+      )
     )
     SELECT id, title FROM s
   `;
@@ -176,6 +203,6 @@ function publicSong(row) {
 }
 
 module.exports = {
-  LYRICS_MAX, PRIVATE_SONG_KEYS, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
+  LYRICS_MAX, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
   splitMovedKeys, writeLyrics, lyricsSearchInfo,
 };

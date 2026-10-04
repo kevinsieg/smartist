@@ -141,7 +141,7 @@ A workspace can be exported first: a ZIP with one CSV per table
 `artists.config.plan`. Limits are enforced server-side with `402` and a machine
 code, and the client only mirrors them for UX. Today the upgrade flips the plan
 directly. Paid billing would only change what writes `config.plan`, through the
-`?action=upgrade` seam. Donations are voluntary and unlock nothing.
+`/api/config/upgrade` seam. Donations are voluntary and unlock nothing.
 
 ---
 

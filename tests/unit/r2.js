@@ -43,6 +43,10 @@ async function run(r) {
   test('keyFromUrl returns null for unrelated URL', () => {
     assertEq(keyFromUrl('https://other.example.test/media/audio/abc-Track.mp3'), null);
   });
+  test('keyFromUrl does not take a host that merely starts like the bucket\'s', () => {
+    assertEq(keyFromUrl('https://cdn.example.test/media.evil.example/audio/x.mp3'), null);
+    assertEq(keyFromUrl('https://cdn.example.test/mediaX/audio/x.mp3'), null);
+  });
   test('filenameFromUrl strips query string and decodes filename', () => {
     assertEq(
       filenameFromUrl('https://cdn.example.test/media/audio/abc-My%20Song.mp3?token=123'),

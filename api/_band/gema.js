@@ -5,6 +5,8 @@ const { requireFeature } = require('../_plans');
 const { checkRateLimit } = require('../_ratelimit');
 const { importWorks, importRightholders } = require('../_domain/gema');
 
+const GEMA_CSV_MAX = 2_000_000;
+
 // POST /api/:artist/gema/import — one GEMA CSV export (works, ids or
 // rightholders) into gema_works / gema_rightholders.
 module.exports = wrap(async function handler(req, res) {
@@ -20,10 +22,13 @@ module.exports = wrap(async function handler(req, res) {
     return res.status(400).json({ error: 'type must be "info", "ids", or "beteiligte"' });
   if (typeof csv !== 'string' || csv.length < 10)
     return res.status(400).json({ error: 'csv must be a non-empty string' });
-  if (csv.length > 5_000_000)
-    return res.status(400).json({ error: 'CSV too large (max 5 MB)' });
+  // Vercel refuses request bodies over 4.5 MB, and the file arrives as a JSON
+  // string, where a quote or an umlaut takes two bytes: 2 million characters
+  // stay under that. A band's GEMA export is a few hundred KB.
+  if (csv.length > GEMA_CSV_MAX)
+    return res.status(400).json({ error: 'CSV too large (max 2 MB)' });
 
-  // Each call parses up to 5 MB and writes a batch; a page run is a handful.
+  // Each call parses up to 2 MB and writes a batch; a page run is a handful.
   if (await checkRateLimit(`gema-import:${band.id}`, 30, 600))
     return res.status(429).json({ error: 'Too many imports — try again in a few minutes' });
 

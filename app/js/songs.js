@@ -229,8 +229,7 @@ var filters = { text: '', active: true, heart: false, lead: '', genre: '', inter
 
 var _setlistFilterIds   = null;   // null = no filter; Set<songId>
 var _setlistFilterOrder = [];     // song IDs in setlist position order
-var _setlistFilterTimer = null;
-var _allSetlistsMeta    = null;   // [{id, name}] fetched once on demand
+var _allSetlistsMeta    = null;   // [{id, title}] fetched once on demand
 var _songsView          = null;
 
 function getVisibleSongs() {
@@ -274,9 +273,9 @@ async function _applySetlistById(id) {
   // Update filter input with setlist name
   var found = (_allSetlistsMeta || []).find(function(s) { return s.id === id; });
   if (found) {
-    filters.setlist = (found.name || '').toLowerCase();
+    filters.setlist = (found.title || '').toLowerCase();
     var el = document.getElementById('filter-setlist');
-    if (el) el.value = found.name || '';
+    if (el) el.value = found.title || '';
   }
   applyFilter();
 }
@@ -318,7 +317,7 @@ async function _resolveSetlistFilter(q) {
     } catch { _allSetlistsMeta = []; }
   }
   var matches = _allSetlistsMeta.filter(function(s) {
-    return (s.name || '').toLowerCase().includes(q.toLowerCase());
+    return (s.title || '').toLowerCase().includes(q.toLowerCase());
   });
   if (!matches.length) return new Set();
 
@@ -439,7 +438,7 @@ async function _applySetlistByIdForView(id) {
   }
   var found = (_allSetlistsMeta || []).find(function(s) { return s.id === id; });
   if (found && _songsView) {
-    _songsView.setFilterValue('setlist', found.name || '');
+    _songsView.setFilterValue('setlist', found.title || '');
   }
 }
 
@@ -644,13 +643,10 @@ function renderLogs(logs) {
 }
 
 async function restoreSong(songId) {
-  const token = getToken();
-  if (!token) return;
-  const r = await fetch(`/api/${artistSlug}/songs/${songId}/restore`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-  });
-  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+  if (!getToken()) return;
+  let r;
+  // apiFetch sends an ended session to the login page and throws.
+  try { r = await apiFetch(`/api/${artistSlug}/songs/${songId}/restore`, 'POST'); } catch { return; }
   if (r.ok) {
     invalidateConfigCache();
     await loadAndRender();

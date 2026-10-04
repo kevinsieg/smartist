@@ -14,7 +14,7 @@
       if (cfg.facebookLogin) want.push(['facebook', 'facebook-url']);
       if (!want.length) return;
       const results = await Promise.all(
-        want.map(([, action]) => fetch('/api/config?action=' + action + '&mode=signup'))
+        want.map(([, action]) => fetch('/api/auth/' + action + '?mode=signup'))
       );
       for (let i = 0; i < want.length; i++) {
         if (!results[i].ok) continue;
@@ -78,7 +78,13 @@
       btn.disabled    = true;
       btn.textContent = t('signup.sending');
       try {
-        await sendSignupLink(email, document.getElementById('signup-hp').value);
+        const r = await fetch('/api/signup/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, website: document.getElementById('signup-hp').value || undefined }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || t('auth.failedToSendLink'));
         _render('sent');
       } catch (err) {
         btn.disabled    = false;

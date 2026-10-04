@@ -6,7 +6,7 @@ const { sendEmail } = require('../_email');
 const { generateMagicToken, demoSeed } = require('../_token');
 const logger = require('../_logger');
 
-// POST { source: 'contact' } — landing-page contact form.
+// POST /api/contact — the contact form.
 async function contact({ body, ip }) {
   const name = validateStr(body.name, 200);
   if (!name) return fail(400, 'Name is required');
@@ -58,7 +58,7 @@ async function sweepSubscribers(sql) {
   }
 }
 
-// POST (default) — email capture: demo signup issues a demo-workspace token;
+// POST /api/subscribe — email capture: demo signup issues a demo-workspace token;
 // landing just records the subscriber.
 async function subscribe({ body, headers, ip }) {
   const email = validateEmail(body.email);
@@ -97,12 +97,9 @@ async function subscribe({ body, headers, ip }) {
     return ok({ ok: true, token: demoToken, slug: demoArtist?.slug || demoSlug });
   }
 
-  try {
-    await sql`INSERT INTO subscribers (email, source) VALUES (${email}, 'landing')`;
-  } catch (err) {
-    if (err.code === '23505') return fail(409, 'Already subscribed');
-    throw err;
-  }
+  // The same answer for an address already on the list: anything else tells
+  // anyone who asks whether an address is subscribed.
+  await sql`INSERT INTO subscribers (email, source) VALUES (${email}, 'landing') ON CONFLICT (email) DO NOTHING`;
   return ok({ ok: true });
 }
 

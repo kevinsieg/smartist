@@ -92,4 +92,4 @@ async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
   return { status: 200, body: { lyrics: null, sources: LYRICS_SOURCES, aiSkipped: skipped ?? false } };
 }
 
-module.exports = { LYRICS_SOURCES, AI_DAILY_MAX, AI_BAND_DAILY_MAX, plainFromSynced, suggestLyrics };
+module.exports = { LYRICS_SOURCES, plainFromSynced, suggestLyrics };

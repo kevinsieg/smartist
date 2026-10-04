@@ -14,7 +14,7 @@
     email = val;
     var btn = document.getElementById('s1-next');
     btn.disabled = true; btn.textContent = '…';
-    fetch('/api/config', {
+    fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, source: 'demo' }),

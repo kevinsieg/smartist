@@ -819,7 +819,6 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
 });
 
 document.getElementById('save-btn').addEventListener('click', async () => {
-  const token   = getToken();
   const title   = document.getElementById('setlist-title').value.trim();
   const gigId   = document.getElementById('gig-select').value || null;
   const comment = document.getElementById('setlist-comment').value.trim() || null;
@@ -840,23 +839,10 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     return;
   }
 
-  const r = await withBusy(document.getElementById('save-btn'), () => fetch(`/api/${artistSlug}/setlists`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ title: title || null, gig_id: gigId ? Number(gigId) : null, comment, song_ids: songIds }),
-  }));
+  // apiFetch sends an ended session to the login page and throws.
+  const r = await withBusy(document.getElementById('save-btn'), () => apiFetch(`/api/${artistSlug}/setlists`, 'POST',
+    { title: title || null, gig_id: gigId ? Number(gigId) : null, comment, song_ids: songIds }).catch(() => null));
   if (!r) return;
-
-  if (r.status === 401) {
-    clearToken();
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    document.getElementById('save-step').style.display = 'none';
-    document.getElementById('auth-step').style.display = 'block';
-    const err = document.getElementById('auth-error');
-    err.textContent = t('setlist.sessionExpired');
-    err.className = 'status-msg error';
-    return;
-  }
 
   if (r.ok) {
     const saved = await r.json();
@@ -878,6 +864,7 @@ document.getElementById('accept-modal').addEventListener('click', e => {
 // --- PDF export ---
 
 async function printSetlist() {
-  var cfg = await loadConfig();
+  // The header needs the band's name, logo and field settings, not its songs.
+  var cfg = await loadConfig(undefined, { light: true });
   printSetlistSongs(currentSet, '', cfg, { headings: _groupByTagOn() ? tagGroupStarts(currentSet) : null });
 }

@@ -171,7 +171,6 @@ DATABASE_URL=<neon-dev-url> node scripts/setup.js
 ```
 
 **Troubleshooting:**
-- *"syntax error at end of input"* when applying schema → run `node scripts/apply_schema.js` then re-run setup.js
 - *"Password must be at least 8 characters"* → use a longer password; re-run the wizard
 - Wrong slug entered → fix with `psql $DATABASE_URL -c "UPDATE artists SET slug = 'correct' WHERE slug = 'wrong';"`
 
@@ -258,17 +257,17 @@ DATABASE_URL=<neon-dev-url> node scripts/setup.js
 # → same
 ```
 
-**If schema apply fails** ("syntax error at end of input"):
-```bash
-DATABASE_URL=<neon-main-url> node scripts/apply_schema.js
-DATABASE_URL=<neon-main-url> node scripts/setup.js   # re-run, will skip schema
-```
+Every later schema change reaches this database by itself: each Vercel build
+runs `scripts/deploy_migrate.js` before the new code goes live.
 
 ### Step 3 — Seed demo data (for demo deployments)
 
+The demo band is restored from `scripts/demo_seed.json`, scoped to its own
+`artist_id` (the nightly *demo-reset* workflow does the same):
+
 ```bash
-DATABASE_URL=<neon-main-url> ARTIST_SLUG=demo node scripts/seed.js --force
-DATABASE_URL=<neon-dev-url>  ARTIST_SLUG=demo node scripts/seed.js --force
+DATABASE_URL=<neon-main-url> node scripts/demo_reset.js --dry-run   # what would change
+DATABASE_URL=<neon-main-url> node scripts/demo_reset.js
 ```
 
 ### Steps 4–6
@@ -298,17 +297,11 @@ Push to `dev` freely. Merge to `main` via PR only.
 ## Local development
 
 ```bash
-# Reads .env (not .env.local — vercel dev CLI quirk; keep all vars in .env)
-vercel dev
+npm run dev:up   # own Postgres, seeded band, the app on :3000
 ```
 
-Pull env vars from the linked Vercel project:
-
-```bash
-vercel env pull .env.local   # wraps values in quotes — loadEnv() in scripts strips them
-```
-
-Copy values from `.env.local` into `.env`. Set `DATABASE_URL` to the Neon `dev` branch URL. Do not set `BETTERSTACK_TOKEN` locally.
+To run against the Neon `dev` branch instead, see *Local development* in
+`README.md`. Do not set `BETTERSTACK_TOKEN` locally.
 
 ---
 

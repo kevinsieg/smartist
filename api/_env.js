@@ -31,9 +31,15 @@ const PAIRS = [
 
 // The newest migration block in scripts/schema.sql. Health reports whether
 // the database has it; tests/unit/env.js keeps the two in step.
-const SCHEMA_VERSION = '2026-10-06';
+const SCHEMA_VERSION = '2026-10-07';
 
 const isSet = name => typeof process.env[name] === 'string' && process.env[name].trim() !== '';
+
+// True unless the URL names a Neon host other than its pooled endpoint.
+function usesNeonPooler(url) {
+  const host = (/@([^/:?]+)/.exec(String(url)) || [])[1] || '';
+  return !/\.neon\.tech$/i.test(host) || /-pooler\./i.test(host);
+}
 
 function envReport(env = process.env.VERCEL_ENV) {
   const missing = REQUIRED.filter(n => !isSet(n));
@@ -43,7 +49,11 @@ function envReport(env = process.env.VERCEL_ENV) {
     const set = pair.filter(isSet);
     if (set.length && set.length < pair.length) warnings.push(...pair.filter(n => !isSet(n)));
   }
+  // Every function instance holds its own connections: on Neon only the
+  // pooled endpoint (the `-pooler` host) takes that many at once.
+  if (isSet('DATABASE_URL') && !usesNeonPooler(process.env.DATABASE_URL))
+    warnings.push('DATABASE_URL (use the -pooler host)');
   return { missing, warnings };
 }
 
-module.exports = { REQUIRED, RECOMMENDED, PRODUCTION, PAIRS, SCHEMA_VERSION, envReport };
+module.exports = { REQUIRED, RECOMMENDED, PAIRS, SCHEMA_VERSION, envReport, usesNeonPooler };

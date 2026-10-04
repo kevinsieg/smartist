@@ -383,8 +383,7 @@ function _panelStageFile(input, type, id) {
 // Create a song from the panel, then upload any files staged on its inputs.
 // Returns the created song, or null if it couldn't be created (no title / auth).
 async function _commitNewSong(formId) {
-  var token = getToken();
-  if (!token) { if (!isViewMode()) requireLogin(); return null; }
+  if (!getToken()) { if (!isViewMode()) requireLogin(); return null; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
     .find(function(i) { return !i.checkValidity(); });
@@ -397,12 +396,7 @@ async function _commitNewSong(formId) {
     return null;
   }
 
-  var r = await fetch('/api/' + artistSlug + '/songs', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body:    JSON.stringify(data),
-  });
-  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return null; }
+  var r = await apiFetch('/api/' + artistSlug + '/songs', 'POST', data);
   if (!r.ok) throw new Error('create failed');
   var newSong = await r.json();
 
@@ -419,16 +413,11 @@ async function _commitNewSong(formId) {
   var draft = _pendingArrDrafts[formId];
   if (draft) {
     try {
-      var ar = await fetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body:    JSON.stringify({ name: 'Default', rows: draft.rows, hidden_instruments: draft.hidden_instruments }),
-      });
+      var ar = await apiFetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements', 'POST',
+        { name: 'Default', rows: draft.rows, hidden_instruments: draft.hidden_instruments });
       if (ar.ok) {
         var created = await ar.json();
-        await fetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements/' + created.id + '/activate', {
-          method: 'POST', headers: { 'Authorization': 'Bearer ' + token },
-        });
+        await apiFetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements/' + created.id + '/activate', 'POST');
       }
     } catch (e) { /* song is saved; arrangement just didn't attach */ }
     delete _pendingArrDrafts[formId];
@@ -437,8 +426,7 @@ async function _commitNewSong(formId) {
 }
 
 async function _savePanelSong(formId, isNew, realSid) {
-  var token = getToken();
-  if (!token) { if (!isViewMode()) requireLogin(); return; }
+  if (!getToken()) { if (!isViewMode()) requireLogin(); return; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
     .find(function(i) { return !i.checkValidity(); });
@@ -454,12 +442,8 @@ async function _savePanelSong(formId, isNew, realSid) {
       if (!newSong) { if (btn) { btn.disabled = false; btn.textContent = t('songs.add'); } return; }
       targetId = String(newSong.id);
     } else {
-      var r = await fetch('/api/' + artistSlug + '/songs', {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body:    JSON.stringify([Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]),
-      });
-      if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+      var r = await apiFetch('/api/' + artistSlug + '/songs', 'PATCH',
+        [Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]);
       if (!r.ok) throw new Error('save failed');
       targetId = String(realSid);
     }

@@ -1,6 +1,7 @@
 const { getDb } = require('../_db');
 const { verifyUserToken, sessionValid } = require('../_token');
 const { validateStr } = require('../_validate');
+const { sessionRowId } = require('../_auth');
 const { ok, fail } = require('./http');
 
 // Gate to the super-admin allowlist (SUPER_ADMIN_EMAILS): the failure result
@@ -9,14 +10,14 @@ async function superAdminDenied(headers, sql) {
   const tok = (headers.authorization || '').replace(/^Bearer /, '');
   const claim = verifyUserToken(tok);
   if (!claim) return fail(401, 'Unauthorized');
-  const [u] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  const [u] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${sessionRowId(sql, claim)} LIMIT 1`;
   if (u && !sessionValid(claim, u)) return fail(401, 'Unauthorized');
   const allow = (process.env.SUPER_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   if (!u || !allow.includes(String(u.email).toLowerCase())) return fail(403, 'Forbidden');
   return null;
 }
 
-// POST ?action=admin-set-plan — super-admin flips any band's plan.
+// POST /api/admin/set-plan — super-admin flips any band's plan.
 async function setPlan({ headers, body }) {
   const sql = getDb();
   const denied = await superAdminDenied(headers, sql);
@@ -30,7 +31,7 @@ async function setPlan({ headers, body }) {
   return ok({ ok: true });
 }
 
-// GET ?action=admin-overview — global band list + usage totals (super-admin).
+// GET /api/admin/overview — global band list + usage totals (super-admin).
 async function overview({ headers }) {
   const sql = getDb();
   const denied = await superAdminDenied(headers, sql);
@@ -52,4 +53,4 @@ async function overview({ headers }) {
   return ok({ totals, bands });
 }
 
-module.exports = { superAdminDenied, setPlan, overview };
+module.exports = { setPlan, overview };

@@ -113,7 +113,7 @@
     var msg = document.getElementById('logout-all-msg');
     btn.disabled = true; msg.className = 'save-msg'; msg.textContent = '';
     try {
-      var r = await apiFetch('/api/config', 'POST', { action: 'logout-everywhere' });
+      var r = await apiFetch('/api/auth/logout-everywhere', 'POST');
       if (!r.ok) { msg.textContent = t('profile.logoutEverywhereFailed'); msg.className = 'save-msg err'; return; }
       doLogout();
     } catch (e) {
@@ -162,7 +162,7 @@
     banner.className = 'auth-banner';
     banner.textContent = t('profile.dangerChecking');
     try {
-      var r = await apiFetch('/api/config', 'POST', { action: 'confirm-deletion', token: token });
+      var r = await apiFetch('/api/auth/confirm-deletion', 'POST', { token: token });
       var data = await r.json().catch(function () { return {}; });
       if (r.ok && data.preview) {
         banner.style.display = 'none';
@@ -211,8 +211,8 @@
     msg.className = 'save-msg';
     msg.textContent = t('profile.dangerConfirm');
     try {
-      var r = await apiFetch('/api/config', 'POST',
-        { action: 'confirm-deletion', token: token, confirm: true });
+      var r = await apiFetch('/api/auth/confirm-deletion', 'POST',
+        { token: token, confirm: true });
       var data = await r.json().catch(function () { return {}; });
       if (r.ok) {
         clearToken();
@@ -244,7 +244,7 @@
 
   async function _loadDeletionZone() {
     try {
-      var r = await apiFetch('/api/config?action=deletion-preflight');
+      var r = await apiFetch('/api/auth/deletion-preflight');
       if (!r.ok) return;
       var plan = await r.json();
       _renderDeletionPlan(plan);
@@ -315,7 +315,7 @@
     msg.className = 'save-msg';
     msg.textContent = t('profile.dangerRequesting');
     try {
-      var r = await apiFetch('/api/config', 'POST', { action: 'request-deletion' });
+      var r = await apiFetch('/api/auth/request-deletion', 'POST');
       var data = await r.json().catch(function () { return {}; });
       if (r.ok) {
         msg.textContent = t('profile.dangerSent', { email: _deletionEmail });

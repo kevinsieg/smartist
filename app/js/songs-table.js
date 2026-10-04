@@ -375,11 +375,9 @@ async function deleteRow(sid) {
 
   if (!confirm(t('songs.confirmDeleteSong'))) return;
 
-  const token = getToken();
-  const r = await fetch(`/api/${artistSlug}/songs/${sid}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
+  let r;
+  // apiFetch sends an ended session to the login page and throws.
+  try { r = await apiFetch(`/api/${artistSlug}/songs/${sid}`, 'DELETE'); } catch { return; }
 
   if (r.ok || r.status === 404) {
     invalidateConfigCache();
@@ -387,8 +385,6 @@ async function deleteRow(sid) {
     dirty.delete(String(sid));
     songs = songs.filter(s => String(s.id) !== String(sid));
     if (dirty.size === 0) _setBulkStatus('', '');
-  } else if (r.status === 401) {
-    if (!isViewMode()) { clearToken(); requireLogin(); }
   } else {
     _setBulkStatus('error', t('songs.couldNotDeleteSong'));
   }
@@ -403,8 +399,7 @@ function discardAll() {
 }
 
 async function saveAll() {
-  const token = getToken();
-  if (!token) { if (!isViewMode()) requireLogin(); return; }
+  if (!getToken()) { if (!isViewMode()) requireLogin(); return; }
 
   const bad = [...document.querySelectorAll('#tbody input[type="number"]')].find(i => !i.checkValidity());
   if (bad) { bad.reportValidity(); bad.focus(); return; }
@@ -428,12 +423,7 @@ async function saveAll() {
 
     var rejected = [];
     if (toUpdate.length > 0) {
-      const r = await fetch(`/api/${artistSlug}/songs`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(toUpdate),
-      });
-      if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+      const r = await apiFetch(`/api/${artistSlug}/songs`, 'PATCH', toUpdate);
       if (!r.ok) throw new Error('patch failed');
       // Rows the server refused: say so instead of reporting a silent success.
       rejected = (await r.json().catch(function() { return {}; })).rejected || [];
@@ -441,11 +431,7 @@ async function saveAll() {
 
     for (const data of toInsert) {
       if (!data.title) continue;
-      const r = await fetch(`/api/${artistSlug}/songs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(data),
-      });
+      const r = await apiFetch(`/api/${artistSlug}/songs`, 'POST', data);
       if (!r.ok) throw new Error('insert failed');
     }
 

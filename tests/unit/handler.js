@@ -171,6 +171,15 @@ async function run(r) {
       assertEq(logs[0].level, 'error');
     });
   });
+
+  console.log(B('\nURLs as logged'));
+  await testAsync('the OAuth code and state never reach the log', async () => {
+    const { logUrl } = require(path.join(__dirname, '../../api/_handler'));
+    assertEq(logUrl('/auth/callback?code=4%2Fsecret&state=abc'), '/auth/callback?code=redacted&state=redacted');
+    assertEq(logUrl('/api/band/songs?limit=5'), '/api/band/songs?limit=5');
+    assert(!/secret/.test(logUrl('/auth/callback?code=secret')), 'code logged');
+  });
+
 }
 
 if (require.main === module) {

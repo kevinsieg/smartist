@@ -63,14 +63,14 @@ async function init() {
     // offer no way back in through the provider that just failed.
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
     let rootCfg;
-    try { rootCfg = await loadConfig(); } catch (e) {}
+    try { rootCfg = await loadConfig(undefined, { light: true }); } catch (e) {}
     renderLogin(t('home.invalidLink'), rootCfg);
     return;
   }
 
   let cfg;
   try {
-    cfg = await loadConfig(slugFromNext || undefined);
+    cfg = await loadConfig(slugFromNext || undefined, { light: true });
     artistSlug = cfg.slug || slugFromNext;
     if (!artistSlug) {
       // Multi-tenant root: nothing to brand the page with. Signup is a link on
@@ -119,10 +119,10 @@ async function init() {
 // The session token the OAuth callback set as a cookie, or null.
 async function _redeemOAuthSession() {
   try {
-    const r = await fetch('/api/config', {
+    const r = await fetch('/api/auth/oauth-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'oauth-session' }),
+      body: '{}',
     });
     if (!r.ok) return null;
     return (await r.json()).token || null;
@@ -133,10 +133,10 @@ async function _redeemOAuthSession() {
 async function verifyToken(token, hint) {
   if (!hint) return { ok: false, artists: [] };
   try {
-    const r = await fetch('/api/config', {
+    const r = await fetch('/api/auth/magic-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'magic-login', magic: token, hint }),
+      body: JSON.stringify({ magic: token, hint }),
     });
     if (!r.ok) return { ok: false, artists: [] };
     const data = await r.json();
@@ -153,7 +153,7 @@ async function verifyToken(token, hint) {
 // silently log the user out — defeating "Remember me".
 async function verifySession(token) {
   try {
-    const r = await fetch('/api/config?action=my-artists', {
+    const r = await fetch('/api/auth/artists', {
       headers: { Authorization: 'Bearer ' + token },
     });
     if (!r.ok) return { ok: false, artists: [] };
@@ -183,7 +183,11 @@ function renderLoggedIn(cfg, artists) {
 
 // ── Login form ────────────────────────────────────────────────────────────────
 
+// A new session starts without any band's cached config.
 function storeToken(token, remember) {
+  Object.keys(sessionStorage)
+    .filter(function(k) { return k.indexOf('artist_config_cache_') === 0; })
+    .forEach(function(k) { sessionStorage.removeItem(k); });
   if (remember) {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -315,10 +319,10 @@ async function doSetPassword(token, hint, cfg) {
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   const restore = () => { btn.disabled = false; btn.textContent = t('home.savePassword'); };
   try {
-    const r    = await fetch('/api/config', {
+    const r    = await fetch('/api/auth/set-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'set-password', token, hint, password: pw }),
+      body: JSON.stringify({ token, hint, password: pw }),
     });
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); restore(); return; }
@@ -366,7 +370,7 @@ async function doLogin() {
   const btn = document.getElementById('pw-btn');
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
-    const cfg = await loadConfig();
+    const cfg = await loadConfig(undefined, { light: true });
     if (cfg.slug) artistSlug = cfg.slug;
     const body = { email, password: pw, rememberMe: remember };
     // Email is the identity: /api/login finds the account across workspaces,
@@ -392,7 +396,7 @@ async function startOAuth(provider) {
   const btn = document.getElementById(`${provider}-btn`);
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const r    = await fetch(`/api/config?action=${provider}-url`);
+    const r    = await fetch(`/api/auth/${provider}-url`);
     const data = await r.json();
     if (data.url) {
       window.location.href = data.url;
@@ -416,10 +420,10 @@ async function doRequestReset() {
   btn.disabled = true; btn.textContent = '…'; msg.textContent = '';
   try {
     // The account is found by address, whichever band this page shows.
-    await fetch('/api/config', {
+    await fetch('/api/auth/request-reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'request-reset', email }),
+      body: JSON.stringify({ email }),
     });
     msg.style.color = 'var(--secondary-color)';
     msg.textContent = t('home.resetSent');

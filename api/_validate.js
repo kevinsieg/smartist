@@ -9,8 +9,10 @@ function validateSongIds(song_ids) {
 }
 
 // Returns trimmed string if valid, null if empty/missing, false if exceeds maxLen.
+// Objects and arrays are invalid (false), not "[object Object]".
 function validateStr(val, maxLen) {
   if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'object') return false;
   const s = String(val).trim();
   if (!s) return null;
   if (s.length > maxLen) return false;
@@ -72,6 +74,8 @@ function parseField(name, f, raw) {
     if (f.nullable === false) return { error: `${name} cannot be empty` };
     return { value: null };
   }
+  if (typeof raw === 'object' && !(raw instanceof Date) && f.type !== 'object')
+    return { error: `${name} must be a ${f.type === 'bool' ? 'boolean' : 'single value'}` };
   switch (f.type) {
     case 'text': {
       const v = validateStr(raw, f.max);
@@ -137,4 +141,16 @@ function parseFields(body, spec, { partial = false } = {}) {
   return { value };
 }
 
-module.exports = { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };
+// Every ownership check on a bucket key is a prefix or pattern on the key as
+// written (`audio/<band id>/…`, `bands/<slug>/…`), so a key that a storage
+// layer could read differently — dot segments, empty segments, escaped
+// slashes or dots, backslashes — must never pass one: `bands/mine/../other`
+// starts with `bands/mine/`. A query string (a cache-busting `?v=`) is not
+// part of the key and is ignored.
+function unsafeKey(key) {
+  if (typeof key !== 'string') return true;
+  const path = key.split(/[?#]/)[0];
+  return !path || /(^|\/)\.{1,2}(\/|$)|\/\/|\\|%2e|%2f|%5c/i.test(path);
+}
+
+module.exports = { unsafeKey, validateSongIds, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };
