@@ -33,6 +33,7 @@
 
   async function _checkSlug(slug) {
     if (!slug || !/^[a-z0-9][a-z0-9-]{2,49}$/.test(slug)) return false;
+    // apiFetch-exempt: a public availability check during sign-up, no session.
     const r = await fetch('/api/signup/check-slug?slug=' + encodeURIComponent(slug));
     const data = await r.json();
     return data.available === true;

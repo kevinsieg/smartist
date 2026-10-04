@@ -110,12 +110,6 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // The venues API only returns non-public statuses to authenticated requests.
-  function _authHeaders() {
-    var token = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
-    return token ? { Authorization: 'Bearer ' + token } : {};
-  }
-
   function _popup(v) {
     var color  = STATUS_COLORS[(v.status || '').toLowerCase()] || STATUS_COLORS[''];
     var status = v.status
@@ -225,7 +219,7 @@
     _dataReady = false;
     _allVenues = [];
     var url = '/api/' + _slug + '/venues?all=1' + (_confirmedOnly ? '&status=confirmed' : '');
-    fetch(url, { headers: _authHeaders() })
+    apiFetch(url)
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(venues) {
         _allVenues = venues;
@@ -300,7 +294,7 @@
       });
     });
 
-    fetch('/api/' + slug + '/venues?all=1&status=confirmed', { headers: _authHeaders() })
+    apiFetch('/api/' + slug + '/venues?all=1&status=confirmed')
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(venues) {
         _allVenues = venues;

@@ -31,13 +31,33 @@ function bodyBytes(chunk) {
   return 0;
 }
 
+// The URL as logged. The OAuth provider returns to /auth/callback with the
+// authorization code and state in the query: credentials, even if spent ones,
+// do not belong in a third-party log.
+const SECRET_PARAMS = ['code', 'state'];
+function logUrl(raw) {
+  if (typeof raw !== 'string' || !raw.includes('?')) return raw;
+  try {
+    const u = new URL(raw, 'http://x');
+    let changed = false;
+    for (const k of SECRET_PARAMS) if (u.searchParams.has(k)) { u.searchParams.set(k, 'redacted'); changed = true; }
+    return changed ? u.pathname + u.search : raw;
+  } catch { return raw; }
+}
+
 function wrap(handler) {
   return async function (req, res) {
     const start = Date.now();
-    const { method, url } = req;
+    const { method } = req;
+    const url = logUrl(req.url);
     const requestId = crypto.randomUUID().slice(0, 8);
     const inContext = logger.withContext || ((_ctx, fn) => fn());
-    if (typeof res.setHeader === 'function') res.setHeader('X-Request-Id', requestId);
+    if (typeof res.setHeader === 'function') {
+      res.setHeader('X-Request-Id', requestId);
+      // Anonymous reads of a public band are CDN-cached (s-maxage) under the
+      // same URL a member's request uses; the answer depends on the session.
+      res.setHeader('Vary', 'Authorization');
+    }
 
     let failed = false;
     let ending = null;
@@ -82,4 +102,4 @@ function wrap(handler) {
   };
 }
 
-module.exports = { wrap, LARGE_RESPONSE_BYTES };
+module.exports = { wrap, logUrl, LARGE_RESPONSE_BYTES };

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { getDb } = require('../_db');
 const { verifyUserToken, sessionValid } = require('../_token');
 const { checkRateLimit } = require('../_ratelimit');
+const { sessionRowId } = require('../_auth');
 const { deleteFromR2 } = require('../_r2');
 const { sendEmail } = require('../_email');
 const logger = require('../_logger');
@@ -17,7 +18,7 @@ async function _sessionEmail(headers, sql) {
   const bearer = (headers.authorization || '').replace(/^Bearer /, '');
   const claim  = verifyUserToken(bearer);
   if (!claim) return null;
-  const [row] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${claim.userId} LIMIT 1`;
+  const [row] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${sessionRowId(sql, claim)} LIMIT 1`;
   return row && sessionValid(claim, row) ? String(row.email).toLowerCase() : null;
 }
 
@@ -100,7 +101,7 @@ async function requestDeletion({ headers, origin }) {
 // POST /api/auth/confirm-deletion — the link. Authenticated by the token alone,
 // because it may well be opened in a different browser from the one that asked.
 //
-// Two-phase, exactly like auth.js's confirm-email-change: without `confirm:true`
+// Two-phase, exactly like confirm-email-change in api/_domain/members.js: without `confirm:true`
 // this only previews what the link would destroy. Opening a URL is not a
 // gesture — a history revisit, a restored tab, the Back button after a 409, or
 // a mail scanner that runs JS all re-issue whatever the page fires on load, and
@@ -110,7 +111,7 @@ async function confirmDeletion({ body, ip }) {
   const raw = body.token;
   if (!raw) return fail(400, 'Invalid or expired link');
 
-  // Same shape as emailchg-confirm (auth.js): the link carries no session, so
+  // Same shape as emailchg-confirm (api/_domain/members.js): the link carries no session, so
   // the IP is all there is to key on, and both phases go through here.
   if (await checkRateLimit(`delete-confirm:${ip}`, 10, 600))
     return fail(429, 'Too many attempts — try again later');
@@ -151,7 +152,7 @@ async function confirmDeletion({ body, ip }) {
   // The row existed a moment ago (the SELECT above found it), so found:false
   // here means something else removed it between that SELECT and this call —
   // a second confirm on the same link, an admin removing this member via
-  // DELETE /api/:artist/auth, scripts/delete_artist.js, anything. Whatever it
+  // DELETE /api/:artist/members, scripts/delete_artist.js, anything. Whatever it
   // was, treat it the same as a used/expired link rather than reporting a
   // fresh success for a deletion this request did not perform.
   if (!out.found) return fail(400, 'Invalid or expired link');

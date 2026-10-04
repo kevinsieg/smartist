@@ -82,8 +82,9 @@ and cleaned up.
 - Business logic lives in `api/_domain/`: plain input in, data or
   `{ status, body }` out; `api/_domain/http.js` is the only adapter to req/res.
 - **Database round-trips cost the most.** With `prepare: false` every query
-  with parameters is two round-trips and `Promise.all` does not overlap them:
-  write one CTE, not three statements.
+  with parameters is two round-trips, and each one costs a connection that
+  concurrent requests on the instance share: write one CTE, not three
+  statements.
 - JSONB: never `JSON.stringify` into a parameter; merge with `||`
   (`config || ${patch}`), never overwrite `artists.config` or `songs.extra`.
   Batch rows as `jsonb_to_recordset(${sql.json(rows)})`. postgres.js cannot

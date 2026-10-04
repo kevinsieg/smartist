@@ -418,11 +418,7 @@ function renderWorkspace(cfg) {
       msg.className = 'save-msg';
       var patch = {};
       patch[key] = toggle.checked;
-      fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-        body: JSON.stringify({ config: patch }),
-      })
+      apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'PATCH', { config: patch })
         .then(function (r) {
           if (!r.ok) throw new Error('');
           invalidateConfigCache();
@@ -464,14 +460,7 @@ function renderWorkspace(cfg) {
     if (!name) { msg.textContent = t('settings.nameRequired'); msg.className = 'save-msg err'; return; }
     btn.disabled = true;
     msg.textContent = '';
-    fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + getToken(),
-      },
-      body: JSON.stringify({ name: name }),
-    })
+    apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'PATCH', { name: name })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (r) {
         if (r.ok) {
@@ -539,9 +528,7 @@ function showFavicon(url) {
 function uploadFavicon(file) {
   var progress = document.getElementById('favicon-progress');
   progress.textContent = t('settings.gettingUploadUrl');
-  fetch('/api/config/favicon-url?slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size, {
-    headers: { 'Authorization': 'Bearer ' + getToken() },
-  })
+  apiFetch('/api/config/favicon-url?slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size)
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d.uploadUrl) throw new Error(d.error || t('settings.failedGetUploadUrl'));
@@ -558,14 +545,7 @@ function uploadFavicon(file) {
     .then(function (publicUrl) {
       progress.textContent = t('settings.saving');
       var versionedUrl = publicUrl + '?v=' + Date.now();
-      return fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + getToken(),
-        },
-        body: JSON.stringify({ config: { faviconUrl: versionedUrl } }),
-      }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: versionedUrl, data: d }; }); });
+      return apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'PATCH', { config: { faviconUrl: versionedUrl } }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: versionedUrl, data: d }; }); });
     })
     .then(function (r) {
       if (!r.ok) throw new Error(r.data.error || '');
@@ -591,9 +571,7 @@ function showPhoto(url) {
 function uploadPhoto(file) {
   var progress = document.getElementById('photo-progress');
   progress.textContent = t('settings.gettingUploadUrl');
-  fetch('/api/config/photo-url?slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size, {
-    headers: { 'Authorization': 'Bearer ' + getToken() },
-  })
+  apiFetch('/api/config/photo-url?slug=' + encodeURIComponent(_settingsSlug) + '&type=' + encodeURIComponent(file.type) + '&size=' + file.size)
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d.uploadUrl) throw new Error(d.error || t('settings.failedGetUploadUrl'));
@@ -609,14 +587,7 @@ function uploadPhoto(file) {
     })
     .then(function (publicUrl) {
       progress.textContent = t('settings.saving');
-      return fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + getToken(),
-        },
-        body: JSON.stringify({ config: { logoUrl: publicUrl } }),
-      }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: publicUrl, data: d }; }); });
+      return apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'PATCH', { config: { logoUrl: publicUrl } }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, publicUrl: publicUrl, data: d }; }); });
     })
     .then(function (r) {
       if (!r.ok) throw new Error(r.data.error || '');
@@ -857,7 +828,7 @@ function renderPlan(cfg) {
       var nLinks = renderSupportLinks(donation.querySelector('[data-support-links]'));
       if (nLinks > 0) donation.style.display = '';
       // Unlock Pro-only nav items without forcing a reload.
-      try { var _fresh = await loadConfig(); applyPlanNavLocks((_fresh.plan && _fresh.plan.features) || []); } catch (e) {}
+      try { var _fresh = await loadConfig(undefined, { light: true }); applyPlanNavLocks((_fresh.plan && _fresh.plan.features) || []); } catch (e) {}
     } catch (e) {
       btn.disabled = false;
     }
@@ -899,14 +870,7 @@ function _renderHiddenSongFields(cfg) {
 
 async function patchConfig(configUpdate) {
   try {
-    var r = await fetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + getToken(),
-      },
-      body: JSON.stringify({ config: configUpdate }),
-    });
+    var r = await apiFetch('/api/config?slug=' + encodeURIComponent(_settingsSlug), 'PATCH', { config: configUpdate });
     if (r.ok) invalidateConfigCache();
     return r.ok;
   } catch { return false; }

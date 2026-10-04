@@ -313,7 +313,9 @@ async function run(r) {
     const token   = generateUserToken(42, 'admin', TTL_8H);
     const artists = [{ slug: 'my-band', name: 'My Band', role: 'admin' }];
     let calls = 0;
-    const handler = makeHandler(async () => {
+    const handler = makeHandler(async (strings) => {
+      // sessionRowId is a subquery inside the statement, not a statement.
+      if (/^\(\s*SELECT id FROM users/.test(strings.join('?').trim())) return [];
       calls++;
       return [{ password_hash: null, sessions_valid_after: null, artists }];
     });

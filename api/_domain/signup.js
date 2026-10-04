@@ -116,7 +116,7 @@ async function signup({ body, ip }) {
     throw err;
   }
   if (!created) return fail(400, 'Invalid or expired link');
-  const sessionToken = generateUserToken(created.userId, 'admin', TTL_8H);
+  const sessionToken = generateUserToken(created.userId, 'admin', TTL_8H, null, created.email);
   await logger.info('signup_complete', { slug, email: created.email });
   return reply(201, { ok: true, token: sessionToken, slug, role: 'admin', email: created.email });
 }

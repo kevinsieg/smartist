@@ -1127,7 +1127,7 @@
   "songImport.file.duplicate_column": "The column \"{column}\" appears twice. Keep only one.",
   "songImport.file.no_rows": "The file has no songs below the header row.",
   "songImport.file.too_many_rows": "Too many rows: at most {max} songs per file.",
-  "songImport.file.file_too_large": "The file is too large (max 4 MB).",
+  "songImport.file.file_too_large": "The file is too large (max 1.5 MB). Split it into smaller files.",
   "songImport.file.song_limit": "Your plan allows only {room} more songs. Skip some rows or upgrade to Pro.",
   "songImport.err.required": "A title is required.",
   "songImport.err.too_long": "Too long (max {max} characters).",

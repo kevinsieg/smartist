@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
 const { wrap } = require('../_handler');
-const { parseFields } = require('../_validate');
+const { parseFields, unsafeKey } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
 const { createPresignedUrl, deleteFromR2, verifyUpload, keyFromUrl } = require('../_r2');
 const { ownsRefs } = require('../_ownership');
@@ -24,8 +24,49 @@ async function checkRefs(sql, artistId, body, res) {
   return true;
 }
 
-// One gig: /api/:artist/gigs/:id is rewritten to /api/:artist/gigs?id=:id so both live in
-// a single serverless function (Hobby plan allows 12, and all 12 are in use).
+// Poster files of this band's gigs, removed from the bucket. Only keys under
+// the band's own gigs/<slug>/ prefix: a stored URL is just a string. Account
+// deletion finds files through the rows (api/_domain/deletion.js), so a gig row
+// deleted without its files left them in the bucket for good. Failures are
+// not fatal; the row is already gone or cleared. The public demo session keeps
+// the files: demo_reset restores the rows, not the bucket.
+async function removeGigFiles(req, artist, urls) {
+  if (!req.user || req.user.id === null) return;
+  const prefix = `gigs/${artist.slug}/`;
+  const own = urls.filter(u => typeof u === 'string' && keyFromUrl(u)?.startsWith(prefix));
+  await Promise.all(own.map(u => deleteFromR2(u).catch(() => false)));
+}
+
+// The DTEND value (floating local time) of a gig that has a start time. An end
+// at or before the start is after midnight, on the next day; without an end
+// the gig lasts two hours, which may also cross midnight.
+function icsEnd(date, timeStart, timeEnd) {
+  const [y, mo, d] = new Date(date).toISOString().slice(0, 10).split('-').map(Number);
+  const mins = t => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const start = mins(timeStart);
+  let end = timeEnd ? mins(timeEnd) : start + 120;
+  if (end <= start && timeEnd) end += 24 * 60;
+  const at = new Date(Date.UTC(y, mo - 1, d, 0, end));
+  const p2 = n => String(n).padStart(2, '0');
+  return `${at.getUTCFullYear()}${p2(at.getUTCMonth() + 1)}${p2(at.getUTCDate())}T${p2(at.getUTCHours())}${p2(at.getUTCMinutes())}00`;
+}
+
+// RFC 5545 content lines are at most 75 octets; longer ones continue on the
+// next line after CRLF and a space. Splits between characters, never inside one.
+function icsFold(line) {
+  if (Buffer.byteLength(line) <= 75) return line;
+  const parts = [];
+  let cur = '', size = 0, max = 75;
+  for (const ch of line) {
+    const n = Buffer.byteLength(ch);
+    if (size + n > max) { parts.push(cur); cur = ''; size = 0; max = 74; }
+    cur += ch; size += n;
+  }
+  parts.push(cur);
+  return parts.join('\r\n ');
+}
+
+// The router sends /api/:artist/gigs/:id here with the id in req.query.id.
 const POSTER_MAX_BYTES = 5 * 1024 * 1024;
 
 // Sub-resources of one gig: the poster, and the upload URLs for it.
@@ -88,15 +129,31 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
 
     const artist = await requireAuth(req, res, slug, 'member');
     if (!artist) return;
-    // A PUT's fields are validated first; its venue/organizer ownership checks
-    // don't depend on the gig row, so they run alongside it.
-    const isUpdate = req.method === 'PUT' && req.query.sub !== 'poster';
-    const parsed = isUpdate ? parseFields(req.body, GIG_FIELDS, { partial: true }) : null;
-    if (parsed?.error) return res.status(400).json({ error: parsed.error });
-    const [[gig], refs] = await Promise.all([
-      sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`,
-      isUpdate ? refsOwned(sql, artist.id, parsed.value) : null,
-    ]);
+
+    // ── PUT /gigs/:id — only the fields sent are written; an empty value clears one.
+    // The venue/organizer check, then the update itself, which refuses a
+    // deleted gig: no read of the row first. Only a refused update looks the
+    // gig up, to tell "not found" from "deleted".
+    if (req.method === 'PUT' && req.query.sub !== 'poster') {
+      const parsed = parseFields(req.body, GIG_FIELDS, { partial: true });
+      if (parsed.error) return res.status(400).json({ error: parsed.error });
+      const value = parsed.value;
+      const refs = await refsOwned(sql, artist.id, value);
+      if (!refs.venue)     return res.status(400).json({ error: 'Invalid venue_id' });
+      if (!refs.organizer) return res.status(400).json({ error: 'Invalid organizer_id' });
+      const [updated] = Object.keys(value).length
+        ? await sql`
+            UPDATE gigs SET ${sql(value)}, last_updated = NOW()
+            WHERE id = ${gigId} AND artist_id = ${artist.id} AND deleted = false
+            RETURNING *`
+        : await sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id} AND deleted = false`;
+      if (updated) return res.json(updated);
+      const [gone] = await sql`SELECT deleted FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
+      if (!gone) return res.status(404).json({ error: 'Gig not found' });
+      return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
+    }
+
+    const [gig] = await sql`SELECT * FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
     if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
     // ── POST /gigs/:id/poster-url — get presigned upload URLs ──────────────────
@@ -137,9 +194,9 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
       // This gig's own keys first: asking storage about any other key would
       // tell the caller whether that file exists.
       const expectedPrefix = `gigs/${artist.slug}/${gigId}-`;
-      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix))
+      if (!keyFromUrl(posterUrl)?.startsWith(expectedPrefix) || unsafeKey(keyFromUrl(posterUrl)))
         return res.status(400).json({ error: 'Invalid poster URL' });
-      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix))
+      if (!keyFromUrl(thumbUrl)?.startsWith(expectedPrefix) || unsafeKey(keyFromUrl(thumbUrl)))
         return res.status(400).json({ error: 'Invalid thumb URL' });
       const [posterOk, thumbOk] = await Promise.all([
         verifyUpload(keyFromUrl(posterUrl)),
@@ -151,45 +208,29 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
         return res.status(400).json({ error: 'Poster must be a JPEG image' });
       if (thumbOk.contentType !== 'image/jpeg')
         return res.status(400).json({ error: 'Thumbnail must be a JPEG image' });
-      // Delete old files if replacing
-      if (gig.poster_url) {
-        await Promise.all([
-          deleteFromR2(gig.poster_url).catch(() => {}),
-          gig.thumb_url ? deleteFromR2(gig.thumb_url).catch(() => {}) : Promise.resolve(),
-        ]);
-      }
       await sql`
         UPDATE gigs
         SET poster_url = ${posterUrl}, thumb_url = ${thumbUrl}, last_updated = NOW()
         WHERE id = ${gigId} AND artist_id = ${artist.id}
       `;
+      // The files this one replaces go once the new ones are saved. A retried
+      // confirm sends the URLs already stored: those are the live files, not
+      // old ones, and deleting them left the gig pointing at nothing.
+      await removeGigFiles(req, artist, [
+        gig.poster_url !== posterUrl ? gig.poster_url : null,
+        gig.thumb_url  !== thumbUrl  ? gig.thumb_url  : null,
+      ]);
       return res.json({ ok: true, posterUrl, thumbUrl });
-    }
-
-    if (req.method === 'PUT') {
-      if (gig.deleted) return res.status(409).json({ error: 'Gig is deleted and cannot be modified' });
-      if (!refs.venue)     return res.status(400).json({ error: 'Invalid venue_id' });
-      if (!refs.organizer) return res.status(400).json({ error: 'Invalid organizer_id' });
-      // Only the fields sent are written; an empty value clears one.
-      const value = parsed.value;
-      if (!Object.keys(value).length) return res.json(gig);
-      const [updated] = await sql`
-        UPDATE gigs SET ${sql(value)}, last_updated = NOW()
-        WHERE id = ${gigId} AND artist_id = ${artist.id}
-        RETURNING *
-      `;
-      return res.json(updated);
     }
 
     // ── DELETE /gigs/:id/poster — remove poster files and clear DB ─────────────
     if (req.method === 'DELETE' && req.query.sub === 'poster') {
-      if (gig.poster_url) await deleteFromR2(gig.poster_url).catch(() => {});
-      if (gig.thumb_url)  await deleteFromR2(gig.thumb_url).catch(() => {});
       await sql`
         UPDATE gigs
         SET poster_url = NULL, thumb_url = NULL, last_updated = NOW()
         WHERE id = ${gigId} AND artist_id = ${artist.id}
       `;
+      await removeGigFiles(req, artist, [gig.poster_url, gig.thumb_url]);
       return res.json({ ok: true });
     }
 
@@ -208,6 +249,7 @@ async function handleOneGig(req, res, { slug, sql, gigId }) {
         }
         await tx`DELETE FROM gigs WHERE id = ${gigId} AND artist_id = ${artist.id}`;
       });
+      await removeGigFiles(req, artist, [gig.poster_url, gig.thumb_url]);
       return res.json({ deleted: true, hard: true });
     }
 }
@@ -262,7 +304,7 @@ module.exports = wrap(async function handler(req, res) {
       `;
       const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
       function esc(s) {
-        return (s || '').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+        return (s || '').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n|\r/g,'\\n');
       }
       // postgres.js hands a DATE back as a Date at UTC midnight, not as text.
       const ymd = t => new Date(t).toISOString().slice(0, 10).replace(/-/g, '');
@@ -270,14 +312,8 @@ module.exports = wrap(async function handler(req, res) {
         const d = ymd(g.date);
         let dtstart, dtend;
         if (g.time_start) {
-          const ts = g.time_start.slice(0, 5).replace(':', '');
-          dtstart = `DTSTART:${d}T${ts}00`;
-          if (g.time_end) {
-            dtend = `DTEND:${d}T${g.time_end.slice(0, 5).replace(':', '')}00`;
-          } else {
-            const h = (Number(ts.slice(0, 2)) + 2) % 24;
-            dtend = `DTEND:${d}T${String(h).padStart(2,'0')}${ts.slice(2)}00`;
-          }
+          dtstart = `DTSTART:${d}T${g.time_start.slice(0, 5).replace(':', '')}00`;
+          dtend   = `DTEND:${icsEnd(g.date, g.time_start, g.time_end)}`;
         } else {
           dtstart = `DTSTART;VALUE=DATE:${d}`;
           dtend   = `DTEND;VALUE=DATE:${ymd(new Date(g.date).getTime() + 86400000)}`;
@@ -293,11 +329,11 @@ module.exports = wrap(async function handler(req, res) {
           dtstart, dtend, `SUMMARY:${esc(g.title)}`,
           loc  ? `LOCATION:${esc(loc)}`    : '',
           desc ? `DESCRIPTION:${esc(desc)}` : '',
-          'END:VEVENT'].filter(Boolean).join('\r\n');
+          'END:VEVENT'].filter(Boolean).map(icsFold).join('\r\n');
       });
       const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Smartist//EN',
         'CALSCALE:GREGORIAN','METHOD:PUBLISH',
-        `X-WR-CALNAME:${esc(artist.name)} — Upcoming Gigs`,
+        icsFold(`X-WR-CALNAME:${esc(artist.name)} — Upcoming Gigs`),
         ...events, 'END:VCALENDAR'].join('\r\n');
       res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${slug}-gigs.ics"`);
@@ -307,10 +343,16 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const { limit, offset } = parsePage(req);
+    // Members also get each gig's setlist titles: the "has setlist" button and
+    // the setlist filter, without loading every setlist of the band.
     const rows = await sql`
       SELECT g.*,
              v.name AS venue_name,
              o.name AS organizer_name,
+             ${user ? sql`ARRAY(
+               SELECT COALESCE(sl.title, '') FROM setlists sl
+               WHERE sl.gig_id = g.id AND sl.artist_id = g.artist_id
+               ORDER BY sl.id) AS setlist_titles,` : sql``}
              COUNT(*) OVER() AS total
       FROM gigs g
       LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
@@ -326,8 +368,8 @@ module.exports = wrap(async function handler(req, res) {
     // Only the public variant may be CDN-cached.
     if (!user) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res.json({
-      rows: rows.map(({ total: _, comment, organizer_id, organizer_name, ...r }) =>
-        (user ? { comment, organizer_id, organizer_name, ...r } : r)),
+      rows: rows.map(({ total: _, comment, organizer_id, organizer_name, setlist_titles, ...r }) =>
+        (user ? { comment, organizer_id, organizer_name, setlist_titles, ...r } : r)),
       total, limit, offset,
     });
   }
@@ -344,3 +386,7 @@ module.exports = wrap(async function handler(req, res) {
 
   res.status(405).json({ error: 'Method not allowed' });
 });
+
+module.exports.icsEnd = icsEnd;
+module.exports.icsFold = icsFold;
+module.exports.removeGigFiles = removeGigFiles;

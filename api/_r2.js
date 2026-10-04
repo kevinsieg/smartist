@@ -48,7 +48,8 @@ function getR2Client() {
 
 function keyFromUrl(url) {
   const base = STORAGE.publicUrl();
-  if (base && url && url.startsWith(base)) return url.slice(base.length + 1);
+  // `${base}/`, not `base`: https://<bucket host>.example.org/… is not ours.
+  if (base && typeof url === 'string' && url.startsWith(`${base}/`)) return url.slice(base.length + 1);
   return null;
 }
 

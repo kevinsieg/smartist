@@ -1,9 +1,9 @@
-const { getDb, getSlug, trimSongLogs } = require('../../_db');
+const { getDb, getSlug, purgeDeletedSongs } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, canBrowseCatalogue } = require('../../_auth');
 const { wrap } = require('../../_handler');
 const { MEDIA_CONFIGS, makeMediaFn } = require('../../_media');
 const { validateStr, jsonBytes } = require('../../_validate');
-const { energyToScale } = require('../../_song_values');
+const { songLimit } = require('../../_plans');
 const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
 const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
@@ -13,6 +13,9 @@ const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_dom
 // An arrangement's rows and hidden instruments are stored as sent; cap them so
 // one request cannot park megabytes that every stage view then loads.
 const ARRANGEMENT_MAX_BYTES = 128 * 1024;
+// Versions per song: each is up to ARRANGEMENT_MAX_BYTES, and the plan's song
+// count would not bound them otherwise.
+const ARRANGEMENTS_PER_SONG = 20;
 function arrangementError(rows, hidden) {
   if (rows !== undefined && jsonBytes(rows) > ARRANGEMENT_MAX_BYTES) return 'rows is too large';
   if (hidden !== undefined && jsonBytes(hidden) > 4 * 1024) return 'hidden_instruments is too large';
@@ -65,7 +68,6 @@ module.exports = wrap(async function handler(req, res) {
     const song = await writeLyrics(sql, band.id, songId, text,
       req.method === 'PUT' ? 'lyrics_update' : 'lyrics_delete');
     if (!song) return res.status(404).json({ error: 'Song not found' });
-    await trimSongLogs(sql, band.id);
     return res.json({ ok: true });
   }
 
@@ -99,6 +101,8 @@ module.exports = wrap(async function handler(req, res) {
     const { rows = [], hidden_instruments = [], copy_from } = req.body ?? {};
     const tooBig = arrangementError(rows, hidden_instruments);
     if (tooBig) return res.status(400).json({ error: tooBig });
+    if (copy_from != null && !(Number.isInteger(Number(copy_from)) && Number(copy_from) > 0))
+      return res.status(400).json({ error: 'Invalid copy_from' });
     const [[song], [src]] = await Promise.all([
       sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
       copy_from
@@ -115,11 +119,17 @@ module.exports = wrap(async function handler(req, res) {
       sourceRows = src.rows;
       sourceHidden = src.hidden_instruments;
     }
+    // The count and the insert in one statement, so two requests at once
+    // cannot both pass a count taken before either of them.
     const [created] = await sql`
       INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
-      VALUES (${songId}, ${band.id}, ${name}, ${sql.json(sourceRows)}::jsonb, ${sql.json(sourceHidden)}::jsonb)
+      SELECT ${songId}, ${band.id}, ${name}, ${sql.json(sourceRows)}::jsonb, ${sql.json(sourceHidden)}::jsonb
+      WHERE (SELECT count(*) FROM song_arrangements
+             WHERE song_id = ${songId} AND artist_id = ${band.id}) < ${ARRANGEMENTS_PER_SONG}
       RETURNING *
     `;
+    if (!created)
+      return res.status(409).json({ error: `At most ${ARRANGEMENTS_PER_SONG} versions per song`, code: 'arrangement_limit' });
     return res.status(201).json(created);
   }
 
@@ -205,18 +215,10 @@ module.exports = wrap(async function handler(req, res) {
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
     const sql = getDb();
-    const [song, arrangements] = await Promise.all([
-      songDetail(sql, band.id, songId),
-      sql`
-        SELECT id, name, is_active, updated_at
-        FROM song_arrangements
-        WHERE song_id = ${songId} AND artist_id = ${band.id}
-        ORDER BY created_at ASC
-      `,
-    ]);
+    const song = await songDetail(sql, band.id, songId);
     if (!song) return res.status(404).json({ error: 'Song not found' });
     // A visitor without a session never sees the band's private notes.
-    return res.json({ ...(user ? song : publicSong(song)), arrangements });
+    return res.json(user ? song : publicSong(song));
   }
 
   // ── DELETE song ───────────────────────────────────────────────────────────
@@ -241,6 +243,7 @@ module.exports = wrap(async function handler(req, res) {
       SELECT id FROM s
     `;
     if (!song) return res.status(404).json({ error: 'Song not found' });
+    await purgeDeletedSongs(sql, band.id);
     return res.status(204).end();
   }
 
@@ -252,6 +255,14 @@ module.exports = wrap(async function handler(req, res) {
     if (!band) return;
 
     const sql = getDb();
+    // A restored song counts towards the plan's song limit like a new one:
+    // delete, add, restore otherwise went past it.
+    const max = songLimit(band);
+    if (max != null) {
+      const [{ count }] = await sql`
+        SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      if (count >= max) return res.status(402).json({ error: 'song_limit', limit: max });
+    }
     // The common case — the row is still there, flagged — is one statement:
     // clear the flag and log it, if a delete record exists.
     const [restored] = await sql`
@@ -269,39 +280,13 @@ module.exports = wrap(async function handler(req, res) {
     `;
     if (restored) return res.status(201).json(restored);
 
-    // The row is gone (hard-deleted before soft delete existed): rebuild it
-    // from the last delete snapshot — unless the song is live, when there is
-    // nothing to restore.
-    const [[log], [live]] = await Promise.all([
-      sql`
-        SELECT song_data FROM song_logs
-        WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete'
-        ORDER BY changed_at DESC
-        LIMIT 1
-      `,
-      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id}`,
-    ]);
-    if (!log) return res.status(404).json({ error: 'No delete record found for this song' });
+    // Nothing came back: the song is live, or there is no deleted row. A
+    // hard-deleted song cannot be restored by id: song_logs.song_id is
+    // ON DELETE SET NULL, so its snapshots no longer carry the id.
+    const [live] = await sql`
+      SELECT 1 FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`;
     if (live) return res.status(409).json({ error: 'Song is not deleted' });
-    const d = log.song_data;
-    const [song] = await sql`
-      WITH s AS (
-        INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
-                           bpm, length_min, interpret, reference_interpret, comment, language, extra)
-        VALUES (${band.id}, ${d.title}, ${d.active ?? true}, ${d.heart ?? false}, ${d.key ?? null},
-                ${d.genre ?? null}, ${energyToScale(d.energy) ?? null}, ${d.time_signature ?? null},
-                ${d.bpm ?? null}, ${d.length_min ?? null},
-                ${d.interpret ?? null}, ${d.reference_interpret ?? null},
-                ${d.comment ?? null}, ${d.language ?? null},
-                ${d.extra ?? {}})
-        RETURNING *
-      ), logged AS (
-        INSERT INTO song_logs (artist_id, song_id, action, song_data)
-        SELECT artist_id, id, 'create', to_jsonb(s) FROM s
-      )
-      SELECT * FROM s
-    `;
-    return res.status(201).json(song);
+    return res.status(404).json({ error: 'No delete record found for this song' });
   }
 
   // ── GET setlist appearances ───────────────────────────────────────────────

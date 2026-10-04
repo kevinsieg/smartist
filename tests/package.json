@@ -3,7 +3,6 @@
   "private": true,
   "scripts": {
     "test": "node api.js",
-    "test:unit": "npm --prefix .. run test:unit",
-    "test:e2e": "node e2e-signup.js"
+    "test:unit": "npm --prefix .. run test:unit"
   }
 }

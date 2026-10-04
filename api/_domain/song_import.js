@@ -13,7 +13,12 @@ const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const { LYRICS_MAX } = require('./songs');
 
 const MAX_ROWS = 1000;
-const MAX_CSV = 4_000_000;
+// Vercel refuses request and response bodies over 4.5 MB. The file travels as
+// a JSON string (a newline, a quote or an umlaut takes two bytes there), and
+// the preview sends every row back, lyrics included, and the page sends them
+// again on each re-check and on import. 1.5 million characters keeps all of
+// those under the platform limit; a larger file is split by the user.
+const MAX_CSV = 1_500_000;
 
 const KEYS = [
   'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯', 'F', 'B♭', 'E♭', 'A♭', 'D♭', 'G♭', 'C♭',
@@ -431,6 +436,6 @@ async function songImport(sql, artistId, input, { maxSongs = null } = {}) {
 }
 
 module.exports = {
-  COLUMNS, cleanCell, MAX_ROWS, parseCsvText, parseSongCsv, checkRows,
+  COLUMNS, cleanCell, MAX_ROWS, MAX_CSV, parseCsvText, parseSongCsv, checkRows,
   normKey, normLength, songImport,
 };
