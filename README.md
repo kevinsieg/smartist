@@ -345,7 +345,7 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 
 ## API
 
-All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json`; interactive docs at `/api/docs`.
+All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json` (`tests/unit/openapi.js` checks it against the route table); interactive docs at `/api/docs`.
 
 A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *stage* = also open without a session when the band turned on *public catalogue* / *public stage links* in Settings (both off by default); — = no session needed.
 
@@ -391,6 +391,7 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | DELETE | `/api/:artist/gigs/:id`           | ✓    | Soft-delete or hard-delete gig                                                               |
 | GET    | `/api/:artist/venues`             | ✓    | List venues (paginated, filterable) — Pro plan                                               |
 | POST   | `/api/:artist/venues`             | ✓    | Create venue                                                                                 |
+| PATCH  | `/api/:artist/venues`             | ✓    | Batch update CRM fields (max 200 rows)                                                       |
 | GET    | `/api/:artist/venues/:id`         | ✓    | Single venue; add `?refs` for linked gigs                                                    |
 | PUT    | `/api/:artist/venues/:id`         | ✓    | Update venue                                                                                 |
 | DELETE | `/api/:artist/venues/:id`         | ✓    | Soft-delete or hard-delete venue                                                             |
