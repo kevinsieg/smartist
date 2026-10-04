@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
+const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, loginOkKey, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
 const { ok, fail } = require('./http');
 const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
@@ -37,7 +37,8 @@ const since = secs => new Date(Date.now() - secs * 1000).toISOString();
 // Everything before bcrypt is one statement: count this attempt against the IP
 // (the upsert checkRateLimit makes), read the address's lock (LOGIN_FAIL_MAX
 // failures from this IP or LOGIN_FAIL_ADDRESS_MAX from all, in
-// LOGIN_FAIL_WINDOW, api/_ratelimit.js), and fetch the candidate
+// LOGIN_FAIL_WINDOW, api/_ratelimit.js; the address-wide lock spares an IP the
+// address signed in from lately), and fetch the candidate
 // rows and the address's bands. Each statement costs two round-trips
 // (prepare: false, see api/_db.js), and these were four statements. The bands
 // are the same for every row of the address (getArtistsForUser goes by email),
@@ -71,8 +72,14 @@ async function passwordLogin({ body, ip }) {
         SELECT 1 FROM rate_limits
         WHERE window_start >= ${since(LOGIN_FAIL_WINDOW)}
           AND ((key = ${loginFailPairKey(clean, ip)} AND count >= ${LOGIN_FAIL_MAX}::int)
-            OR (key = ${loginFailKey(clean)} AND count >= ${LOGIN_FAIL_ADDRESS_MAX}::int))
+            OR (key = ${loginFailKey(clean)} AND count >= ${LOGIN_FAIL_ADDRESS_MAX}::int
+                AND NOT EXISTS (
+                  SELECT 1 FROM rate_limits
+                  WHERE key = ${loginOkKey(clean, ip)}
+                    AND window_start >= now() - ${`${LOGIN_OK_DAYS} days`}::interval)))
       ) AS locked,
+      (SELECT window_start > now() - interval '1 day' FROM rate_limits
+       WHERE key = ${loginOkKey(clean, ip)}) AS ip_known_today,
       COALESCE((
         SELECT json_agg(c ORDER BY c.id) FROM (
           SELECT id, role, password_hash FROM (
@@ -107,6 +114,11 @@ async function passwordLogin({ body, ip }) {
     return fail(401, 'Invalid email or password');
   }
 
+  // Remember this IP as one the address signs in from (see loginOkKey) —
+  // refreshed at most once a day, so a usual sign-in stays one statement.
+  if (!gate.ip_known_today) await sql`
+    INSERT INTO rate_limits (key, window_start, count) VALUES (${loginOkKey(clean, ip)}, NOW(), 1)
+    ON CONFLICT (key) DO UPDATE SET window_start = NOW()`;
   const token   = generateUserToken(user.id, user.role, rememberMe ? TTL_30D : TTL_8H, user.password_hash);
   const artists = gate.artists;
   await logger.info('login', { email: clean, artists: artists.length });
@@ -153,7 +165,10 @@ async function logoutEverywhere({ headers }) {
   if (!me || !sessionValid(claim, me)) return fail(401, 'Unauthorized');
   // The function's own clock, which is what iat was taken from.
   const { count } = await sql`
-    UPDATE users SET sessions_valid_after = ${new Date()} WHERE email = ${me.email}`;
+    UPDATE users SET sessions_valid_after = ${new Date()},
+        pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
+        delete_token_hash = NULL, delete_token_expires = NULL
+    WHERE email = ${me.email}`;
   await logger.info('logout_everywhere', { userId: claim.userId, rows: count });
   return ok({ ok: true });
 }

@@ -17,7 +17,7 @@ process.env.APP_SECRET = process.env.APP_SECRET || 'unit-test-secret-32-bytes-ok
 const HASH = bcrypt.hashSync('correct horse battery', 4);
 const OTHER = bcrypt.hashSync('a different password', 4);
 
-function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ slug: 'a', name: 'A', role: 'admin' }] } = {}) {
+function makeHandler(rows, { rateLimited = false, locked = false, ipKnown = true, artists = [{ slug: 'a', name: 'A', role: 'admin' }] } = {}) {
   const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const authPath   = require.resolve(path.join(__dirname, '../../api/_auth'));
@@ -38,7 +38,7 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
     queries.push({ text, values });
     // passwordLogin's one statement: IP count, lock, candidates and bands.
     if (/WITH ip_hit AS \( INSERT INTO rate_limits/.test(text))
-      return Promise.resolve([{ ip_limited: rateLimited, locked, candidates: rows, artists }]);
+      return Promise.resolve([{ ip_limited: rateLimited, locked, ip_known_today: ipKnown, candidates: rows, artists }]);
     if (/FROM users/.test(text)) return Promise.resolve(rows);
     return Promise.resolve(artists);
   };
@@ -47,6 +47,7 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
     id: rlPath, filename: rlPath, loaded: true,
     exports: {
       loginFailKey: email => `login-fail:${email}`, loginFailPairKey: (email, ip) => `login-fail:${email}|${ip}`,
+      loginOkKey: (email, ip) => `login-ok:${email}|${ip}`, LOGIN_OK_DAYS: 30,
       LOGIN_FAIL_MAX: 10, LOGIN_FAIL_ADDRESS_MAX: 100, LOGIN_FAIL_WINDOW: 900,
       countLoginFailure: async (email, ip) => { failures.push(email); failureIps.push(ip); },
       checkRateLimit: async () => rateLimited, clientIp: () => '127.0.0.1',
@@ -180,6 +181,27 @@ async function run(r) {
     assertEq(res._status, 200);
     assertEq(queries.length, 1, 'rate limit, lock, candidates and bands were four statements');
     assertEq(res._body.artists[0].slug, 'a', 'the bands come from that statement');
+  });
+
+  await testAsync('the address-wide lock spares an IP the address signed in from', async () => {
+    const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
+    await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
+    assert(queries[0].values.includes('login-ok:a@b.co|127.0.0.1'), 'the known-IP key is read in the gate');
+    assert(/NOT EXISTS \( SELECT 1 FROM rate_limits WHERE key =/.test(queries[0].text), 'the address lock is waived for a known IP');
+  });
+
+  await testAsync('a sign-in from a new IP remembers it, in one more statement', async () => {
+    const { handler, queries } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }], { ipKnown: false });
+    const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
+    assertEq(res._status, 200);
+    assertEq(queries.length, 2);
+    assert(queries[1].values.includes('login-ok:a@b.co|127.0.0.1'), 'the IP is stored for the address');
+  });
+
+  await testAsync('a wrong password never marks the IP as known', async () => {
+    const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }], { ipKnown: false });
+    await call(handler, { email: 'a@b.co', password: 'not it' });
+    assert(!queries.some(q => q.values.includes('login-ok:a@b.co|127.0.0.1') && /^INSERT/.test(q.text)));
   });
 
   await testAsync('a wrong password is counted against the address and IP', async () => {

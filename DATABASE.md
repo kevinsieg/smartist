@@ -404,7 +404,7 @@ Row ids are one sequence across all artists, and a foreign key only proves that 
 
 ### Soft delete
 
-Songs, venues, organizers, and gigs use `deleted = true` rather than physical deletion. This preserves setlist history (songs), CRM history (venues/organizers), and linked setlists (gigs). The restore endpoint for songs (`POST /api/:artist/songs/:id/restore`) uses the `song_logs` snapshot as a fallback. A song deleted more than 90 days ago that no setlist lists and that has no uploaded file is removed for good, with its history (`purgeDeletedSongs` in `api/_db.js`, run by about one song deletion in ten). A song has at most 20 arrangement versions.
+Songs, venues, organizers, and gigs use `deleted = true` rather than physical deletion. This preserves setlist history (songs), CRM history (venues/organizers), and linked setlists (gigs). The restore endpoint for songs (`POST /api/:artist/songs/:id/restore`) clears the flag; a hard-deleted song cannot come back by id, since its `song_logs` rows lose the id. A song deleted more than 90 days ago that no setlist lists and that has no uploaded file is removed for good, with its history (`purgeDeletedSongs` in `api/_db.js`, run by about one song deletion in ten). A song has at most 20 arrangement versions.
 
 ### FK delete strategies
 
