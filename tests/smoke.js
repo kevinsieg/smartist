@@ -99,7 +99,19 @@ async function main() {
     await assertAccessible(page, '/login');
   });
 
+  // Public pages a visitor reaches before signing in.
+  for (const p of ['signup', 'privacy', 'contact', 'confirm-email', 'demo']) {
+    await check(`/${p} renders and is accessible`, async () => {
+      await page.goto(`${BASE}/${p}`);
+      await settle(page);
+      assertClean(log.take(), `/${p}`);
+      await assertAccessible(page, `/${p}`);
+    });
+  }
+
   await check('signing in through the form lands on the workspace', async () => {
+    await page.goto(`${BASE}/login`);
+    await page.waitForSelector('#email-input', { timeout: 10000 });
     await page.fill('#email-input', EMAIL);
     await page.fill('#pw-input', PASSWORD);
     await Promise.all([
@@ -123,6 +135,31 @@ async function main() {
       await assertAccessible(page, p);
     });
   }
+
+  for (const p of ['profile', 'workspaces']) {
+    await check(`/${p} loads without errors`, async () => {
+      await page.goto(`${BASE}/${p}`);
+      await settle(page);
+      assertClean(log.take(), `/${p}`);
+      await assertAccessible(page, `/${p}`);
+    });
+  }
+
+  // What a page-load scan cannot see: the song panel opened from the keyboard
+  // takes focus (on phones it covers the list) and passes axe while open.
+  await check('a song opened by keyboard moves focus into its panel', async () => {
+    await page.goto(`${BASE}/${SLUG}/songs`);
+    await settle(page);
+    await page.locator('[data-id][tabindex="0"]').first().focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#view-side-panel .vsp-title', { timeout: 10000 });
+    await page.waitForFunction(() => document.getElementById('view-side-panel').contains(document.activeElement), null, { timeout: 5000 });
+    assertClean(log.take(), 'song panel');
+    await assertAccessible(page, 'song panel');
+    await page.keyboard.press('Escape');
+    const back = await page.evaluate(() => !!document.activeElement.closest('[data-id]'));
+    if (!back) throw new Error('Escape did not return focus to the song row');
+  });
 
   await check('nav links navigate in place (SPA) without errors', async () => {
     await page.goto(`${BASE}/${SLUG}/dashboard`);

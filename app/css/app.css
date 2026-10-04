@@ -251,14 +251,15 @@ h2 { font-weight: 600; font-size: clamp(1.05rem, 3vw, 1.3rem); line-height: 1.25
 }
 @keyframes navAuthMenuIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
 .nav-auth-menu-item {
-    display: flex; align-items: center;
+    display: flex; align-items: center; width: 100%; min-height: 44px;
+    background: none; border: none; text-align: left;
     padding: 0.55rem 1rem; font-size: 0.8rem; cursor: pointer;
     color: var(--secondary-ink); border-bottom: 1px solid var(--border-color);
     font-family: var(--font-ui);
     -webkit-tap-highlight-color: transparent;
 }
 .nav-auth-menu-item:last-child { border-bottom: none; }
-.nav-auth-menu-item:hover { background: var(--secondary-color); }
+.nav-auth-menu-item:hover, .nav-auth-menu-item:focus-visible { background: var(--secondary-color); }
 
 /* View-mode login in nav */
 .nav-auth-vm { display: flex; flex-direction: row; align-items: center; gap: 0.4rem; }
@@ -317,6 +318,7 @@ h2 { font-weight: 600; font-size: clamp(1.05rem, 3vw, 1.3rem); line-height: 1.25
     border-bottom-color: rgba(0,0,0,0.15);
 }
 .app-header--authed .band-name { color: var(--primary-color); }
+.app-header--authed .app-studio-wordmark { color: var(--primary-color); }
 .app-header--authed .app-logo-initials {
     background: rgba(0,0,0,0.22);
     color: var(--primary-color);
@@ -464,7 +466,7 @@ input[type="date"], input[type="number"] {
   z-index: 9999;
   transition: opacity 0.12s ease;
 }
-[data-tooltip]:hover::after { opacity: 1; transition: opacity 0.12s ease 0.45s; }
+[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { opacity: 1; transition: opacity 0.12s ease 0.45s; }
 
 /* ── Status messages ────────────────────────────────────────────────────────── */
 @keyframes status-in {
@@ -1466,7 +1468,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .danger-zone .btn-danger { background: #7a2a2a; color: #fff; border-color: #7a2a2a; }
 .danger-zone .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 .danger-zone .danger-export-btn {
-    background: none; border: none; padding: 0; margin-left: 0.35rem;
+    background: none; border: none; padding: 0.25rem 0; margin-left: 0.35rem; min-height: 24px;
     color: var(--secondary-ink); text-decoration: underline; cursor: pointer;
     font: inherit; font-size: 0.8em;
 }
@@ -1474,7 +1476,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .reset-link {
     background: none; border: none; color: var(--third-color); font-size: 0.78rem;
     font-family: var(--font-ui); cursor: pointer;
-    margin-top: 1rem; text-decoration: underline; padding: 0;
+    margin-top: 1rem; text-decoration: underline; padding: 0.3rem 0; min-height: 24px;
     touch-action: manipulation;
 }
 .reset-link:hover { color: var(--secondary-ink); }
@@ -1718,7 +1720,8 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .vsp-header-text { flex: 1; min-width: 0; }
 .vsp-title { margin: 0 0 0.2rem; font-size: 1.05rem; word-break: break-word; }
 .vsp-active-dot { font-size: 0.72rem; }
-.vsp-active-dot--on { color: var(--secondary-color); }
+.vsp-active-dot--on { color: var(--secondary-ink); }
+.vsp-active-dot--on .vsp-dot { color: var(--secondary-color); }
 .vsp-active-dot--off { color: var(--third-color); }
 .vsp-close {
   background: none; border: none;
@@ -1746,7 +1749,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
 .vsp-audio-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--third-color); margin-bottom: 0.25rem; }
 .vsp-audio { width: 100%; height: 32px; display: block; }
 .audio-speed-btns { display: flex; gap: 0.3rem; margin-top: 0.35rem; }
-.audio-speed-btns button { font-size: 0.7rem; padding: 0.15rem 0.45rem; border: 1px solid var(--border-color); border-radius: 3px; background: none; color: var(--third-color); cursor: pointer; line-height: 1.4; }
+.audio-speed-btns button { font-size: 0.7rem; padding: 0.15rem 0.6rem; min-height: 28px; min-width: 36px; border: 1px solid var(--border-color); border-radius: 3px; background: none; color: var(--third-color); cursor: pointer; line-height: 1.4; }
 .audio-speed-btns button:hover { color: var(--text-color); border-color: var(--text-color); }
 .audio-speed-btns button.active { color: var(--text-color); border-color: var(--text-color); background: var(--primary-color); }
 .vsp-lyrics { white-space: pre-wrap; font-size: 0.78rem; line-height: 1.55; flex: 1; min-height: 120px; max-height: 40vh; overflow-y: auto; background: var(--primary-color); border-radius: 4px; padding: 0.5rem 0.6rem; word-break: break-word; }
@@ -2035,7 +2038,8 @@ span.heart-btn    { cursor: default; }
 .arr-inp:focus, .arr-sel:focus { outline: 2px solid var(--secondary-color); border-color: transparent; }
 .arr-sel { border: 1px solid var(--border-color); border-radius: 2px; padding: 2px 4px; font-size: 0.8rem; font-family: inherit; background: var(--bg-color); color: inherit; width: 68px; }
 .arr-lead-sel { width: 88px; }
-.arr-row-btn { background: none; border: none; cursor: pointer; color: var(--third-color); font-size: 0.9rem; padding: 1px 3px; }
+.arr-row-btn { background: none; border: none; cursor: pointer; color: var(--third-color); font-size: 0.9rem; padding: 1px 3px; min-width: 28px; min-height: 28px; }
+.arr-row-btn:disabled { opacity: 0.3; cursor: default; }
 .arr-row-btn--del:hover { color: #e55; }
 .arr-add-row-cell { padding: 4px 6px; }
 .arr-add-row-btn { background: none; border: 1px dashed var(--border-color); border-radius: 3px; padding: 3px 12px; color: var(--third-color); font-size: 0.8rem; cursor: pointer; width: 100%; }
@@ -2045,8 +2049,8 @@ span.heart-btn    { cursor: default; }
 
 /* Harmony picker */
 .arr-harm-picker { background: var(--bg-color); border: 1px solid var(--arr-harm-color); border-radius: 3px; min-width: 140px; box-shadow: 0 2px 8px rgba(0,0,0,.15); font-size: 0.82rem; }
-.arr-harm-item { display: flex; align-items: center; gap: 0.5rem; padding: 5px 10px; cursor: pointer; }
-.arr-harm-item:hover { background: rgba(61,107,206,.08); }
+.arr-harm-item { display: flex; align-items: center; gap: 0.5rem; padding: 5px 10px; cursor: pointer; width: 100%; min-height: 32px; background: none; border: none; font: inherit; color: inherit; text-align: left; }
+.arr-harm-item:hover, .arr-harm-item:focus-visible { background: rgba(61,107,206,.08); }
 .arr-harm-item--sel { background: rgba(61,107,206,.08); }
 .arr-harm-abbr { color: var(--arr-harm-color); font-weight: 700; min-width: 1.5rem; }
 
@@ -2187,9 +2191,9 @@ span.heart-btn    { cursor: default; }
 /* ── Share menu popover (setlist history, songs toolbar) ── */
 .share-menu { background:#fff; border:1px solid var(--border-color); border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.14); min-width:190px; overflow:hidden; animation:share-menu-in 60ms ease-out; z-index:200; }
 @keyframes share-menu-in { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
-.share-menu-item { display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; font-size:0.84rem; cursor:pointer; color:var(--secondary-ink); border-bottom:1px solid var(--border-color); }
+.share-menu-item { display:flex; align-items:center; gap:0.65rem; width:100%; min-height:44px; background:none; border:none; border-bottom:1px solid var(--border-color); text-align:left; font-family:inherit; padding:0.65rem 1rem; font-size:0.84rem; cursor:pointer; color:var(--secondary-ink); border-bottom:1px solid var(--border-color); }
 .share-menu-item:last-child { border-bottom:none; }
-.share-menu-item:hover { background:var(--secondary-color); }
+.share-menu-item:hover, .share-menu-item:focus-visible { background:var(--secondary-color); }
 .share-menu-icon { font-size:1rem; flex-shrink:0; }
 
 /* ── Dashboard help ── */

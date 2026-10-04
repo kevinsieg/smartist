@@ -84,13 +84,13 @@ function _openHistPanelContent(item, panelEl) {
     '</div>' +
     '<div class="vsp-actions" style="margin-bottom:1rem;">' +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="' + t('setlist.editTooltip') + '" data-onclick="_histEdit(' + onArg(sid) + ')">' +
+        '<button class="btn icon-btn" data-tooltip="' + t('setlist.editTooltip') + '" aria-label="' + t('setlist.editTooltip') + '" data-onclick="_histEdit(' + onArg(sid) + ')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
           '</svg>' +
         '</button>') +
       (_viewMode ? '' :
-        '<button class="btn icon-btn" data-tooltip="' + t('setlist.duplicateTooltip') + '" data-onclick="_histDuplicate(' + onArg(sid) + ')">' +
+        '<button class="btn icon-btn" data-tooltip="' + t('setlist.duplicateTooltip') + '" aria-label="' + t('setlist.duplicateTooltip') + '" data-onclick="_histDuplicate(' + onArg(sid) + ')">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
             '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
@@ -206,13 +206,13 @@ function _renderHistRow(s) {
   var orgName = (gig && gig.organizer_name) || '';
   var headerLinks = [];
   if (gigName)   headerLinks.push(gig && gig.id
-    ? '<span class="hist-meta-link" data-onclick="event.stopPropagation();navigate(\'/gigs?open=' + gig.id + '\')">' + escHtml(gigName) + ' &#8599;</span>'
+    ? '<a class="hist-meta-link" href="/' + _artistSlug + '/gigs?open=' + Number(gig.id) + '" data-onclick="event.stopPropagation();event.preventDefault();navigate(\'/gigs?open=' + Number(gig.id) + '\')">' + escHtml(gigName) + ' &#8599;</a>'
     : '<span class="hist-meta-link" style="cursor:default">' + escHtml(gigName) + '</span>');
   if (venueName) headerLinks.push(gig && gig.venue_id
-    ? '<span class="hist-meta-link" data-onclick="event.stopPropagation();navigate(\'/venues?open=' + gig.venue_id + '\')">' + escHtml(venueName) + ' &#8599;</span>'
+    ? '<a class="hist-meta-link" href="/' + _artistSlug + '/venues?open=' + Number(gig.venue_id) + '" data-onclick="event.stopPropagation();event.preventDefault();navigate(\'/venues?open=' + Number(gig.venue_id) + '\')">' + escHtml(venueName) + ' &#8599;</a>'
     : '<span class="hist-meta-link" style="cursor:default">' + escHtml(venueName) + '</span>');
   if (orgName)   headerLinks.push(gig && gig.organizer_id
-    ? '<span class="hist-meta-link" data-onclick="event.stopPropagation();navigate(\'/organizers?open=' + gig.organizer_id + '\')">' + escHtml(orgName) + ' &#8599;</span>'
+    ? '<a class="hist-meta-link" href="/' + _artistSlug + '/organizers?open=' + Number(gig.organizer_id) + '" data-onclick="event.stopPropagation();event.preventDefault();navigate(\'/organizers?open=' + Number(gig.organizer_id) + '\')">' + escHtml(orgName) + ' &#8599;</a>'
     : '<span class="hist-meta-link" style="cursor:default">' + escHtml(orgName) + '</span>');
 
   var sid = String(s.id);
@@ -722,7 +722,7 @@ function _histShareMenu(sid, btn) {
   sid = String(sid);
   var existing = document.getElementById('share-menu-popup');
   if (existing) {
-    existing.remove();
+    closeShareMenu();
     if (existing.dataset.sid === sid) return;
   }
 
@@ -731,15 +731,15 @@ function _histShareMenu(sid, btn) {
   menu.className = 'share-menu';
   menu.dataset.sid = sid;
   menu.innerHTML =
-    '<div class="share-menu-item" data-onclick="_histExportPdf(' + onArg(sid) + ');closeShareMenu()">' +
-      '<span class="share-menu-icon">⎙</span><span class="share-menu-label">' + t('setlist.shareMenuExportPdf') + '</span>' +
-    '</div>' +
-    '<div class="share-menu-item" data-onclick="_histCopyLink(' + onArg(sid) + ')">' +
-      '<span class="share-menu-icon">⧉</span><span class="share-menu-label">' + t('setlist.shareMenuCopyLink') + '</span>' +
-    '</div>' +
-    '<div class="share-menu-item" data-onclick="closeShareMenu();_histShare(' + onArg(sid) + ')">' +
-      '<span class="share-menu-icon">✉</span><span class="share-menu-label">' + t('setlist.shareMenuEmail') + '</span>' +
-    '</div>';
+    '<button type="button" class="share-menu-item" data-onclick="_histExportPdf(' + onArg(sid) + ');closeShareMenu()">' +
+      '<span class="share-menu-icon" aria-hidden="true">⎙</span><span class="share-menu-label">' + t('setlist.shareMenuExportPdf') + '</span>' +
+    '</button>' +
+    '<button type="button" class="share-menu-item" data-keep-open data-onclick="_histCopyLink(' + onArg(sid) + ')">' +
+      '<span class="share-menu-icon" aria-hidden="true">⧉</span><span class="share-menu-label">' + t('setlist.shareMenuCopyLink') + '</span>' +
+    '</button>' +
+    '<button type="button" class="share-menu-item" data-onclick="closeShareMenu();_histShare(' + onArg(sid) + ')">' +
+      '<span class="share-menu-icon" aria-hidden="true">✉</span><span class="share-menu-label">' + t('setlist.shareMenuEmail') + '</span>' +
+    '</button>';
 
   var rect = btn.getBoundingClientRect();
   menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;left:' + rect.left + 'px';
@@ -747,25 +747,19 @@ function _histShareMenu(sid, btn) {
   // Shift left if overflowing right edge
   var overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
   if (overflow > 0) menu.style.left = Math.max(8, rect.left - overflow) + 'px';
-
-  function closeMenu(e) {
-    if (!menu.contains(e.target) && e.target !== btn) {
-      menu.remove();
-      document.removeEventListener('click', closeMenu);
-    }
-  }
-  setTimeout(function() { document.addEventListener('click', closeMenu); }, 0);
+  wirePopupMenu(btn, menu);
 }
 
 function _histCopyLink(sid) {
   var url = location.origin + '/' + _artistSlug + '/stage?id=' + sid;
   var menu = document.getElementById('share-menu-popup');
   var item = menu && menu.querySelectorAll('.share-menu-item')[1];
-  if (item) item.innerHTML = '<span class="share-menu-icon">✓</span><span class="share-menu-label">' + t('setlist.shareMenuCopied') + '</span>';
+  if (item) item.innerHTML = '<span class="share-menu-icon" aria-hidden="true">✓</span><span class="share-menu-label">' + t('setlist.shareMenuCopied') + '</span>';
+  announce(t('setlist.shareMenuCopied'));
   navigator.clipboard.writeText(url).catch(function() {
-    if (item) item.innerHTML = '<span class="share-menu-icon">⧉</span><span class="share-menu-label">' + t('setlist.shareMenuCopyLink') + '</span>';
+    if (item) item.innerHTML = '<span class="share-menu-icon" aria-hidden="true">⧉</span><span class="share-menu-label">' + t('setlist.shareMenuCopyLink') + '</span>';
   });
-  setTimeout(function() { if (menu && menu.parentNode) menu.remove(); }, 900);
+  setTimeout(function() { if (menu && menu.parentNode) closeShareMenu(); }, 900);
 }
 
 function _histShare(sid) {

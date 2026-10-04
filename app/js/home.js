@@ -239,7 +239,7 @@ function renderLogin(errorMsg, cfg) {
       '<div class="auth-remember">' +
         '<label class="auth-remember-label"><input type="checkbox" id="remember-me"> ' + t('home.rememberMe') + '</label>' +
       '</div>' +
-      '<div class="auth-error" id="auth-error"></div>' +
+      '<div class="auth-error" id="auth-error" role="alert"></div>' +
       '<button class="btn active auth-submit" id="pw-btn">' + t('home.signIn') + '</button>' +
       '<button class="reset-link" id="reset-toggle">' + t('home.forgotPassword') + '</button>' +
       '<div class="reset-form" id="reset-form" style="display:none">' +
@@ -247,7 +247,7 @@ function renderLogin(errorMsg, cfg) {
           '<label class="auth-label" for="reset-email">' + t('home.emailAddressLabel') + '</label>' +
           '<input type="email" id="reset-email" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
         '</div>' +
-        '<div class="auth-error" id="reset-msg"></div>' +
+        '<div class="auth-error" id="reset-msg" role="status"></div>' +
         '<button class="btn auth-submit" id="reset-btn">' + t('home.sendLink') + '</button>' +
       '</div>' +
       '<p class="auth-hint">' + t('home.noAccount') + ' <a href="/signup">' + t('home.signUpFree') + '</a></p>' +
@@ -294,7 +294,7 @@ function renderSetPassword(token, cfg, resetHint) {
           '<button type="button" class="pw-toggle" id="pw-toggle-new">' + t('home.showPw') + '</button>' +
         '</div>' +
       '</div>' +
-      '<div class="auth-error" id="auth-error"></div>' +
+      '<div class="auth-error" id="auth-error" role="alert"></div>' +
       '<button class="btn active auth-submit" id="accept-btn">' + label + '</button>' +
     '</div>';
   document.getElementById('pw-toggle-new').addEventListener('click', () => {
@@ -381,7 +381,7 @@ async function doLogin() {
       body: JSON.stringify(body),
     });
     const data = await r.json();
-    if (!r.ok) { err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); return; }
+    if (!r.ok) { err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); document.getElementById('pw-input')?.focus(); return; }
     storeToken(data.token, remember);
     sessionStorage.setItem('smartist_admin_email', data.email || '');
     applyNav(cfg.name, cfg.config);
