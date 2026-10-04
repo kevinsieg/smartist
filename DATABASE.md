@@ -390,8 +390,6 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |
 | `created_at` timestamptz | |
 
-**Indexes:** `users_email_idx (email)` — membership lookups on every request; `users_invited_by_idx (invited_by)`, so deleting a user does not scan the table for its `SET NULL`.
-
 Every emailed token is stored only as a hash.
 
 ---

@@ -427,8 +427,3 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-06') ON CONFLICT DO NOTHING;
 --   -- 2026-10-07: add public share token to setlists
 --   ALTER TABLE setlists ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE;
 --   INSERT INTO schema_migrations (id) VALUES ('2026-10-07') ON CONFLICT DO NOTHING;
-
--- 2026-10-07: index users.invited_by. Its ON DELETE SET NULL foreign key made
--- every deleted users row (account or band deletion) scan the whole table.
-CREATE INDEX IF NOT EXISTS users_invited_by_idx ON users(invited_by) WHERE invited_by IS NOT NULL;
-INSERT INTO schema_migrations (id) VALUES ('2026-10-07') ON CONFLICT DO NOTHING;
