@@ -42,26 +42,32 @@ function _canvasToJpegBlob(canvas, quality) {
   });
 }
 
+// The poster's long edge: a phone photo (4000 px and more) is cut down to this
+// before upload. Still sharp in the lightbox, and well under a megabyte.
+var POSTER_MAX_EDGE = 2000;
+
+function _posterCanvas(img, maxEdge) {
+  var scale  = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+  var canvas = document.createElement('canvas');
+  canvas.width  = Math.max(1, Math.round(img.naturalWidth  * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  var ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+// A JPEG of at most POSTER_MAX_EDGE px (never upscaled), at quality 0.85; smaller
+// steps only if that is still over the 5 MB the API accepts.
 async function generatePosterBlob(file) {
   var img = await _loadImage(file);
-  var limits = [0, 2048, 1600, 1200]; // 0 = natural size first
+  var limits = [POSTER_MAX_EDGE, 1600, 1200];
   for (var i = 0; i < limits.length; i++) {
-    var maxEdge = limits[i] || Math.max(img.naturalWidth, img.naturalHeight);
-    var scale   = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
-    var canvas  = document.createElement('canvas');
-    canvas.width  = Math.round(img.naturalWidth  * scale);
-    canvas.height = Math.round(img.naturalHeight * scale);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    var blob = await _canvasToJpegBlob(canvas, 0.85);
+    var blob = await _canvasToJpegBlob(_posterCanvas(img, limits[i]), 0.85);
     if (blob.size <= 5 * 1024 * 1024) return blob;
   }
   // Last resort: 1200px max, quality 0.6
-  var canvas2 = document.createElement('canvas');
-  var s2 = Math.min(1, 1200 / Math.max(img.naturalWidth, img.naturalHeight));
-  canvas2.width  = Math.round(img.naturalWidth  * s2);
-  canvas2.height = Math.round(img.naturalHeight * s2);
-  canvas2.getContext('2d').drawImage(img, 0, 0, canvas2.width, canvas2.height);
-  return _canvasToJpegBlob(canvas2, 0.6);
+  return _canvasToJpegBlob(_posterCanvas(img, 1200), 0.6);
 }
 
 async function generateThumbBlob(file) {

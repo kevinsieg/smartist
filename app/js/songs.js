@@ -680,7 +680,7 @@ async function openAppearances(songId) {
       const label = parts.length ? parts.join(' — ') : (sl.title || `Setlist #${sl.id}`);
       const date  = formatDate(sl.created_at);
       return `<div class="appearance-row">
-        <a class="appearance-gig" href="/setlist-history#set-${sl.id}" target="_blank">${escHtml(label)}</a>
+        <a class="appearance-gig" href="/${encodeURIComponent(artistSlug)}/setlist?view=history&amp;set=${Number(sl.id)}" target="_blank" rel="noopener">${escHtml(label)}</a>
         <span class="appearance-date">${date}</span>
       </div>`;
     }).join('');

@@ -41,6 +41,7 @@ const suites = [
   require('./unit/gig_handlers'),
   require('./unit/plans'),
   require('./unit/asset_versions'),
+  require('./unit/page_styles'),
   require('./unit/labels'),
   require('./unit/click_targets'),
   require('./unit/page_scripts'),

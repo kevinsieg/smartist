@@ -161,6 +161,93 @@ async function main() {
     if (!back) throw new Error('Escape did not return focus to the song row');
   });
 
+  // The songs list renders a page of rows (window.LV_RENDER_STEP, 200) and a "Show
+  // more" button for the rest; text filters run once typing pauses. The step is
+  // set to 1 here so two seeded songs exercise it.
+  await check('the songs list shows a page of rows, then more on request', async () => {
+    await page.goto(`${BASE}/${SLUG}/songs`);
+    await settle(page);
+    const rows = () => page.evaluate(() => document.querySelectorAll('#lv-body > [data-id]').length);
+    const total = await page.evaluate(() => { window.LV_RENDER_STEP = 1; window.renderTable(); return window._getSongsForFactory({ active: true }).length; });
+    try {
+      if (total < 2) throw new Error(`needs two active songs, found ${total}`);
+      if (await rows() !== 1) throw new Error(`expected 1 row at first, got ${await rows()}`);
+      await assertAccessible(page, 'songs list with "Show more"');
+      await page.click('#lv-body [data-lv-more]');
+      if (await rows() !== Math.min(2, total)) throw new Error(`expected 2 rows after "Show more", got ${await rows()}`);
+      const focused = await page.evaluate(() => [...document.querySelectorAll('#lv-body > [data-id]')].indexOf(document.activeElement));
+      if (focused !== 1) throw new Error(`focus should move to the first new row, is on row ${focused}`);
+      await page.fill('#lv-f-title', 'ci song two');
+      await page.waitForFunction(() => document.getElementById('lv-count').textContent.startsWith('1 /'), null, { timeout: 5000 });
+      if (await rows() !== 1 || await page.$('#lv-body [data-lv-more]')) throw new Error('the filtered list should show its one row and no button');
+      assertClean(log.take(), 'songs list paging');
+    } finally {
+      await page.evaluate(() => { window.LV_RENDER_STEP = 200; });
+    }
+  });
+
+  // A panel save reloads that one song, not the whole list (GET /songs).
+  await check('saving a song in the panel updates its row without reloading the list', async () => {
+    await page.goto(`${BASE}/${SLUG}/songs`);
+    await settle(page);
+    const id = await page.evaluate(() => window.songs[0].id);
+    const listCalls = [];
+    const onRequest = req => { if (new URL(req.url()).pathname === `/api/${SLUG}/songs` && req.method() === 'GET') listCalls.push(req.url()); };
+    page.on('request', onRequest);
+    const before = await page.evaluate(i => window.songs.find(s => s.id === i).comment || '', id);
+    try {
+      await page.evaluate(i => { window._songsView.select(i); window._openSongEditInPanel(i); }, id);
+      // The field sits in a collapsed section; set it as typing would.
+      await page.evaluate(() => {
+        const el = document.querySelector('#view-side-panel input[data-key="comment"]');
+        el.value = '[TEST] smoke comment';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await page.click('#song-panel-save-btn');
+      await page.waitForFunction(i => (window.songs.find(s => s.id === i).comment || '') === '[TEST] smoke comment', id, { timeout: 10000 });
+      await page.waitForSelector('#view-side-panel .vsp-title', { timeout: 10000 });
+      if (listCalls.length) throw new Error(`the save reloaded the whole list: ${listCalls.join(', ')}`);
+      const shown = await page.evaluate(i => !!document.querySelector('#lv-body [data-id="' + i + '"]'), id);
+      if (!shown) throw new Error('the saved song is no longer in the list');
+      assertClean(log.take(), 'panel save');
+    } finally {
+      page.off('request', onRequest);
+      await page.evaluate(async ({ slug, i, comment }) => {
+        const s = window.songs.find(x => x.id === i);
+        await window.apiFetch('/api/' + slug + '/songs', 'PATCH', [{ id: i, title: s.title, active: s.active, comment: comment }]);
+      }, { slug: SLUG, i: id, comment: before });
+    }
+  });
+
+  // A song's appearances link to the History tab with that set open.
+  await check('an appearance opens its set in the setlist history', async () => {
+    await page.goto(`${BASE}/${SLUG}/songs`);
+    await settle(page);
+    const { id, songId } = await page.evaluate(async slug => {
+      const songId = window.songs[0].id;
+      const r = await window.apiFetch('/api/' + slug + '/setlists', 'POST', { title: '[TEST] smoke appearances', song_ids: [songId] });
+      return { id: (await r.json()).id, songId };
+    }, SLUG);
+    if (!id) throw new Error('could not create a setlist');
+    try {
+      await page.evaluate(i => window.openAppearances(i), songId);
+      const link = page.locator(`#appearances-list a[href*="set=${id}"]`);
+      await link.waitFor({ timeout: 10000 });
+      const href = await link.getAttribute('href');
+      if (href !== `/${SLUG}/setlist?view=history&set=${id}`) throw new Error(`unexpected link ${href}`);
+      await page.goto(`${BASE}${href}`);
+      await page.waitForFunction(() => {
+        const t = document.querySelector('#view-side-panel.open .vsp-title');
+        return t && t.textContent === '[TEST] smoke appearances';
+      }, null, { timeout: 10000 });
+      assertClean(log.take(), 'appearance link');
+    } finally {
+      await page.evaluate(async ({ slug, id }) => {
+        await window.apiFetch('/api/' + slug + '/setlists/' + id, 'DELETE');
+      }, { slug: SLUG, id });
+    }
+  });
+
   await check('nav links navigate in place (SPA) without errors', async () => {
     await page.goto(`${BASE}/${SLUG}/dashboard`);
     await settle(page);

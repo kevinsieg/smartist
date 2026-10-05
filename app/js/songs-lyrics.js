@@ -342,14 +342,3 @@ registerModal('player-modal',   closePlayer);
 registerModal('sheet-modal',    closeSheet);
 registerModal('playback-modal', closePlayback);
 registerModal('lyrics-modal',   closeLyrics);
-
-window.refreshAllActionBtns = function() {
-  _viewMode = isViewMode();
-  var inner = document.getElementById('view-side-panel-inner');
-  if (inner) {
-    var sidEl = inner.querySelector('[data-sid]');
-    if (sidEl && sidEl.dataset.sid) {
-      _openSongPanelContent({ id: sidEl.dataset.sid }, inner);
-    }
-  }
-};
