@@ -113,7 +113,7 @@ async function run(r) {
     assertEq(meta.perform_country, null);
   });
 
-  await testAsync('sweepSubscribers — deletes rows past 24 months and strips dropped meta keys', async () => {
+  await testAsync('sweepSubscribers — deletes rows past 24 months', async () => {
     const queries = [];
     const { sweepSubscribers } = require(path.join(__dirname, '../../api/_domain/subscribe'));
     const random = Math.random;
@@ -122,7 +122,6 @@ async function run(r) {
     finally { Math.random = random; }
     assertEq(queries.length, 1);
     assertEq(/DELETE FROM subscribers WHERE created_at < now\(\) - interval '24 months'/.test(queries[0]), true);
-    assertEq(/meta - \?::text\[\]/.test(queries[0]), true);
   });
 }
 

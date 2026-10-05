@@ -127,8 +127,11 @@ async function oauthCallback({ query, headers, ip, origin }) {
   if (!email) return failed('no_email_from_provider');
 
   const sql = getDb();
-  const [firstUser] = await sql`
-    SELECT u.id, u.role, u.password_hash FROM users u WHERE u.email = ${email.toLowerCase()} ORDER BY u.id LIMIT 1
+  const addr = email.toLowerCase();
+  let [firstUser] = await sql`
+    SELECT id, role, password_hash FROM users
+    WHERE email = ${addr} AND (password_hash IS NOT NULL OR invite_token_hash IS NULL)
+    ORDER BY id LIMIT 1
   `;
 
   // Facebook has no verified-email flag (see identity.js), so its address proves
@@ -138,6 +141,18 @@ async function oauthCallback({ query, headers, ip, origin }) {
   // deployment opts in, a new Facebook address goes through the emailed
   // signup link instead.
   const untrustedFacebook = provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true';
+
+  // An address with no account yet, only invites: the provider has shown this
+  // is the address they were sent to, so signing in accepts them, as setting a
+  // password through the invite link would. An existing account's invites
+  // stay open; it joins each band from the link.
+  if (!firstUser && !untrustedFacebook) {
+    const joined = await sql`
+      UPDATE users SET invite_token_hash = NULL, invite_expires_at = NULL
+      WHERE email = ${addr} AND password_hash IS NULL AND invite_expires_at > now()
+      RETURNING id, role, password_hash`;
+    firstUser = joined.sort((x, y) => x.id - y.id)[0];
+  }
 
   // A new address goes on to set up a workspace, whichever button started the
   // flow: "Continue with Google" on the login page used to answer a new

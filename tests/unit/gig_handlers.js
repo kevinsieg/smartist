@@ -66,6 +66,8 @@ function loadHandler(route, r2 = {}, { user = { id: 1, role: 'member' } } = {}) 
       deleteFromR2: async () => {}, verifyUpload: async () => ({ size: 1, contentType: 'image/jpeg' }),
       keyFromUrl: () => 'k', filenameFromUrl: () => 'f',
       ...r2,
+      // Confirms move the upload out of pending/; here that is the same HEAD.
+      promoteUpload: r2?.promoteUpload || r2?.verifyUpload || (async () => ({ size: 1, contentType: 'image/jpeg' })),
     },
   };
   const rlPath = mp('api/_ratelimit');
@@ -203,7 +205,7 @@ async function run(r) {
     for (const [user, expected] of [[{ id: 1, role: 'member' }, [OWN, OWN_THUMB]], [{ id: null, role: 'member' }, []]]) {
       const { r2, seen } = posterR2();
       const { handler } = loadHandler(gigRow({ poster_url: OWN, thumb_url: OWN_THUMB }), r2, { user });
-      const res = await call(handler, 'DELETE', '/api/test/gigs/7', { body: { hard: true } });
+      const res = await call(handler, 'DELETE', '/api/test/gigs/7?hard=1');
       assertEq(res.statusCode, 200);
       assertEq(seen.deleted.sort(), expected.sort(), `user ${user.id}`);
     }

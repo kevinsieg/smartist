@@ -3,7 +3,7 @@
 const { getDb, getSlug } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
-const { parseFields, positiveId, validateOptions } = require('../_validate');
+const { parseFields, positiveId, deleteMode } = require('../_validate');
 const { updateSet, mergedTooLarge } = require('../_domain/records');
 const { removeGigFiles } = require('../_domain/gigs');
 const { MSG } = require('../_domain/http');
@@ -50,13 +50,13 @@ function recordItemHandler(spec) {
     return res.json(updated);
   }
 
-  // ── DELETE — soft by default; { hard, cascade: ['gigs', 'setlists'] } ──────
+  // ── DELETE — soft by default; ?hard=1&cascade=gigs,setlists ───────────────
   // A hard delete is one transaction: a refused delete (409, a gig still points
   // at the record) leaves the cascaded gigs and setlists in place.
   async function del(req, res, { sql, artist, id }) {
-    const { hard } = req.body ?? {};
-    const cascade = validateOptions(req.body?.cascade, ['gigs', 'setlists']);
-    if (cascade === false) return res.status(400).json({ error: 'cascade must be a list of: gigs, setlists' });
+    const mode = deleteMode(req.query, req.body, ['gigs', 'setlists']);
+    if (mode === false) return res.status(400).json({ error: 'cascade must be a list of: gigs, setlists' });
+    const { hard, cascade } = mode;
     if (!hard) {
       const [updated] = await sql`
         UPDATE ${sql(spec.table)} SET deleted = true, last_updated = NOW()

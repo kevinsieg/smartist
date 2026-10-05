@@ -21,6 +21,7 @@ async function getArtistsForUser(userId, sql) {
     FROM users u
     JOIN artists a ON a.id = u.artist_id
     WHERE u.email = (SELECT email FROM users WHERE id = ${userId})
+      AND (u.password_hash IS NOT NULL OR u.invite_token_hash IS NULL)
     ORDER BY a.name
   `;
 }

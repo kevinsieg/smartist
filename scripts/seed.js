@@ -628,21 +628,19 @@ const VENUES = [
     website: 'https://lechatnoir.example.fr', booking_channel: 'Email',
     generic_email: 'booking@lechatnoir.example.fr',
     comment: 'Great outdoor courtyard. PA included. Contact: Julien Morel.',
-    main_genre: 'Blues', turnus: 'Monthly',
   },
   {
     name: 'Parc des Expositions', city: 'Nantes', country: 'France', postcode: '44300',
     state: 'Pays de la Loire', size: 5000, status: 'Confirmed', category: 'festival',
     website: 'https://parcexpo-nantes.example.fr', booking_channel: 'Agency',
     comment: 'Festival site — large outdoor stage. Load-in from 14:00.',
-    main_genre: 'Mixed', season: 'Summer',
+    season: 'Summer',
   },
   {
     name: 'La Maison Bleue', city: 'Bordeaux', country: 'France', postcode: '33000',
     state: 'Nouvelle-Aquitaine', size: 350, status: 'Prospect', category: 'club',
     generic_email: 'contact@maisonbleue.example.fr', booking_channel: 'Email',
     comment: 'On our shortlist for the warm-up show. No response yet.',
-    main_genre: 'Rock',
   },
   {
     name: 'Le Cargo', city: 'Rouen', country: 'France', postcode: '76000',
@@ -650,152 +648,132 @@ const VENUES = [
     website: 'https://lecargo.example.fr', generic_email: 'prog@lecargo.example.fr',
     booking_channel: 'Email',
     comment: 'Alternative option for warm-up show. Known for indie/rock nights.',
-    main_genre: 'Rock',
   },
   {
     name: 'Le Trabendo', city: 'Paris', country: 'France', postcode: '75019',
     state: 'Île-de-France', size: 700, status: 'Active', category: 'club',
     website: 'https://letrabendo.example.fr', generic_email: 'booking@letrabendo.example.fr',
-    booking_channel: 'Agency', main_genre: 'Rock', turnus: 'Weekly',
+    booking_channel: 'Agency',
     comment: 'Parc de la Villette. Great sound, professional crew.',
   },
   {
     name: 'L\'Épicerie Moderne', city: 'Feyzin', country: 'France', postcode: '69320',
     state: 'Auvergne-Rhône-Alpes', size: 800, status: 'Active', category: 'club',
     generic_email: 'contact@lepiceriemoderne.example.fr', booking_channel: 'Email',
-    main_genre: 'Mixed', turnus: 'Monthly',
     comment: 'Converted warehouse, excellent acoustics.',
   },
   {
     name: 'La Ferronnerie', city: 'Toulouse', country: 'France', postcode: '31000',
     state: 'Occitanie', size: 180, status: 'Active', category: 'club',
     generic_email: 'prog@laferronnerie.example.fr', booking_channel: 'Email',
-    main_genre: 'Blues', turnus: 'Bi-monthly',
     comment: 'Intimate blues venue. Bar is excellent.',
   },
   {
     name: 'La Cigale', city: 'Paris', country: 'France', postcode: '75018',
     state: 'Île-de-France', size: 1800, status: 'Prospect', category: 'club',
     website: 'https://lacigale.example.fr', booking_channel: 'Agency',
-    main_genre: 'Mixed',
     comment: 'Dream venue. Need label backing to get in.',
   },
   {
     name: 'Salle Pleyel', city: 'Paris', country: 'France', postcode: '75008',
     state: 'Île-de-France', size: 2400, status: 'Prospect', category: 'club',
     website: 'https://sallepleyel.example.fr', booking_channel: 'Agency',
-    main_genre: 'Classical / Crossover',
     comment: 'Ambitious long-term target. Acoustic nights series.',
   },
   {
     name: 'Le Chabada', city: 'Angers', country: 'France', postcode: '49000',
     state: 'Pays de la Loire', size: 600, status: 'Active', category: 'club',
     generic_email: 'prog@lechabada.example.fr', booking_channel: 'Email',
-    main_genre: 'Mixed', turnus: 'Monthly',
   },
   {
     name: 'Le Brin de Zinc', city: 'Rennes', country: 'France', postcode: '35000',
     state: 'Bretagne', size: 120, status: 'Active', category: 'pub',
     generic_email: 'contact@brindezinc.example.fr', booking_channel: 'Direct',
-    main_genre: 'Folk', turnus: 'Weekly',
     comment: 'Small but loyal crowd. Free-entry nights.',
   },
   {
     name: 'Le Moloco', city: 'Audincourt', country: 'France', postcode: '25400',
     state: 'Bourgogne-Franche-Comté', size: 700, status: 'Active', category: 'club',
     website: 'https://lemoloco.example.fr', booking_channel: 'Email',
-    main_genre: 'Rock',
   },
   // Germany
   {
     name: 'Kulturzentrum am Schloss', city: 'Heidelberg', country: 'Germany',
     postcode: '69117', state: 'Baden-Württemberg', size: 280, status: 'Active', category: 'club',
     generic_email: 'buero@kuzas.example.de', booking_channel: 'Email',
-    main_genre: 'Folk', turnus: 'Bi-monthly',
     comment: 'Reliable venue, good sound system. Audience is very attentive.',
   },
   {
     name: 'Bi Nuu', city: 'Berlin', country: 'Germany', postcode: '10997',
     state: 'Berlin', size: 600, status: 'Active', category: 'club',
     website: 'https://binuu.example.de', booking_channel: 'Email',
-    main_genre: 'Rock', turnus: 'Weekly',
     comment: 'Under the U-Bahn arches. Loud but great atmosphere.',
   },
   {
     name: 'Fabrik', city: 'Hamburg', country: 'Germany', postcode: '22767',
     state: 'Hamburg', size: 1200, status: 'Prospect', category: 'club',
     website: 'https://fabrik.example.de', booking_channel: 'Agency',
-    main_genre: 'Mixed',
   },
   {
     name: 'Strom', city: 'Munich', country: 'Germany', postcode: '80337',
     state: 'Bavaria', size: 400, status: 'Active', category: 'club',
     generic_email: 'booking@strom.example.de', booking_channel: 'Email',
-    main_genre: 'Indie / Blues',
     comment: 'Good sound, friendly promoter.',
   },
   {
     name: 'Hirsch', city: 'Nuremberg', country: 'Germany', postcode: '90429',
     state: 'Bavaria', size: 500, status: 'Active', category: 'club',
     website: 'https://hirsch.example.de', booking_channel: 'Email',
-    main_genre: 'Rock', turnus: 'Monthly',
   },
   {
     name: 'Lofft', city: 'Leipzig', country: 'Germany', postcode: '04109',
     state: 'Saxony', size: 300, status: 'Prospect', category: 'club',
-    booking_channel: 'Email', main_genre: 'Mixed',
+    booking_channel: 'Email',
   },
   {
     name: 'Substage', city: 'Karlsruhe', country: 'Germany', postcode: '76133',
     state: 'Baden-Württemberg', size: 900, status: 'Active', category: 'club',
     website: 'https://substage.example.de', booking_channel: 'Agency',
-    main_genre: 'Rock', turnus: 'Weekly',
   },
   // Belgium / Netherlands
   {
     name: 'Ancienne Belgique', city: 'Brussels', country: 'Belgium', postcode: '1000',
     size: 2000, status: 'Prospect', category: 'club',
     website: 'https://ab.example.be', booking_channel: 'Agency',
-    main_genre: 'Mixed',
     comment: 'Prestige venue for Benelux market.',
   },
   {
     name: 'Café Central', city: 'Brussels', country: 'Belgium', postcode: '1000',
     size: 250, status: 'Active', category: 'club',
     generic_email: 'booking@cafecentral.example.be', booking_channel: 'Email',
-    main_genre: 'Jazz / Blues', turnus: 'Weekly',
     comment: 'Jazz and blues focused. Seated shows.',
   },
   {
     name: 'Paradiso', city: 'Amsterdam', country: 'Netherlands', postcode: '1017',
     size: 1500, status: 'Prospect', category: 'club',
     website: 'https://paradiso.example.nl', booking_channel: 'Agency',
-    main_genre: 'Mixed',
   },
   {
     name: 'De Helling', city: 'Utrecht', country: 'Netherlands', postcode: '3511',
     size: 700, status: 'Active', category: 'club',
     generic_email: 'booking@dehelling.example.nl', booking_channel: 'Email',
-    main_genre: 'Rock',
   },
   // Switzerland / Austria
   {
     name: 'Papiersaal', city: 'Zurich', country: 'Switzerland', postcode: '8005',
     size: 350, status: 'Active', category: 'club',
     generic_email: 'events@papiersaal.example.ch', booking_channel: 'Email',
-    main_genre: 'Mixed', turnus: 'Monthly',
     comment: 'Beautiful converted paper mill.',
   },
   {
     name: 'Turnhalle', city: 'Basel', country: 'Switzerland', postcode: '4057',
     size: 450, status: 'Prospect', category: 'club',
-    booking_channel: 'Email', main_genre: 'Rock',
+    booking_channel: 'Email',
   },
   {
     name: 'WUK', city: 'Vienna', country: 'Austria', postcode: '1090',
     size: 800, status: 'Active', category: 'club',
     website: 'https://wuk.example.at', booking_channel: 'Email',
-    main_genre: 'Mixed', turnus: 'Monthly',
     comment: 'Cultural centre, very diverse programme.',
   },
   // Spain / UK
@@ -803,25 +781,22 @@ const VENUES = [
     name: 'Sala Razzmatazz', city: 'Barcelona', country: 'Spain', postcode: '08005',
     size: 2000, status: 'Prospect', category: 'club',
     website: 'https://razzmatazz.example.es', booking_channel: 'Agency',
-    main_genre: 'Mixed',
   },
   {
     name: 'The Borderline', city: 'London', country: 'United Kingdom', postcode: 'W1F 9HX',
     size: 275, status: 'Prospect', category: 'club',
-    booking_channel: 'Agency', main_genre: 'Rock / Blues',
+    booking_channel: 'Agency',
     comment: 'UK market entry target.',
   },
   {
     name: 'Espace Aragon', city: 'Strasbourg', country: 'France', postcode: '67000',
     state: 'Grand Est', size: 500, status: 'Active', category: 'club',
     generic_email: 'prog@espacearagon.example.fr', booking_channel: 'Email',
-    main_genre: 'Mixed', turnus: 'Monthly',
   },
   {
     name: 'Stereolux', city: 'Nantes', country: 'France', postcode: '44200',
     state: 'Pays de la Loire', size: 900, status: 'Active', category: 'club',
     website: 'https://stereolux.example.fr', booking_channel: 'Email',
-    main_genre: 'Electronic / Rock',
   },
 ];
 
@@ -1498,13 +1473,13 @@ async function run() {
     const [row] = await sql`
       INSERT INTO venues (artist_id, name, city, country, postcode, state, size,
                           status, category, website, generic_email, booking_channel,
-                          comment, main_genre, turnus, season)
+                          comment, season)
       VALUES (
         ${artist.id}, ${v.name}, ${v.city ?? null}, ${v.country ?? null},
         ${v.postcode ?? null}, ${v.state ?? null}, ${v.size ?? null},
         ${v.status ?? null}, ${v.category ?? null}, ${v.website ?? null},
         ${v.generic_email ?? null}, ${v.booking_channel ?? null},
-        ${v.comment ?? null}, ${v.main_genre ?? null}, ${v.turnus ?? null},
+        ${v.comment ?? null},
         ${v.season ?? null}
       )
       RETURNING *

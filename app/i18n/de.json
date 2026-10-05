@@ -233,6 +233,8 @@
   "home.emailPlaceholder": "sie@band.de",
   "home.enterPassword": "Bitte ein Passwort eingeben.",
   "home.failedCreateAccount": "Konto konnte nicht erstellt werden.",
+  "home.joinBand": "{name} beitreten",
+  "home.joinIntro": "Du wurdest eingeladen, {name} beizutreten. Dein Konto und dein Passwort bleiben unverändert.",
   "home.forgotPassword": "Passwort vergessen?",
   "home.hidePw": "verbergen",
   "home.invalidLink": "Ungültiger oder abgelaufener Anmeldelink.",

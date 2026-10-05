@@ -146,14 +146,14 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `last_communication` | date | |
 | `booking_channel` | text | How to reach them: `Email`, `Agency`, … |
 | `number_of_cold_contacts` | integer DEFAULT 0 | |
-| `turnus` | text | Booking frequency hint |
+| `turnus` | text | Unused since 2026-10; dropped a release after the API stopped writing it |
 | `remuneration` | text | Pay notes |
 | `overnight` | boolean DEFAULT false | Accommodation available |
 | `season` | text | Active season |
 | `preferred_period` | text | |
 | `comment` | text | |
 | `deadline` | date | |
-| `main_genre` | text | Primary genre this venue books |
+| `main_genre` | text | Unused since 2026-10; dropped a release after the API stopped writing it |
 | `size` | integer | Capacity |
 | `language` | text | |
 | `lat`, `lng` | double precision | Map position, from the address search |

@@ -18,6 +18,11 @@ function demoRole(token, artist) {
 // access to a workspace the user does not belong to. Role comes from the DB
 // row (per-workspace, revocable), not from the token.
 //
+// Only an accepted row is a membership: `password_hash IS NOT NULL OR
+// invite_token_hash IS NULL`. An invite still open (no password, a token) grants
+// nothing — an existing account invited to a band joins only by accepting
+// (api/_domain/members.js). Every list of an address's bands uses the same test.
+//
 // The band and the caller's membership in it come back from one statement:
 // every authenticated request starts here, and two queries cost twice the
 // round-trips, on a connection other requests of the instance are waiting for.
@@ -33,6 +38,7 @@ async function loadArtistAndMember(token, slug) {
       SELECT u2.id, u2.role, u1.password_hash, u1.sessions_valid_after, u1.email
       FROM users u1
       JOIN users u2 ON u2.email = u1.email AND u2.artist_id = a.id
+       AND (u2.password_hash IS NOT NULL OR u2.invite_token_hash IS NULL)
       WHERE u1.id = ${sessionRowId(sql, claim)}
       LIMIT 1
     ) m ON true
@@ -60,7 +66,8 @@ function sessionRowId(sql, claim) {
   return sql`(
     SELECT id FROM users
     WHERE id = ${claim.userId}
-       OR (email = ${claim.email ?? null} AND created_at <= ${new Date(Number(claim.iat) || 0)})
+       OR (email = ${claim.email ?? null} AND created_at <= ${new Date(Number(claim.iat) || 0)}
+           AND (password_hash IS NOT NULL OR invite_token_hash IS NULL))
     ORDER BY (id = ${claim.userId}) DESC, id
     LIMIT 1)`;
 }

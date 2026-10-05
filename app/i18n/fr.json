@@ -233,6 +233,8 @@
   "home.emailPlaceholder": "vous@groupe.com",
   "home.enterPassword": "Saisissez un mot de passe.",
   "home.failedCreateAccount": "Échec de la création du compte.",
+  "home.joinBand": "Rejoindre {name}",
+  "home.joinIntro": "Vous êtes invité·e à rejoindre {name}. Votre compte et votre mot de passe restent inchangés.",
   "home.forgotPassword": "Mot de passe oublié ?",
   "home.hidePw": "masquer",
   "home.invalidLink": "Lien de connexion invalide ou expiré.",

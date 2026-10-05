@@ -218,7 +218,7 @@ async function listArtists(req, res) {
     COALESCE((
       SELECT json_agg(json_build_object('slug', a.slug, 'name', a.name, 'role', u.role) ORDER BY a.name)
       FROM users u JOIN artists a ON a.id = u.artist_id
-      WHERE u.email = me.email
+      WHERE u.email = me.email AND (u.password_hash IS NOT NULL OR u.invite_token_hash IS NULL)
     ), '[]') AS artists`);
   if (!me || !me.artists.length) return res.status(401).json({ error: MSG.unauthorized });
   return res.json({ artists: me.artists });

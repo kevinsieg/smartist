@@ -2,11 +2,11 @@ const crypto = require('crypto');
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue, refuseDemo } = require('../_auth');
 const { wrap } = require('../_handler');
-const { parseFields, unsafeKey, positiveId, validateOptions } = require('../_validate');
+const { parseFields, unsafeKey, positiveId, deleteMode } = require('../_validate');
 const { GIG_FIELDS } = require('../_domain/records');
 const { removeGigFiles } = require('../_domain/gigs');
 const { MSG } = require('../_domain/http');
-const { createPresignedUrl, verifyUpload, keyFromUrl } = require('../_r2');
+const { createPresignedUrl, promoteUpload, keyFromUrl } = require('../_r2');
 const { ownsRefs } = require('../_ownership');
 const { presignLimited } = require('../_ratelimit');
 
@@ -142,8 +142,8 @@ async function posterUrl(req, res, { artist, gigId }) {
   const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
   const thumbKey  = `gigs/${artist.slug}/${gigId}-${uuid}-thumb.jpg`;
   const [poster, thumb] = await Promise.all([
-    createPresignedUrl(posterKey, 'image/jpeg', posterSize),
-    createPresignedUrl(thumbKey,  'image/jpeg', thumbSize),
+    createPresignedUrl(posterKey, 'image/jpeg', posterSize, { pending: true }),
+    createPresignedUrl(thumbKey,  'image/jpeg', thumbSize, { pending: true }),
   ]);
   return res.json({
     posterUploadUrl: poster.uploadUrl,
@@ -166,7 +166,7 @@ async function confirmPoster(req, res, { sql, artist, gigId, gig }) {
   const posterKey = ownKey(poster), thumbKey = ownKey(thumb);
   if (!posterKey) return res.status(400).json({ error: 'Invalid poster URL' });
   if (!thumbKey)  return res.status(400).json({ error: 'Invalid thumb URL' });
-  const [posterOk, thumbOk] = await Promise.all([verifyUpload(posterKey), verifyUpload(thumbKey)]);
+  const [posterOk, thumbOk] = await Promise.all([promoteUpload(posterKey), promoteUpload(thumbKey)]);
   if (!posterOk) return res.status(400).json({ error: 'Poster file not found in storage' });
   if (!thumbOk)  return res.status(400).json({ error: 'Thumbnail file not found in storage' });
   if (posterOk.contentType !== 'image/jpeg')
@@ -199,11 +199,11 @@ async function deletePoster(req, res, { sql, artist, gigId, gig }) {
   return res.json({ ok: true });
 }
 
-// ── DELETE /gigs/:id — soft by default; { hard, cascade: ['setlists'] } ──────
+// ── DELETE /gigs/:id — soft by default; ?hard=1&cascade=setlists ─────────────
 async function deleteGig(req, res, { sql, artist, gigId, gig }) {
-  const { hard } = req.body ?? {};
-  const cascade = validateOptions(req.body?.cascade, ['setlists']);
-  if (cascade === false) return res.status(400).json({ error: 'cascade must be a list of: setlists' });
+  const mode = deleteMode(req.query, req.body, ['setlists']);
+  if (mode === false) return res.status(400).json({ error: 'cascade must be a list of: setlists' });
+  const { hard, cascade } = mode;
   if (!hard) {
     const [updated] = await sql`
       UPDATE gigs SET deleted = true, last_updated = NOW()

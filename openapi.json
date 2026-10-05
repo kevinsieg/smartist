@@ -2970,33 +2970,30 @@
           },
           {
             "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "hard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "`1`: remove the row for good. Without it the delete is soft."
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "With `hard`: a comma-separated list of `setlists` to delete along with it."
           }
         ],
-        "description": "Member role. Soft delete by default; `{ \"hard\": true }` removes the row, and `cascade: [\"setlists\"]` its setlists too.",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hard": {
-                    "type": "boolean"
-                  },
-                  "cascade": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "setlists"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "Member role. Soft delete by default; `?hard=1` removes the row, and `&cascade=setlists` its setlists too.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -4048,35 +4045,30 @@
           },
           {
             "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "hard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "`1`: remove the row for good. Without it the delete is soft."
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "With `hard`: a comma-separated list of `gigs`, `setlists` to delete along with it."
           }
         ],
-        "description": "Member role, Pro plan. Soft delete by default; `{ \"hard\": true }` removes the row.",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hard": {
-                    "type": "boolean"
-                  },
-                  "cascade": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "gigs",
-                        "setlists"
-                      ]
-                    },
-                    "description": "With `hard`: also delete the gigs that point at the record, and their setlists"
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "Member role, Pro plan. Soft delete by default; `?hard=1` removes the row, and `&cascade=gigs,setlists` the gigs that point at it and their setlists.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -4480,35 +4472,30 @@
           },
           {
             "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "hard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "`1`: remove the row for good. Without it the delete is soft."
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "With `hard`: a comma-separated list of `gigs`, `setlists` to delete along with it."
           }
         ],
-        "description": "Member role, Pro plan. Soft delete by default; `{ \"hard\": true }` removes the row.",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hard": {
-                    "type": "boolean"
-                  },
-                  "cascade": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "gigs",
-                        "setlists"
-                      ]
-                    },
-                    "description": "With `hard`: also delete the gigs that point at the record, and their setlists"
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "Member role, Pro plan. Soft delete by default; `?hard=1` removes the row, and `&cascade=gigs,setlists` the gigs that point at it and their setlists.",
         "responses": {
           "200": {
             "description": "Deleted",

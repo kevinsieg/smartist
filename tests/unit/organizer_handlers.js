@@ -240,8 +240,7 @@ async function run(r) {
 
   await testAsync('hard delete removes setlists before gigs before the organizer', async () => {
     const { handler, calls } = loadHandler(ITEM, () => [ORG]);
-    const res = await call(handler, 'DELETE', '/api/test/organizers/5',
-      { body: { hard: true, cascade: ['setlists', 'gigs'] } });
+    const res = await call(handler, 'DELETE', '/api/test/organizers/5?hard=1&cascade=setlists,gigs');
     assertEq(res.statusCode, 200);
     assertEq(res.body, { deleted: true, hard: true });
     const order = calls.map(c => c.text).filter(t => /^DELETE FROM/.test(t))
@@ -252,8 +251,7 @@ async function run(r) {
 
   await testAsync('hard delete without cascade leaves gigs alone', async () => {
     const { handler, calls } = loadHandler(ITEM, () => [ORG]);
-    await call(handler, 'DELETE', '/api/test/organizers/5',
-      { body: { hard: true } });
+    await call(handler, 'DELETE', '/api/test/organizers/5?hard=1');
     assert(!calls.some(c => /DELETE FROM gigs/.test(c.text)), 'gigs must survive without cascade');
     assert(calls.some(c => /DELETE FROM organizers/.test(c.text)), 'organizer should still go');
   });

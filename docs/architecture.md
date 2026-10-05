@@ -73,6 +73,7 @@ that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
 - **One address, one password.** The same person has a `users` row per band.
   Every way of setting a password (reset, change, accepting an invite) writes
   all of them, so an old password never keeps working through another band.
+  Rows that are still open invites are left out: a password would accept them.
 - **Tokens are bound to the database.** The signing key is derived from
   `APP_SECRET` and the database host and name. User ids are per database, so a
   secret shared by two deployments must not let user 5 of one in as user 5 of
@@ -87,7 +88,9 @@ that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
   gate hands out a `demo` token, which is a *member* session: no settings,
   invites or uploads.
 - **Signup** creates a new workspace. **Invites** add a person to an existing
-  one. `scripts/create_user.js` creates the first account for a band that has
+  one, once accepted: an open invite (no password, a token) grants nothing and
+  is listed nowhere. A new address accepts by setting its password; an address
+  that already has an account gets a `#join=` link and keeps its password. `scripts/create_user.js` creates the first account for a band that has
   none.
 - **A workspace is private by default.** Anonymous access is opt-in per surface
   (`publicCatalogue`, `publicStage`, both off); see `docs/reference.md`.

@@ -27,6 +27,7 @@ async function init() {
   const oauthDone    = qp('oauth');
   const hint         = qp('hint');
   const invite       = qp('invite');
+  const join         = qp('join');
   const reset        = qp('reset');
   const oauthError   = qp('oauth_error');
   const path         = window.location.pathname.replace(/\/+$/, '') || '/';
@@ -35,12 +36,12 @@ async function init() {
   _loginNext = next; // survives the URL strip below
 
   const hasToken = !!(sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY));
-  if (path === '/' && !magic && !oauthDone && !oauthError && !invite && !reset && !hasToken) {
+  if (path === '/' && !magic && !oauthDone && !oauthError && !invite && !join && !reset && !hasToken) {
     window.location.replace('/login' + window.location.search);
     return;
   }
 
-  if (magic || oauthDone || oauthError || invite || reset) history.replaceState(null, '', window.location.pathname);
+  if (magic || oauthDone || oauthError || invite || join || reset) history.replaceState(null, '', window.location.pathname);
 
   // A finished session the OAuth callback left in an HttpOnly cookie, redeemed
   // once. Handled before
@@ -94,6 +95,7 @@ async function init() {
 
   if (oauthError) { renderLogin(t('home.oauthErrorMsg'), cfg); return; }
   if (invite)     { renderSetPassword(invite, cfg); return; }
+  if (join)       { renderJoin(join, cfg); return; }
   // Arrived from "Forgot password?". Landing here rather than on the dashboard
   // is the whole point: being logged in with the password you forgot still in
   // place is what made the old flow a dead end.
@@ -333,6 +335,43 @@ async function doSetPassword(token, hint, cfg) {
   } catch {
     err.textContent = t('home.connError');
     restore();
+  }
+}
+
+// An invite to an address that already has an account: nothing changes until
+// the person accepts, and accepting keeps their password.
+function renderJoin(token, cfg) {
+  const el = document.getElementById('landing-auth');
+  if (!el) return;
+  const name = escHtml(cfg?.name || artistSlug);
+  el.innerHTML =
+    '<div class="landing-login">' +
+      '<p>' + t('home.joinIntro', { name: name }) + '</p>' +
+      '<div class="auth-error" id="auth-error" role="alert"></div>' +
+      '<button class="btn active auth-submit" id="join-btn">' + t('home.joinBand', { name: name }) + '</button>' +
+    '</div>';
+  document.getElementById('join-btn').addEventListener('click', () => doJoin(token, cfg));
+}
+
+async function doJoin(token, cfg) {
+  const btn   = document.getElementById('join-btn');
+  const err   = document.getElementById('auth-error');
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = '…'; err.textContent = '';
+  try {
+    const r    = await fetch(`/api/${cfg?.slug || artistSlug}/members/accept-invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token }),
+    });
+    const data = await r.json();
+    if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); btn.disabled = false; btn.textContent = label; return; }
+    storeToken(data.token, false);
+    sessionStorage.setItem('smartist_admin_email', data.email || '');
+    renderLoggedIn(cfg, data.artists || []);
+  } catch {
+    err.textContent = t('home.connError');
+    btn.disabled = false; btn.textContent = label;
   }
 }
 

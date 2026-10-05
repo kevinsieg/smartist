@@ -44,6 +44,9 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 15
+    # Secrets at job level, unlike ci.yml: the steps' `if:` conditions read
+    # them, and this job runs only on schedule or by hand, on the default
+    # branch, with every action pinned to a commit. No pushed code runs here.
     env:
       PG_MAJOR: '17'
       BACKUP_DATABASES: ${{ secrets.BACKUP_DATABASES }}

@@ -645,7 +645,8 @@ async function confirmHardDelete() {
   if (btn) { btn.disabled = true; btn.textContent = t('common.deleting'); }
   try {
     var cascade = _hardDeleteOpts.getCascade ? _hardDeleteOpts.getCascade() : [];
-    var r = await apiFetch(_hardDeleteOpts.deleteUrl, 'DELETE', { hard: true, cascade });
+    var url = _hardDeleteOpts.deleteUrl + '?hard=1' + (cascade.length ? '&cascade=' + cascade.map(encodeURIComponent).join(',') : '');
+    var r = await apiFetch(url, 'DELETE');
     if (r.ok) {
       setStatus('hd-status', t('common.deleted'));
       var opts = _hardDeleteOpts;

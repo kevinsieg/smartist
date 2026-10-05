@@ -67,8 +67,7 @@ async function collectR2Urls(artistIds, sql) {
   // Only keys this account can prove it owns. A stored URL is just a string a
   // band could once set to anything, so a URL naming another band's object —
   // `bands/<other slug>/…`, `audio/<other id>/…` — is left alone rather than
-  // deleted on that band's behalf. Pre-scoping song media (`audio/<uuid>-name`)
-  // carries no owner at all and is still removed, as before.
+  // deleted on that band's behalf.
   const ids   = new Set(bands.map(b => String(b.id)));
   const slugs = new Set(bands.map(b => b.slug));
   const base  = process.env.R2_PUBLIC_URL;
@@ -78,7 +77,6 @@ async function collectR2Urls(artistIds, sql) {
     if (unsafeKey(key)) return false;
     const m = /^(audio|sheets|playback)\/([^/]+)\/[^/]+$/.exec(key);
     if (m) return ids.has(m[2]);
-    if (/^(audio|sheets|playback)\/[^/]+$/.test(key)) return true;   // legacy flat key
     const b = /^(bands|gigs)\/([^/]+)\//.exec(key);
     if (b) return slugs.has(b[2]);
     return false;

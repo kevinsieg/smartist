@@ -31,7 +31,7 @@ async function signupLink({ body, ip, origin }) {
     SELECT u.id, u.email, u.password_hash, a.slug
     FROM users u JOIN artists a ON a.id = u.artist_id
     WHERE u.email = ${email}
-    ORDER BY u.id LIMIT 1
+    ORDER BY (u.password_hash IS NOT NULL OR u.invite_token_hash IS NULL) DESC, u.id LIMIT 1
   `;
   if (existing) {
     const o    = origin;

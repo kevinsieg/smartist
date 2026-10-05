@@ -153,10 +153,13 @@ and bucket to the backup secrets.
 
 ## Unconfirmed uploads
 
-Song media is uploaded straight to the bucket with a presigned URL (size signed
-in, at most 50 MB) and counted once the app confirms it. An upload that is
-never confirmed stays in the bucket, uncounted. Do **not** add a bucket
-lifecycle rule for this: confirmed files live under the same prefixes
-(`audio/`, `sheets/`, `playback/`) and would be deleted too.
+Song media and gig posters are uploaded straight to the bucket with a
+presigned URL (size and type signed in, at most 50 MB), under `pending/`. The
+app's confirm moves the file to its real key (`promoteUpload`, `api/_r2.js`)
+and counts it. An upload that is never confirmed stays under `pending/`, which
+each bucket's lifecycle rule empties after a day (`tenant-onboarding.md`). The
+rule covers `pending/` only: confirmed files live under `audio/`, `sheets/`,
+`playback/` and `gigs/`. Band logos and favicons overwrite one fixed key per
+band and need no rule.
 `node scripts/plans.js --recount` recomputes each band's usage from the files
 its songs reference.
