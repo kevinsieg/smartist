@@ -5,15 +5,16 @@ description: Checklist for any database schema change in smartist — adding a t
 
 # Schema change
 
-`scripts/schema.sql` is the whole schema and must stay idempotent: it is
-applied again and again to every database (CI applies it twice).
+`scripts/schema.sql` is the whole schema and must stay idempotent: every
+database gets the blocks it has not recorded in `schema_migrations`, a fresh
+one gets all of it, and CI applies it twice.
 
 1. **Append** a dated block at the end of `scripts/schema.sql` — never edit an
    earlier block that production already ran:
    ```sql
    -- YYYY-MM-DD: why this change exists
    ALTER TABLE songs ADD COLUMN IF NOT EXISTS foo TEXT;
-   CREATE INDEX IF NOT EXISTS songs_foo_idx ON songs(artist_id, foo);
+   CREATE INDEX CONCURRENTLY IF NOT EXISTS songs_foo_idx ON songs(artist_id, foo);
    INSERT INTO schema_migrations (id) VALUES ('YYYY-MM-DD') ON CONFLICT DO NOTHING;
    ```
    - `IF NOT EXISTS` / `IF EXISTS` everywhere. No `DO $$` blocks: `apply_schema.js`

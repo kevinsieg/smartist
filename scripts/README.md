@@ -25,9 +25,13 @@ To apply the schema without the wizard, use `apply_schema.js` (below).
 
 ## apply_schema.js — bring an existing database up to date
 
-`setup.js` skips the schema step once tables exist; this always runs every statement of
-`schema.sql` (idempotent), so new tables, columns and indexes reach existing databases.
-Run it against **every** production database after a schema change.
+`setup.js` skips the schema step once tables exist; this runs the blocks of `schema.sql`
+(idempotent) that the database has not recorded in `schema_migrations` — every statement on
+an empty database — so new tables, columns and indexes reach existing databases.
+
+Deployments apply pending migrations themselves while they build (`scripts/deploy_migrate.js`);
+run this by hand only for a database no deployment builds against, or locally. It shows the
+host and asks before it connects.
 
 ```bash
 node scripts/apply_schema.js                          # database from .env
@@ -90,11 +94,13 @@ Targets the band whose slug matches `ARTIST_SLUG` in your `.env`, or the first b
 
 Inserts:
 
-- 20 songs across genres (Rock, Blues, Folk, Country, Funk, Soul, Reggae, Alternative), with varied keys, tempos, and lengths; 2 inactive songs; some with `extra.capo`
-- 4 gigs (2 past, 1 upcoming June 2026, 1 TBD)
-- 4 setlists (2 linked to past gigs, 1 for the upcoming gig, 1 standalone 30-min template)
-- Song audit log entries (create/update/delete)
-- 2 GEMA works with 3 rightholders each
+- ~50 songs (various genres, keys, tempos, originals with lyrics, covers with links)
+- 30 venues across Europe
+- 30 organizers (agencies, festivals, clubs, associations)
+- 30 gigs (past and upcoming) linked to venues and organizers
+- 30 setlists linked to gigs, plus standalone templates
+- Song audit log entries
+- 2 GEMA works with rightholders
 
 ---
 
@@ -193,7 +199,8 @@ to be typed back. The deletion runs in one transaction in the order `DATABASE.md
 1. `gigs.venue_id` / `gigs.organizer_id` are `ON DELETE RESTRICT` → set to NULL first.
 2. References from *other* artists into this one (setlist rows naming its songs, gigs naming its
    venues or organizers) are removed or nulled, so they cannot block the delete.
-3. `setlist_songs.song_id` has no cascade → delete the setlists first (that cascades their songs).
+3. The band's setlists are deleted (that cascades their songs). Not required on the current schema,
+   where `setlist_songs.song_id` cascades; older databases had no cascade there.
 4. `DELETE FROM artists` cascades songs, venues, organizers, gigs, arrangements, logs, users and GEMA works.
 
 Other artists are untouched. R2 files (audio, sheets, playback) are **not** deleted — the script

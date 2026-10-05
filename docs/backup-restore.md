@@ -110,6 +110,10 @@ no activity for 60 days, and a disabled schedule sends nothing.
 
 ### 6. First run
 
+The workflow runs only in the upstream repository: the job's `if:` line
+checks `github.repository`. On a fork, change that check to your own
+owner/name first; the workflow skips itself everywhere else.
+
 Actions → **Nightly backups** → Run workflow. Then in the backup bucket:
 `db/<label>/<date>/` holds a `.dump.age` and a `.manifest.json` per database,
 `files/<label>/` a copy of each upload bucket. Then do the drill below once:
