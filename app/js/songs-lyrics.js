@@ -4,7 +4,8 @@
 
 // --- Lyrics column ---
 
-var _lyricsChordsOn = localStorage.getItem('lyrics_chords') !== '0';
+var _lyricsChordsOn = true;
+try { _lyricsChordsOn = localStorage.getItem('lyrics_chords') !== '0'; } catch (_) {}
 var _lyricsSteps    = 0;
 var _lyricsText     = '';
 
@@ -19,7 +20,7 @@ function _lyricsShow(text) {
 
 function lyricsToggleChords() {
   _lyricsChordsOn = !_lyricsChordsOn;
-  localStorage.setItem('lyrics_chords', _lyricsChordsOn ? '1' : '0');
+  try { localStorage.setItem('lyrics_chords', _lyricsChordsOn ? '1' : '0'); } catch (_) {}
   _lyricsShow(_lyricsText);
 }
 

@@ -112,10 +112,11 @@ function _chEsc(s) {
 
 function chordsRender(text, opts) {
   var show = !opts || opts.chords !== false, steps = (opts && opts.steps) || 0;
+  var labels = chordsHas(text);
   return String(text).split('\n').map(function (line) {
     var segs = _chSegments(line);
     if (segs.length === 1) {
-      return _CH_LABEL.test(line)
+      return labels && _CH_LABEL.test(line)
         ? '<div class="chord-label">' + _chEsc(line.trim()) + '</div>'
         : '<div class="chord-row">' + (_chEsc(line) || '&nbsp;') + '</div>';
     }

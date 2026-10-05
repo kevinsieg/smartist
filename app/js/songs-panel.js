@@ -529,7 +529,7 @@ function _openLyricsFromPanel(formId, isNew, sid) {
   currentLyricsSid = formId;
   var hidden = document.querySelector('input[data-key="lyrics"][data-id="' + formId + '"]');
   document.getElementById('lyrics-title').textContent = '¶ ' + t('songs.lyricsTitle');
-  document.getElementById('lyrics-edit').value        = (hidden && hidden.value) || '';
+  document.getElementById('lyrics-edit').value        = chordsToAbove((hidden && hidden.value) || '');
   _lyricsSetMode('edit');
   document.getElementById('lyrics-modal').classList.add('open');
   document.getElementById('lyrics-edit').focus();
