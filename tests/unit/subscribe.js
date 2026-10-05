@@ -4,7 +4,7 @@ const { makeRunner, stubLogger } = require('./_runner');
 
 stubLogger();
 
-// Re-require config.js backed by a given sql tagged-template stub.
+// Re-require api/_config.js backed by a given sql tagged-template stub.
 // Always overrides _ratelimit so the real DB-backed rate limiter is never called,
 // regardless of what's in require.cache from earlier suites.
 function makeHandler(sqlFn) {
@@ -14,7 +14,7 @@ function makeHandler(sqlFn) {
 
   delete require.cache[dbPath];
   delete require.cache[configPath];
-  // config.js delegates to api/_domain/* — bust them so the re-require rebuilds
+  // api/_config.js delegates to api/_domain/* — bust them so the re-require rebuilds
   // the chain against the stubs below (the subscribe handler lives in _domain/subscribe).
   const domainDir = path.join(__dirname, '../../api/_domain');
   require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {
@@ -44,44 +44,45 @@ function mockRes() {
 }
 
 async function run(r) {
-  const { testAsync, assertEq } = r;
+  const { testAsync, assert, assertEq } = r;
 
-  await testAsync('POST /api/config subscribe — missing email → 400', async () => {
+  await testAsync('POST /api/subscribe — missing email → 400', async () => {
     const handler = makeHandler((s, ...v) => Promise.resolve([]));
     const res = mockRes();
-    await handler({ method: 'POST', body: {} }, res);
+    await handler({ method: 'POST', query: { action: 'subscribe' }, body: {} }, res);
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config subscribe — invalid email → 400', async () => {
+  await testAsync('POST /api/subscribe — invalid email → 400', async () => {
     const handler = makeHandler((s, ...v) => Promise.resolve([]));
     const res = mockRes();
-    await handler({ method: 'POST', body: { email: 'notanemail' } }, res);
+    await handler({ method: 'POST', query: { action: 'subscribe' }, body: { email: 'notanemail' } }, res);
     assertEq(res._status, 400);
   });
 
-  await testAsync('POST /api/config subscribe — duplicate email → 409', async () => {
-    const dupErr = Object.assign(new Error('unique violation'), { code: '23505' });
-    const handler = makeHandler((s, ...v) => Promise.reject(dupErr));
+  await testAsync('POST /api/subscribe — an address already on the list answers 200 like a new one', async () => {
+    const seen = [];
+    const handler = makeHandler((s, ...v) => { seen.push(s.join('?')); return Promise.resolve([]); });
     const res = mockRes();
-    await handler({ method: 'POST', body: { email: 'a@b.com' } }, res);
-    assertEq(res._status, 409);
+    await handler({ method: 'POST', query: { action: 'subscribe' }, body: { email: 'a@b.com' } }, res);
+    assertEq(res._status, 200);
+    assert(seen.some(q => /ON CONFLICT \(email\) DO NOTHING/.test(q)), 'insert ignores an existing address');
   });
 
-  await testAsync('POST /api/config subscribe — valid email → 200', async () => {
+  await testAsync('POST /api/subscribe — valid email → 200', async () => {
     const handler = makeHandler((s, ...v) => Promise.resolve([]));
     const res = mockRes();
-    await handler({ method: 'POST', body: { email: 'hello@example.com' } }, res);
+    await handler({ method: 'POST', query: { action: 'subscribe' }, body: { email: 'hello@example.com' } }, res);
     assertEq(res._status, 200);
     assertEq(res._body?.ok, true);
   });
 
-  await testAsync('POST /api/config subscribe demo — stores country only, no city, user agent or referrer', async () => {
+  await testAsync('POST /api/subscribe demo — stores country only, no city, user agent or referrer', async () => {
     const values = [];
     const handler = makeHandler((s, ...v) => { values.push(...v); return Promise.resolve([]); });
     const res = mockRes();
     await handler({
-      method: 'POST',
+      method: 'POST', query: { action: 'subscribe' },
       headers: {
         'x-vercel-ip-country': 'FR', 'x-vercel-ip-country-region': 'IDF', 'x-vercel-ip-city': 'Paris',
         'user-agent': 'UA/1.0', referer: 'https://example.com/',
@@ -94,12 +95,12 @@ async function run(r) {
     for (const k of ['geo_city', 'geo_region', 'ua', 'ref']) assertEq(k in meta, false);
   });
 
-  await testAsync('POST /api/config subscribe demo — form fields are bounded strings', async () => {
+  await testAsync('POST /api/subscribe demo — form fields are bounded strings', async () => {
     const values = [];
     const handler = makeHandler((s, ...v) => { values.push(...v); return Promise.resolve([]); });
     const res = mockRes();
     await handler({
-      method: 'POST', headers: {},
+      method: 'POST', headers: {}, query: { action: 'subscribe' },
       body: {
         email: 'demo@example.com', source: 'demo',
         name: 'x'.repeat(5000), genres: ['Folk', { big: 'x'.repeat(5000) }, 'Jazz'], perform_country: { nested: true },
@@ -112,7 +113,7 @@ async function run(r) {
     assertEq(meta.perform_country, null);
   });
 
-  await testAsync('sweepSubscribers — deletes rows past 24 months and strips dropped meta keys', async () => {
+  await testAsync('sweepSubscribers — deletes rows past 24 months', async () => {
     const queries = [];
     const { sweepSubscribers } = require(path.join(__dirname, '../../api/_domain/subscribe'));
     const random = Math.random;
@@ -121,7 +122,6 @@ async function run(r) {
     finally { Math.random = random; }
     assertEq(queries.length, 1);
     assertEq(/DELETE FROM subscribers WHERE created_at < now\(\) - interval '24 months'/.test(queries[0]), true);
-    assertEq(/meta - \?::text\[\]/.test(queries[0]), true);
   });
 }
 

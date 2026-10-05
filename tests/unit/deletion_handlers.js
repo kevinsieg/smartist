@@ -42,11 +42,25 @@ function makeDb(rows) {
 
   const sql = (strings, ...values) => {
     const text = strings.join('?').replace(/\s+/g, ' ').trim();
+    // sessionRowId (api/_auth.js): the claim's row, or another of its address.
+    if (/^\( SELECT id FROM users WHERE id = \? OR \(email = \? AND created_at <= \?/.test(text)) {
+      const [id, email] = values;
+      const row = users.find(u => u.id === id) || users.find(u => email && u.email === email);
+      return { sessionRowId: row ? row.id : null };
+    }
+    // sessionAccount's column list (api/_session.js), a fragment.
+    if (text === 'me.email') return { columns: 'me.email' };
     writes.push({ text, values });
 
-    // _sessionEmail: who is the bearer token's userId.
+    // _sessionEmail (sessionAccount): who is the bearer token's userId.
+    if (/FROM users me WHERE me\.id = \?/i.test(text)) {
+      const id = values.find(v => v && typeof v === 'object' && 'sessionRowId' in v)?.sessionRowId;
+      const row = users.find(u => u.id === id);
+      return Promise.resolve(row ? [{ email: row.email }] : []);
+    }
     if (/SELECT email(, password_hash(, sessions_valid_after)?)? FROM users WHERE id =/i.test(text)) {
-      const row = users.find(u => u.id === values[0]);
+      const id = values[0] && typeof values[0] === 'object' ? values[0].sessionRowId : values[0];
+      const row = users.find(u => u.id === id);
       return Promise.resolve(row ? [{ email: row.email }] : []);
     }
     // confirmDeletion: look the raw token's hash up.

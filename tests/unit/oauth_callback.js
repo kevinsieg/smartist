@@ -28,7 +28,7 @@ const EMAIL = 'player@example.com';
 
 const logged = [];
 
-function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name: 'Band' }], provider = 'google' } = {}) {
+function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name: 'Band' }], provider = 'google', invites = [] } = {}) {
   logged.length = 0;
   const logPath = require.resolve(path.join(__dirname, '../../api/_logger'));
   require.cache[logPath] = {
@@ -57,9 +57,12 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
   // exists to prevent.
   delete require.cache[tokenPath];
 
+  const updates = [];
   const sql = (strings) => {
     const text = Array.isArray(strings) ? strings.join(' ') : String(strings);
     // Order matters: the workspace lookup also selects FROM users.
+    // Accepting the open invites of an address with no account yet.
+    if (/^\s*UPDATE\s+users/i.test(text)) { updates.push(text); return Promise.resolve(invites); }
     if (/JOIN\s+artists/i.test(text)) return Promise.resolve(artists);
     if (/FROM\s+users/i.test(text))   return Promise.resolve(user ? [user] : []);
     return Promise.resolve(artists);
@@ -95,6 +98,7 @@ function load({ user = { id: 7, role: 'admin' }, artists = [{ slug: 'band', name
       .handle(require(path.join(__dirname, '../../api/_domain/oauth')).oauthCallback) },
     state: realIdentity.generateState(provider, 'login', NONCE),
     token: require(tokenPath),   // the real one, loaded after the eviction above
+    updates,
   };
 }
 
@@ -122,7 +126,7 @@ function sessionCookie(res) {
 }
 
 async function callback(opts = {}, query, cookie = `oauth_nonce=${NONCE}`) {
-  const { oauth, state, token } = load(opts);
+  const { oauth, state, token, updates } = load(opts);
   const res = mockRes();
   await oauth.oauthCallback(
     {
@@ -133,6 +137,7 @@ async function callback(opts = {}, query, cookie = `oauth_nonce=${NONCE}`) {
     res,
   );
   res._token = token;
+  res._updates = updates;
   return res;
 }
 
@@ -223,6 +228,31 @@ async function run(r) {
       `expected onboarding, got ${res._url}`);
     assert(!sessionCookie(res), 'a session for an account that does not exist');
     assert(logged.some(l => l.event === 'oauth_signup_started'), 'signup start not logged');
+  });
+
+  // An address invited to a band but with no account yet: the provider has
+  // shown it is theirs, so signing in accepts the invites, as the invite link
+  // would. An existing account's invites stay open (see the next test).
+  await testAsync('an invited address with no account signs in and joins its bands', async () => {
+    const res = await callback({ user: null, invites: [{ id: 9, role: 'member', password_hash: null }] });
+    assert(sessionCookie(res), 'no session for the invited address');
+    assertEq(fragment(res._url).get('next'), '/band/dashboard');
+    assertEq(res._updates.length, 1, 'invites accepted');
+  });
+
+  await testAsync('an existing account\'s open invites are not accepted by signing in', async () => {
+    const res = await callback();
+    assertEq(res._updates.length, 0);
+  });
+
+  await testAsync('an untrusted Facebook address accepts no invites', async () => {
+    const saved = process.env.FACEBOOK_TRUST_EMAIL;
+    delete process.env.FACEBOOK_TRUST_EMAIL;
+    try {
+      const res = await callback({ user: null, provider: 'facebook', invites: [{ id: 9, role: 'member', password_hash: null }] });
+      assertEq(res._updates.length, 0);
+      assertEq(res._url, 'https://app.smartist.studio/signup?error=verify_email');
+    } finally { if (saved !== undefined) process.env.FACEBOOK_TRUST_EMAIL = saved; }
   });
 
   // Facebook does not say whether an address is verified. A workspace set up

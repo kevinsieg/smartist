@@ -35,10 +35,10 @@ async function _contactSend() {
   btn.disabled = true; btn.textContent = t('contact.sending');
   setStatus('cf-status', '');
   try {
-    var r = await fetch('/api/config', {
+    var r = await fetch('/api/contact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'contact', name: name, email: email, message: msg }),
+      body: JSON.stringify({ name: name, email: email, message: msg }),
     });
     var d = await r.json().catch(function() { return {}; });
     if (!r.ok) {

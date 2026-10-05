@@ -82,7 +82,7 @@
 
   let d;
   try {
-    const r = await fetch('/api/config?action=my-artists', {
+    const r = await fetch('/api/auth/artists', {
       headers: { Authorization: 'Bearer ' + authTok },
     });
     if (r.status === 401) {

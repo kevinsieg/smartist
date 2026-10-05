@@ -63,7 +63,7 @@ function makeContext(fetchImpl) {
 (async () => {
   console.log(B('\nhome session validation'));
 
-  await test('valid stored token is validated via my-artists (Bearer), not the password endpoint', async () => {
+  await test('valid stored token is validated via /api/auth/artists (Bearer), not the password endpoint', async () => {
     let request = null;
     const ctx = makeContext(async (url, opts) => {
       request = { url, opts: opts || {} };
@@ -72,8 +72,9 @@ function makeContext(fetchImpl) {
     const res = await ctx.verifySession('tok-123');
     assertEq(res.ok, true);
     assertEq(res.artists.length, 1);
-    assert(request.url.indexOf('action=my-artists') !== -1, 'must call the my-artists endpoint, got ' + request.url);
-    assert(request.url.indexOf('/auth') === -1, 'must NOT post the token to the password/auth endpoint');
+    assert(request.url.indexOf('/api/auth/artists') !== -1, 'must call /api/auth/artists, got ' + request.url);
+    assert(request.url.indexOf('/api/login') === -1 && (request.opts.method || 'GET') === 'GET',
+      'must NOT post the token to the password endpoint');
     assertEq(request.opts.headers.Authorization, 'Bearer tok-123');
   });
 
@@ -109,6 +110,71 @@ function makeContext(fetchImpl) {
     await vm.runInContext('init()', ctx);
     assert(rendered, 'nothing rendered');
     assertEq(rendered.msg, 'home.oauthErrorMsg');
+  });
+
+  console.log(B('\nhome OAuth sign-in completion'));
+
+  // The callback leaves the session in an HttpOnly cookie and sends the
+  // browser to /login#oauth=1; the page trades the cookie for the token once
+  // (POST oauth-session) and never sees it in a URL. Every Google and Facebook
+  // sign-in ends here.
+  function oauthArrival(handover, artists) {
+    const calls = { fetch: [], stored: [], rendered: null, replaced: 0 };
+    const ctx = makeContext(async (url, opts = {}) => {
+      calls.fetch.push({ url, opts });
+      if (opts.method === 'POST') return handover;
+      return artists
+        ? { ok: true, status: 200, json: async () => ({ artists }) }
+        : { ok: false, status: 401, json: async () => ({}) };
+    });
+    ctx.window = { location: { search: '', hash: '#oauth=1&hint=' + Buffer.from('me@example.test').toString('base64url'), pathname: '/login', origin: 'https://app.example' } };
+    ctx.history = { replaceState() { calls.replaced++; } };
+    ctx.AUTH_TOKEN_KEY = 'smartist_token';
+    ctx.t = (k) => k;
+    ctx.storeToken = (tok, remember) => { calls.stored.push([tok, remember]); ctx.sessionStorage.setItem('smartist_token', tok); };
+    ctx.loadConfig = async () => ({ name: '', config: { oauth: true } });
+    ctx.renderLoggedIn = (cfg, list) => { calls.rendered = { loggedIn: true, cfg, artists: list }; };
+    ctx.renderLogin = (msg, cfg) => { calls.rendered = { msg, cfg }; };
+    return { ctx, calls };
+  }
+  const handoverOk = { ok: true, status: 200, json: async () => ({ token: 'tok-oauth' }) };
+
+  await test('#oauth=1 trades the cookie for the session once and signs in', async () => {
+    const { ctx, calls } = oauthArrival(handoverOk, [{ slug: 'band', name: 'Band', role: 'admin' }]);
+    await vm.runInContext('init()', ctx);
+    const post = calls.fetch.filter(c => c.opts.method === 'POST');
+    assertEq(post.length, 1, 'one handover request');
+    assertEq(post[0].url, '/api/auth/oauth-session');
+    assertEq(JSON.parse(post[0].opts.body), {});
+    assertEq(calls.stored, [['tok-oauth', false]]);
+    const check = calls.fetch.find(c => c.opts.method !== 'POST');
+    assertEq(check.opts.headers.Authorization, 'Bearer tok-oauth');
+    assert(calls.rendered && calls.rendered.loggedIn, 'not signed in');
+    assertEq(calls.rendered.artists.length, 1);
+    assert(calls.replaced > 0, 'the #oauth fragment stays in the address bar');
+    assertEq(ctx.sessionStorage.getItem('smartist_admin_email'), 'me@example.test');
+  });
+
+  await test('a spent or missing cookie → "invalid link" on the login form, nothing stored', async () => {
+    const { ctx, calls } = oauthArrival({ ok: false, status: 401, json: async () => ({}) }, null);
+    await vm.runInContext('init()', ctx);
+    assertEq(calls.stored, []);
+    assertEq(calls.rendered.msg, 'home.invalidLink');
+    assert(calls.rendered.cfg && calls.rendered.cfg.config.oauth, 'the form lost its sign-in buttons');
+  });
+
+  await test('a session the server refuses is dropped again', async () => {
+    const { ctx, calls } = oauthArrival(handoverOk, null);
+    await vm.runInContext('init()', ctx);
+    assertEq(calls.rendered.msg, 'home.invalidLink');
+    assertEq(ctx.sessionStorage.getItem('smartist_token'), null);
+  });
+
+  await test('the handover failing on the network → login form, no crash', async () => {
+    const { ctx, calls } = oauthArrival(handoverOk, null);
+    ctx.fetch = async () => { throw new Error('offline'); };
+    await vm.runInContext('init()', ctx);
+    assertEq(calls.rendered.msg, 'home.invalidLink');
   });
 
   console.log(B('\nafter sign-in: next= stays on this site'));

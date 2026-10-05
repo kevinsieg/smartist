@@ -1,7 +1,7 @@
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
-const { parseFields } = require('../_validate');
+const { parseFields, likePattern } = require('../_validate');
 const { ORGANIZER_FIELDS } = require('../_domain/records');
 const { requireFeature } = require('../_plans');
 
@@ -26,7 +26,7 @@ module.exports = wrap(async function handler(req, res) {
 
     const { limit, offset } = parsePage(req);
     const q = (req.query.q || '').trim();
-    const pattern = q ? `%${q}%` : null;
+    const pattern = likePattern(q);
     const favourite = req.query.favourite === '1';
     const rows = await sql`
       SELECT *, COUNT(*) OVER() AS total

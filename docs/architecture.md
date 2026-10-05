@@ -26,7 +26,6 @@ styling) in `docs/reference.md`, the schema in `DATABASE.md`.
   (see `api/_db.js`).
 - **`api/_*.js`**: infrastructure (db, email, storage, logger, tokens, rate
   limits). Each swappable provider sits behind one block at the top of its file.
-- **`app/js/services/`**: API client wrappers used by the standalone pages.
 
 The whole API is one serverless function, `api/index.js`: a table of
 paths, each sent to a handler in `api/_config.js` or `api/_band/`. Files and
@@ -48,8 +47,9 @@ that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
   - Changing your own email sends a link to the *new* address, and nothing
     changes until it is confirmed.
   - Google sign-in requires `verified_email === true`. Facebook reports no
-    such flag, so it may only sign into an existing account when the
-    deployment sets `FACEBOOK_TRUST_EMAIL=true`.
+    such flag, so it may only sign in or set up an account when the
+    deployment sets `FACEBOOK_TRUST_EMAIL=true`; otherwise a new address is
+    sent to the emailed sign-up link.
   - OAuth `state` is bound to an `oauth_nonce` cookie set when the flow
     starts, so a callback URL cannot be replayed in someone else's browser.
   - Emails are stored lowercased, enforced by a database CHECK.
@@ -73,19 +73,24 @@ that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
 - **One address, one password.** The same person has a `users` row per band.
   Every way of setting a password (reset, change, accepting an invite) writes
   all of them, so an old password never keeps working through another band.
+  Rows that are still open invites are left out: a password would accept them.
 - **Tokens are bound to the database.** The signing key is derived from
   `APP_SECRET` and the database host and name. User ids are per database, so a
   secret shared by two deployments must not let user 5 of one in as user 5 of
   the other. Rotating database credentials keeps sessions; moving the database
   signs everyone out.
 - **Guessing is limited per address as well as per IP.** Ten failed sign-ins
-  within fifteen minutes lock that address, from whatever IPs they come.
+  in fifteen minutes lock that address on that IP; a hundred in the same window
+  from all IPs together lock the address everywhere except the IPs it signed in from in the
+  last 30 days, so a stranger cannot lock the owner out.
 - **Email links are single-purpose.** Magic tokens are signed for `login`,
   `reset` or `demo`, and one cannot be redeemed as another. The public demo
   gate hands out a `demo` token, which is a *member* session: no settings,
   invites or uploads.
 - **Signup** creates a new workspace. **Invites** add a person to an existing
-  one. `scripts/create_user.js` creates the first account for a band that has
+  one, once accepted: an open invite (no password, a token) grants nothing and
+  is listed nowhere. A new address accepts by setting its password; an address
+  that already has an account gets a `#join=` link and keeps its password. `scripts/create_user.js` creates the first account for a band that has
   none.
 - **A workspace is private by default.** Anonymous access is opt-in per surface
   (`publicCatalogue`, `publicStage`, both off); see `docs/reference.md`.
@@ -141,7 +146,7 @@ A workspace can be exported first: a ZIP with one CSV per table
 `artists.config.plan`. Limits are enforced server-side with `402` and a machine
 code, and the client only mirrors them for UX. Today the upgrade flips the plan
 directly. Paid billing would only change what writes `config.plan`, through the
-`?action=upgrade` seam. Donations are voluntary and unlock nothing.
+`/api/config/upgrade` seam. Donations are voluntary and unlock nothing.
 
 ---
 
@@ -172,8 +177,9 @@ the browser before upload.
 
 - **No build step.** Pages are plain HTML with plain scripts. Four shared
   scripts load first on every page — `core.js` (pure helpers, also on the stage
-  view), `session.js`, `ui.js`, `shell.js` — and `shell.js` builds the header, `footer.js` builds the footer (the same one on every
-  page), and in-app navigation swaps page content without a full reload
+  view), `session.js`, `ui.js`, `shell.js`. `shell.js` builds the header and
+  `footer.js` the footer (the same one on every page); in-app navigation swaps
+  page content without a full reload
   (`navigate()`). Page scripts therefore share one global scope: use `var` and
   private names (enforced by `tests/unit/page_scripts.js`).
 - **No inline script.** The Content-Security-Policy allows scripts only from

@@ -14,7 +14,7 @@
       if (cfg.facebookLogin) want.push(['facebook', 'facebook-url']);
       if (!want.length) return;
       const results = await Promise.all(
-        want.map(([, action]) => fetch('/api/config?action=' + action + '&mode=signup'))
+        want.map(([, action]) => fetch('/api/auth/' + action + '?mode=signup'))
       );
       for (let i = 0; i < want.length; i++) {
         if (!results[i].ok) continue;
@@ -66,7 +66,7 @@
         '</div>' +
         // Honeypot — visually hidden, bots fill it, server then skips the email
         '<input id="signup-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">' +
-        '<div class="auth-error" id="signup-error">' + errorMsg + '</div>' +
+        '<div class="auth-error" id="signup-error" role="alert">' + errorMsg + '</div>' +
         '<button type="button" class="btn active auth-submit" id="signup-btn">' + _esc(t('signup.sendBtn')) + '</button>' +
         '<p class="auth-hint">' + _esc(t('signup.alreadyHave')) + ' <a href="/login">' + _esc(t('signup.loginLink')) + '</a></p>' +
       '</div>';
@@ -78,7 +78,13 @@
       btn.disabled    = true;
       btn.textContent = t('signup.sending');
       try {
-        await sendSignupLink(email, document.getElementById('signup-hp').value);
+        const r = await fetch('/api/signup/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, website: document.getElementById('signup-hp').value || undefined }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || t('auth.failedToSendLink'));
         _render('sent');
       } catch (err) {
         btn.disabled    = false;

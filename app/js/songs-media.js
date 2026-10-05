@@ -46,26 +46,17 @@ async function _panelUploadHandler(input, sid, mediaType) {
 //   'storage' — PUT to storage failed
 //   'confirm' — confirm request failed
 async function _uploadSongMedia(sid, type, file) {
-  var token = getToken();
   var contentType = type === 'sheet' ? 'application/pdf' : file.type;
-  var r = await fetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
-  });
-  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
+  // apiFetch sends an ended session to the login page and throws.
+  var r = await apiFetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, 'POST',
+    { filename: file.name, contentType: file.type, size: file.size });
   if (!r.ok) throw new Error('presign');
 
   var json = await r.json();
   var put = await fetch(json.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
   if (!put.ok) throw new Error('storage');
 
-  var confirm = await fetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ publicUrl: json.publicUrl }),
-  });
-  if (confirm.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } throw new Error('auth'); }
+  var confirm = await apiFetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, 'PUT', { publicUrl: json.publicUrl });
   if (!confirm.ok) throw new Error('confirm');
 
   // Media URLs live in songs.extra, which the cached config payload carries.
@@ -123,10 +114,13 @@ async function handleAudioFile(input, sid) {
 // cross-site page needs for its scripts and cookies; it never becomes ours.
 var _EMBED_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation';
 
-// A PDF stays unsandboxed: browsers refuse to show a PDF in a sandboxed frame.
+// A PDF from our own bucket (an uploaded sheet) stays unsandboxed: browsers
+// refuse to show a PDF in a sandboxed frame. Decided by where the file lives,
+// not by how the URL ends — `https://anywhere/page#.pdf` ends in .pdf too.
+// Any other sheet link is sandboxed; the "open" link still opens it.
 function _sheetFrame(url) {
   var u = safeUrl(url);
-  var pdf = /\.pdf(\?|#|$)/i.test(u);
+  var pdf = !!_mediaBase && u.indexOf(_mediaBase + '/sheets/') === 0 && /\.pdf$/i.test(u.split(/[?#]/)[0]);
   return '<div class="sheet-embed"><iframe src="' + escHtml(u) + '" title="Sheet"' +
     (pdf ? '' : ' sandbox="' + _EMBED_SANDBOX + ' allow-forms"') + '></iframe></div>';
 }
@@ -155,9 +149,9 @@ function openPlayer(sid) {
   const content  = document.getElementById('player-content');
 
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay></audio><div class="audio-speed-btns"><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
-    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+    content.innerHTML = `<div class="player-embed"><iframe title="${escHtml(t('songs.listen'))}" src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
     content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }
@@ -201,11 +195,7 @@ async function confirmDeleteAudio() {
   closePlayer();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/audio`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${getToken()}` },
-    });
-    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+    const r = await apiFetch(`/api/${artistSlug}/songs/${sid}/audio`, 'DELETE');
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveAudio')); return; }
     invalidateConfigCache();
 
@@ -257,9 +247,9 @@ async function handleReplaceFile(input) {
     const embedUrl = toEmbedUrl(publicUrl);
     const content = document.getElementById('player-content');
     if (isAudio) {
-      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay></audio><div class="audio-speed-btns"><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     } else if (embedUrl) {
-      content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+      content.innerHTML = `<div class="player-embed"><iframe title="${escHtml(t('songs.listen'))}" src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
     } else {
       content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(publicUrl))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
     }
@@ -386,11 +376,7 @@ async function confirmDeleteSheet() {
   closeSheet();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/sheet`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${getToken()}` },
-    });
-    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+    const r = await apiFetch(`/api/${artistSlug}/songs/${sid}/sheet`, 'DELETE');
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemoveSheet')); return; }
     invalidateConfigCache();
 
@@ -531,9 +517,9 @@ function openPlayback(sid) {
   const embedUrl = toEmbedUrl(url);
   const content  = document.getElementById('playback-content');
   if (isAudio) {
-    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+    content.innerHTML = `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(url))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
   } else if (embedUrl) {
-    content.innerHTML = `<div class="player-embed"><iframe src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+    content.innerHTML = `<div class="player-embed"><iframe title="${escHtml(t('songs.playback'))}" src="${escHtml(safeUrl(embedUrl))}" sandbox="${_EMBED_SANDBOX}" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
   } else {
     content.innerHTML = `<p class="player-link"><a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">${t('songs.openNewTab')}</a></p>`;
   }
@@ -575,11 +561,7 @@ async function confirmDeletePlayback() {
   closePlayback();
 
   try {
-    const r = await fetch(`/api/${artistSlug}/songs/${sid}/playback`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${getToken()}` },
-    });
-    if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+    const r = await apiFetch(`/api/${artistSlug}/songs/${sid}/playback`, 'DELETE');
     if (!r.ok) { _setBulkStatus('error', t('songs.couldNotRemovePlayback')); return; }
     invalidateConfigCache();
 
@@ -627,7 +609,7 @@ async function handleReplacePlayback(input) {
     const td = document.querySelector(`#row-${sid} .playback-cell`);
     if (td) td.querySelector('input[type="text"]').value = publicUrl;
     document.getElementById('playback-content').innerHTML =
-      `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
+      `<div class="audio-speed-wrap"><audio controls src="${escHtml(safeUrl(publicUrl))}" autoplay style="width:100%;margin:1rem 0;display:block"></audio><div class="audio-speed-btns"><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div></div>`;
     apiFetch(`/api/${artistSlug}/song-logs?songId=${sid}`).then(r => r.ok ? r.json() : []).then(renderPlaybackHistory).catch(() => {});
     _setBulkStatus('saved', t('songs.playbackReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);

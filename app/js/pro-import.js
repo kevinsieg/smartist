@@ -55,7 +55,7 @@ function handleFileSelect(file) {
     sel.value = _csvType || 'info';
     document.getElementById('type-row').style.display = '';
     document.getElementById('step1-actions').style.display = '';
-    setStatus('');
+    _piStatus('');
   };
   reader.readAsText(file, 'UTF-8');
 }
@@ -74,7 +74,7 @@ async function runValidate() {
   if (!_csvText) return;
   _csvType = document.getElementById('type-select').value;
 
-  setStatus(t('pro.statusValidating'));
+  _piStatus(t('pro.statusValidating'));
   document.getElementById('validate-btn').disabled = true;
   document.getElementById('preview-area').style.display = 'none';
 
@@ -82,9 +82,9 @@ async function runValidate() {
     const data = await callImport({ dryRun: true });
     _validationResult = data;
     renderPreview(data);
-    setStatus('');
+    _piStatus('');
   } catch (e) {
-    setStatus(t('pro.statusError', { msg: e.message }), true);
+    _piStatus(t('pro.statusError', { msg: e.message }), true);
   } finally {
     document.getElementById('validate-btn').disabled = false;
   }
@@ -94,19 +94,19 @@ async function runImport() {
   if (!_csvText || !_validationResult) return;
   _csvType = document.getElementById('type-select').value;
 
-  setStatus(t('pro.statusImporting'));
+  _piStatus(t('pro.statusImporting'));
   document.getElementById('import-btn').disabled = true;
 
   try {
     const data = await callImport({ dryRun: false });
     renderResult(data);
-    setStatus('');
+    _piStatus('');
     document.getElementById('preview-area').style.display = 'none';
     _csvText = null;
     _csvType = null;
     _validationResult = null;
   } catch (e) {
-    setStatus(t('pro.statusError', { msg: e.message }), true);
+    _piStatus(t('pro.statusError', { msg: e.message }), true);
     document.getElementById('import-btn').disabled = false;
   }
 }
@@ -118,7 +118,8 @@ async function callImport({ dryRun }) {
     dryRun,
     ownerIpNameNumber: document.getElementById('owner-ip').value.trim() || undefined,
   });
-  const data = await r.json();
+  // The platform answers a body over its 4.5 MB limit with a 413 of its own, not JSON.
+  const data = await r.json().catch(() => ({ error: r.status === 413 ? 'CSV too large (max 2 MB)' : null }));
   if (!r.ok) throw new Error(data.error || t('pro.importFailed'));
   return data;
 }
@@ -255,7 +256,7 @@ function resetPreview() {
   document.getElementById('preview-area').style.display = 'none';
   document.getElementById('result-area').style.display = 'none';
   _validationResult = null;
-  setStatus('');
+  _piStatus('');
 }
 
 function resetImport() {
@@ -269,12 +270,15 @@ function resetImport() {
   document.getElementById('step1-actions').style.display = 'none';
   document.getElementById('preview-area').style.display = 'none';
   document.getElementById('result-area').style.display = 'none';
-  setStatus('');
+  _piStatus('');
 }
 
-function setStatus(msg, isError = false) {
+// Not setStatus: page scripts share the global scope with ui.js on SPA
+// navigation, and redefining a shared function breaks every other page.
+function _piStatus(msg, isError = false) {
   const el = document.getElementById('import-status');
   el.textContent = msg;
   el.style.color  = isError ? 'var(--danger-color)' : 'var(--third-color)';
   el.style.display = msg ? '' : 'none';
+  if (msg) announce(msg, isError);
 }

@@ -33,8 +33,12 @@ A typical setup:
 | Domain | Vercel project | `ARTIST_SLUG` | Database |
 |---|---|---|---|
 | `app.example.com` (public, with signup) | `smartist` | unset | its own Neon project |
-| `smartist.band.example.com` | `smartist-myband` | `myband` | a separate Neon project |
+| `smartist.band.example.com` | `smartist-myband` | `myband` | a separate Neon project, or a row in a shared one |
 | `example.com` (marketing) | separate static site | none | none |
+
+Every Neon project has a `main` branch for Production and a `dev` branch for
+Preview + Development ([`tenant-onboarding.md`](tenant-onboarding.md) walks
+through all three models).
 
 The login screen is served at `/` by `vercel.json`, which is right for every
 kind of deployment. A marketing page, if you want one, lives in its own repo.
@@ -46,7 +50,9 @@ A public demo is just another band inside the production database, at
 `scripts/demo_reset.js` from `scripts/demo_seed.json`. The reset is scoped to
 one `artist_id` and never deletes table-wide; `artists` and `users` rows are
 left alone. It needs the repository secret `DEMO_DATABASE_URL`, pointing at the
-**production** database.
+**production** database. The workflow runs only in the upstream repository
+(its job's `if:` checks `github.repository`); on a fork, change that check to
+your own owner/name first, or the job skips itself.
 
 Visitors enter through the `/demo` gate, which gives them a **member** session
 on that band (`DEMO_ARTIST_SLUG`, default `demo`): they can edit songs, gigs and
@@ -77,10 +83,10 @@ vercel env ls production --project <name>    # what that one actually has
 
 | Variable | Public deployment | Single-band deployment | Notes |
 |---|---|---|---|
-| `APP_SECRET` | yes | yes | `openssl rand -hex 32`, unique per project. Missing it takes the whole API down. |
+| `APP_SECRET` | yes | yes | `openssl rand -hex 32`, unique per project. Without it nobody can sign in (500 on sign-in, 401 on every session). |
 | `DATABASE_URL` | yes | yes | Per environment. |
 | `ARTIST_SLUG` | **no** | yes | Presence pins a deployment to one band. |
-| `SUPER_ADMIN_EMAILS` | yes | optional | Needs a `users` row to match; `scripts/create_user.js` creates the first one. |
+| `SUPER_ADMIN_EMAILS` | yes | optional | Needs a `users` row to match: sign up with that address (public), or the admin from `setup.js`. |
 | `APP_ORIGIN` | yes | yes | Base of every emailed link. Without it links fall back to the request's `Host` header. |
 | `R2_*`, `RESEND_*`, `GEMINI_API_KEY` | yes | yes | See `tenant-onboarding.md`. |
 | `DEMO_ARTIST_SLUG` | optional | no | Band the `/demo` gate opens; default `demo`. |
@@ -115,7 +121,7 @@ update on their own; check them afterwards rather than assuming either way.
 
 ## Monitoring
 
-Two checks per production deployment, both in Better Stack:
+Three checks per production deployment, all in Better Stack:
 
 - **Uptime.** A monitor on `https://<domain>/api/config?action=health`, every
   3 minutes, alerting when the URL is unavailable. The endpoint answers 503
@@ -127,7 +133,6 @@ Two checks per production deployment, both in Better Stack:
   line arrives in 30 minutes. It catches the transport failing silently (a
   wrong `BETTERSTACK_TOKEN`, or lines lost when the function freezes after the
   response) as well as the deployment being down.
-
 - **Responses near the size limit.** Vercel refuses response bodies over
   4.5 MB, and the song and setlist lists and the export are unpaged. Every
   `request` line carries the body size (`bytes`); a body over 2 MB also logs a
@@ -148,10 +153,13 @@ and bucket to the backup secrets.
 
 ## Unconfirmed uploads
 
-Song media is uploaded straight to the bucket with a presigned URL (size signed
-in, at most 50 MB) and counted once the app confirms it. An upload that is
-never confirmed stays in the bucket, uncounted. Do **not** add a bucket
-lifecycle rule for this: confirmed files live under the same prefixes
-(`audio/`, `sheets/`, `playback/`) and would be deleted too.
+Song media and gig posters are uploaded straight to the bucket with a
+presigned URL (size and type signed in, at most 50 MB), under `pending/`. The
+app's confirm moves the file to its real key (`promoteUpload`, `api/_r2.js`)
+and counts it. An upload that is never confirmed stays under `pending/`, which
+each bucket's lifecycle rule empties after a day (`tenant-onboarding.md`). The
+rule covers `pending/` only: confirmed files live under `audio/`, `sheets/`,
+`playback/` and `gigs/`. Band logos and favicons overwrite one fixed key per
+band and need no rule.
 `node scripts/plans.js --recount` recomputes each band's usage from the files
 its songs reference.

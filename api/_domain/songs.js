@@ -1,5 +1,7 @@
 'use strict';
 
+const { SONG_LOG_KEEP } = require('../_constants');
+
 // Song reads and writes shared by api/_band/songs.js and api/_band/songs/item.js.
 //
 // Lyrics live in song_lyrics, not in songs.extra: a band's lyrics run to
@@ -10,9 +12,9 @@
 const LYRICS_MAX = 20000;
 const LANGUAGE_MAX = 10;
 
-// Keys that used to live in songs.extra and are real columns now. An older
-// client (or a cached page) may still send them inside extra.
-const MOVED_EXTRA_KEYS = ['lyrics', 'language'];
+// Keys that are columns of their own and never go into songs.extra (a list
+// carries extra; lyrics never travel in a list).
+const COLUMN_KEYS = ['lyrics', 'language'];
 
 // One GEMA work per song for the list columns — the lowest work number wins.
 function gemaJoin(sql) {
@@ -78,11 +80,26 @@ function configSongs(sql, artistId) {
   `;
 }
 
-// One live song with its lyrics — the song panel, the lyrics modal and stage.
+// One live song with its lyrics and its arrangement versions (newest last),
+// in one statement — the song panel, the lyrics modal and stage. The versions
+// carry names only; the active one comes in full as active_arrangement, so
+// stage draws its chart without a second request.
 async function songDetail(sql, artistId, songId) {
   const [song] = await sql`
     SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language,
-      l.lyrics, (l.song_id IS NOT NULL) AS has_lyrics
+      l.lyrics, (l.song_id IS NOT NULL) AS has_lyrics,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', a.id, 'name', a.name, 'is_active', a.is_active,
+                                          'updated_at', a.updated_at) ORDER BY a.created_at, a.id)
+        FROM song_arrangements a
+        WHERE a.song_id = s.id AND a.artist_id = s.artist_id
+      ), '[]') AS arrangements,
+      (SELECT json_build_object('id', a.id, 'name', a.name, 'is_active', a.is_active,
+                                'hidden_instruments', a.hidden_instruments, 'rows', a.rows,
+                                'created_at', a.created_at, 'updated_at', a.updated_at)
+       FROM song_arrangements a
+       WHERE a.song_id = s.id AND a.artist_id = s.artist_id AND a.is_active
+       LIMIT 1) AS active_arrangement
     FROM songs s
     LEFT JOIN song_lyrics l ON l.song_id = s.id
     ${gemaJoin(sql)}
@@ -95,7 +112,7 @@ async function songDetail(sql, artistId, songId) {
 function cleanLyrics(value) {
   if (value == null) return { value: null };
   if (typeof value !== 'string') return { error: 'lyrics must be a string' };
-  if (value.length > LYRICS_MAX) return { error: 'Lyrics too long (max 20 000 characters)' };
+  if (value.length > LYRICS_MAX) return { error: `Lyrics too long (max ${LYRICS_MAX} characters)` };
   return { value: value.trim() || null };
 }
 
@@ -109,21 +126,26 @@ function cleanLanguage(value) {
   return s.toUpperCase();
 }
 
-// Splits the keys that are columns now out of an incoming extra object, so
-// they never land in songs.extra again. Returns { extra, lyrics, language },
-// where lyrics / language are undefined when extra did not carry them.
-function splitMovedKeys(extra) {
-  if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return { extra, lyrics: undefined, language: undefined };
-  const rest = { ...extra };
-  const moved = {};
-  for (const k of MOVED_EXTRA_KEYS) {
-    if (k in rest) { moved[k] = rest[k]; delete rest[k]; }
-  }
-  return { extra: rest, lyrics: moved.lyrics, language: moved.language };
+// The statement that trims the history of some songs to their newest
+// SONG_LOG_KEEP entries (api/_constants.js), as a fragment: run on its own
+// (trimSongLogs in api/_db.js) or as a `trimmed AS (…)` step of the write that
+// logged. `songIds` is a subquery fragment (`SELECT id FROM s`), so an entry
+// that same statement inserts is counted too. song_logs_song_id_idx finds
+// the rows, so the cost does not grow with the band.
+function trimHistory(sql, artistId, songIds) {
+  return sql`
+    DELETE FROM song_logs WHERE id IN (
+      SELECT id FROM (
+        SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
+        FROM song_logs
+        WHERE artist_id = ${artistId} AND song_id IN (${songIds})
+      ) ranked
+      WHERE n > ${SONG_LOG_KEEP}
+    )`;
 }
 
-// Saves (or, with null, removes) one song's lyrics and writes the audit entry,
-// in one statement. Returns the song ({ id, title }) or null when the song is
+// Saves (or, with null, removes) one song's lyrics, writes the audit entry and
+// trims the song's history, in one statement. Returns the song ({ id, title }) or null when the song is
 // not a live song of this band.
 async function writeLyrics(sql, artistId, songId, lyrics, action = 'lyrics_update') {
   const [song] = await sql`
@@ -140,6 +162,8 @@ async function writeLyrics(sql, artistId, songId, lyrics, action = 'lyrics_updat
     ), logged AS (
       INSERT INTO song_logs (artist_id, song_id, action, song_data)
       SELECT ${artistId}, id, ${action}, jsonb_build_object('title', title) FROM s
+    ), trimmed AS (
+      ${trimHistory(sql, artistId, sql`SELECT id FROM s`)}
     )
     SELECT id, title FROM s
   `;
@@ -176,6 +200,6 @@ function publicSong(row) {
 }
 
 module.exports = {
-  LYRICS_MAX, PRIVATE_SONG_KEYS, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
-  splitMovedKeys, writeLyrics, lyricsSearchInfo,
+  LYRICS_MAX, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
+  COLUMN_KEYS, writeLyrics, lyricsSearchInfo, trimHistory,
 };

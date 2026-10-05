@@ -17,7 +17,7 @@ process.env.APP_SECRET = process.env.APP_SECRET || 'unit-test-secret-32-bytes-ok
 const HASH = bcrypt.hashSync('correct horse battery', 4);
 const OTHER = bcrypt.hashSync('a different password', 4);
 
-function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ slug: 'a', name: 'A', role: 'admin' }] } = {}) {
+function makeHandler(rows, { rateLimited = false, locked = false, ipKnown = true, artists = [{ slug: 'a', name: 'A', role: 'admin' }] } = {}) {
   const dbPath     = require.resolve(path.join(__dirname, '../../api/_db'));
   const rlPath     = require.resolve(path.join(__dirname, '../../api/_ratelimit'));
   const authPath   = require.resolve(path.join(__dirname, '../../api/_auth'));
@@ -31,6 +31,7 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
   });
 
   const queries = [];
+  const spent = new Set();
   const failures = [];
   const failureIps = [];
   const sql = (strings, ...values) => {
@@ -38,7 +39,13 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
     queries.push({ text, values });
     // passwordLogin's one statement: IP count, lock, candidates and bands.
     if (/WITH ip_hit AS \( INSERT INTO rate_limits/.test(text))
-      return Promise.resolve([{ ip_limited: rateLimited, locked, candidates: rows, artists }]);
+      return Promise.resolve([{ ip_limited: rateLimited, locked, ip_known_today: ipKnown, candidates: rows, artists }]);
+    // magicLogin's claim of a sign-in link: taken once, then refused.
+    if (/INSERT INTO rate_limits \(key, window_start, count\) VALUES/.test(text)) {
+      if (spent.has(values[0])) return Promise.resolve([]);
+      spent.add(values[0]);
+      return Promise.resolve([{ ok: 1 }]);
+    }
     if (/FROM users/.test(text)) return Promise.resolve(rows);
     return Promise.resolve(artists);
   };
@@ -46,7 +53,8 @@ function makeHandler(rows, { rateLimited = false, locked = false, artists = [{ s
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
     exports: {
-      loginFailKey: email => `login-fail:${email}`, loginFailPairKey: (email, ip) => `login-fail:${email}|${ip}`,
+      loginFailKey: email => `login-fail:${email}`, loginFailPairKey: (email, ip) => `login-fail:${email} ${ip}`,
+      loginOkKey: (email, ip) => `login-ok:${email} ${ip}`, loginOkPrefix: email => `login-ok:${email} `, LOGIN_OK_DAYS: 30,
       LOGIN_FAIL_MAX: 10, LOGIN_FAIL_ADDRESS_MAX: 100, LOGIN_FAIL_WINDOW: 900,
       countLoginFailure: async (email, ip) => { failures.push(email); failureIps.push(ip); },
       checkRateLimit: async () => rateLimited, clientIp: () => '127.0.0.1',
@@ -72,9 +80,8 @@ function mockRes() {
   return res;
 }
 
-// The rewrite /api/login → /api/config?action=login delivers the action in the
-// QUERY. Exercising only the body shape is exactly what let a rewritten login
-// fall through to the subscribe handler in production.
+// The route table turns /api/login into action 'login' in the QUERY; an action
+// in the body is not read at all.
 async function call(handler, body, { via = 'query' } = {}) {
   const res = mockRes();
   const req = via === 'query'
@@ -171,7 +178,19 @@ async function run(r) {
     await call(handler, { email: 'A@B.co', password: 'correct horse battery' });
     assert(queries[0].values.includes('auth:127.0.0.1'), 'the per-IP key');
     assert(queries[0].values.includes('login-fail:a@b.co'), 'the per-address lock key, normalised');
-    assert(queries[0].values.includes('login-fail:a@b.co|127.0.0.1'), 'the per-address-and-IP lock key');
+    assert(queries[0].values.includes('login-fail:a@b.co 127.0.0.1'), 'the per-address-and-IP lock key');
+  });
+
+  // An "address" carrying the separator named another person's pair key, so
+  // strangers could trip the lock meant for the owner's own network.
+  await testAsync('an address that is not one → 401, nothing read or counted', async () => {
+    for (const email of ['a@b.co 10.0.0.1', 'a@b.co\t10.0.0.1', 'not-an-address']) {
+      const { handler, queries, failures } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
+      const res = await call(handler, { email, password: 'correct horse battery' });
+      assertEq(res._status, 401, email);
+      assertEq(queries.length, 0, email);
+      assertEq(failures.length, 0, email);
+    }
   });
 
   await testAsync('a successful sign-in is one statement', async () => {
@@ -180,6 +199,27 @@ async function run(r) {
     assertEq(res._status, 200);
     assertEq(queries.length, 1, 'rate limit, lock, candidates and bands were four statements');
     assertEq(res._body.artists[0].slug, 'a', 'the bands come from that statement');
+  });
+
+  await testAsync('the address-wide lock spares an IP the address signed in from', async () => {
+    const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
+    await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
+    assert(queries[0].values.includes('login-ok:a@b.co 127.0.0.1'), 'the known-IP key is read in the gate');
+    assert(/NOT EXISTS \( SELECT 1 FROM rate_limits WHERE key =/.test(queries[0].text), 'the address lock is waived for a known IP');
+  });
+
+  await testAsync('a sign-in from a new IP remembers it, in one more statement', async () => {
+    const { handler, queries } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }], { ipKnown: false });
+    const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
+    assertEq(res._status, 200);
+    assertEq(queries.length, 2);
+    assert(queries[1].values.includes('login-ok:a@b.co 127.0.0.1'), 'the IP is stored for the address');
+  });
+
+  await testAsync('a wrong password never marks the IP as known', async () => {
+    const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }], { ipKnown: false });
+    await call(handler, { email: 'a@b.co', password: 'not it' });
+    assert(!queries.some(q => q.values.includes('login-ok:a@b.co 127.0.0.1') && /^INSERT/.test(q.text)));
   });
 
   await testAsync('a wrong password is counted against the address and IP', async () => {
@@ -198,10 +238,11 @@ async function run(r) {
   });
 
 
-  await testAsync('the action is honoured in the body too, as the app sends it', async () => {
-    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+  await testAsync('an action in the body is ignored: actions are URL paths', async () => {
+    const { handler, queries } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
     const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' }, { via: 'body' });
-    assertEq(res._status, 200);
+    assertEq(res._status, 404);
+    assertEq(queries.length, 0);
   });
 
   await testAsync('a rewritten login never reaches another action', async () => {
@@ -220,7 +261,7 @@ async function run(r) {
   const hint = addr => Buffer.from(addr).toString('base64url');
   async function magic(handler, body) {
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'magic-login', ...body }, headers: {}, query: {} }, res);
+    await handler({ method: 'POST', body, headers: {}, query: { action: 'magic-login' } }, res);
     return res;
   }
 
@@ -241,6 +282,21 @@ async function run(r) {
     const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
     assertEq(res._status, 200);
     assertEq(res._body.role, 'admin');
+  });
+
+  await testAsync('a link signs in once; the second use is refused', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const body = { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') };
+    assertEq((await magic(handler, body))._status, 200);
+    const again = await magic(handler, body);
+    assertEq(again._status, 401);
+    assert(!again._body.token, 'no session from a spent link');
+  });
+
+  await testAsync('a refused link claims nothing', async () => {
+    const { handler, queries } = makeHandler([{ id: 9, role: 'admin', password_hash: OTHER }]);
+    await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(queries.filter(q => /magic-used/.test(String(q.values[0]))).length, 0);
   });
 
   await testAsync('a reset link does not log anyone in', async () => {
@@ -268,8 +324,8 @@ async function run(r) {
   const { generateUserToken, TTL_8H } = require('../../api/_token');
   async function logoutAll(handler, token) {
     const res = mockRes();
-    await handler({ method: 'POST', body: { action: 'logout-everywhere' },
-      headers: token ? { authorization: `Bearer ${token}` } : {}, query: {} }, res);
+    await handler({ method: 'POST', body: {}, query: { action: 'logout-everywhere' },
+      headers: token ? { authorization: `Bearer ${token}` } : {} }, res);
     return res;
   }
 

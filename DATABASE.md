@@ -1,16 +1,16 @@
-# Database Model
+# Database model
 
-PostgreSQL via **Neon** (hosted). All tables are scoped to an `artist_id` — a single database supports multiple independent artists.
+PostgreSQL via **Neon** (hosted). Every band's data is scoped to its `artist_id` — a single database supports multiple independent artists. The global tables (`rate_limits`, `subscribers`, `schema_migrations`) have no `artist_id`, and two child tables reach their band through a parent (`setlist_songs` through `setlists`, `gema_rightholders` through `gema_works`).
 
 ## Driver
 
 **postgres.js** (`postgres` npm package, v3). Connects over the standard PostgreSQL wire protocol (port 5432) using Neon's pooler connection string.
 
-The scripts use the same driver through `scripts/_lib.js` (`connect()` turns SSL off for a database on localhost). `@neondatabase/serverless` is no longer a dependency: its HTTP transport has no transactions (`sql.begin()`).
+The scripts use the same driver through `scripts/_lib.js` (`connect()` turns SSL off for a database on localhost). postgres.js speaks the wire protocol to Neon's pooler and supports transactions (`sql.begin()`), which multi-step writes need; Neon's HTTP driver (`@neondatabase/serverless`) has none, so it is not used.
 
 The swap point is the `DB.connect` line in `api/_db.js`. The rest of the codebase is driver-agnostic (`sql\`...\`` tagged templates only).
 
-Schema file: `scripts/schema.sql` (idempotent — safe to re-run against any database version to apply missing tables/columns without data loss).
+Schema file: `scripts/schema.sql` (idempotent — safe to re-run). The tables in it are the schema as of 2026-10-06 with every earlier migration folded in, so it builds an empty database or brings one that has recorded `2026-10-06` up to date through the dated blocks after it, without data loss. A database older than that cannot be upgraded with the current file.
 
 ---
 
@@ -98,7 +98,7 @@ Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist histor
 | `extra` | jsonb DEFAULT `{}` | Artist-specific fields (capo, isrc, listenUrl, …) |
 | `deleted` | boolean NOT NULL DEFAULT false | Soft-delete flag |
 
-**Indexes:** `songs_list_idx (artist_id, deleted, title)` — serves every song query; `songs_artist_id_idx`, `songs_band_active_idx (artist_id, active)`.
+**Indexes:** `songs_list_idx (artist_id, deleted, title)` — serves every song query; `songs_tags_idx` (GIN on `tags`). UNIQUE `songs_id_artist_key (id, artist_id)` is what the band-scoped foreign keys point at (see [FK delete strategies](#fk-delete-strategies)).
 
 ---
 
@@ -132,6 +132,8 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `declined` | boolean DEFAULT false | Venue declined to book |
 | `status` | text | Free-form status label (e.g. `Active`, `Prospect`, `Confirmed`) |
 | `category` | text | Type: `club`, `festival`, `placeholder`, `legacy`, … |
+| `street_number` | text | |
+| `street` | text | |
 | `postcode` | text | |
 | `city` | text | |
 | `state` | text | |
@@ -144,19 +146,21 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `last_communication` | date | |
 | `booking_channel` | text | How to reach them: `Email`, `Agency`, … |
 | `number_of_cold_contacts` | integer DEFAULT 0 | |
-| `turnus` | text | Booking frequency hint |
+| `turnus` | text | Unused since 2026-10; dropped a release after the API stopped writing it |
 | `remuneration` | text | Pay notes |
 | `overnight` | boolean DEFAULT false | Accommodation available |
 | `season` | text | Active season |
 | `preferred_period` | text | |
 | `comment` | text | |
 | `deadline` | date | |
-| `main_genre` | text | Primary genre this venue books |
+| `main_genre` | text | Unused since 2026-10; dropped a release after the API stopped writing it |
 | `size` | integer | Capacity |
 | `language` | text | |
+| `lat`, `lng` | double precision | Map position, from the address search |
+| `heart` | boolean NOT NULL DEFAULT false | Favourite |
 | `last_updated` | timestamptz DEFAULT NOW() | |
 
-**Indexes:** `venues_artist_id_idx`
+**Indexes:** `venues_artist_id_idx`; UNIQUE `venues_id_artist_key (id, artist_id)` for the band-scoped foreign key from `gigs`.
 
 ---
 
@@ -180,9 +184,10 @@ Contacts who organize or book gigs (agencies, festival orgs, promoters).
 | `last_communication` | date | |
 | `comment` | text | |
 | `extra` | jsonb DEFAULT `{}` | Extensible fields |
+| `heart` | boolean NOT NULL DEFAULT false | Favourite |
 | `last_updated` | timestamptz DEFAULT NOW() | |
 
-**Indexes:** `organizers_artist_id_idx`
+**Indexes:** `organizers_artist_id_idx`; UNIQUE `organizers_id_artist_key (id, artist_id)` for the band-scoped foreign key from `gigs`.
 
 ---
 
@@ -201,15 +206,17 @@ A performance event. Setlists can be linked to a gig but the link is optional.
 | `type` | text | `Club show`, `Festival`, `Private`, … |
 | `time_start` | time | |
 | `time_end` | time | |
+| `location` | text | Free-text place, shown after the venue name |
 | `additional_link` | text | |
 | `additional_text` | text | |
 | `comment` | text | |
+| `poster_url`, `thumb_url` | text | Poster image and its thumbnail in R2 |
 | `deleted` | boolean NOT NULL DEFAULT false | Soft-delete |
 | `last_updated` | timestamptz DEFAULT NOW() | |
 
-`ON DELETE RESTRICT` on `venue_id` and `organizer_id` means you must clear or reassign those FKs before hard-deleting a venue or organizer.
+`ON DELETE RESTRICT` on `venue_id` and `organizer_id` means you must clear or reassign those FKs before hard-deleting a venue or organizer. `gigs_venue_same_band_fkey` and `gigs_organizer_same_band_fkey` (`(venue_id, artist_id)` / `(organizer_id, artist_id)` → the parent's `(id, artist_id)`) make the database refuse another band's venue or organizer.
 
-**Indexes:** `gigs_artist_date_idx` (artist_id, date DESC NULLS LAST, id DESC)
+**Indexes:** `gigs_artist_date_idx` (artist_id, date DESC NULLS LAST, id DESC), `gigs_venue_id_idx`, `gigs_organizer_id_idx`; UNIQUE `gigs_id_artist_key (id, artist_id)` for the band-scoped foreign key from `setlists`.
 
 ---
 
@@ -226,7 +233,9 @@ A saved setlist. Songs are stored in `setlist_songs`.
 | `comment` | text | |
 | `created_at` | timestamptz DEFAULT NOW() | |
 
-**Indexes:** `setlists_artist_created_idx` (artist_id, created_at DESC)
+`setlists_gig_same_band_fkey` (`(gig_id, artist_id)` → `gigs (id, artist_id)`, `ON DELETE SET NULL (gig_id)`) keeps the gig in the same band.
+
+**Indexes:** `setlists_artist_created_idx` (artist_id, created_at DESC), `setlists_gig_id_idx`
 
 ---
 
@@ -234,7 +243,7 @@ A saved setlist. Songs are stored in `setlist_songs`.
 
 Junction table: setlist ↔ song with explicit ordering. PK `(setlist_id, position)` enforces unique slots.
 
-Soft-deleting a song keeps its row, so historical setlists remain intact. `song_id` cascades: songs are only hard-deleted together with their band.
+Soft-deleting a song keeps its row, so historical setlists remain intact. `song_id` cascades, which loses nothing: a song is hard-deleted only with its band, or by the 90-day purge, which skips songs a setlist still lists (see [Soft delete](#soft-delete)). The table has no `artist_id`, so no band-scoped key backs `song_id`; `api/_ownership.js` checks every id.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -248,12 +257,12 @@ Soft-deleting a song keeps its row, so historical setlists remain intact. `song_
 
 ### `song_arrangements`
 
-Versioned arrangement charts for a song. Each song can have multiple named versions; exactly one should be marked `is_active` (enforced at the application level). Arrangements are hard-deleted when the parent song is soft-deleted.
+Versioned arrangement charts for a song. Each song can have several named versions (at most 20); at most one is `is_active` (unique index `song_arrangements_one_active_idx`). Arrangements stay when the song is soft-deleted and go with it on a hard delete (FK CASCADE).
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | serial PK | |
-| `song_id` | integer FK → songs CASCADE | Hard-deleted with the song |
+| `song_id` | integer FK → songs CASCADE | Removed with the song on a hard delete |
 | `artist_id` | integer FK → artists CASCADE | Denormalised for fast per-artist queries |
 | `name` | text NOT NULL DEFAULT `'Default'` | Version label, e.g. `Default`, `Acoustic` |
 | `is_active` | boolean NOT NULL DEFAULT false | The version shown on stage — at most one per song |
@@ -270,9 +279,9 @@ Versioned arrangement charts for a song. Each song can have multiple named versi
 {
   "structure":  "C1",
   "part":       "A",
-  "lead":       "Ludo",
+  "lead":       "Alex",
   "lead_type":  "person",
-  "harmony":    ["Kevin", "Cerise"],
+  "harmony":    ["Sam", "Robin"],
   "licks":      "BJO",
   "parts":      { "GTR": "STRUM", "BJO": "ROLL", "BASS": "ALT" },
   "comment":    ""
@@ -285,7 +294,7 @@ Versioned arrangement charts for a song. Each song can have multiple named versi
 
 ### `song_logs`
 
-Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries: about one logged write in ten trims the band's older ones (`trimSongLogs` in `api/_db.js`). Entries with `song_id` `NULL` are never trimmed.
+Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries (`SONG_LOG_KEEP`): every edit trims the history of the songs it wrote, in the same statement (or `trimSongLogs` in `api/_db.js` for media writes). Entries with `song_id` `NULL` are never trimmed.
 
 `song_id` is nullable — if a song is ever hard-deleted the FK goes `NULL` via `ON DELETE SET NULL` but the `song_data` snapshot is preserved.
 
@@ -310,9 +319,9 @@ Works registered with a performing-rights organisation. Linked to `songs` via `s
 |--------|------|-------|
 | `id` | serial PK | |
 | `artist_id` | integer FK → artists CASCADE | |
-| `gema_work_number` | text NOT NULL | e.g. `15299392-001` |
+| `gema_work_number` | text NOT NULL | e.g. `12345678-001` |
 | `title` | text NOT NULL | Uppercase as exported by GEMA |
-| `iswc` | text | e.g. `T8034602217` |
+| `iswc` | text | e.g. `T0000000000` |
 | `isrc` | text | |
 | `publisher_work_numbers` | text | |
 | `language` | text | Normalised: `DE`, `EN`, `FR`, … |
@@ -324,7 +333,7 @@ Works registered with a performing-rights organisation. Linked to `songs` via `s
 | `song_id` | integer FK → songs SET NULL | |
 | `created_at` | timestamptz DEFAULT NOW() | |
 
-UNIQUE `(artist_id, gema_work_number)`.
+UNIQUE `(artist_id, gema_work_number)`. **Indexes:** `gema_works_song_id_idx`. `gema_works_song_same_band_fkey` keeps the linked song in the same band.
 
 ---
 
@@ -346,7 +355,7 @@ One row per rightholder per work. Replace-all on import (existing rows deleted b
 
 ### `rate_limits`
 
-Sliding-window rate limiting: login, failed band-password bearers, password reset, OAuth, sign-up, invites, setlist shares, deletion and lyrics suggest.
+Sliding-window rate limiting: sign-in (per IP, and failed sign-ins per address and per address and IP), password reset, OAuth, sign-up, invites and other outgoing mail, setlist shares, deletion, imports, uploads, lyrics suggest and the contact forms.
 
 | Column | Notes |
 |--------|-------|
@@ -385,12 +394,26 @@ A login. One row per person **per workspace**; the rows of one person share the 
 | `role` text | `admin`, `member` or `viewer` |
 | `invite_token_hash`, `invite_expires_at` | SHA-256 of the emailed invite token; 7 days |
 | `sessions_valid_after` timestamptz | Set by "log out everywhere" on every row of the address; session tokens issued earlier are refused |
-| `invited_by` FK → `users` SET NULL | |
+| `invited_by` FK → `users` SET NULL | Indexed (`users_invited_by_idx`) for that SET NULL |
 | `pending_email`, `email_change_token_hash`, `email_change_expires_at` | Email change waiting for confirmation from the new address (24 h) |
 | `delete_token_hash`, `delete_token_expires` | Account deletion waiting for confirmation (30 min) |
 | `created_at` timestamptz | |
 
 Every emailed token is stored only as a hash.
+
+**Indexes:** `users_email_idx (email)` — one address's rows across workspaces; `users_invited_by_idx`; UNIQUE `(artist_id, email)`.
+
+---
+
+### `schema_migrations`
+
+The migration ledger: one row per dated block of `scripts/schema.sql`. The
+health check compares it with `SCHEMA_VERSION` in `api/_env.js`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | text PK | The block's date, e.g. `2026-10-06` |
+| `applied_at` | timestamptz DEFAULT now() | |
 
 ---
 
@@ -398,13 +421,13 @@ Every emailed token is stored only as a hash.
 
 ### Multi-tenancy
 
-Every table has an `artist_id` FK. A single deployment and database serves multiple artists. `ARTIST_SLUG` env var tells `GET /api/config` which artist to serve in single-artist deployments.
+Every band-scoped table has an `artist_id` FK, except `setlist_songs` and `gema_rightholders`, which belong to their parent row. A single deployment and database serves multiple artists. `ARTIST_SLUG` env var tells `GET /api/config` which artist to serve in single-artist deployments.
 
-Row ids are one sequence across all artists, and a foreign key only proves that *some* row exists. The API therefore checks every id that arrives in a request body against the caller's artist (`api/_ownership.js`) and scopes every join by `artist_id`.
+Row ids are one sequence across all artists, and a plain foreign key only proves that *some* row exists. So the band-scoped keys pair it with `artist_id` (`(venue_id, artist_id)` → `venues (id, artist_id)` and so on): the database refuses another band's row. `setlist_songs` has no `artist_id`, so for its `song_id` the API alone keeps the band: it checks every id that arrives in a request body against the caller's artist (`api/_ownership.js`) and scopes every join by `artist_id`.
 
 ### Soft delete
 
-Songs, venues, organizers, and gigs use `deleted = true` rather than physical deletion. This preserves setlist history (songs), CRM history (venues/organizers), and linked setlists (gigs). The restore endpoint for songs (`POST /api/:artist/songs/:id/restore`) uses the `song_logs` snapshot as a fallback.
+Songs, venues, organizers, and gigs use `deleted = true` rather than physical deletion. This preserves setlist history (songs), CRM history (venues/organizers), and linked setlists (gigs). The restore endpoint for songs (`POST /api/:artist/songs/:id/restore`) clears the flag; a hard-deleted song cannot come back by id, since its `song_logs` rows lose the id. A song deleted more than 90 days ago that no setlist lists and that has no uploaded file is removed for good, with its history (`purgeDeletedSongs` in `api/_db.js`, run by about one song deletion in ten). A song has at most 20 arrangement versions.
 
 ### FK delete strategies
 
@@ -412,20 +435,24 @@ Songs, venues, organizers, and gigs use `deleted = true` rather than physical de
 |---|---|---|
 | `songs` → `artists` | CASCADE | Song only makes sense within its artist |
 | `setlist_songs.setlist_id` → `setlists` | CASCADE | Junction row is meaningless without its setlist |
-| `setlist_songs.song_id` → `songs` | CASCADE | Songs are soft-deleted; a hard delete only happens with the whole band |
-| `song_lyrics.song_id` → `songs` | CASCADE | Lyrics belong to their song |
+| `setlist_songs.song_id` → `songs` | CASCADE | Songs are soft-deleted; a hard delete happens with the whole band, or by the 90-day purge, which skips listed songs |
+| `song_lyrics.song_id`, `song_arrangements.song_id` → `songs` | CASCADE | Lyrics and arrangements belong to their song |
 | `setlists.gig_id` → `gigs` | SET NULL | Setlist outlives its gig |
 | `gigs.venue_id` → `venues` | RESTRICT | Must clear link before removing venue |
 | `gigs.organizer_id` → `organizers` | RESTRICT | Must clear link before removing organizer |
-| `song_logs.song_id` → `songs` | SET NULL | Preserve audit record after hard-delete |
+| `song_logs.song_id`, `gema_works.song_id` → `songs` | SET NULL | Preserve audit record and PRO registration after hard-delete |
+| `(song_id \| venue_id \| organizer_id \| gig_id, artist_id)` → parent `(id, artist_id)` | same as the plain key above (SET NULL only clears the id) | The `*_same_band_fkey` constraints on `gigs`, `setlists`, `song_arrangements`, `song_lyrics`, `song_logs` and `gema_works` refuse another band's row; `setlist_songs.song_id` relies on `api/_ownership.js` alone |
 
 ### JSONB for extensible data
 
 `songs.extra` holds per-artist fields (capo, isrc, media URLs, …) without schema changes. Anything large or queried on its own gets a column or table instead (`songs.language`, `song_lyrics`). `artists.config` drives the UI:
 - `displayFields` / `filterFields` — song table columns and setlist generator filters
-- `logoUrl` — nav and print header logo
+- `hiddenSongFields` — instrument fields the band hid in Settings
+- `arrangementConfig` — members and instruments for arrangement charts
+- `logoUrl` / `faviconUrl` — nav and print header logo, browser-tab icon
 - `publicCatalogue` / `publicStage` — opt-in anonymous access (both off unless `true`)
 - `platforms` — streaming/social links managed by `/hub` (see below)
+- `plan` / `upgradedAt`, `gemaIpNameNumber` — see [Artist config](#artist-config)
 
 Always patch with JSONB `||` merge, never overwrite the full object — other keys not touched by the current UI operation would be lost.
 
@@ -465,15 +492,36 @@ Full `artists.config` shape:
     { "field": "key",        "label": "Key"  },
     { "field": "extra.capo", "label": "Capo", "type": "integer" }
   ],
-  "googleLogin":   true,
-  "facebookLogin": false,
+  "hiddenSongFields": ["extra.banjoCapo"],
+  "faviconUrl": "https://media.example.com/bands/myband/favicon.png",
   "platforms": {
     "spotify": { "url": "https://open.spotify.com/artist/…" }
-  }
+  },
+  "arrangementConfig": {
+    "members":     [{ "name": "Alex", "abbr": "A", "instruments": ["GTR"], "userEmail": "alex@example.com" }],
+    "instruments": [{ "key": "GTR", "label": "Guitar", "techniques": ["STRUM", "PICK"] }]
+  },
+  "publicCatalogue": false,
+  "publicStage": false,
+  "plan": "free",
+  "upgradedAt": "2026-10-01T12:00:00.000Z",
+  "gemaIpNameNumber": "123456789"
 }
 ```
 
-(`googleLogin`/`facebookLogin` are not stored — they're computed at runtime from env vars and injected into the `GET /api/config` response.)
+| Key | Set by | Notes |
+|---|---|---|
+| `displayFields`, `filterFields` | Settings, `setup.js` | Song table columns; setlist generator filters (`"type": "integer"` for a range) |
+| `hiddenSongFields` | Settings | Instrument fields hidden from the song pages; unset → a default list (`core.js`) |
+| `logoUrl`, `faviconUrl` | Settings | http(s) URLs; one in the band's bucket must be under its own `bands/<slug>/` prefix |
+| `platforms` | `/hub` | See [Platform connections](#platform-connections-configplatforms) |
+| `arrangementConfig` | Settings | Members (name, abbreviation, instruments, optional linked account) and instruments (key, label, techniques) for arrangement charts |
+| `publicCatalogue`, `publicStage` | Settings | Anonymous access, only when `=== true` |
+| `plan` | `/api/config/upgrade`, `/downgrade`, `/admin`, `scripts/plans.js` | `free` or `pro`; a config `PATCH` never changes it |
+| `upgradedAt` | `/api/config/upgrade` | Time of the latest upgrade, kept on downgrade (demand tracking); never sent to visitors |
+| `gemaIpNameNumber` | by hand (SQL) | The band's GEMA IP-Name-Nr; PRO import uses it to classify the band's own compositions when the form leaves the field empty; never sent to visitors |
+
+A visitor without a session sees only the keys in `PUBLIC_CONFIG_KEYS` (`api/_config.js`). `googleLogin`/`facebookLogin` are not stored — they are computed from env vars and added to the `GET /api/config` response.
 
 ---
 
@@ -481,7 +529,7 @@ Full `artists.config` shape:
 
 ### Export all data for one artist
 
-`GET /api/:artist/export` (requires auth; rewritten to `/setlists/export`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `account` (the caller's own memberships across workspaces, no hashes or tokens), `members` (admins only: email, role, joined), `songs` (with a `lyrics` and a `language` column), `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
+`GET /api/:artist/export` (requires a session; `api/_band/export.js`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `account` (the caller's own memberships across workspaces, no hashes or tokens), `members` (admins only: email, role, joined), `songs` (with a `lyrics` and a `language` column), `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
 
 Built by `api/_export.js`. Soft-deleted rows are left out. Columns empty in every row are dropped, as are `artist_id` and `deleted`; `id`s stay so the files still join. `songs.extra` is flattened into its own columns (a key clashing with a real column becomes `extra_<key>`); other JSON columns are a JSON string in the cell. UTF-8 with BOM, CRLF, and cells starting with `= + - @` are prefixed with `'` so spreadsheets don't run them.
 
@@ -493,7 +541,7 @@ R2 file assets (audio, sheet PDFs, playback) are referenced by URL in `songs.ext
 
 ### Delete all data for one artist
 
-All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order. (`setlist_songs.song_id` cascades since 2026-09-29; the explicit steps below stay so the sequence also works on a database that has not had that migration.)
+All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order. (`setlist_songs.song_id` cascades in every database on the current schema, so deleting the setlists first is no longer required; `scripts/delete_artist.js` still does it, and it is harmless.)
 
 **Safe deletion sequence — always use this pattern** (`scripts/delete_artist.js` runs the same steps):
 
@@ -514,8 +562,8 @@ WHERE venue_id IN (SELECT id FROM venues WHERE artist_id = (SELECT id FROM artis
 UPDATE gigs SET organizer_id = NULL
 WHERE organizer_id IN (SELECT id FROM organizers WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug'));
 
--- setlist_songs.song_id has no cascade — drop the setlists first (that cascades
--- setlist_songs), otherwise deleting the songs fails with a FK violation.
+-- Not required on the current schema (setlist_songs.song_id cascades); kept to
+-- match scripts/delete_artist.js. Older databases had no cascade there.
 DELETE FROM setlists
 WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
 
@@ -527,7 +575,7 @@ DELETE FROM artists WHERE slug = 'yourslug';
 COMMIT;
 ```
 
-Run this against the correct DB branch (main for production, dev for preview). After the transaction completes, remove any R2 files manually using the Cloudflare dashboard or `wrangler r2 object delete`.
+Run this against the right database (the deployment's production branch, or `dev` for preview); `scripts/delete_artist.js` shows the host and asks first. After the transaction completes, remove any R2 files manually using the Cloudflare dashboard or `wrangler r2 object delete`.
 
 In a shared-DB multi-tenant setup, this leaves all other artists' data completely untouched.
 
@@ -581,11 +629,11 @@ SELECT * FROM unnest($1::int[], $2::int[], $3::int[]);
 **Song appearances** — used by `GET /api/:artist/songs/:id/setlists`:
 ```sql
 SELECT sl.id, sl.title, sl.comment, sl.created_at,
-       g.title AS gig_title, g.date AS gig_date, v.name AS venue_name
+       g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
 FROM setlists sl
 JOIN setlist_songs ss ON ss.setlist_id = sl.id
 LEFT JOIN gigs g      ON sl.gig_id = g.id   AND g.artist_id = sl.artist_id
-LEFT JOIN venues v    ON g.venue_id = v.id AND v.artist_id = g.artist_id
+LEFT JOIN venues v    ON v.id = g.venue_id AND v.artist_id = g.artist_id
 WHERE ss.song_id = $1 AND sl.artist_id = $2
 ORDER BY sl.created_at DESC;
 ```

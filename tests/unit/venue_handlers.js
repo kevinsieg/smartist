@@ -22,7 +22,9 @@ function mockRes() {
 // Records every statement with its interpolated values; route(text) answers.
 function loadHandler(rel, route, opts) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), handlerPath = mp(rel);
-  for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
+  // The item handlers are built by api/_band/record_item.js: rebuilt too, so it
+  // picks up these stubs.
+  for (const p of [dbPath, authPath, handlerPath, mp('api/_band/record_item')]) delete require.cache[p];
   const calls = [];
   // postgres.js has two call shapes: tagged template (query) and sql(identifier)
   // / sql`fragment` used inside another query. The stub answers both.
@@ -33,7 +35,10 @@ function loadHandler(rel, route, opts) {
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
     const isFragment = !/^(SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(text);
     if (isFragment) return { fragment: text, values };
-    calls.push({ text, values });
+    // A statement's text with its identifiers (sql('venues')) in place.
+    const named = strings.reduce((t, str, i) => t + (i ? ` ${values[i - 1]?.fragment !== undefined && !values[i - 1].values ? values[i - 1].fragment : ''} ` : '') + str, '')
+      .replace(/\s+/g, ' ').trim();
+    calls.push({ text: named, values });
     return Promise.resolve(route(text));
   };
   require.cache[dbPath] = {
@@ -71,7 +76,22 @@ async function call(handler, method, url, body) {
 }
 
 // The columns an INSERT/UPDATE writes through sql({ … }).
-const written = c => (c.values.find(v => v && v.helper) || {}).helper || {};
+// INSERTs pass sql({ … }); record updates nest one `col = $n` fragment per
+// column (api/_domain/records.js updateSet).
+const written = c => {
+  const out = {};
+  const find = vs => {
+    for (const v of vs || []) {
+      if (v && v.helper) return Object.assign(out, v.helper);
+      // updateSet: one `col = $n` fragment per column, nested.
+      if (v && v.values && v.values[0] && 'fragment' in v.values[0] && !v.values[0].values
+          && /^= ,/.test(v.fragment || '')) out[v.values[0].fragment] = v.values[1];
+      if (v && v.values) find(v.values);
+    }
+  };
+  find(c.values);
+  return out;
+};
 
 const STORED = { id: 5, artist_id: 1, name: 'Old', deleted: false, phone: '+49 1', contact_name: 'Anna', social_links: {} };
 const byId = text => (text.startsWith('SELECT * FROM venues') ? [STORED] : [{ ...STORED }]);
@@ -243,7 +263,7 @@ async function run(r) {
     assert(/not found|too long/i.test(res.body.rejected[1].error), 'reason missing: ' + res.body.rejected[1].error);
   });
 
-  await testAsync('PATCH writes all rows in one transaction', async () => {
+  await testAsync('PATCH writes all rows in one statement', async () => {
     const stored = id => ({ id, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
       season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null });
     const { handler, calls, began } = loadHandler('api/_band/venues.js',
@@ -252,9 +272,57 @@ async function run(r) {
       [{ id: 5, status: 'contacted' }, { id: 6, status: 'declined' }]);
     assertEq(res.statusCode, 200);
     assertEq(res.body?.count, 2);
-    assert(began.value, 'writes must run inside sql.begin');
+    assert(!began.value, 'one statement needs no transaction around it');
     const updates = calls.filter(c => c.text.startsWith('UPDATE venues'));
-    assert(updates.length <= 1, `expected one batched UPDATE, got ${updates.length}`);
+    assertEq(updates.length, 1, `expected one batched UPDATE, got ${updates.length}`);
+  });
+
+  await testAsync('PATCH with a null, a non-object or a bad id row rejects that row → 200, not 500', async () => {
+    const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
+      season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null };
+    const { handler, calls } = loadHandler('api/_band/venues.js',
+      text => (text.startsWith('SELECT * FROM venues') ? [stored] : [{ id: 5 }]));
+    const res = await call(handler, 'PATCH', '/api/test/venues',
+      [null, 7, { id: 'abc' }, { id: 5, status: 'contacted' }]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.count, 1);
+    assertEq(res.body?.rejected?.length, 3);
+    const select = calls.find(c => c.text.startsWith('SELECT * FROM venues'));
+    assertEq(select.values.find(Array.isArray), [5]);
+  });
+
+  await testAsync('PATCH where no row has a valid id → 200, nothing queried', async () => {
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
+    const res = await call(handler, 'PATCH', '/api/test/venues', [null]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.count, 0);
+    assertEq(calls.length, 0);
+  });
+
+  await testAsync('the search escapes % and _; status, category and country are exact', async () => {
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => []);
+    const res = await call(handler, 'GET', '/api/test/venues?q=100%25_&status=%25&country=DE');
+    assertEq(res.statusCode, 200);
+    const list = calls.find(c => /FROM venues/.test(c.text));
+    assert(list.values.includes('%100\\%\\_%'), `pattern ${JSON.stringify(list.values)}`);
+    assert(/lower\(status\) = lower\(/.test(list.text) && /lower\(country\) = lower\(/.test(list.text), list.text);
+    assert(!/has_gigs|EXISTS/.test(list.text), 'the has_gigs filter is gone');
+  });
+
+  await testAsync('DELETE with a cascade that is not a list of known values → 400, nothing deleted', async () => {
+    for (const cascade of [5, 'gigs', ['venues']]) {
+      const { handler, calls } = loadHandler('api/_band/venues/item.js', () => [{ ...STORED }]);
+      const res = await call(handler, 'DELETE', '/api/test/venues/5', { hard: true, cascade });
+      assertEq(res.statusCode, 400, `cascade ${JSON.stringify(cascade)}`);
+      assert(!calls.some(c => c.text.startsWith('DELETE')), 'nothing may be deleted');
+    }
+  });
+
+  await testAsync('an id past the integer column → 400, no query', async () => {
+    const { handler, calls } = loadHandler('api/_band/venues/item.js', () => [{ ...STORED }]);
+    const res = await call(handler, 'GET', '/api/test/venues/99999999999');
+    assertEq(res.statusCode, 400);
+    assertEq(calls.length, 0);
   });
 
   await testAsync('PATCH skips rows with an invalid date and reports the count', async () => {
@@ -304,6 +372,17 @@ async function run(r) {
     assertEq(res.statusCode, 400);
     assert(/^phone too long/.test(res.body?.error), res.body?.error);
   });
+
+  await testAsync('PATCH with an impossible calendar date rejects that row instead of failing the batch', async () => {
+    const stored = { id: 5, artist_id: 1, status: null, category: null, comment: null, booking_channel: null,
+      season: null, preferred_period: null, remuneration: null, last_communication: null, deadline: null };
+    const { handler, calls } = loadHandler('api/_band/venues.js', () => [stored]);
+    const res = await call(handler, 'PATCH', '/api/test/venues', [{ id: 5, deadline: '2026-02-30' }]);
+    assertEq(res.statusCode, 200);
+    assertEq(res.body?.rejected?.[0]?.id, 5);
+    assert(!calls.some(c => c.text.startsWith('UPDATE venues')), 'an impossible date reached the database');
+  });
+
 }
 
 if (require.main === module) {

@@ -92,6 +92,16 @@ function run(r) {
       delete require.cache[require.resolve(path.join(__dirname, '../../api/_token'))];
     }
   });
+
+  console.log(B('\nthe address in a session token'));
+  test('a token carries its address, lower-cased, so it outlives the row it named', () => {
+    const tok = generateUserToken(9, 'member', 60000, null, 'Player@Example.com');
+    assertEq(verifyUserToken(tok).email, 'player@example.com');
+  });
+  test('a token without one (issued before) verifies with email null', () => {
+    assertEq(verifyUserToken(generateUserToken(9, 'member', 60000)).email, null);
+  });
+
 }
 
 if (require.main === module) {

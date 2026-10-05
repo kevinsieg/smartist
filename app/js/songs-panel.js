@@ -10,8 +10,8 @@ function _openSongPanelContent(item, panelEl) {
 
   var title = escHtml(song.title || t('songs.untitled'));
   var activeDot = song.active
-    ? '<span class="vsp-active-dot vsp-active-dot--on">&#9679; ' + t('songs.active') + '</span>'
-    : '<span class="vsp-active-dot vsp-active-dot--off">&#9679; ' + t('songs.inactive') + '</span>';
+    ? '<span class="vsp-active-dot vsp-active-dot--on"><span class="vsp-dot" aria-hidden="true">&#9679;</span> ' + t('songs.active') + '</span>'
+    : '<span class="vsp-active-dot vsp-active-dot--off"><span class="vsp-dot" aria-hidden="true">&#9679;</span> ' + t('songs.inactive') + '</span>';
 
   var listenUrl   = getVal(song, 'extra.listenUrl');
   var playbackUrl = getVal(song, 'extra.playbackUrl');
@@ -21,7 +21,7 @@ function _openSongPanelContent(item, panelEl) {
   var sidEsc      = escHtml(sid);
   var audioRe     = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
 
-  var _spd = '<div class="audio-speed-btns"><button data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
+  var _spd = '<div class="audio-speed-btns"><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
   var audioHtml = '';
   if (listenUrl  && audioRe.test(listenUrl))
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(listenUrl)) + '"></audio>' + _spd + '</div>';
@@ -29,23 +29,23 @@ function _openSongPanelContent(item, panelEl) {
     audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(playbackUrl)) + '"></audio>' + _spd + '</div>';
 
   var actions = '';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(' + onArg(sid) + ')">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" aria-label="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(' + onArg(sid) + ')">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 9.5-9.5z"/>' +
     '</svg></button>';
-  actions += '<a class="btn icon-btn" data-tooltip="' + t('songs.stageView') + '" href="/' + _artistSlug + '/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  actions += '<a class="btn icon-btn" data-tooltip="' + t('songs.stageView') + '" aria-label="' + t('songs.stageView') + '" href="/' + _artistSlug + '/stage?song=' + sidEsc + '" target="_blank" rel="noopener">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>' +
     '</svg></a>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" data-onclick="openLyrics(' + onArg(sid) + ')">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.lyricsTitle') + '" aria-label="' + t('songs.lyricsTitle') + '" data-onclick="openLyrics(' + onArg(sid) + ')">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/>' +
     '</svg></button>';
   if (listenUrl  && !audioRe.test(listenUrl))   actions += '<button class="btn" data-onclick="openPlayer(' + onArg(sid) + ')">&#9654; ' + t('songs.listen') + '</button>';
   if (playbackUrl && !audioRe.test(playbackUrl)) actions += '<button class="btn" data-onclick="openPlayback(' + onArg(sid) + ')">&#9655; ' + t('songs.playback') + '</button>';
   if (sheetUrl)   actions += '<button class="btn" data-onclick="openSheet(' + onArg(sid) + ')">&#8801; ' + t('songs.sheet') + '</button>';
-  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" data-onclick="_openSongArrangement(' + Number(sid) + ')">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.colTitleArrangement') + '" aria-label="' + t('songs.colTitleArrangement') + '" data-onclick="_openSongArrangement(' + Number(sid) + ')">' +
+    '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>' +
     '</svg></button>';
 
@@ -128,7 +128,7 @@ function _openSongPanelContent(item, panelEl) {
     '<div data-sid="' + escHtml(sid) + '">' +
     '<div class="vsp-header">' +
       '<div class="vsp-header-text">' +
-        '<h3 class="vsp-title">' + title + '</h3>' + activeDot +
+        '<h2 class="vsp-title">' + title + '</h2>' + activeDot +
       '</div>' +
       '<button class="vsp-close" data-onclick="_songsDeselect()" aria-label="' + t('songs.close') + '">&#215;</button>' +
     '</div>' +
@@ -140,11 +140,15 @@ function _openSongPanelContent(item, panelEl) {
   // Async: setlist count + arrangement table — both use _panelSid for stale-panel check
   var _panelSid = sid;
 
-  // Async: lyrics come with the song's details, fetched the first time.
-  if (hasLyrics && song.lyrics === undefined) {
-    loadSongLyrics(artistSlug, song).then(function(text) {
+  // Async: lyrics and the active arrangement both come with the song's details
+  // (GET /songs/:id), so one request covers them. Lyrics stay cached on the song.
+  var needLyrics = hasLyrics && song.lyrics === undefined;
+  var needArr    = !_viewMode && song.has_arrangement;
+  var detail = (needLyrics || needArr) ? _fetchSongDetail(song) : null;
+  if (needLyrics) {
+    detail.then(function() {
       var el = document.getElementById('vsp-lyrics-' + sid);
-      if (el) el.textContent = text;
+      if (el) el.textContent = song.lyrics || '';
     }).catch(function() {
       var el = document.getElementById('vsp-lyrics-' + sid);
       if (el) el.textContent = t('songs.lyricsCouldNotFetch');
@@ -152,11 +156,10 @@ function _openSongPanelContent(item, panelEl) {
   }
 
   // Async: arrangement table (auth-only, active version only)
-  if (!_viewMode && song.has_arrangement) {
-    apiFetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
-      .then(function(r) { return r.json(); })
-      .then(function(versions) {
-        var active = versions.find(function(v) { return v.is_active; });
+  if (needArr) {
+    detail
+      .then(function(d) {
+        var active = d.active_arrangement;
         if (!active) return;
         var panel = document.getElementById('view-side-panel-inner');
         if (!panel || !panel.querySelector('[data-sid="' + _panelSid + '"]')) return;
@@ -183,13 +186,25 @@ function _openSongPanelContent(item, panelEl) {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (!linkEl) return;
       if (!ids || !ids.length) { linkEl.textContent = t('songs.notInAnySetlist'); return; }
-      var songTitle = song.title || '';
       linkEl.innerHTML = '<a href="#" data-onclick="event.preventDefault();openAppearances(' + Number(sid) + ')" style="color:var(--secondary-ink)">&#8594; ' + t('songs.setlistCount', { count: ids.length }) + '</a>';
     })
     .catch(function() {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (linkEl) linkEl.textContent = '';
     });
+}
+
+// One song's details (GET /songs/:id): lyrics, arrangement names and the active
+// arrangement in full. Caches the lyrics on the song like loadSongLyrics does.
+async function _fetchSongDetail(song) {
+  var r = await apiFetch('/api/' + artistSlug + '/songs/' + Number(song.id));
+  if (!r.ok) throw new Error('song fetch failed');
+  var d = await r.json();
+  if (song.lyrics === undefined) {
+    song.lyrics = d.lyrics || null;
+    song.has_lyrics = !!song.lyrics;
+  }
+  return d;
 }
 
 function _songPanelEl() { return document.getElementById('view-side-panel-inner'); }
@@ -275,7 +290,7 @@ function _openSongEditForm(sid, panelEl) {
 
   panelEl.innerHTML =
     '<div class="vsp-header">' +
-      '<div class="vsp-header-text"><h3 class="vsp-title">' + (isNew ? t('songs.newSong') : escHtml(song.title || t('songs.editSong'))) + '</h3></div>' +
+      '<div class="vsp-header-text"><h2 class="vsp-title">' + (isNew ? t('songs.newSong') : escHtml(song.title || t('songs.editSong'))) + '</h2></div>' +
       (!isNew ? '<button class="vsp-close" data-onclick="_openSongPanelById(' + sid + ')" aria-label="' + t('songs.cancel') + '">&#215;</button>' : '') +
     '</div>' +
     '<div style="padding:0 0.5rem;" data-sid="' + id + '">' +
@@ -354,10 +369,9 @@ function _openSongEditForm(sid, panelEl) {
   if (!isNew && song.has_arrangement) {
     var _editArrSid = String(sid);
     var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
-    apiFetch('/api/' + artistSlug + '/songs/' + _editArrSid + '/arrangements')
-      .then(function(r) { return r.json(); })
-      .then(function(versions) {
-        var active = versions.find(function(v) { return v.is_active; });
+    _fetchSongDetail(song)
+      .then(function(d) {
+        var active = d.active_arrangement;
         if (!active) return;
         var preview = document.getElementById('edit-arr-preview');
         if (!preview || !panelEl.querySelector('[data-sid="' + _editArrSid + '"]')) return;
@@ -383,8 +397,7 @@ function _panelStageFile(input, type, id) {
 // Create a song from the panel, then upload any files staged on its inputs.
 // Returns the created song, or null if it couldn't be created (no title / auth).
 async function _commitNewSong(formId) {
-  var token = getToken();
-  if (!token) { if (!isViewMode()) requireLogin(); return null; }
+  if (!getToken()) { if (!isViewMode()) requireLogin(); return null; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
     .find(function(i) { return !i.checkValidity(); });
@@ -397,13 +410,8 @@ async function _commitNewSong(formId) {
     return null;
   }
 
-  var r = await fetch('/api/' + artistSlug + '/songs', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body:    JSON.stringify(data),
-  });
-  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return null; }
-  if (!r.ok) throw new Error('create failed');
+  var r = await apiFetch('/api/' + artistSlug + '/songs', 'POST', data);
+  if (!r.ok) throw await _songCreateError(r);
   var newSong = await r.json();
 
   var staged = [['audio', 'pf-audio-'], ['sheet', 'pf-sheet-'], ['playback', 'pf-playback-']];
@@ -419,16 +427,11 @@ async function _commitNewSong(formId) {
   var draft = _pendingArrDrafts[formId];
   if (draft) {
     try {
-      var ar = await fetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body:    JSON.stringify({ name: 'Default', rows: draft.rows, hidden_instruments: draft.hidden_instruments }),
-      });
+      var ar = await apiFetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements', 'POST',
+        { name: 'Default', rows: draft.rows, hidden_instruments: draft.hidden_instruments });
       if (ar.ok) {
         var created = await ar.json();
-        await fetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements/' + created.id + '/activate', {
-          method: 'POST', headers: { 'Authorization': 'Bearer ' + token },
-        });
+        await apiFetch('/api/' + artistSlug + '/songs/' + newSong.id + '/arrangements/' + created.id + '/activate', 'POST');
       }
     } catch (e) { /* song is saved; arrangement just didn't attach */ }
     delete _pendingArrDrafts[formId];
@@ -437,8 +440,7 @@ async function _commitNewSong(formId) {
 }
 
 async function _savePanelSong(formId, isNew, realSid) {
-  var token = getToken();
-  if (!token) { if (!isViewMode()) requireLogin(); return; }
+  if (!getToken()) { if (!isViewMode()) requireLogin(); return; }
 
   var bad = [].slice.call(document.querySelectorAll('input[type="number"][data-id="' + formId + '"]'))
     .find(function(i) { return !i.checkValidity(); });
@@ -454,27 +456,67 @@ async function _savePanelSong(formId, isNew, realSid) {
       if (!newSong) { if (btn) { btn.disabled = false; btn.textContent = t('songs.add'); } return; }
       targetId = String(newSong.id);
     } else {
-      var r = await fetch('/api/' + artistSlug + '/songs', {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body:    JSON.stringify([Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]),
-      });
-      if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
-      if (!r.ok) throw new Error('save failed');
+      var r = await apiFetch('/api/' + artistSlug + '/songs', 'PATCH',
+        [Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]);
+      var res = r.ok ? await r.json().catch(function() { return {}; }) : null;
+      if (!res || (res.rejected && res.rejected.length)) throw new Error('save failed');
       targetId = String(realSid);
     }
 
     // Songs ride along in the cached /api/config payload (the setlist page reads
     // cfg.songs), so drop that cache or other pages keep serving the old list.
     invalidateConfigCache();
-    await fetchSongsList(true);
-    if (_songsView) { _songsView.refresh(); _songsView.select(targetId); }
+    if (isNew) {
+      // A new song needs its computed columns (play_count, has_*) and its place
+      // in the title order: reload the list.
+      await fetchSongsList(true);
+      if (_songsView) { _songsView.refresh(); _songsView.select(targetId); }
+    } else {
+      // An edit changes one song: reload that one and redraw its row only.
+      var reloadedAll = await _reloadOneSong(targetId, res);
+      if (_songsView) {
+        if (reloadedAll) _songsView.refresh(); else _songsView.refreshItem(targetId);
+        _songsView.select(targetId);
+      }
+    }
     loadLogs();
-  } catch {
+  } catch (err) {
     var errEl = document.getElementById('song-panel-edit-error');
-    if (errEl) { errEl.textContent = t('songs.saveFailed'); errEl.className = 'status-msg error'; }
+    if (errEl) {
+      errEl.textContent = err && err.limit ? t('songs.limitReached', { limit: err.limit }) : t('songs.saveFailed');
+      errEl.className = 'status-msg error';
+    }
     if (btn) { btn.disabled = false; btn.textContent = isNew ? t('songs.add') : t('songs.save'); }
   }
+}
+
+// Refresh one song in songs[] after a PATCH: from the rows the PATCH answer
+// carries when the API sends them, otherwise from GET /songs/:id. The list-only
+// columns (play_count, last_played_at) are kept; a field edit does not change them.
+// Returns true when it had to reload the whole list instead.
+async function _reloadOneSong(sid, patchRes) {
+  var song = songs.find(function(s) { return String(s.id) === String(sid); });
+  if (!song) { await fetchSongsList(true); return true; }
+  var fresh = patchRes && Array.isArray(patchRes.rows)
+    ? patchRes.rows.find(function(x) { return String(x.id) === String(sid); })
+    : null;
+  if (!fresh) {
+    try {
+      var r = await apiFetch('/api/' + artistSlug + '/songs/' + Number(sid));
+      if (!r.ok) throw new Error('song fetch failed');
+      fresh = await r.json();
+    } catch (e) {
+      await fetchSongsList(true);
+      return true;
+    }
+  }
+  if (Array.isArray(fresh.arrangements)) song.has_arrangement = fresh.arrangements.length > 0;
+  var copy = Object.assign({}, fresh);
+  delete copy.arrangements;
+  delete copy.active_arrangement;
+  if (!('lyrics' in fresh)) delete copy.lyrics;
+  Object.assign(song, copy);
+  return false;
 }
 
 function _isNewPanelSid(sid) { return String(sid).indexOf('_new_panel_') === 0; }

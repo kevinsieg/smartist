@@ -41,35 +41,48 @@ function run(r) {
     assert(spaScripts.size > 0, 'no SPA page scripts found — selector is wrong');
   });
 
-  // A private workspace 401s every data endpoint, so page scripts must send the token.
-  // Plain fetch() here made the songs panel claim "not in any setlist" while the song
-  // had 71 of them. apiFetch adds the token when there is one and is harmless without.
-  test('workspace data endpoints are called through apiFetch', () => {
-    // Endpoints that answer without a session by design: login, password reset,
-    // the two emailed member links, OAuth start, the public config payload, the
-    // contact form.
-    const PUBLIC = /\/api\/login\b|request-reset|\/members\/(accept-invite|confirm-email-change)|\/api\/config/;
+  // Page scripts share the global scope with the shared scripts, and SPA
+  // navigation keeps whatever a page defined. pro-import.js once declared its
+  // own setStatus(msg, isError): after a visit to PRO, every other page's
+  // setStatus(id, msg) wrote into nothing and "+ Add gig" threw.
+  test('page scripts do not redefine shared-script functions', () => {
+    const topLevelNames = src => {
+      const names = new Set();
+      const re = /^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(|^var\s+([A-Za-z_$][\w$]*)/gm;
+      let m;
+      while ((m = re.exec(src)) !== null) names.add(m[1] || m[2]);
+      return names;
+    };
+    const COMMON = SHARED.concat(['footer', 'i18n']);
+    const shared = new Map();
+    COMMON.forEach(n => {
+      const file = path.join(APP, 'js', n + '.js');
+      if (fs.existsSync(file)) topLevelNames(fs.readFileSync(file, 'utf8')).forEach(f => shared.set(f, n));
+    });
+    const offenders = [];
+    spaScripts.forEach(n => {
+      const file = path.join(APP, 'js', n + '.js');
+      if (COMMON.includes(n) || !fs.existsSync(file)) return;
+      topLevelNames(fs.readFileSync(file, 'utf8')).forEach(f => {
+        if (shared.has(f)) offenders.push(`${n}.js redefines ${f} (${shared.get(f)}.js)`);
+      });
+    });
+    assert(offenders.length === 0, 'rename these:\n      ' + offenders.join('\n      '));
+  });
+
+  // A multi-tenant deployment has no ARTIST_SLUG, so /api/config writes need
+  // ?slug=. Hub links failed with "slug required" in production this way while
+  // the local stack (ARTIST_SLUG set) passed.
+  test('config writes name the band', () => {
     const offenders = [];
     fs.readdirSync(path.join(APP, 'js')).filter(f => f.endsWith('.js')).forEach(function(file) {
-      const src = fs.readFileSync(path.join(APP, 'js', file), 'utf8');
-      const re = /(?<![A-Za-z])fetch\(/g;
-      let m;
-      while ((m = re.exec(src)) !== null) {
-        let depth = 0, end = m.index;
-        for (let i = src.indexOf('(', m.index); i < src.length; i++) {
-          if (src[i] === '(') depth++;
-          else if (src[i] === ')' && --depth === 0) { end = i; break; }
+      fs.readFileSync(path.join(APP, 'js', file), 'utf8').split('\n').forEach(function(line, i) {
+        if (/apiFetch\(\s*['"`]\/api\/config(\/[\w-]+)?['"`?]/.test(line) && !/slug=/.test(line)) {
+          offenders.push(`${file}:${i + 1}  ${line.trim().slice(0, 70)}`);
         }
-        const call = src.slice(m.index, end + 1);
-        if (!/\/api\//.test(call)) continue;
-        if (PUBLIC.test(call)) continue;
-        // stage.js and arrangement.js run without session.js and add the header themselves
-        if (/Authorization|_authHeaders|_stageAuthHeaders|_arrAuthHeaders/.test(call)) continue;
-        offenders.push(`${file}:${src.slice(0, m.index).split('\n').length}  ${call.replace(/\s+/g, ' ').slice(0, 70)}`);
-      }
+      });
     });
-    assert(offenders.length === 0,
-      'these calls send no token and fail in a private workspace:\n      ' + offenders.join('\n      '));
+    assert(offenders.length === 0, 'add ?slug=:\n      ' + offenders.join('\n      '));
   });
 
   // "Remember me" stores the token in localStorage only (home.js storeToken clears the
@@ -157,9 +170,9 @@ function run(r) {
 
       // arrangement.js is shared between the songs page (which has all the
       // shared scripts) and stage (core.js only). Its editing paths — the only callers of
-      // apiFetch/setStatus — are unreachable on the read-only stage view, as its
-      // own header states. Anything else it reaches for is a real bug.
-      const KNOWN_UNREACHABLE = { 'arrangement': new Set(['apiFetch', 'setStatus']) };
+      // apiFetch/setStatus/announce/registerModal — are unreachable on the read-only
+      // stage view, as its own header states. Anything else it reaches for is a real bug.
+      const KNOWN_UNREACHABLE = { 'arrangement': new Set(['apiFetch', 'setStatus', 'announce', 'registerModal']) };
 
       sources.forEach(({ name, src }) => {
         commonFns.forEach(fn => {

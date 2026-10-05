@@ -43,7 +43,7 @@ function makeSql(route) {
 function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), r2Path = mp('api/_r2');
   const handlerPath = mp(rel);
-  for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
+  for (const p of [dbPath, authPath, handlerPath, mp('api/_domain/gigs'), mp('api/_band/record_item')]) delete require.cache[p];
   const sql = makeSql(route);
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
@@ -69,7 +69,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
     id: r2Path, filename: r2Path, loaded: true,
     exports: {
       createPresignedUrl: async () => ({}), deleteFromR2: async () => {},
-      verifyUpload: async () => ({}), keyFromUrl: () => 'k',
+      verifyUpload: async () => ({}), promoteUpload: async () => ({}), keyFromUrl: () => 'k',
     },
   };
   return { handler: viaRouter(path.join(__dirname, '../..', rel)), sql };

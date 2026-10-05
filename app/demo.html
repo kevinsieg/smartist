@@ -5,24 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>smartist · Try the demo</title>
 <meta name="robots" content="noindex">
-<script src="/app/js/i18n.js?v=54"></script>
+<script src="/app/js/i18n.js?v=60"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #fcfaf7; color: #1a1a1a; -webkit-text-size-adjust: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
 
   .site-header { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e6ded1; }
   .site-header .wordmark { font-size: 1rem; font-weight: 700; letter-spacing: 0.12em; text-decoration: none; color: inherit; }
-  .site-header nav a { font-size: 0.68rem; color: #999; text-decoration: none; letter-spacing: 0.1em; margin-left: 18px; }
-  .site-header nav a:hover { color: #b06a2a; }
+  .site-header nav a { font-size: 0.68rem; color: #6f6a65; text-decoration: none; letter-spacing: 0.1em; margin-left: 18px; }
+  .site-header nav a:hover { color: #9e5e20; }
   @media (min-width: 640px) { .site-header { padding: 20px 40px; } }
 
   /* Gate layout */
   .gate { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 24px 48px; }
   .gate-inner { width: 100%; max-width: 440px; }
-  .step-label { font-size: 0.63rem; letter-spacing: 0.3em; text-transform: uppercase; color: #b06a2a; margin-bottom: 14px; }
+  .step-label { font-size: 0.63rem; letter-spacing: 0.3em; text-transform: uppercase; color: #9e5e20; margin-bottom: 14px; }
   .gate-inner h1 { font-size: clamp(1.3rem, 3.5vw, 1.8rem); font-weight: 700; line-height: 1.25; letter-spacing: 0.02em; margin-bottom: 10px; }
-  .gate-inner h1 em { font-style: normal; color: #b06a2a; }
-  .divider { width: 32px; height: 2px; background: #b06a2a; margin-bottom: 16px; }
+  .gate-inner h1 em { font-style: normal; color: #9e5e20; }
+  .divider { width: 32px; height: 2px; background: #9e5e20; margin-bottom: 16px; }
   .gate-inner > p { font-size: 0.87rem; color: #666; line-height: 1.7; margin-bottom: 24px; }
 
   /* Step panels */
@@ -31,23 +31,22 @@
 
   /* Inputs */
   .field { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-  .field input { padding: 11px 14px; border: 1px solid #e6ded1; background: #fffdfa; font-family: inherit; font-size: 0.85rem; color: #1a1a1a; border-radius: 2px; outline: none; }
-  .field input:focus { border-color: #b06a2a; }
+  .field input { padding: 11px 14px; border: 1px solid #e6ded1; background: #fffdfa; font-family: inherit; font-size: 1rem; color: #1a1a1a; border-radius: 2px; outline: none; }
+  .field input:focus { border-color: #9e5e20; }
   .field input::placeholder { color: #bbb; }
-  .field-label { font-size: 0.63rem; letter-spacing: 0.18em; text-transform: uppercase; color: #888; }
 
   /* Buttons */
   .btn-row { display: flex; gap: 10px; align-items: center; }
-  .btn-primary { flex: 1; padding: 12px; background: transparent; border: 1.5px solid #b06a2a; color: #b06a2a; font-family: inherit; font-size: 0.78rem; letter-spacing: 0.22em; text-transform: uppercase; cursor: pointer; border-radius: 2px; transition: background 0.15s, color 0.15s; }
-  .btn-primary:hover:not(:disabled) { background: #b06a2a; color: #fcfaf7; }
+  .btn-primary { flex: 1; padding: 12px; background: transparent; border: 1.5px solid #9e5e20; color: #9e5e20; font-family: inherit; font-size: 0.78rem; letter-spacing: 0.22em; text-transform: uppercase; cursor: pointer; border-radius: 2px; transition: background 0.15s, color 0.15s; }
+  .btn-primary:hover:not(:disabled) { background: #9e5e20; color: #fcfaf7; }
   .btn-primary:disabled { opacity: 0.5; cursor: default; }
-  .gate-msg { font-size: 0.73rem; color: #b06a2a; min-height: 1.2em; margin-top: 10px; }
+  .gate-msg { font-size: 0.73rem; color: #9e5e20; min-height: 1.2em; margin-top: 10px; }
 
-  .gate-note { margin-top: 18px; font-size: 0.67rem; color: #aaa; line-height: 1.6; }
-  .gate-note a { color: #b06a2a; text-decoration: underline; }
+  .gate-note { margin-top: 18px; font-size: 0.67rem; color: #6f6a65; line-height: 1.6; }
+  .gate-note a { color: #9e5e20; text-decoration: underline; }
 
 </style>
-  <link rel="stylesheet" href="/app/css/footer.css?v=4">
+  <link rel="stylesheet" href="/app/css/footer.css?v=5">
 </head>
 <body>
 
@@ -72,7 +71,7 @@
       <div class="btn-row">
         <button class="btn-primary" id="s1-next" data-i18n="demo.nextBtn">Next →</button>
       </div>
-      <div class="gate-msg" id="s1-msg"></div>
+      <div class="gate-msg" id="s1-msg" role="alert"></div>
       <p class="gate-note"><span data-i18n="demo.noSpam">No spam — unsubscribe anytime.</span> <a href="/privacy" data-i18n="legal.privacyLink">Privacy policy</a> · <a href="/impressum" data-i18n="demo.legalLink">Legal notice</a></p>
     </div>
   </div>
@@ -81,6 +80,6 @@
 <footer data-app-footer></footer>
 <script src="/app/js/footer.js?v=3"></script>
 
-<script src="/app/js/demo.js?v=1"></script>
+<script src="/app/js/demo.js?v=3"></script>
 </body>
 </html>

@@ -56,7 +56,7 @@ function loadHandler(route) {
   require.cache[r2Path] = {
     id: r2Path, filename: r2Path, loaded: true,
     exports: { createPresignedUrl: async () => ({}), deleteFromR2: async () => {},
-      verifyUpload: async () => ({}), keyFromUrl: () => 'k', filenameFromUrl: () => 'f' },
+      verifyUpload: async () => ({}), promoteUpload: async () => ({}), keyFromUrl: () => 'k', filenameFromUrl: () => 'f' },
   };
   return { handler: viaRouter(path.join(__dirname, '../..', 'api/_band/songs.js')), calls };
 }
@@ -143,7 +143,8 @@ async function run(r) {
     assertEq(JSON.stringify(batchRows(calls)[0].tags), '["Liebe","Arbeit"]');
     const q = calls.find(c => c.text.includes('unnest(tags)'));
     assert(q && q.values.every(v => v === 1 || Array.isArray(v)), 'known tags are scoped to the band');
-    assertEq(calls.filter(c => c.text.startsWith('SELECT')).length, 1, 'rows, genres and tags in one statement');
+    // The history trim's `SELECT id FROM u` is a fragment of the batch statement.
+    assertEq(calls.filter(c => c.text.startsWith('SELECT') && !/^SELECT id FROM u$/.test(c.text.trim())).length, 1, 'rows, genres and tags in one statement');
   });
 
   await testAsync('invalid tags reject the row', async () => {
@@ -165,13 +166,17 @@ async function run(r) {
     assertEq(calls.filter(c => c.text.includes('UPDATE songs')).length, 1, 'one UPDATE for all rows');
   });
 
-  await testAsync('language is a column; an older client may still send it in extra', async () => {
+  await testAsync('language is a column of its own: inside extra the row is rejected', async () => {
     const stored = { id: 5, artist_id: 1, title: 'Song', active: true, heart: false, language: null, extra: { gitCapo: 1 } };
     const { handler, calls } = loadHandler(routeFor(stored));
-    await patch(handler, [{ id: 5, extra: { language: 'fr', lyrics: 'stale copy', gitCapo: 3 } }]);
+    const res = await patch(handler, [{ id: 5, extra: { language: 'fr', gitCapo: 3 } }]);
+    assertEq(res.body?.count, 0);
+    assert(/language/.test(res.body?.rejected?.[0]?.error || ''), 'reason should name language');
+    assert(!calls.some(c => isBatch(c.text)), 'nothing written');
+    await patch(handler, [{ id: 5, language: 'fr', extra: { gitCapo: 3 } }]);
     const row = batchRows(calls)[0];
     assertEq(row.language, 'FR');
-    assertEq(row.extra, { gitCapo: 3 }, 'language and lyrics never land in extra');
+    assertEq(row.extra, { gitCapo: 3 });
   });
 
   await testAsync('an over-long language is reported', async () => {

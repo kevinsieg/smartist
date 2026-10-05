@@ -14,18 +14,29 @@ const {
 const CTX = () => ({ titles: new Set(['wonderwall']), genres: ['Rock'], tags: ['Liebe'] });
 
 // A fake sql tag: answers the context query with `band`, records the insert.
+// band.liveAtInsert: the band's song count the insert sees (a parallel
+// import committed in between); the insert then writes nothing over the limit.
+const isInsert = c => c.text.startsWith('WITH live AS');
 function fakeSql(band = {}) {
   const calls = [];
+  let inTx = false;
   const sql = (strings, ...values) => {
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
-    calls.push({ text, values });
-    if (text.startsWith('WITH v AS')) return Promise.resolve([{ count: values[0].json.length }]);
+    calls.push({ text, values, inTx });
+    if (text.startsWith('WITH live AS')) {
+      const rows = values.find(v => v && v.json).json;
+      const max = values[values.length - 1];
+      const live = band.liveAtInsert ?? band.count ?? 1;
+      const fits = max == null || live + rows.length <= max;
+      return Promise.resolve([{ count: fits ? rows.length : 0, live }]);
+    }
     return Promise.resolve([{
       titles: band.titles ?? ['Wonderwall'], genres: ['Rock'], tags: ['Liebe'], count: band.count ?? 1,
     }]);
   };
   sql.json = v => ({ json: v });
-  return { sql, calls, inserts: () => calls.filter(c => c.text.startsWith('WITH v AS')) };
+  sql.begin = async fn => { inTx = true; try { return await fn(sql); } finally { inTx = false; } };
+  return { sql, calls, inserts: () => calls.filter(isInsert) };
 }
 
 async function run(r) {
@@ -188,7 +199,7 @@ async function run(r) {
       { line: 3, values: { title: 'Wonderwall' } },
     ] });
     assertEq(res.status, 422);
-    assertEq(res.body.error, 'rows_need_attention');
+    assertEq(res.body.code, 'rows_need_attention');
     assertEq(inserts().length, 0);
   });
 
@@ -202,7 +213,7 @@ async function run(r) {
     assertEq(res.status, 201);
     assertEq(res.body.imported, 1);
     assertEq(inserts().length, 1);
-    const rows = inserts()[0].values[0].json;
+    const rows = inserts()[0].values.find(v => v && v.json).json;
     assertEq(rows.length, 1);
     assertEq(rows[0].title, 'New');
     assertEq(rows[0].lyrics, 'la la');
@@ -219,6 +230,30 @@ async function run(r) {
     assertEq(inserts().length, 0);
     const check = await songImport(sql, 1, { rows }, { maxSongs: 100 });
     assertEq(JSON.stringify(check.body.limit), '{"max":100,"room":1}');
+  });
+
+  // Parallel imports each read the same count before inserting: five of 100
+  // rows put 500 songs into a band limited to 100.
+  await testAsync('under a song limit the insert re-counts under the band\'s lock', async () => {
+    const { sql, calls, inserts } = fakeSql({ count: 50 });
+    const rows = [{ line: 2, values: { title: 'A' } }, { line: 3, values: { title: 'B' } }];
+    const res = await songImport(sql, 7, { commit: true, rows }, { maxSongs: 100 });
+    assertEq(res.status, 201);
+    const lock = calls.findIndex(c => /pg_advisory_xact_lock/.test(c.text));
+    assert(lock >= 0 && calls[lock].inTx, 'the lock is taken in the transaction');
+    assert(calls[lock].values.includes(7), 'the band\'s lock');
+    const insert = calls.findIndex(isInsert);
+    assert(insert > lock && calls[insert].inTx, 'the insert runs after the lock, in the same transaction');
+    assert(/count\(\*\) FROM live\) \+/.test(inserts()[0].text), 'the insert counts again');
+  });
+
+  await testAsync('an import that no longer fits once the lock is held → 402, nothing written', async () => {
+    const { sql } = fakeSql({ count: 50, liveAtInsert: 99 });
+    const rows = [{ line: 2, values: { title: 'A' } }, { line: 3, values: { title: 'B' } }];
+    const res = await songImport(sql, 1, { commit: true, rows }, { maxSongs: 100 });
+    assertEq(res.status, 402);
+    assertEq(res.body.code, 'song_limit');
+    assertEq(res.body.room, 1);
   });
 
   await testAsync('bad input is refused before the database', async () => {

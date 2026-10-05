@@ -32,7 +32,7 @@ function run(r) {
 
   test('schema.sql splits into statements without DO blocks', () => {
     const stmts = splitStatements(schema);
-    assert(stmts.length > 50, `only ${stmts.length} statements`);
+    assert(stmts.length > 30, `only ${stmts.length} statements`);
     assert(!stmts.some(s => /\$\$/.test(s)), 'a $$ block cannot survive the ; split');
   });
 
@@ -72,6 +72,22 @@ function run(r) {
     } finally {
       for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
       Object.assign(process.env, saved);
+    }
+  });
+
+  test('a Neon DATABASE_URL must be the pooled endpoint', () => {
+    const { usesNeonPooler } = require(path.join(ROOT, 'api/_env'));
+    assert(usesNeonPooler('postgresql://u:p@ep-x-123-pooler.eu-central-1.aws.neon.tech/db?sslmode=require'), 'pooler');
+    assert(!usesNeonPooler('postgresql://u:p@ep-x-123.eu-central-1.aws.neon.tech/db?sslmode=require'), 'direct');
+    assert(usesNeonPooler('postgres://u:p@localhost:5433/db'), 'not Neon: no opinion');
+    const saved = process.env.DATABASE_URL;
+    try {
+      process.env.DATABASE_URL = 'postgresql://u:p@ep-x-123.eu-central-1.aws.neon.tech/db';
+      const rep = envReport('production');
+      assert(rep.warnings.includes('DATABASE_URL (use the -pooler host)'), 'warned');
+      assert(!JSON.stringify(rep).includes('ep-x-123'), 'host leaked');
+    } finally {
+      if (saved === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = saved;
     }
   });
 

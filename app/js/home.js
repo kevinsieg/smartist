@@ -27,6 +27,7 @@ async function init() {
   const oauthDone    = qp('oauth');
   const hint         = qp('hint');
   const invite       = qp('invite');
+  const join         = qp('join');
   const reset        = qp('reset');
   const oauthError   = qp('oauth_error');
   const path         = window.location.pathname.replace(/\/+$/, '') || '/';
@@ -35,17 +36,17 @@ async function init() {
   _loginNext = next; // survives the URL strip below
 
   const hasToken = !!(sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY));
-  if (path === '/' && !magic && !oauthDone && !oauthError && !invite && !reset && !hasToken) {
+  if (path === '/' && !magic && !oauthDone && !oauthError && !invite && !join && !reset && !hasToken) {
     window.location.replace('/login' + window.location.search);
     return;
   }
 
-  if (magic || oauthDone || oauthError || invite || reset) history.replaceState(null, '', window.location.pathname);
+  if (magic || oauthDone || oauthError || invite || join || reset) history.replaceState(null, '', window.location.pathname);
 
   // A finished session the OAuth callback left in an HttpOnly cookie, redeemed
   // once. Handled before
   // loadConfig because it needs no workspace: verifySession authenticates
-  // against the slug-independent my-artists endpoint. Doing it later would
+  // against the slug-independent /api/auth/artists endpoint. Doing it later would
   // break the multi-workspace case, where `next` is /workspaces and there is no
   // slug to load a config for.
   if (oauthDone) {
@@ -63,14 +64,14 @@ async function init() {
     // offer no way back in through the provider that just failed.
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
     let rootCfg;
-    try { rootCfg = await loadConfig(); } catch (e) {}
+    try { rootCfg = await loadConfig(undefined, { light: true }); } catch (e) {}
     renderLogin(t('home.invalidLink'), rootCfg);
     return;
   }
 
   let cfg;
   try {
-    cfg = await loadConfig(slugFromNext || undefined);
+    cfg = await loadConfig(slugFromNext || undefined, { light: true });
     artistSlug = cfg.slug || slugFromNext;
     if (!artistSlug) {
       // Multi-tenant root: nothing to brand the page with. Signup is a link on
@@ -94,6 +95,7 @@ async function init() {
 
   if (oauthError) { renderLogin(t('home.oauthErrorMsg'), cfg); return; }
   if (invite)     { renderSetPassword(invite, cfg); return; }
+  if (join)       { renderJoin(join, cfg); return; }
   // Arrived from "Forgot password?". Landing here rather than on the dashboard
   // is the whole point: being logged in with the password you forgot still in
   // place is what made the old flow a dead end.
@@ -119,10 +121,10 @@ async function init() {
 // The session token the OAuth callback set as a cookie, or null.
 async function _redeemOAuthSession() {
   try {
-    const r = await fetch('/api/config', {
+    const r = await fetch('/api/auth/oauth-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'oauth-session' }),
+      body: '{}',
     });
     if (!r.ok) return null;
     return (await r.json()).token || null;
@@ -133,10 +135,10 @@ async function _redeemOAuthSession() {
 async function verifyToken(token, hint) {
   if (!hint) return { ok: false, artists: [] };
   try {
-    const r = await fetch('/api/config', {
+    const r = await fetch('/api/auth/magic-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'magic-login', magic: token, hint }),
+      body: JSON.stringify({ magic: token, hint }),
     });
     if (!r.ok) return { ok: false, artists: [] };
     const data = await r.json();
@@ -148,12 +150,12 @@ async function verifyToken(token, hint) {
 }
 
 // Validate a stored session token on page load. The Bearer-authenticated
-// my-artists endpoint returns the user's workspaces. Posting it to the
+// /api/auth/artists returns the user's workspaces. Posting it to the
 // password-login endpoint (as the magic flow does) would reject a valid JWT and
 // silently log the user out — defeating "Remember me".
 async function verifySession(token) {
   try {
-    const r = await fetch('/api/config?action=my-artists', {
+    const r = await fetch('/api/auth/artists', {
       headers: { Authorization: 'Bearer ' + token },
     });
     if (!r.ok) return { ok: false, artists: [] };
@@ -183,7 +185,11 @@ function renderLoggedIn(cfg, artists) {
 
 // ── Login form ────────────────────────────────────────────────────────────────
 
+// A new session starts without any band's cached config.
 function storeToken(token, remember) {
+  Object.keys(sessionStorage)
+    .filter(function(k) { return k.indexOf('artist_config_cache_') === 0; })
+    .forEach(function(k) { sessionStorage.removeItem(k); });
   if (remember) {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -223,19 +229,19 @@ function renderLogin(errorMsg, cfg) {
       oauthHtml +
       '<div class="auth-field">' +
         '<label class="auth-label" for="email-input">' + t('home.emailLabel') + '</label>' +
-        '<input type="email" id="email-input" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
+        '<input type="email" id="email-input" aria-describedby="auth-error" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
       '</div>' +
       '<div class="auth-field">' +
         '<label class="auth-label" for="pw-input">' + t('home.passwordLabel') + '</label>' +
         '<div class="pw-wrapper">' +
-          '<input type="password" id="pw-input" placeholder="••••••••" autocomplete="current-password">' +
+          '<input type="password" id="pw-input" aria-describedby="auth-error" placeholder="••••••••" autocomplete="current-password">' +
           '<button type="button" class="pw-toggle" id="pw-toggle">' + t('home.showPw') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="auth-remember">' +
         '<label class="auth-remember-label"><input type="checkbox" id="remember-me"> ' + t('home.rememberMe') + '</label>' +
       '</div>' +
-      '<div class="auth-error" id="auth-error"></div>' +
+      '<div class="auth-error" id="auth-error" role="alert"></div>' +
       '<button class="btn active auth-submit" id="pw-btn">' + t('home.signIn') + '</button>' +
       '<button class="reset-link" id="reset-toggle">' + t('home.forgotPassword') + '</button>' +
       '<div class="reset-form" id="reset-form" style="display:none">' +
@@ -243,7 +249,7 @@ function renderLogin(errorMsg, cfg) {
           '<label class="auth-label" for="reset-email">' + t('home.emailAddressLabel') + '</label>' +
           '<input type="email" id="reset-email" placeholder="' + t('home.emailPlaceholder') + '" autocomplete="email">' +
         '</div>' +
-        '<div class="auth-error" id="reset-msg"></div>' +
+        '<div class="auth-error" id="reset-msg" role="status"></div>' +
         '<button class="btn auth-submit" id="reset-btn">' + t('home.sendLink') + '</button>' +
       '</div>' +
       '<p class="auth-hint">' + t('home.noAccount') + ' <a href="/signup">' + t('home.signUpFree') + '</a></p>' +
@@ -286,11 +292,11 @@ function renderSetPassword(token, cfg, resetHint) {
       '<div class="auth-field">' +
         '<label class="auth-label" for="pw-new">' + t('home.choosePassword') + '</label>' +
         '<div class="pw-wrapper">' +
-          '<input type="password" id="pw-new" placeholder="' + t('home.pwPlaceholder') + '" autocomplete="new-password">' +
+          '<input type="password" id="pw-new" aria-describedby="auth-error" placeholder="' + t('home.pwPlaceholder') + '" autocomplete="new-password">' +
           '<button type="button" class="pw-toggle" id="pw-toggle-new">' + t('home.showPw') + '</button>' +
         '</div>' +
       '</div>' +
-      '<div class="auth-error" id="auth-error"></div>' +
+      '<div class="auth-error" id="auth-error" role="alert"></div>' +
       '<button class="btn active auth-submit" id="accept-btn">' + label + '</button>' +
     '</div>';
   document.getElementById('pw-toggle-new').addEventListener('click', () => {
@@ -311,14 +317,15 @@ async function doSetPassword(token, hint, cfg) {
   const pw  = document.getElementById('pw-new').value;
   const btn = document.getElementById('accept-btn');
   const err = document.getElementById('auth-error');
+  document.getElementById('pw-new').setAttribute('aria-invalid', String(!pw));
   if (!pw) { err.textContent = t('home.enterPassword'); return; }
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   const restore = () => { btn.disabled = false; btn.textContent = t('home.savePassword'); };
   try {
-    const r    = await fetch('/api/config', {
+    const r    = await fetch('/api/auth/set-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'set-password', token, hint, password: pw }),
+      body: JSON.stringify({ token, hint, password: pw }),
     });
     const data = await r.json();
     if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); restore(); return; }
@@ -331,10 +338,48 @@ async function doSetPassword(token, hint, cfg) {
   }
 }
 
+// An invite to an address that already has an account: nothing changes until
+// the person accepts, and accepting keeps their password.
+function renderJoin(token, cfg) {
+  const el = document.getElementById('landing-auth');
+  if (!el) return;
+  const name = escHtml(cfg?.name || artistSlug);
+  el.innerHTML =
+    '<div class="landing-login">' +
+      '<p>' + t('home.joinIntro', { name: name }) + '</p>' +
+      '<div class="auth-error" id="auth-error" role="alert"></div>' +
+      '<button class="btn active auth-submit" id="join-btn">' + t('home.joinBand', { name: name }) + '</button>' +
+    '</div>';
+  document.getElementById('join-btn').addEventListener('click', () => doJoin(token, cfg));
+}
+
+async function doJoin(token, cfg) {
+  const btn   = document.getElementById('join-btn');
+  const err   = document.getElementById('auth-error');
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = '…'; err.textContent = '';
+  try {
+    const r    = await fetch(`/api/${cfg?.slug || artistSlug}/members/accept-invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token }),
+    });
+    const data = await r.json();
+    if (!r.ok) { err.textContent = data.error || t('home.invalidLink'); btn.disabled = false; btn.textContent = label; return; }
+    storeToken(data.token, false);
+    sessionStorage.setItem('smartist_admin_email', data.email || '');
+    renderLoggedIn(cfg, data.artists || []);
+  } catch {
+    err.textContent = t('home.connError');
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+
 async function doAcceptInvite(inviteToken, cfg) {
   const pw  = document.getElementById('pw-new').value;
   const btn = document.getElementById('accept-btn');
   const err = document.getElementById('auth-error');
+  document.getElementById('pw-new').setAttribute('aria-invalid', String(!pw));
   if (!pw) { err.textContent = t('home.enterPassword'); return; }
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
@@ -361,12 +406,14 @@ async function doLogin() {
   const remember = document.getElementById('remember-me')?.checked || false;
   const err = document.getElementById('auth-error');
   // Every login is a named user: the shared band password is retired.
+  document.getElementById('email-input')?.setAttribute('aria-invalid', String(!email));
+  document.getElementById('pw-input').setAttribute('aria-invalid', 'false');
   if (!email) { err.textContent = t('home.emailRequired'); document.getElementById('email-input')?.focus(); return; }
   if (!pw) return;
   const btn = document.getElementById('pw-btn');
   btn.disabled = true; btn.textContent = '…'; err.textContent = '';
   try {
-    const cfg = await loadConfig();
+    const cfg = await loadConfig(undefined, { light: true });
     if (cfg.slug) artistSlug = cfg.slug;
     const body = { email, password: pw, rememberMe: remember };
     // Email is the identity: /api/login finds the account across workspaces,
@@ -377,7 +424,7 @@ async function doLogin() {
       body: JSON.stringify(body),
     });
     const data = await r.json();
-    if (!r.ok) { err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); return; }
+    if (!r.ok) { document.getElementById('pw-input')?.setAttribute('aria-invalid', 'true'); err.textContent = data.error || t('home.signInFailed'); btn.disabled = false; btn.textContent = t('home.signIn'); document.getElementById('pw-input')?.focus(); return; }
     storeToken(data.token, remember);
     sessionStorage.setItem('smartist_admin_email', data.email || '');
     applyNav(cfg.name, cfg.config);
@@ -392,7 +439,7 @@ async function startOAuth(provider) {
   const btn = document.getElementById(`${provider}-btn`);
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const r    = await fetch(`/api/config?action=${provider}-url`);
+    const r    = await fetch(`/api/auth/${provider}-url`);
     const data = await r.json();
     if (data.url) {
       window.location.href = data.url;
@@ -416,10 +463,10 @@ async function doRequestReset() {
   btn.disabled = true; btn.textContent = '…'; msg.textContent = '';
   try {
     // The account is found by address, whichever band this page shows.
-    await fetch('/api/config', {
+    await fetch('/api/auth/request-reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'request-reset', email }),
+      body: JSON.stringify({ email }),
     });
     msg.style.color = 'var(--secondary-color)';
     msg.textContent = t('home.resetSent');

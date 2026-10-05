@@ -119,14 +119,6 @@ function _ensureSongsFooter() {
 
 async function loadAndRender(viewMode) {
   try {
-    if (!artistSlug) {
-      // Try to read slug synchronously from session cache so songs fetch
-      // can start in parallel with the config network request.
-      try {
-        const _c = JSON.parse(sessionStorage.getItem('artist_config_cache'));
-        if (_c?.slug) artistSlug = _c.slug;
-      } catch {}
-    }
     const cfgPromise = getConfig();
     const songsPromise = artistSlug ? fetchSongsList(true) : null;
     const cfg = await cfgPromise;
@@ -229,8 +221,7 @@ var filters = { text: '', active: true, heart: false, lead: '', genre: '', inter
 
 var _setlistFilterIds   = null;   // null = no filter; Set<songId>
 var _setlistFilterOrder = [];     // song IDs in setlist position order
-var _setlistFilterTimer = null;
-var _allSetlistsMeta    = null;   // [{id, name}] fetched once on demand
+var _allSetlistsMeta    = null;   // [{id, title}] fetched once on demand
 var _songsView          = null;
 
 function getVisibleSongs() {
@@ -274,9 +265,9 @@ async function _applySetlistById(id) {
   // Update filter input with setlist name
   var found = (_allSetlistsMeta || []).find(function(s) { return s.id === id; });
   if (found) {
-    filters.setlist = (found.name || '').toLowerCase();
+    filters.setlist = (found.title || '').toLowerCase();
     var el = document.getElementById('filter-setlist');
-    if (el) el.value = found.name || '';
+    if (el) el.value = found.title || '';
   }
   applyFilter();
 }
@@ -318,7 +309,7 @@ async function _resolveSetlistFilter(q) {
     } catch { _allSetlistsMeta = []; }
   }
   var matches = _allSetlistsMeta.filter(function(s) {
-    return (s.name || '').toLowerCase().includes(q.toLowerCase());
+    return (s.title || '').toLowerCase().includes(q.toLowerCase());
   });
   if (!matches.length) return new Set();
 
@@ -390,7 +381,7 @@ function _renderSongsListView() {
         title: t('songs.bulkEdit'),
         onClick: toggleBulkEdit,
         desktopOnly: true },
-      { label: t('songs.share'), icon: SHARE_ICON, title: t('songs.share'), onClick: _songsShareMenu },
+      { label: t('songs.share'), icon: SHARE_ICON, title: t('songs.share'), popup: true, onClick: _songsShareMenu },
     ],
     getData:   _getSongsForFactory,
     getTotal:  function() { return getToken() ? songs.length : _songsTotal; },
@@ -439,7 +430,7 @@ async function _applySetlistByIdForView(id) {
   }
   var found = (_allSetlistsMeta || []).find(function(s) { return s.id === id; });
   if (found && _songsView) {
-    _songsView.setFilterValue('setlist', found.name || '');
+    _songsView.setFilterValue('setlist', found.title || '');
   }
 }
 
@@ -572,33 +563,26 @@ async function exportCsv() {
 // Share menu on the toolbar — same popover pattern as setlist history.
 function _songsShareMenu(btn) {
   var existing = document.getElementById('share-menu-popup');
-  if (existing) { existing.remove(); return; }
+  if (existing) { closeShareMenu(); return; }
 
   var menu = document.createElement('div');
   menu.id = 'share-menu-popup';
   menu.className = 'share-menu';
   menu.innerHTML =
-    '<div class="share-menu-item" data-onclick="exportCsv();closeShareMenu()">' +
-      '<span class="share-menu-icon">&#10515;</span><span class="share-menu-label">' + t('songs.exportCsv') + '</span>' +
-    '</div>' +
+    '<button type="button" class="share-menu-item" data-onclick="exportCsv();closeShareMenu()">' +
+      '<span class="share-menu-icon" aria-hidden="true">&#10515;</span><span class="share-menu-label">' + t('songs.exportCsv') + '</span>' +
+    '</button>' +
     (getAuthRole() === 'viewer' ? '' :
-    '<div class="share-menu-item" data-onclick="closeShareMenu();navigate(\'/song-import\')">' +
-      '<span class="share-menu-icon">&#10514;</span><span class="share-menu-label">' + t('songs.importCsv') + '</span>' +
-    '</div>');
+    '<button type="button" class="share-menu-item" data-onclick="closeShareMenu();navigate(\'/song-import\')">' +
+      '<span class="share-menu-icon" aria-hidden="true">&#10514;</span><span class="share-menu-label">' + t('songs.importCsv') + '</span>' +
+    '</button>');
 
   var rect = btn.getBoundingClientRect();
   menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;left:' + rect.left + 'px';
   document.body.appendChild(menu);
   var overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
   if (overflow > 0) menu.style.left = Math.max(8, rect.left - overflow) + 'px';
-
-  function closeMenu(e) {
-    if (!menu.contains(e.target) && e.target !== btn) {
-      menu.remove();
-      document.removeEventListener('click', closeMenu);
-    }
-  }
-  setTimeout(function() { document.addEventListener('click', closeMenu); }, 0);
+  wirePopupMenu(btn, menu);
 }
 
 // --- Logs ---
@@ -650,19 +634,26 @@ function renderLogs(logs) {
   el.innerHTML = `<div class="logs-wrap"><h2 class="logs-heading">${t('songs.changeLog')}</h2>${items}</div>`;
 }
 
+// A failed song create as an Error; `limit` is set when the plan's song limit
+// refused it, so the caller can say that instead of "try again".
+async function _songCreateError(r) {
+  const d = await r.json().catch(() => ({}));
+  const err = new Error(d.error || 'create failed');
+  if ((d.code || d.error) === 'song_limit') err.limit = d.limit;
+  return err;
+}
+
 async function restoreSong(songId) {
-  const token = getToken();
-  if (!token) return;
-  const r = await fetch(`/api/${artistSlug}/songs/${songId}/restore`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-  });
-  if (r.status === 401) { if (!isViewMode()) { clearToken(); requireLogin(); } return; }
+  if (!getToken()) return;
+  let r;
+  // apiFetch sends an ended session to the login page and throws.
+  try { r = await apiFetch(`/api/${artistSlug}/songs/${songId}/restore`, 'POST'); } catch { return; }
   if (r.ok) {
     invalidateConfigCache();
     await loadAndRender();
   } else {
-    _setBulkStatus('error', t('songs.couldNotRestore'));
+    const d = await r.json().catch(() => ({}));
+    _setBulkStatus('error', (d.code || d.error) === 'song_limit' ? t('songs.limitReached', { limit: d.limit }) : t('songs.couldNotRestore'));
   }
 }
 
@@ -689,7 +680,7 @@ async function openAppearances(songId) {
       const label = parts.length ? parts.join(' — ') : (sl.title || `Setlist #${sl.id}`);
       const date  = formatDate(sl.created_at);
       return `<div class="appearance-row">
-        <a class="appearance-gig" href="/setlist-history#set-${sl.id}" target="_blank">${escHtml(label)}</a>
+        <a class="appearance-gig" href="/${encodeURIComponent(artistSlug)}/setlist?view=history&amp;set=${Number(sl.id)}" target="_blank" rel="noopener">${escHtml(label)}</a>
         <span class="appearance-date">${date}</span>
       </div>`;
     }).join('');
@@ -779,8 +770,9 @@ function _setAudioSpeed(btn, rate) {
   var wrap = btn.closest('.vsp-audio-block, .audio-speed-wrap, .song-stage-rec');
   var audio = wrap && wrap.querySelector('audio');
   if (audio) audio.playbackRate = rate;
-  btn.parentNode.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+  btn.parentNode.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
   btn.classList.add('active');
+  btn.setAttribute('aria-pressed', 'true');
 }
 
 init();

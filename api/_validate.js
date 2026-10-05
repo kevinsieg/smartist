@@ -1,16 +1,64 @@
-// Returns validated array of positive integers (max 200, unique), or null if invalid.
+// Largest id a column of type integer holds: a bigger one is not "not found"
+// but a 500 from the database (value out of range).
+const ID_MAX = 2147483647;
+
+// A row id from a path or a body. Returns the id as a number, null if
+// empty/missing, false if it is not a positive integer (objects, booleans,
+// '1.5', 'abc', 0 and anything past ID_MAX included).
+function positiveId(val) {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val !== 'number' && typeof val !== 'string') return false;
+  if (typeof val === 'string' && !/^\s*\d+\s*$/.test(val)) return false;
+  const n = Number(val);
+  return Number.isInteger(n) && n > 0 && n <= ID_MAX ? n : false;
+}
+
+// Returns validated array of song ids (max 200, unique), or false if invalid.
 function validateSongIds(song_ids) {
-  if (!Array.isArray(song_ids)) return null;
-  if (song_ids.length > 200) return null;
-  const ids = song_ids.map(Number).filter(n => Number.isFinite(n) && Number.isInteger(n) && n > 0);
-  if (ids.length !== song_ids.length) return null;
-  if (new Set(ids).size !== ids.length) return null;
-  return ids;
+  if (!Array.isArray(song_ids)) return false;
+  if (song_ids.length > 200) return false;
+  const ids = song_ids.map(positiveId);
+  if (ids.some(n => !n)) return false;
+  if (new Set(ids).size !== ids.length) return false;
+  return /** @type {number[]} */ (ids);
+}
+
+// The values of a list option such as a delete's `cascade`: an array of known
+// strings. Returns the array, [] if missing, false if anything else was sent.
+function validateOptions(val, allowed) {
+  if (val === null || val === undefined) return [];
+  if (!Array.isArray(val) || !val.every(v => allowed.includes(v))) return false;
+  return val;
+}
+
+// How a DELETE goes, from its URL: `?hard=1` removes the row for good (soft
+// otherwise), `&cascade=gigs,setlists` takes those along. Returns
+// { hard, cascade } or false for an unknown cascade. A page loaded before the
+// URL form shipped still sends { hard, cascade } as the body; that is read
+// too, until the next release.
+function deleteMode(query, body, allowed) {
+  const q = query ?? {};
+  if (q.hard !== undefined || q.cascade !== undefined) {
+    const list = q.cascade === undefined || q.cascade === '' ? null : String(q.cascade).split(',');
+    const cascade = validateOptions(list, allowed);
+    return cascade === false ? false : { hard: q.hard === '1' || q.hard === 'true', cascade };
+  }
+  const cascade = validateOptions(body?.cascade, allowed);
+  return cascade === false ? false : { hard: body?.hard === true, cascade };
+}
+
+// A substring search pattern for ILIKE, or null for an empty query. The
+// user's own % and _ match themselves, not "anything".
+function likePattern(q) {
+  const s = String(q ?? '').trim();
+  return s ? '%' + s.replace(/[\\%_]/g, c => '\\' + c) + '%' : null;
 }
 
 // Returns trimmed string if valid, null if empty/missing, false if exceeds maxLen.
+// Objects and arrays are invalid (false), not "[object Object]".
 function validateStr(val, maxLen) {
   if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'object') return false;
   const s = String(val).trim();
   if (!s) return null;
   if (s.length > maxLen) return false;
@@ -34,8 +82,8 @@ function validateEmail(val) {
 
 // ── Field specs ───────────────────────────────────────────────────────────────
 // A resource's writable fields as one table, so create and update validate the
-// same fields the same way (they used to drift: update skipped half of them and
-// could not clear a field, because `body.x ?? stored.x` turns null into "keep").
+// same fields the same way, and an update can clear a field (`body.x ?? stored.x`
+// would turn null into "keep").
 //
 //   const VENUE = { name: F.text(200, { required: true }), website: F.url(), size: F.int(0, 1e7) };
 //   const { value, error } = parseFields(req.body, VENUE, { partial: true });
@@ -72,6 +120,8 @@ function parseField(name, f, raw) {
     if (f.nullable === false) return { error: `${name} cannot be empty` };
     return { value: null };
   }
+  if (typeof raw === 'object' && !(raw instanceof Date) && f.type !== 'object')
+    return { error: `${name} must be a ${f.type === 'bool' ? 'boolean' : 'single value'}` };
   switch (f.type) {
     case 'text': {
       const v = validateStr(raw, f.max);
@@ -137,4 +187,16 @@ function parseFields(body, spec, { partial = false } = {}) {
   return { value };
 }
 
-module.exports = { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };
+// Every ownership check on a bucket key is a prefix or pattern on the key as
+// written (`audio/<band id>/…`, `bands/<slug>/…`), so a key that a storage
+// layer could read differently — dot segments, empty segments, escaped
+// slashes or dots, backslashes — must never pass one: `bands/mine/../other`
+// starts with `bands/mine/`. A query string (a cache-busting `?v=`) is not
+// part of the key and is ignored.
+function unsafeKey(key) {
+  if (typeof key !== 'string') return true;
+  const path = key.split(/[?#]/)[0];
+  return !path || /(^|\/)\.{1,2}(\/|$)|\/\/|\\|%2e|%2f|%5c/i.test(path);
+}
+
+module.exports = { unsafeKey, positiveId, validateSongIds, validateOptions, deleteMode, likePattern, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };

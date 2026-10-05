@@ -1,4 +1,4 @@
-const { getDb, getSlug, parsePage, trimSongLogs } = require('../_db');
+const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { validateStr, validateNum, jsonBytes } = require('../_validate');
 const { wrap } = require('../_handler');
@@ -8,23 +8,27 @@ const { keyFromUrl } = require('../_r2');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
-  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong,
+  listSongs, cleanLyrics, cleanLanguage, COLUMN_KEYS, publicSong, trimHistory,
 } = require('../_domain/songs');
-const { songImport } = require('../_domain/song_import');
+const { songImport, SONG_LIMIT_LOCK } = require('../_domain/song_import');
+const { MSG } = require('../_domain/http');
 
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
-// What a new song is checked against: the band's live song count (plan
-// limit), genres (spelling) and tags (casing), in one statement.
-async function songValues(sql, artistId) {
-  const [row] = await sql`
+// What a new song is checked against: the band's genres (spelling) and tags
+// (casing), read in the statement that takes the band's song-limit lock
+// (SONG_LIMIT_LOCK, api/_domain/song_import.js). The limit itself is counted
+// by the insert, a statement later, so it sees every song a previous holder
+// of the lock committed.
+async function lockAndSongValues(tx, artistId) {
+  const [row] = await tx`
     SELECT
-      (SELECT count(*)::int FROM songs WHERE artist_id = ${artistId} AND NOT deleted) AS count,
+      pg_advisory_xact_lock(${SONG_LIMIT_LOCK}::int, ${artistId}::int) AS locked,
       ARRAY(SELECT DISTINCT genre FROM songs
             WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> '') AS genres,
       ARRAY(SELECT DISTINCT unnest(tags) FROM songs
             WHERE artist_id = ${artistId} AND NOT deleted) AS tags`;
-  return { count: row?.count ?? 0, genres: row?.genres ?? [], tags: row?.tags ?? [] };
+  return { genres: row?.genres ?? [], tags: row?.tags ?? [] };
 }
 
 // `extra` is free-form, but its *Url keys end up in href/src attributes on the
@@ -33,10 +37,15 @@ async function songValues(sql, artistId) {
 // otherwise a band could point its song at another band's file and have it
 // deleted by the next media replace, media delete or account deletion.
 const EXTRA_MAX_BYTES = 32 * 1024;
+// The cap is on what is stored after the merge (`extra || patch`): each request
+// alone fitting let repeated requests with new keys grow the row without end,
+// and extra ships with every song list.
 function extraError(extra, current = {}) {
   if (extra == null) return null;
   if (typeof extra !== 'object' || Array.isArray(extra)) return 'extra must be an object';
-  if (jsonBytes(extra) > EXTRA_MAX_BYTES) return 'extra is too large';
+  const column = COLUMN_KEYS.find(k => k in extra);
+  if (column) return `${column} is a field of its own, not part of extra`;
+  if (jsonBytes({ ...(current || {}), ...extra }) > EXTRA_MAX_BYTES) return 'extra is too large';
   for (const [k, v] of Object.entries(extra)) {
     if (!/Url$/.test(k) || v == null || v === '') continue;
     if (typeof v !== 'string' || !/^https?:\/\//i.test(v)) return `${k} must be an http(s) URL`;
@@ -91,7 +100,7 @@ module.exports = wrap(async function handler(req, res) {
   // song's details (GET /songs/:id). ?lyrics=1 adds the text for the CSV export.
   if (req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     const viewMode = !user;
     if (viewMode && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
@@ -134,16 +143,11 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const _max = songLimit(band);
-    const { count, genres: knownGenres, tags: knownTags } = await songValues(sql, band.id);
-    if (_max != null && count >= _max)
-      return res.status(402).json({ error: 'song_limit', limit: _max });
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
             comment: rawComment } = req.body ?? {};
-    // Lyrics and language are columns now; an older client still sends them in extra.
-    const moved = splitMovedKeys(req.body?.extra);
-    const extra = moved.extra;
+    const extra = req.body?.extra;
 
     const title = validateStr(rawTitle, 200);
     if (title === false) return res.status(400).json({ error: 'title too long' });
@@ -152,7 +156,6 @@ module.exports = wrap(async function handler(req, res) {
     if (key === false) return res.status(400).json({ error: 'key too long' });
     const typedGenre = validateStr(rawCat, 100);
     if (typedGenre === false) return res.status(400).json({ error: 'genre too long' });
-    const genre = matchGenre(typedGenre, knownGenres);
     const energy = energyToScale(rawEnergy);
     if (energy === undefined) return res.status(400).json({ error: ENERGY_ERROR });
     const time_signature = validateStr(rawTimeSig, 20);
@@ -167,25 +170,30 @@ module.exports = wrap(async function handler(req, res) {
     if (reference_interpret === false) return res.status(400).json({ error: 'reference_interpret too long' });
     const comment = validateStr(rawComment, 2000);
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
-    const language = cleanLanguage(req.body?.language !== undefined ? req.body.language : moved.language);
+    const language = cleanLanguage(req.body?.language);
     if (language === false) return res.status(400).json({ error: 'language too long' });
-    const tags = cleanTags(req.body?.tags, knownTags);
-    if (tags && 'error' in tags) return res.status(400).json({ error: tags.error });
-    const lyrics = cleanLyrics(req.body?.lyrics !== undefined ? req.body.lyrics : moved.lyrics);
+    // The spelling of known tags comes later, under the lock; checked here.
+    const typedTags = cleanTags(req.body?.tags, []);
+    if (typedTags && 'error' in typedTags) return res.status(400).json({ error: typedTags.error });
+    const lyrics = cleanLyrics(req.body?.lyrics);
     if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
     if (extraErr) return res.status(400).json({ error: extraErr });
 
-    // Song, lyrics and audit entry in one statement.
-    const [song] = await sql`
+    // BEGIN, the lock with the band's genres and tags, the insert, COMMIT:
+    // with auth, five statements. Song, lyrics and audit entry are one
+    // statement, which adds nothing once the band is at its limit.
+    const insertSong = (q, genre, tags) => q`
       WITH s AS (
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            bpm, length_min, interpret, reference_interpret, comment, language, extra, tags)
-        VALUES (${band.id}, ${title}, ${active ?? true}, ${heart ?? false}, ${key},
-                ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
-                ${interpret}, ${reference_interpret},
-                ${comment}, ${language}, ${extra ?? {}},
-                ARRAY(SELECT jsonb_array_elements_text(${sql.json(tags ?? [])})))
+        SELECT ${band.id}, ${title}, ${toBool(active, true)}, ${toBool(heart, false)}, ${key},
+               ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
+               ${interpret}, ${reference_interpret},
+               ${comment}, ${language}, ${extra ?? {}},
+               ARRAY(SELECT jsonb_array_elements_text(${sql.json(tags ?? [])}))
+        WHERE ${_max}::int IS NULL
+           OR (SELECT count(*) FROM songs WHERE artist_id = ${band.id} AND NOT deleted) < ${_max}::int
         RETURNING *
       ), saved_lyrics AS (
         INSERT INTO song_lyrics (song_id, artist_id, lyrics)
@@ -196,6 +204,12 @@ module.exports = wrap(async function handler(req, res) {
       )
       SELECT s.*, (${lyrics.value}::text IS NOT NULL) AS has_lyrics FROM s
     `;
+    const song = await sql.begin(async tx => {
+      const known = await lockAndSongValues(tx, band.id);
+      const tags = typedTags && cleanTags(typedTags, known.tags);
+      return (await insertSong(tx, matchGenre(typedGenre, known.genres), tags))[0] ?? null;
+    });
+    if (!song) return res.status(402).json({ error: 'Song limit reached', code: 'song_limit', limit: _max });
     return res.status(201).json(song);
   }
 
@@ -246,7 +260,6 @@ module.exports = wrap(async function handler(req, res) {
       const current = stored.get(songId);
       if (!current) { rejected.push({ id: songId, error: 'song not found' }); continue; }
 
-      const moved = splitMovedKeys(update.extra);
       const value = { id: songId };
       let error = null;
       for (const [field, maxLen] of Object.entries(TEXT_LIMITS)) {
@@ -270,7 +283,7 @@ module.exports = wrap(async function handler(req, res) {
         }
       }
       if (!error) {
-        const rawLang = 'language' in update ? update.language : moved.language;
+        const rawLang = 'language' in update ? update.language : undefined;
         if (rawLang === undefined) value.language = current.language ?? null;
         else {
           value.language = cleanLanguage(rawLang);
@@ -282,18 +295,20 @@ module.exports = wrap(async function handler(req, res) {
         if (tags && 'error' in tags) error = tags.error;
         else value.tags = tags ?? current.tags ?? [];
       }
-      if (!error) error = extraError(moved.extra, current.extra);
+      if (!error) error = extraError(update.extra, current.extra);
       if (error) { rejected.push({ id: songId, error }); continue; }
 
       value.active = toBool(update.active, current.active);
       value.heart  = toBool(update.heart,  current.heart);
-      value.extra  = moved.extra ?? {};
+      value.extra  = update.extra ?? {};
       accepted.set(songId, value);
     }
 
-    // One statement for the whole batch — the rows, merged extra and one
-    // audit entry each — instead of two round-trips per song.
+    // One statement for the whole batch — the rows, merged extra, one audit
+    // entry each and the history trim — instead of two round-trips per song.
     let applied = 0;
+    /** @type {any[]} */
+    let saved = [];
     if (accepted.size) {
       const rows = [...accepted.values()];
       const updated = await sql`
@@ -323,15 +338,21 @@ module.exports = wrap(async function handler(req, res) {
         ), logged AS (
           INSERT INTO song_logs (artist_id, song_id, action, song_data)
           SELECT artist_id, id, 'update', to_jsonb(u) FROM u
+        ), trimmed AS (
+          -- This band's history of the songs written here, newest SONG_LOG_KEEP
+          -- kept. The entry added above is not visible yet: it rides along.
+          ${trimHistory(sql, band.id, sql`SELECT id FROM u`)}
         )
-        SELECT id FROM u
+        SELECT u.* FROM u
       `;
-      const done = new Set(updated.map(r => r.id));
+      saved = [...updated];
+      const done = new Set(saved.map(r => r.id));
       applied = done.size;
-      if (applied) await trimSongLogs(sql, band.id);
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
-    return res.json({ ok: true, count: applied, rejected });
+    // The rows as stored, so the page updates them in place instead of
+    // downloading the whole list again.
+    return res.json({ ok: true, count: applied, rejected, rows: saved });
   }
 
   res.status(405).json({ error: 'Method not allowed' });

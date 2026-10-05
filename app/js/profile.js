@@ -60,6 +60,11 @@
     var cf  = document.getElementById('pw-confirm').value;
     var msg = document.getElementById('pw-msg');
     msg.className = 'save-msg';
+    // aria-invalid marks the field the message is about (the message is the fields' description).
+    var bad = !cur ? 'pw-current' : !nw ? 'pw-new' : !cf ? 'pw-confirm' : nw.length < 8 ? 'pw-new' : nw !== cf ? 'pw-confirm' : null;
+    ['pw-current', 'pw-new', 'pw-confirm'].forEach(function(id) {
+      document.getElementById(id).setAttribute('aria-invalid', String(id === bad));
+    });
     if (!cur || !nw || !cf) { msg.textContent = t('profile.fillAll');     msg.className = 'save-msg err'; return; }
     if (nw.length < 8)      { msg.textContent = t('profile.minChars');    msg.className = 'save-msg err'; return; }
     if (nw !== cf)          { msg.textContent = t('profile.pwMismatch');  msg.className = 'save-msg err'; return; }
@@ -113,7 +118,7 @@
     var msg = document.getElementById('logout-all-msg');
     btn.disabled = true; msg.className = 'save-msg'; msg.textContent = '';
     try {
-      var r = await apiFetch('/api/config', 'POST', { action: 'logout-everywhere' });
+      var r = await apiFetch('/api/auth/logout-everywhere', 'POST');
       if (!r.ok) { msg.textContent = t('profile.logoutEverywhereFailed'); msg.className = 'save-msg err'; return; }
       doLogout();
     } catch (e) {
@@ -162,7 +167,7 @@
     banner.className = 'auth-banner';
     banner.textContent = t('profile.dangerChecking');
     try {
-      var r = await apiFetch('/api/config', 'POST', { action: 'confirm-deletion', token: token });
+      var r = await apiFetch('/api/auth/confirm-deletion', 'POST', { token: token });
       var data = await r.json().catch(function () { return {}; });
       if (r.ok && data.preview) {
         banner.style.display = 'none';
@@ -211,8 +216,8 @@
     msg.className = 'save-msg';
     msg.textContent = t('profile.dangerConfirm');
     try {
-      var r = await apiFetch('/api/config', 'POST',
-        { action: 'confirm-deletion', token: token, confirm: true });
+      var r = await apiFetch('/api/auth/confirm-deletion', 'POST',
+        { token: token, confirm: true });
       var data = await r.json().catch(function () { return {}; });
       if (r.ok) {
         clearToken();
@@ -244,7 +249,7 @@
 
   async function _loadDeletionZone() {
     try {
-      var r = await apiFetch('/api/config?action=deletion-preflight');
+      var r = await apiFetch('/api/auth/deletion-preflight');
       if (!r.ok) return;
       var plan = await r.json();
       _renderDeletionPlan(plan);
@@ -315,7 +320,7 @@
     msg.className = 'save-msg';
     msg.textContent = t('profile.dangerRequesting');
     try {
-      var r = await apiFetch('/api/config', 'POST', { action: 'request-deletion' });
+      var r = await apiFetch('/api/auth/request-deletion', 'POST');
       var data = await r.json().catch(function () { return {}; });
       if (r.ok) {
         msg.textContent = t('profile.dangerSent', { email: _deletionEmail });

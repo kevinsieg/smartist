@@ -25,10 +25,13 @@ function mockRes() {
 
 function makeSql(route) {
   const calls = [];
-  const sql = async (strings, ...values) => {
+  const sql = (strings, ...values) => {
+    // sql(identifier) and sql`fragment` nested in a statement are not statements.
+    if (!Array.isArray(strings)) return { fragment: String(strings) };
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
+    if (!/^(SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(text)) return { fragment: text, values };
     calls.push({ text, values });
-    return route(text, values);
+    return (async () => route(text, values))();
   };
   // Like postgres.js: begin resolves an array of queries to their results.
   sql.begin = async fn => { const r = await fn(sql); return Array.isArray(r) ? Promise.all(r) : r; };
@@ -40,7 +43,7 @@ function makeSql(route) {
 function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), r2Path = mp('api/_r2');
   const handlerPath = mp(rel), ownPath = mp('api/_ownership');
-  for (const p of [dbPath, authPath, r2Path, handlerPath, ownPath]) delete require.cache[p];
+  for (const p of [dbPath, authPath, r2Path, handlerPath, ownPath, mp('api/_domain/gigs'), mp('api/_band/record_item')]) delete require.cache[p];
   const sql = makeSql(route);
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
@@ -64,6 +67,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
     exports: {
       createPresignedUrl: async () => ({}), deleteFromR2: async () => true,
       verifyUpload: async () => ({ size: 1, contentType: 'audio/mpeg' }),
+      promoteUpload: async () => ({ size: 1, contentType: 'audio/mpeg' }),
       filenameFromUrl: u => u,
       keyFromUrl: u => (String(u).startsWith('https://media.example.test/') ? String(u).slice(27) : null),
     },
@@ -138,35 +142,41 @@ async function run(r) {
   });
 
   await testAsync("updating a setlist cannot pull in another band's song", async () => {
-    const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
-      if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
-      return ownershipRoute(text, values);
-    });
+    const { handler, sql } = loadHandler('api/_band/setlists/item.js', ownershipRoute);
     const res = mockRes();
     await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
       body: { song_ids: [11, 777] } }, res);
     assertEq(res.statusCode, 400);
-    assert(!sql.calls.some(c => c.text.startsWith('DELETE FROM setlist_songs')), 'the old list must survive');
+    assert(!sql.calls.some(c => c.text.includes('setlist_songs')), 'the old list must survive');
   });
 
-  await testAsync('updating a setlist rewrites its songs in one transaction', async () => {
+  await testAsync('updating a setlist locks the row, then rewrites its songs in one statement', async () => {
     const { handler, sql } = loadHandler('api/_band/setlists/item.js', (text, values) => {
-      if (text.startsWith('SELECT id FROM setlists')) return [{ id: 3 }];
-      if (text.startsWith('SELECT s.*, g.title AS gig_name')) return [{ id: 3, song_count: 2 }];
+      if (text.startsWith('WITH s AS ( SELECT * FROM setlists')) return [{ id: 3, song_count: 2 }];
       return ownershipRoute(text, values);
     });
-    let inTx = false;
-    const begin = sql.begin;
-    sql.begin = async fn => { inTx = true; const out = await begin(fn); inTx = false; return out; };
     const res = mockRes();
     await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
       body: { song_ids: [10, 11] } }, res);
     assertEq(res.statusCode, 200);
     assertEq(res.body.song_count, 2);
-    assert(inTx === false, 'transaction closed');
-    const del = sql.calls.findIndex(c => c.text.startsWith('DELETE FROM setlist_songs'));
-    const ins = sql.calls.findIndex(c => c.text.startsWith('INSERT INTO setlist_songs'));
-    assert(del >= 0 && ins > del, 'delete then insert');
+    const writes = sql.calls.filter(c => /UPDATE setlists|setlist_songs/.test(c.text));
+    assertEq(writes.length, 2);
+    assert(/^UPDATE setlists SET .* WHERE id = AND artist_id =$/.test(writes[0].text), 'row locked first, scoped to the band');
+    const q = writes[1].text;
+    assert(/WITH s AS \( SELECT \* FROM setlists WHERE id = AND artist_id = \)/.test(q), 'songs scoped to the band');
+    assert(q.includes('ON CONFLICT (setlist_id, position) DO UPDATE'), 'positions upserted');
+    assert(/DELETE FROM setlist_songs WHERE setlist_id IN \(SELECT id FROM s\) AND position >=/.test(q),
+      'the tail is cut, and only for a setlist the update found');
+  });
+
+  await testAsync("updating another band's setlist → 404, nothing written", async () => {
+    const { handler } = loadHandler('api/_band/setlists/item.js', (text, values) =>
+      text.startsWith('WITH s AS ( SELECT * FROM setlists') ? [] : ownershipRoute(text, values));
+    const res = mockRes();
+    await handler({ method: 'PUT', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {},
+      body: { song_ids: [10] } }, res);
+    assertEq(res.statusCode, 404);
   });
 
   await testAsync('reading a setlist only joins this band\'s songs', async () => {

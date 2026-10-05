@@ -2,8 +2,11 @@ const path = require('path');
 const { keyFromUrl, filenameFromUrl } =
   require(path.join(__dirname, '../../api/_r2'));
 
+const Cmd = name => class { constructor(input) { this.name = name; this.input = input; } };
+
 // Loads a fresh _r2 against a stubbed S3 SDK whose send() either succeeds or
 // throws, so deleteFromR2's reported result can be checked.
+// sendFails may instead be a function: it gets each command and answers it.
 function loadR2WithStubbedSdk(sendFails) {
   const sdkPath = require.resolve('@aws-sdk/client-s3');
   const r2Path  = require.resolve(path.join(__dirname, '../../api/_r2'));
@@ -12,8 +15,15 @@ function loadR2WithStubbedSdk(sendFails) {
   require.cache[sdkPath] = {
     id: sdkPath, filename: sdkPath, loaded: true,
     exports: {
-      S3Client: class { async send() { if (sendFails) throw new Error('storage unavailable'); return {}; } },
-      PutObjectCommand: class {}, DeleteObjectCommand: class {}, HeadObjectCommand: class {},
+      S3Client: class {
+        async send(cmd) {
+          if (typeof sendFails === 'function') return sendFails(cmd);
+          if (sendFails) throw new Error('storage unavailable');
+          return {};
+        }
+      },
+      PutObjectCommand: Cmd('Put'), DeleteObjectCommand: Cmd('Delete'),
+      HeadObjectCommand: Cmd('Head'), CopyObjectCommand: Cmd('Copy'),
     },
   };
   const mod = require(path.join(__dirname, '../../api/_r2'));
@@ -43,6 +53,10 @@ async function run(r) {
   test('keyFromUrl returns null for unrelated URL', () => {
     assertEq(keyFromUrl('https://other.example.test/media/audio/abc-Track.mp3'), null);
   });
+  test('keyFromUrl does not take a host that merely starts like the bucket\'s', () => {
+    assertEq(keyFromUrl('https://cdn.example.test/media.evil.example/audio/x.mp3'), null);
+    assertEq(keyFromUrl('https://cdn.example.test/mediaX/audio/x.mp3'), null);
+  });
   test('filenameFromUrl strips query string and decodes filename', () => {
     assertEq(
       filenameFromUrl('https://cdn.example.test/media/audio/abc-My%20Song.mp3?token=123'),
@@ -65,6 +79,54 @@ async function run(r) {
     const { mod, restore } = loadR2WithStubbedSdk(true);
     try {
       assertEq(await mod.deleteFromR2('https://cdn.example.test/media/audio/abc.mp3'), false);
+    } finally { restore(); }
+  });
+
+  // Media and posters upload under pending/ and are moved on confirm; a
+  // lifecycle rule expires whatever is never confirmed.
+  console.log(B('\npending uploads'));
+
+  function bucket(objects) {
+    const sent = [];
+    const send = cmd => {
+      sent.push(cmd);
+      const { Key } = cmd.input;
+      if (cmd.name === 'Head') {
+        if (!(Key in objects)) throw new Error('NotFound');
+        return { ContentLength: objects[Key].size, ContentType: objects[Key].type };
+      }
+      if (cmd.name === 'Copy') objects[Key] = objects[cmd.input.CopySource.split('/').slice(1).join('/')];
+      if (cmd.name === 'Delete') delete objects[Key];
+      return {};
+    };
+    return { sent, send };
+  }
+
+  await testAsync('promoteUpload moves a pending upload to its key', async () => {
+    const objects = { 'pending/audio/7/a.mp3': { size: 5, type: 'audio/mpeg' } };
+    const { sent, send } = bucket(objects);
+    const { mod, restore } = loadR2WithStubbedSdk(send);
+    try {
+      assertEq(await mod.promoteUpload('audio/7/a.mp3'), { size: 5, contentType: 'audio/mpeg' });
+      assertEq(Object.keys(objects), ['audio/7/a.mp3']);
+      assertEq(sent.map(c => c.name), ['Head', 'Head', 'Copy', 'Delete']);
+    } finally { restore(); }
+  });
+
+  await testAsync('promoteUpload of a file already in place copies nothing (a retried confirm)', async () => {
+    const { sent, send } = bucket({ 'audio/7/a.mp3': { size: 5, type: 'audio/mpeg' } });
+    const { mod, restore } = loadR2WithStubbedSdk(send);
+    try {
+      assertEq(await mod.promoteUpload('audio/7/a.mp3'), { size: 5, contentType: 'audio/mpeg' });
+      assertEq(sent.map(c => c.name), ['Head']);
+    } finally { restore(); }
+  });
+
+  await testAsync('promoteUpload with nothing uploaded → null', async () => {
+    const { send } = bucket({});
+    const { mod, restore } = loadR2WithStubbedSdk(send);
+    try {
+      assertEq(await mod.promoteUpload('audio/7/a.mp3'), null);
     } finally { restore(); }
   });
 

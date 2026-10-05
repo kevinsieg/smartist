@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash(npm run typecheck)",
+      "Bash(npm run lint)",
       "Bash(npm run test:*)",
       "Bash(npm run dev:*)",
       "Bash(npm install)",
@@ -22,13 +24,19 @@
       "Bash(node scripts/seed.js*)",
       "Bash(node scripts/import_*)",
       "Bash(node scripts/demo_reset.js*)",
-      "Bash(node scripts/setup.js*)"
+      "Bash(node scripts/setup.js*)",
+      "Bash(node scripts/db_backup.js*)",
+      "Bash(node scripts/db_restore.js*)"
     ],
     "deny": [
       "Bash(git push origin main*)",
       "Bash(git push origin HEAD:main*)",
       "Bash(git push * main)",
+      "Bash(git push *:main*)",
+      "Bash(git push * main *)",
       "Bash(git push -f origin main*)",
+      "Bash(git push --force* origin main*)",
+      "Bash(git push * +main*)",
       "Bash(node scripts/delete_artist.js*)",
       "Bash(vercel env*)",
       "Bash(vercel --prod*)",

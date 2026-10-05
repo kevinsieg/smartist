@@ -5,13 +5,13 @@ const { generateUserToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const { sendEmail } = require('../_email');
 const { escHtml } = require('../_html');
-const { checkRateLimit, outboundMailLimited } = require('../_ratelimit');
-const { validateStr, validateEmail } = require('../_validate');
+const { checkRateLimit, outboundMailLimited, loginOkPrefix } = require('../_ratelimit');
+const { validateStr, validateEmail, positiveId } = require('../_validate');
 const logger = require('../_logger');
 const { ok, reply, fail } = require('./http');
 
 // A band's members: invites, roles, and each person's own password and login
-// address. api/_band/auth.js checks the session and the role, then calls these
+// address. api/_band/members.js checks the session and the role, then calls these
 // with a context:
 //
 //   { band, user, body, ip, origin, slug }   — user is { id, role } (id null for the demo)
@@ -33,6 +33,24 @@ function linkToken() {
 // Header values (subjects) must stay on one line.
 function oneLine(s) { return String(s ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200); }
 
+// The invite mail. A new address sets its password with the link; an address
+// that already has an account joins with it (`#join=`) and keeps its password.
+// The link names the band (`next`): at the root of a multi-tenant deployment
+// the login page has no other way to know which band the token is for.
+function inviteMail(band, origin, raw, known) {
+  const name = escHtml(band.name);
+  const next = `&next=${encodeURIComponent(`/${band.slug}/dashboard`)}`;
+  return known
+    ? { subject: `You've been invited to join ${oneLine(band.name)}`,
+        html: `<p>You've been invited to join ${name} on smartist.</p>
+               <p><a href="${origin}/login#join=${raw}${next}">Join ${name}</a></p>
+               <p>Nothing changes until you accept. This link expires in 7 days.</p>` }
+    : { subject: `You've been invited to ${oneLine(band.name)}`,
+        html: `<p>You've been invited to access ${name} on smartist.</p>
+               <p><a href="${origin}/login#invite=${raw}${next}">Accept invite and set your password</a></p>
+               <p>This link expires in 7 days.</p>` };
+}
+
 // Invites send mail to any address with the band's name in it, so they are
 // capped per band, per IP, per sender and overall — an admin session must not
 // be a mail relay.
@@ -40,6 +58,12 @@ async function inviteLimited(band, ip, user) {
   return (await checkRateLimit(`invite:${band.id}`, 20, 3600))
       || (await checkRateLimit(`invite-ip:${ip}`, 30, 3600))
       || (await outboundMailLimited(user.email || `user:${user.id}`));
+}
+
+// Does any users row carry this address (any band, invited or not)?
+async function addressTaken(sql, email) {
+  const [row] = await sql`SELECT 1 FROM users WHERE email = ${email} LIMIT 1`;
+  return !!row;
 }
 
 // The caller's own row, when currentPassword is its password; else null.
@@ -51,37 +75,62 @@ async function ownRow(sql, user, currentPassword) {
 
 // ── Public: the links in the emails ───────────────────────────────────────────
 
-// POST /members/accept-invite — the invite link sets the first password.
+// POST /members/accept-invite — the invite link. A new address sets its first
+// password with it. An address that already has an account joins with it and
+// keeps its password (`#join=` links, no password sent). Until then the
+// invite is pending and grants nothing: a row counts as a membership only
+// when accepted, `password_hash IS NOT NULL OR invite_token_hash IS NULL`
+// (api/_auth.js and every list of an address's bands).
 async function acceptInvite({ band, body }) {
   const { token, password } = body ?? {};
-  if (!token || !password)            return fail(400, 'token and password required');
-  if (String(password).length < 8)    return fail(400, 'Password must be at least 8 characters');
-  if (String(password).length > 1000) return fail(400, 'Password too long');
+  if (!token) return fail(400, 'token required');
 
   const sql = getDb();
   const [user] = await sql`
-    SELECT * FROM users
-    WHERE artist_id = ${band.id}
-      AND invite_token_hash = ${sha256(token)}
-      AND invite_expires_at > now()
-      AND password_hash IS NULL
+    SELECT u.*, EXISTS (
+      SELECT 1 FROM users o WHERE o.email = u.email AND o.id <> u.id AND (o.password_hash IS NOT NULL OR o.invite_token_hash IS NULL)) AS known
+    FROM users u
+    WHERE u.artist_id = ${band.id}
+      AND u.invite_token_hash = ${sha256(token)}
+      AND u.invite_expires_at > now()
+      AND u.password_hash IS NULL
   `;
   if (!user) return fail(400, 'Invalid or expired invite');
+
+  if (user.known) {
+    // The address's password comes along (one address, one password); nothing
+    // else of the account changes.
+    const [joined] = await sql`
+      UPDATE users
+      SET invite_token_hash = NULL, invite_expires_at = NULL,
+          password_hash = (SELECT password_hash FROM users WHERE email = ${user.email}
+                           AND password_hash IS NOT NULL ORDER BY id LIMIT 1)
+      WHERE id = ${user.id}
+      RETURNING password_hash`;
+    const artists = await getArtistsForUser(user.id, sql);
+    const sessionToken = generateUserToken(user.id, user.role, TTL_8H, joined.password_hash, user.email);
+    return ok({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
+  }
+
+  if (!password)                      return fail(400, 'token and password required');
+  if (String(password).length < 8)    return fail(400, 'Password must be at least 8 characters');
+  if (String(password).length > 1000) return fail(400, 'Password too long');
 
   // One address, one password: the same person may already sign in to other
   // bands, and an old password left on those rows would keep working there.
   const hash = await bcrypt.hash(password, 12);
-  const [, artists] = await Promise.all([
-    sql`
+  await sql`
       UPDATE users
       SET password_hash = ${hash},
           invite_token_hash = CASE WHEN id = ${user.id} THEN NULL ELSE invite_token_hash END,
           invite_expires_at = CASE WHEN id = ${user.id} THEN NULL ELSE invite_expires_at END
+      -- Other bands' invites to this address stay pending: each is accepted on its own.
       WHERE email = ${user.email}
-    `,
-    getArtistsForUser(user.id, sql),
-  ]);
-  const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash);
+        AND (id = ${user.id} OR password_hash IS NOT NULL OR invite_token_hash IS NULL)
+    `;
+  // After the update: the list holds accepted memberships only.
+  const artists = await getArtistsForUser(user.id, sql);
+  const sessionToken = generateUserToken(user.id, user.role, TTL_8H, hash, user.email);
   return ok({ ok: true, token: sessionToken, role: user.role, email: user.email, artists });
 }
 
@@ -117,14 +166,10 @@ async function confirmEmailChange({ body, ip, slug }) {
   const target   = pending.pending_email;
   try {
     await sql.begin(async tx => {
-      // Refuse if the address is already taken in any band this change touches.
-      const [clash] = await tx`
-        SELECT 1 FROM users u
-        WHERE u.email = ${target}
-          AND u.artist_id IN (SELECT artist_id FROM users WHERE email = ${oldEmail})
-        LIMIT 1
-      `;
-      if (clash) throw Object.assign(new Error('taken'), { taken: true });
+      // Refuse if the address has an account of its own anywhere — checked
+      // again here, since it may have signed up after the request. Moving onto
+      // it would merge two people into one identity (memberships join on email).
+      if (await addressTaken(tx, target)) throw Object.assign(new Error('taken'), { taken: true });
 
       // One statement moves every membership, so the person keeps all bands.
       await tx`UPDATE users SET email = ${target}, delete_token_hash = NULL, delete_token_expires = NULL WHERE email = ${oldEmail}`;
@@ -162,7 +207,9 @@ async function confirmEmailChange({ body, ip, slug }) {
 async function listMembers({ band }) {
   const users = await getDb()`
     SELECT id, email, role, created_at, invite_expires_at,
-           (password_hash IS NOT NULL)                                                               AS accepted,
+           -- No open invite: a member who signs in with Google or Facebook (no
+           -- password), or an existing account added to this band.
+           (password_hash IS NOT NULL OR invite_token_hash IS NULL)                                  AS accepted,
            (invite_token_hash IS NOT NULL AND invite_expires_at >  now() AND password_hash IS NULL) AS invite_pending,
            (invite_token_hash IS NOT NULL AND invite_expires_at <= now() AND password_hash IS NULL) AS invite_expired
     FROM users WHERE artist_id = ${band.id}
@@ -181,27 +228,31 @@ async function invite({ band, user, body, ip, origin, slug }) {
   if (!ROLES.includes(role)) return fail(400, 'Invalid role');
 
   const sql = getDb();
-  const [existing] = await sql`SELECT id FROM users WHERE artist_id = ${band.id} AND email = ${cleanEmail.toLowerCase()}`;
-  if (existing) return fail(409, 'User already exists');
+  const addr = cleanEmail.toLowerCase();
+  // An address that already has an account gets a link to join, not one to
+  // set a password: accepting one wrote a new password to every band of the
+  // address and ended all of its sessions. Either way the new row is a
+  // pending invite and grants nothing until the person accepts it.
+  const [state] = await sql`
+    SELECT
+      EXISTS (SELECT 1 FROM users WHERE artist_id = ${band.id} AND email = ${addr}) AS here,
+      EXISTS (SELECT 1 FROM users WHERE email = ${addr} AND (password_hash IS NOT NULL OR invite_token_hash IS NULL)) AS known`;
+  if (state.here) return fail(409, 'User already exists');
   if (await inviteLimited(band, ip, user)) return fail(429, 'Too many invites — try again later');
 
   const token   = linkToken();
   const expires = new Date(Date.now() + INVITE_TTL_MS);
   const [newUser] = await sql`
-    INSERT INTO users (artist_id, email, role, invite_token_hash, invite_expires_at, invited_by)
-    VALUES (${band.id}, ${cleanEmail.toLowerCase()}, ${role}, ${token.hash}, ${expires}, ${user.id})
+    INSERT INTO users (artist_id, email, role, invite_token_hash, invite_expires_at, invited_by, sessions_valid_after)
+    SELECT ${band.id}, ${addr}, ${role}, ${token.hash}, ${expires}, ${user.id},
+           -- The address's newest "log out everywhere": a session ended there
+           -- must not come back through this row.
+           (SELECT max(sessions_valid_after) FROM users WHERE email = ${addr})
     RETURNING id, email, role
   `;
 
-  const link = `${origin}/login#invite=${token.raw}`;
   try {
-    await sendEmail({
-      to: cleanEmail,
-      subject: `You've been invited to ${oneLine(band.name)}`,
-      html: `<p>You've been invited to access ${escHtml(band.name)} on smartist.</p>
-             <p><a href="${link}">Accept invite and set your password</a></p>
-             <p>This link expires in 7 days.</p>`,
-    });
+    await sendEmail({ to: cleanEmail, ...inviteMail(band, origin, token.raw, state.known) });
   } catch (err) {
     await logger.error('invite_email_failed', { band: slug, error: err.message });
     await sql`DELETE FROM users WHERE id = ${newUser.id}`;
@@ -212,12 +263,17 @@ async function invite({ band, user, body, ip, origin, slug }) {
 
 // POST /members/resend-invite — a fresh link for an invite not yet accepted.
 async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
-  const { userId } = body ?? {};
-  if (!userId) return fail(400, 'userId required');
+  const { userId: rawUserId } = body ?? {};
+  const userId = positiveId(rawUserId);
+  if (userId === null) return fail(400, 'userId required');
+  if (userId === false) return fail(400, 'Invalid userId');
 
   const sql = getDb();
   const [user] = await sql`
-    SELECT * FROM users WHERE id = ${Number(userId)} AND artist_id = ${band.id} AND password_hash IS NULL
+    SELECT u.*, EXISTS (SELECT 1 FROM users o WHERE o.email = u.email AND o.id <> u.id AND (o.password_hash IS NOT NULL OR o.invite_token_hash IS NULL)) AS known
+    FROM users u
+    WHERE u.id = ${userId} AND u.artist_id = ${band.id} AND u.password_hash IS NULL
+      AND u.invite_token_hash IS NOT NULL
   `;
   if (!user) return fail(404, 'Pending invite not found');
   if (await inviteLimited(band, ip, sender)) return fail(429, 'Too many invites — try again later');
@@ -226,15 +282,9 @@ async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
   const expires = new Date(Date.now() + INVITE_TTL_MS);
   await sql`UPDATE users SET invite_token_hash = ${token.hash}, invite_expires_at = ${expires} WHERE id = ${user.id}`;
 
-  const link = `${origin}/login#invite=${token.raw}`;
   try {
-    await sendEmail({
-      to: user.email,
-      subject: `Invite reminder — ${oneLine(band.name)}`,
-      html: `<p>Here is your updated invite link for ${escHtml(band.name)}:</p>
-             <p><a href="${link}">Accept invite and set your password</a></p>
-             <p>This link expires in 7 days.</p>`,
-    });
+    const mail = inviteMail(band, origin, token.raw, user.known);
+    await sendEmail({ to: user.email, ...mail, subject: `Invite reminder — ${oneLine(band.name)}` });
   } catch (err) {
     await logger.error('invite_email_failed', { band: slug, error: err.message });
     return fail(500, 'Failed to send email');
@@ -246,15 +296,17 @@ async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
 // cross-workspace identity (resolveUser joins users on email), so rewriting it
 // would hand this user another account's memberships.
 async function setRole({ band, user, body }) {
-  const { userId, role, email } = body ?? {};
-  if (!userId) return fail(400, 'userId required');
+  const { userId: rawUserId, role, email } = body ?? {};
+  const userId = positiveId(rawUserId);
+  if (userId === null) return fail(400, 'userId required');
+  if (userId === false) return fail(400, 'Invalid userId');
   if (email !== undefined) return fail(400, 'Email cannot be changed');
   if (!ROLES.includes(role)) return fail(400, 'Invalid role');
-  if (user.id !== null && user.id === Number(userId)) return fail(400, 'Cannot change your own role');
+  if (user.id !== null && user.id === userId) return fail(400, 'Cannot change your own role');
 
   const [updated] = await getDb()`
     UPDATE users SET role = ${role}
-    WHERE id = ${Number(userId)} AND artist_id = ${band.id}
+    WHERE id = ${userId} AND artist_id = ${band.id}
     RETURNING id, email, role
   `;
   if (!updated) return fail(404, 'User not found');
@@ -263,12 +315,14 @@ async function setRole({ band, user, body }) {
 
 // DELETE — remove a member from the band.
 async function removeMember({ band, user, body }) {
-  const { userId } = body ?? {};
-  if (!userId) return fail(400, 'userId required');
-  if (user.id !== null && user.id === Number(userId)) return fail(400, 'Cannot remove yourself');
+  const { userId: rawUserId } = body ?? {};
+  const userId = positiveId(rawUserId);
+  if (userId === null) return fail(400, 'userId required');
+  if (userId === false) return fail(400, 'Invalid userId');
+  if (user.id !== null && user.id === userId) return fail(400, 'Cannot remove yourself');
 
   const [deleted] = await getDb()`
-    DELETE FROM users WHERE id = ${Number(userId)} AND artist_id = ${band.id} RETURNING id
+    DELETE FROM users WHERE id = ${userId} AND artist_id = ${band.id} RETURNING id
   `;
   if (!deleted) return fail(404, 'User not found');
   return ok({ ok: true });
@@ -293,10 +347,24 @@ async function changePassword({ user, body, ip }) {
   // Every band of this address: after a compromise, a password changed in one
   // band must not keep working through another.
   const hash = await bcrypt.hash(String(newPassword), 12);
-  await sql`UPDATE users SET password_hash = ${hash} WHERE email = ${row.email}`;
+  // Links still outstanding (email change, account deletion) end with the old
+  // password: whoever held it may have requested them.
+  // The known-IP exemption from the login lock goes with the old password.
+  await sql`
+    WITH u AS (
+      UPDATE users SET password_hash = ${hash},
+          pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
+          delete_token_hash = NULL, delete_token_expires = NULL
+      -- Invites still open stay open: a password would accept them.
+      WHERE email = ${row.email} AND (password_hash IS NOT NULL OR invite_token_hash IS NULL) RETURNING 1
+    ), forget AS (
+      DELETE FROM rate_limits
+      WHERE key >= ${loginOkPrefix(row.email)} AND key < ${loginOkPrefix(row.email)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(row.email)})
+    )
+    SELECT count(*) FROM u`;
   // The new hash invalidates every session issued before it, this one
   // included — hand back a replacement so the caller stays signed in.
-  const token = generateUserToken(row.id, row.role, rememberMe ? TTL_30D : TTL_8H, hash);
+  const token = generateUserToken(row.id, row.role, rememberMe ? TTL_30D : TTL_8H, hash, row.email);
   return ok({ ok: true, token });
 }
 
@@ -309,9 +377,8 @@ async function requestEmailChange({ user, body, ip, origin, slug }) {
   if (String(currentPassword).length > 1000) return fail(400, 'Password too long');
   if (user.id === null) return fail(400, 'Email change is not available for this account');
 
-  const clean = validateStr(newEmail, 200);
-  if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean)) return fail(400, 'Invalid email address');
-  const lower = clean.toLowerCase();
+  const lower = String(newEmail).length <= 200 ? validateEmail(newEmail) : false;
+  if (!lower) return fail(400, 'Invalid email address');
 
   if (await checkRateLimit(`emailchg:${ip}`, 5, 600)) return fail(429, 'Too many attempts — try again later');
 
@@ -319,19 +386,36 @@ async function requestEmailChange({ user, body, ip, origin, slug }) {
   const row = await ownRow(sql, user, currentPassword);
   if (!row) return fail(401, 'Current password is incorrect');
   if (row.email.toLowerCase() === lower) return fail(400, 'That is already your email address');
-
+  // An address that already has an account belongs to someone: moving these
+  // rows onto it would merge the two accounts, so this password would open
+  // that person's bands (passwordLogin tries every hash of an address).
+  // confirmEmailChange refuses it. Until then a taken address is treated
+  // exactly like a free one — the request is stored, so the export shows the
+  // same pending_email, and the reply and the mail count are the same — or
+  // this would tell anyone with an account which addresses have one. Only the
+  // inbox learns why nothing will happen.
+  // The mail goes to an address of the caller's choosing: it counts against
+  // their daily mail cap, like an invite.
+  if (await outboundMailLimited(row.email)) return fail(429, 'Too many attempts — try again later');
   const token   = linkToken();
   const expires = new Date(Date.now() + EMAIL_CHANGE_TTL_MS).toISOString();
-  await sql`
+  const [{ taken }] = await sql`
     UPDATE users
     SET pending_email = ${lower}, email_change_token_hash = ${token.hash}, email_change_expires_at = ${expires}
     WHERE id = ${row.id}
+    RETURNING EXISTS (SELECT 1 FROM users WHERE email = ${lower}) AS taken
   `;
 
   // Fragment, not query — tokens must not land in server/CDN logs.
   const link = `${origin}/confirm-email#token=${encodeURIComponent(token.raw)}&slug=${encodeURIComponent(slug)}`;
   try {
-    await sendEmail({
+    await sendEmail(taken ? {
+      to: lower,
+      subject: 'Your smartist address',
+      html: `<p>Someone asked to move another smartist login to this address. It already has an
+             account, so nothing will be changed.</p>
+             <p>If that was you, sign in with this address instead.</p>`,
+    } : {
       to: lower,
       subject: 'Confirm your new email address',
       html: `<p>Confirm this address to finish changing your smartist login email:</p>

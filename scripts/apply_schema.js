@@ -20,6 +20,9 @@ const lib  = require('./_lib');
 function connect(url) {
   const pg = lib.connect(url);
   const run = strings => pg.unsafe(strings.join(''));
+  // Several statements in one simple query: they run as one implicit
+  // transaction, which SET LOCAL needs.
+  run.simple = text => pg.unsafe(text).simple();
   run.end = () => pg.end();
   return run;
 }
@@ -56,6 +59,32 @@ function splitStatements(src) {
 function migrationIds(src) {
   const re = /INSERT INTO schema_migrations \(id\) VALUES \('([^']+)'\)/g;
   return [...splitStatements(src).join(';\n').matchAll(re)].map(m => m[1]);
+}
+
+// The statements a database still needs. schema.sql is a base (the tables,
+// ending in the ids folded into it) and dated blocks, each ending in its own
+// schema_migrations insert; a block whose ids are all recorded is left out.
+// Re-running long-applied statements was not free: CREATE INDEX IF NOT EXISTS
+// and ADD COLUMN IF NOT EXISTS take their table lock before they find there
+// is nothing to do. `have` empty (a new database) → every statement.
+function pendingStatements(src, have) {
+  const chunks = [];
+  let cur = { stmts: [], ids: [] };
+  for (const stmt of splitStatements(src)) {
+    const m = /^INSERT INTO schema_migrations \(id\) VALUES \('([^']+)'\)/i.exec(stmt);
+    if (!m && cur.ids.length) { chunks.push(cur); cur = { stmts: [], ids: [] }; }
+    cur.stmts.push(stmt);
+    if (m) cur.ids.push(m[1]);
+  }
+  if (cur.stmts.length) chunks.push(cur);
+  const done = new Set(have);
+  return chunks.filter(c => !c.ids.length || c.ids.some(id => !done.has(id))).flatMap(c => c.stmts);
+}
+
+// Indexes a failed or cancelled CREATE INDEX CONCURRENTLY left behind. IF NOT
+// EXISTS skips them on the next run, so nothing else would notice.
+async function invalidIndexes(sql) {
+  return (await sql(['SELECT indexrelid::regclass::text AS name FROM pg_index WHERE NOT indisvalid'])).map(r => r.name);
 }
 
 async function check(sql, src) {
@@ -104,13 +133,28 @@ async function main() {
   }
 }
 
-// Runs every statement of schema.sql; "already exists" is not an error. Also
+// Every deployment runs this against its live database while the old code
+// still serves it. A statement that has to wait for a table lock (an ALTER
+// behind a long query) would make every later query on that table queue
+// behind it, so it gives up after LOCK_TIMEOUT instead: the build fails, the
+// old code stays live, and a redeploy tries again. New indexes on big tables
+// are written CREATE INDEX CONCURRENTLY, which takes no write lock but cannot
+// run inside a transaction, so those statements run on their own.
+const LOCK_TIMEOUT = '5s';
+function withLockTimeout(stmt) {
+  return /\bCONCURRENTLY\b/i.test(stmt) ? null : `SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'; ${stmt}`;
+}
+
+// Runs every statement of schema.sql, or with `have` (the recorded migration
+// ids) only the blocks still pending; "already exists" is not an error. Also
 // used by setup.js. `sql` is a raw runner from connect() above.
-async function applyStatements(sql, src) {
+async function applyStatements(sql, src, { have } = {}) {
   let applied = 0, skipped = 0;
-  for (const stmt of splitStatements(src)) {
+  for (const stmt of have ? pendingStatements(src, have) : splitStatements(src)) {
     try {
-      await sql([stmt]);
+      const timed = sql.simple ? withLockTimeout(stmt) : null;
+      if (timed) await sql.simple(timed);
+      else await sql([stmt]);
       applied++;
     } catch (e) {
       if (e.message.toLowerCase().includes('already exists')) { skipped++; continue; }
@@ -123,4 +167,4 @@ async function applyStatements(sql, src) {
 
 if (require.main === module) main();
 
-module.exports = { splitStatements, migrationIds, applyStatements, connect };
+module.exports = { splitStatements, migrationIds, pendingStatements, invalidIndexes, applyStatements, connect, withLockTimeout };

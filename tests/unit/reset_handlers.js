@@ -51,7 +51,9 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
       // Model ORDER BY rather than returning fixture order: the anchor row is
       // chosen by it, so a fake that ignored it would let the code depend on
       // however the rows happened to be written in the test.
-      if (/ORDER BY id/i.test(text)) hit.sort((a, b) => a.id - b.id);
+      // Accepted memberships first (an open invite has no password and a token), then by id.
+      const accepted = u => !!u.password_hash || !u.invite_token_hash;
+      if (/ORDER BY .*id/i.test(text)) hit.sort((a, b) => (accepted(b) - accepted(a)) || a.id - b.id);
       return Promise.resolve(hit);
     }
     return Promise.resolve([]);
@@ -60,7 +62,7 @@ function load({ rows = [], artists = [{ slug: 'band', name: 'Band', role: 'admin
 
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1', loginOkPrefix: e => `login-ok:${e} ` },
   };
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,
@@ -98,7 +100,8 @@ function mockRes() {
   return r;
 }
 
-const post = (body) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: {}, url: '/api/_config' });
+// The action rides in the query, where the route table puts it.
+const post = ({ action, ...body }) => ({ method: 'POST', body, headers: { host: 'app.smartist.studio' }, query: { action } });
 
 async function run(r) {
   const { testAsync, assert, assertEq, B } = r;
@@ -198,6 +201,24 @@ async function run(r) {
       hint: Buffer.from(VICTIM).toString('base64url'), password: 'a-new-password',
     }), mockRes());
     assertEq(seed, 'h3');
+  });
+
+  // An open invite to another band is not the account: it has no password,
+  // and anchoring on it would issue a session for a row that grants nothing.
+  await testAsync('an open invite is never the anchor', async () => {
+    let seed = null;
+    const { handler } = load({
+      rows: [
+        { id: 2, email: VICTIM, role: 'member', password_hash: null, invite_token_hash: 'x' },
+        { id: 5, email: VICTIM, role: 'admin',  password_hash: 'h5' },
+      ],
+      tokens: { verifyMagicToken: (_t, s) => { seed = s; return false; } },
+    });
+    await handler(post({
+      action: 'set-password', token: 'tok',
+      hint: Buffer.from(VICTIM).toString('base64url'), password: 'a-new-password',
+    }), mockRes());
+    assertEq(seed, 'h5');
   });
 
   await testAsync('a short password is refused', async () => {

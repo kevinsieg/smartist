@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Smartist API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Song catalogue, setlists, gigs and booking CRM for bands. Each band (workspace) is addressed by its slug in the `{band}` path segment; `GET /api/config` returns it.\n\n**Auth**: send `Authorization: Bearer <token>`. The token is a session token from `POST /api/login` (email + password) or from Google sign-in. Roles: `viewer` (read), `member` (edit), `admin` (settings, members, uploads).\n\n**A workspace is private.** Reads need a session too, except where the band opted in: *public catalogue* opens songs and gigs; *public stage links* open a single setlist and a single song. Both are off by default. Operations that can be public list an empty security requirement next to `bearerAuth`.\n\nIDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.",
     "license": {
       "name": "AGPL-3.0-or-later",
@@ -16,7 +16,7 @@
     },
     {
       "url": "http://localhost:3000",
-      "description": "Local (vercel dev)"
+      "description": "Local (npm run dev:up)"
     }
   ],
   "components": {
@@ -300,6 +300,13 @@
           "organizer_name": {
             "type": "string",
             "nullable": true
+          },
+          "setlist_titles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Titles of the setlists linked to this gig (empty string for an untitled one). Gig list, members only."
           },
           "location": {
             "type": "string",
@@ -609,6 +616,10 @@
           },
           "deleted": {
             "type": "boolean"
+          },
+          "heart": {
+            "type": "boolean",
+            "description": "Marked as a favourite: listed first"
           }
         }
       },
@@ -659,6 +670,10 @@
           },
           "deleted": {
             "type": "boolean"
+          },
+          "heart": {
+            "type": "boolean",
+            "description": "Marked as a favourite: listed first"
           }
         }
       }
@@ -734,9 +749,21 @@
             "in": "query",
             "required": false,
             "schema": {
+              "type": "string",
+              "enum": [
+                "health"
+              ]
+            },
+            "description": "`health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration. The other account and band actions have their own paths (`/api/auth/*`, `/api/signup/*`, `/api/config/*`)."
+          },
+          {
+            "name": "light",
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
-            "description": "`health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration. Other actions: `check-slug`, `my-artists`, `photo-url`, `favicon-url`, OAuth and admin actions."
+            "description": "`1`: name, config, counts and flags without the songs payload (most pages need no more)"
           }
         ],
         "description": "Band slug, name, branding config, plan and usage. `songs` and `counts` are included only with a session or when the band has a public catalogue. `role` is the caller's role in this band (null without a session). The `slug` is the `{band}` path parameter for every other endpoint.",
@@ -804,14 +831,107 @@
           }
         }
       },
+      "patch": {
+        "summary": "Update band name and settings",
+        "tags": [
+          "Config"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          }
+        ],
+        "description": "Admin role. `config` is merged into the stored settings (keys not sent are kept); `plan` and `upgradedAt` are ignored — the plan changes only through `/api/config/upgrade` and `/downgrade`. `logoUrl` / `faviconUrl` must be http(s) and, when they point into the app's storage, this band's own uploads. Settings are capped at 64 KB.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "config": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Settings too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/request-reset": {
       "post": {
-        "summary": "Request a password-reset link (action: request-reset)",
+        "summary": "Request a password-reset link",
         "tags": [
           "Auth"
         ],
         "security": [],
         "parameters": [],
-        "description": "Emails a 30-minute link to set a new password; the password is set on every account of the address. Sent as `POST /api/config` with `action: \"request-reset\"`. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
+        "description": "Emails a 30-minute link to set a new password; the password is set on every account of the address. Always returns `{ ok: true }`, whether or not the address has an account. Rate-limited per IP and per address.",
         "requestBody": {
           "required": true,
           "content": {
@@ -819,16 +939,9 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "action",
                   "email"
                 ],
                 "properties": {
-                  "action": {
-                    "type": "string",
-                    "enum": [
-                      "request-reset"
-                    ]
-                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -982,6 +1095,42 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Anonymous public catalogue only: page size (at most 30)"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Anonymous public catalogue only: rows to skip"
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Anonymous public catalogue only: `0` includes inactive songs"
+          },
+          {
+            "name": "lyrics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`1` (members): each song carries its lyrics text, for the CSV export"
           }
         ],
         "description": "With a session: every non-deleted song with play stats, as an array. Without a session only when the band has a public catalogue — then paged (`limit` ≤ 30, `offset`, `active=0` to include inactive songs) and returned as `{ rows, total, limit, offset }`.",
@@ -1356,9 +1505,15 @@
                         },
                         "arrangements": {
                           "type": "array",
+                          "description": "Every version: id, name, is_active, updated_at.",
                           "items": {
                             "type": "object"
                           }
+                        },
+                        "active_arrangement": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "The active version in full (rows, hidden_instruments), or null."
                         }
                       }
                     }
@@ -2815,33 +2970,30 @@
           },
           {
             "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "hard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "`1`: remove the row for good. Without it the delete is soft."
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "With `hard`: a comma-separated list of `setlists` to delete along with it."
           }
         ],
-        "description": "Member role. Soft delete by default; `{ \"hard\": true }` removes the row, and `cascade: [\"setlists\"]` its setlists too.",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hard": {
-                    "type": "boolean"
-                  },
-                  "cascade": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "setlists"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "Member role. Soft delete by default; `?hard=1` removes the row, and `&cascade=setlists` its setlists too.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -2852,6 +3004,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`cascade` is not a list of known values"
           },
           "401": {
             "$ref": "#/components/responses/401"
@@ -3332,35 +3487,32 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Substring of name, city, country or postcode (any case; `%` and `_` match themselves)"
           },
           {
             "name": "status",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Exact value, any case"
           },
           {
             "name": "category",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Exact value, any case"
           },
           {
             "name": "country",
             "in": "query",
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "has_gigs",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
+            },
+            "description": "Exact value, any case"
           },
           {
             "name": "sort",
@@ -3404,6 +3556,36 @@
               "type": "string"
             },
             "description": "Any value: a plain array of `{ id, name, … }` for pickers instead of the paged object"
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: every venue with coordinates as a plain array, for the map (no comment, no audit columns); `status` narrows it"
+          },
+          {
+            "name": "facet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "country"
+              ]
+            },
+            "description": "`country`: the distinct countries of the band's venues, as an array of strings"
+          },
+          {
+            "name": "favourite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`1`: only venues marked with a heart"
           }
         ],
         "description": "Pro plan (402 otherwise). Private CRM data — always needs a session. Paged: `{ rows, total, limit, offset }`.",
@@ -3486,6 +3668,164 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Venue"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Batch update venue CRM fields",
+        "tags": [
+          "Venues"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          }
+        ],
+        "description": "Member role, Pro plan. Up to 200 rows; only the fields sent are written, everything else keeps its stored value. Rows that fail validation are reported back; the accepted rows are written in one transaction.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 200,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "maxLength": 50,
+                      "nullable": true
+                    },
+                    "category": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "nullable": true
+                    },
+                    "booking_channel": {
+                      "type": "string",
+                      "maxLength": 50,
+                      "nullable": true
+                    },
+                    "remuneration": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "nullable": true
+                    },
+                    "season": {
+                      "type": "string",
+                      "maxLength": 50,
+                      "nullable": true
+                    },
+                    "preferred_period": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "nullable": true
+                    },
+                    "comment": {
+                      "type": "string",
+                      "maxLength": 2000,
+                      "nullable": true
+                    },
+                    "last_communication": {
+                      "type": "string",
+                      "format": "date",
+                      "nullable": true
+                    },
+                    "deadline": {
+                      "type": "string",
+                      "format": "date",
+                      "nullable": true
+                    },
+                    "heart": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "rejected": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -3705,24 +4045,30 @@
           },
           {
             "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "hard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "`1`: remove the row for good. Without it the delete is soft."
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "With `hard`: a comma-separated list of `gigs`, `setlists` to delete along with it."
           }
         ],
-        "description": "Member role, Pro plan. Soft delete by default; `{ \"hard\": true }` removes the row.",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hard": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "Member role, Pro plan. Soft delete by default; `?hard=1` removes the row, and `&cascade=gigs,setlists` the gigs that point at it and their setlists.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -3733,6 +4079,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`cascade` is not a list of known values"
           },
           "401": {
             "$ref": "#/components/responses/401"
@@ -3760,6 +4109,9 @@
           "404": {
             "$ref": "#/components/responses/404"
           },
+          "409": {
+            "description": "A hard delete without `gigs` in `cascade` while gigs still point at the record"
+          },
           "500": {
             "$ref": "#/components/responses/500"
           }
@@ -3786,7 +4138,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Substring of name, type, city, country or email (any case; `%` and `_` match themselves)"
           },
           {
             "name": "limit",
@@ -3809,6 +4162,15 @@
               "type": "string"
             },
             "description": "Any value: a plain array of `{ id, name, … }` for pickers instead of the paged object"
+          },
+          {
+            "name": "favourite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`1`: only organizers marked with a heart"
           }
         ],
         "description": "Pro plan (402 otherwise). Private CRM data — always needs a session. Paged: `{ rows, total, limit, offset }`.",
@@ -4110,24 +4472,30 @@
           },
           {
             "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "hard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "`1`: remove the row for good. Without it the delete is soft."
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "With `hard`: a comma-separated list of `gigs`, `setlists` to delete along with it."
           }
         ],
-        "description": "Member role, Pro plan. Soft delete by default; `{ \"hard\": true }` removes the row.",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hard": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "Member role, Pro plan. Soft delete by default; `?hard=1` removes the row, and `&cascade=gigs,setlists` the gigs that point at it and their setlists.",
         "responses": {
           "200": {
             "description": "Deleted",
@@ -4138,6 +4506,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`cascade` is not a list of known values"
           },
           "401": {
             "$ref": "#/components/responses/401"
@@ -4164,6 +4535,9 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "description": "A hard delete without `gigs` in `cascade` while gigs still point at the record"
           },
           "500": {
             "$ref": "#/components/responses/500"
@@ -4994,6 +5368,1441 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/config/upgrade": {
+      "post": {
+        "summary": "Switch the band to Pro",
+        "tags": [
+          "Config"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          }
+        ],
+        "description": "Admin role. Today a free self-serve switch (`mode: \"self-serve\"`); with paid billing it will return `{ mode: \"checkout\", url }` instead.",
+        "responses": {
+          "200": {
+            "description": "Upgraded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "self-serve",
+                        "checkout"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/config/downgrade": {
+      "post": {
+        "summary": "Switch the band back to Free",
+        "tags": [
+          "Config"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          }
+        ],
+        "description": "Admin role.",
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/config/photo-url": {
+      "get": {
+        "summary": "Presigned upload URL for the band photo",
+        "tags": [
+          "Config"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Content type (image/jpeg (default), png, webp, gif)"
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "File size in bytes"
+          }
+        ],
+        "description": "Admin role. PUT the file to `uploadUrl`, then save `publicUrl` with `PATCH /api/config`. Capped uploads per band per hour.",
+        "responses": {
+          "200": {
+            "description": "Upload URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadUrl": {
+                      "type": "string"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported type or size",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many uploads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/config/favicon-url": {
+      "get": {
+        "summary": "Presigned upload URL for the band favicon",
+        "tags": [
+          "Config"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Band slug — required unless the deployment is pinned to one band (`ARTIST_SLUG`)"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Content type (image/png (default), x-icon, jpeg, webp, gif)"
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "File size in bytes"
+          }
+        ],
+        "description": "Admin role. PUT the file to `uploadUrl`, then save `publicUrl` with `PATCH /api/config`. Capped uploads per band per hour.",
+        "responses": {
+          "200": {
+            "description": "Upload URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadUrl": {
+                      "type": "string"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported type or size",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many uploads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/magic-login": {
+      "post": {
+        "summary": "Sign in with an emailed link",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Redeems a sign-in link (`magic` and `hint` from its URL). Rate-limited per IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "magic",
+                  "hint"
+                ],
+                "properties": {
+                  "magic": {
+                    "type": "string"
+                  },
+                  "hint": {
+                    "type": "string",
+                    "description": "base64url of the address, from the link"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "admin",
+                        "member",
+                        "viewer"
+                      ]
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "artists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/google-url": {
+      "get": {
+        "summary": "Start Google sign-in",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "login",
+                "signup"
+              ]
+            }
+          }
+        ],
+        "description": "Returns the Google authorization URL and sets a nonce cookie. Google returns to `/auth/callback`, which sets a short-lived `oauth_session` cookie and redirects to `/login`; `POST /api/auth/oauth-session` redeems it.",
+        "responses": {
+          "200": {
+            "description": "Authorization URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          },
+          "503": {
+            "description": "Google sign-in is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/facebook-url": {
+      "get": {
+        "summary": "Start Facebook sign-in",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "login",
+                "signup"
+              ]
+            }
+          }
+        ],
+        "description": "Returns the Facebook authorization URL and sets a nonce cookie. Facebook returns to `/auth/callback`, which sets a short-lived `oauth_session` cookie and redirects to `/login`; `POST /api/auth/oauth-session` redeems it.",
+        "responses": {
+          "200": {
+            "description": "Authorization URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          },
+          "503": {
+            "description": "Facebook sign-in is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth-session": {
+      "post": {
+        "summary": "Finish Google/Facebook sign-in",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Redeems the HttpOnly `oauth_session` cookie set by `/auth/callback` once and clears it. No session ever travels in a URL.",
+        "responses": {
+          "200": {
+            "description": "Session token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No sign-in to finish",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/logout-everywhere": {
+      "post": {
+        "summary": "End every session",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "description": "Ends every session of the signed-in address, on all devices and workspaces.",
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/set-password": {
+      "post": {
+        "summary": "Set a new password from a reset link",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Redeems the link from `/api/auth/request-reset` (`token` and `hint` from its URL) and signs in. The password is set on every account of the address and earlier sessions end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "hint",
+                  "password"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "hint": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "admin",
+                        "member",
+                        "viewer"
+                      ]
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "artists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/artists": {
+      "get": {
+        "summary": "Bands of the signed-in address",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "description": "Every band the address belongs to, with its role there.",
+        "responses": {
+          "200": {
+            "description": "Bands",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "artists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "admin",
+                              "member",
+                              "viewer"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/deletion-preflight": {
+      "get": {
+        "summary": "What deleting the account would do",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "description": "`destroy`: bands deleted with the account (it is their only member); `leave`: bands it leaves; `blocked`: bands where it is the only admin and others are still members.",
+        "responses": {
+          "200": {
+            "description": "Plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string"
+                    },
+                    "destroy": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "leave": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "blocked": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/request-deletion": {
+      "post": {
+        "summary": "Email a link to delete the account",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "description": "Rate-limited per address.",
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "409": {
+            "description": "The only admin of a band that still has members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/auth/confirm-deletion": {
+      "post": {
+        "summary": "Delete the account from the emailed link",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Deletes the account and the bands listed under `destroy` in the preflight, with their files. The token goes in the body, never the query string.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "destroyed": {
+                      "type": "integer"
+                    },
+                    "left": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/signup/link": {
+      "post": {
+        "summary": "Email a sign-up link",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Rate-limited per address and IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Valid email required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/signup/verify": {
+      "post": {
+        "summary": "Check a sign-up link",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Returns the address the link was sent to.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "email": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/signup": {
+      "post": {
+        "summary": "Create a band",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Redeems a sign-up link: creates the band with the caller as admin and signs in.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "name",
+                  "slug"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "admin",
+                        "member",
+                        "viewer"
+                      ]
+                    },
+                    "email": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slug taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/signup/check-slug": {
+      "get": {
+        "summary": "Is a band slug available?",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "3–50 lowercase letters, digits and dashes. Rate-limited per IP.",
+        "responses": {
+          "200": {
+            "description": "Availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "available": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/subscribe": {
+      "post": {
+        "summary": "Email signup",
+        "tags": [
+          "Public"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "`source: \"landing\"` records the address; `\"demo\"` also opens a demo workspace and returns `{ token, slug }` for it. Rate-limited per IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "landing",
+                      "demo"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "genres": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "perform_country": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscribed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Valid email required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/contact": {
+      "post": {
+        "summary": "Contact-form message",
+        "tags": [
+          "Public"
+        ],
+        "security": [],
+        "parameters": [],
+        "description": "Rate-limited per IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "email",
+                  "message"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "500": {
             "$ref": "#/components/responses/500"

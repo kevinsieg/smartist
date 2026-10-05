@@ -14,6 +14,7 @@ const suites = [
   require('./unit/ai'),
   require('./unit/handler'),
   require('./unit/router'),
+  require('./unit/openapi'),
   require('./unit/subscribe'),
   require('./unit/contact'),
   require('./unit/i18n'),
@@ -40,7 +41,9 @@ const suites = [
   require('./unit/gig_handlers'),
   require('./unit/plans'),
   require('./unit/asset_versions'),
+  require('./unit/page_styles'),
   require('./unit/labels'),
+  require('./unit/click_targets'),
   require('./unit/page_scripts'),
   require('./unit/storage_accounting'),
   require('./unit/export'),
@@ -55,7 +58,10 @@ const suites = [
   require('./unit/csp'),
   require('./unit/ignore_build'),
   require('./unit/inline_handlers'),
+  require('./unit/api_fetch'),
   require('./unit/backup'),
+  require('./unit/schema_scripts'),
+  require('./unit/health'),
 ];
 
 (async () => {

@@ -11,7 +11,7 @@
  *
  * Deletion order matters (see DATABASE.md → Tenant lifecycle):
  *   1. gigs.venue_id / gigs.organizer_id are ON DELETE RESTRICT → nullify first
- *   2. setlist_songs.song_id has no cascade → drop setlists first (cascades setlist_songs)
+ *   2. setlists go before songs (deleting a setlist cascades its setlist_songs)
  *   3. DELETE FROM artists cascades the rest
  *
  * R2 files (audio, sheets, playback) are NOT removed — delete them in the

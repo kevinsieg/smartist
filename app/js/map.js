@@ -110,12 +110,6 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // The venues API only returns non-public statuses to authenticated requests.
-  function _authHeaders() {
-    var token = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
-    return token ? { Authorization: 'Bearer ' + token } : {};
-  }
-
   function _popup(v) {
     var color  = STATUS_COLORS[(v.status || '').toLowerCase()] || STATUS_COLORS[''];
     var status = v.status
@@ -225,7 +219,7 @@
     _dataReady = false;
     _allVenues = [];
     var url = '/api/' + _slug + '/venues?all=1' + (_confirmedOnly ? '&status=confirmed' : '');
-    fetch(url, { headers: _authHeaders() })
+    apiFetch(url)
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(venues) {
         _allVenues = venues;
@@ -300,7 +294,7 @@
       });
     });
 
-    fetch('/api/' + slug + '/venues?all=1&status=confirmed', { headers: _authHeaders() })
+    apiFetch('/api/' + slug + '/venues?all=1&status=confirmed')
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(venues) {
         _allVenues = venues;
@@ -335,7 +329,6 @@
     if (!ungeocoded.length) return;
     var btn      = document.getElementById('map-geocode-btn');
     var progress = document.getElementById('map-geocode-progress');
-    var token    = sessionStorage.getItem('smartist_token') || localStorage.getItem('smartist_token');
     if (btn)      btn.disabled = true;
     if (progress) progress.style.display = '';
 
@@ -370,11 +363,7 @@
         var afterDelay = function() { done++; next(); };
         if (!result) { failed++; setTimeout(afterDelay, 1100); return; }
 
-        var url  = '/api/' + _slug + '/venues/' + v.id;
-        var opts = { method: 'PUT', headers: { 'Content-Type': 'application/json' } };
-        if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-        opts.body = JSON.stringify({ name: v.name, lat: result.lat, lng: result.lng });
-        fetch(url, opts)
+        apiFetch('/api/' + _slug + '/venues/' + v.id, 'PUT', { name: v.name, lat: result.lat, lng: result.lng })
           .then(function(r) { return r.ok ? r.json() : null; })
           .then(function(updated) {
             if (updated) {

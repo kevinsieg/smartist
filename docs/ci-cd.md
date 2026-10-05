@@ -1,6 +1,6 @@
 # CI/CD
 
-GitHub Actions runs tests automatically on every push to `dev` or `main`, and on PRs to `main`.
+GitHub Actions runs tests automatically on every push to `dev` or `main`, and on pull requests to `dev` or `main`.
 
 ## Workflow
 
@@ -8,7 +8,7 @@ GitHub Actions runs tests automatically on every push to `dev` or `main`, and on
 
 1. **Unit tests** — ESLint (`npm run lint`), type check (`npm run typecheck`), then the unit suites; run immediately, no secrets needed, ~10 seconds
 2. **Integration + browser tests (local Postgres)** — after unit tests; no secrets needed. A `postgres:16` service gets `scripts/schema.sql` applied twice (it must stay idempotent) and checked with `apply_schema.js --check`, `tests/harness/seed.js` creates a Pro band with one admin and two songs, `tests/harness/server.js` serves the handlers with the `vercel.json` rewrites, and `tests/api.js` runs against it. Then `tests/smoke.js` drives Chromium through the app: sign in through the login form, every workspace page, the nav links (SPA navigation) and a stage link; any uncaught exception, console error or API 5xx fails it. `tests/smoke-root.js` then starts a second server without `ARTIST_SLUG`, as production runs, and checks the root flows: signing in at `/login` and the mailed sign-in and reset links. It also dumps the seeded database with `scripts/db_backup.js --verify`, restoring it into an empty database and comparing it, the path the nightly backup takes. This is the job that catches a schema, handler or page-script change before it reaches a preview.
-3. **Live code on the new schema** — only when `scripts/schema.sql` differs from `main`. Applies this branch's schema to a fresh `postgres:16`, then seeds, serves and runs the API suite of `main` (a worktree) against it. Deployments migrate in their build a minute or two before the new code is live; this is that window. A column dropped while `main` still uses it fails here.
+3. **Live code on the new schema** — first, on every run, checks that a database upgraded from `main`'s schema ends up the same as a fresh one (`tests/schema-upgrade.js`). The rest runs only when `scripts/schema.sql` differs from `main`: it applies this branch's schema to a fresh `postgres:16`, then seeds, serves and runs the API suite of `main` (a worktree) against it. Deployments migrate in their build a minute or two before the new code is live; this is that window. A column dropped while `main` still uses it fails here.
 4. **Integration tests (Vercel preview)** — after unit tests; deploy a preview to Vercel then run the same suite against it, through the real router and the dev database
 
 Run the same thing locally with `npm run test:all` (unit, then API and browser
@@ -39,19 +39,19 @@ Go to **Settings → Secrets and variables → Variables → New repository vari
 
 ## Test cleanup
 
-All write tests clean up after themselves:
+All write tests clean up after themselves (songs only as far as the API allows):
 
 | Table | Cleanup method |
 |-------|---------------|
-| Songs | Soft-deleted then hard-deleted within the test run |
+| Songs | Soft-deleted; removed for good by the 90-day purge (`purgeDeletedSongs` in `api/_db.js`) |
 | Arrangements | Hard-deleted within the arrangement write tests |
 | Setlists | `DELETE /api/:artist/setlists/:id` — original and duplicate both deleted |
-| Venues | `DELETE /api/:artist/venues/:id { hard: true }` |
-| Organizers | `DELETE /api/:artist/organizers/:id { hard: true }` |
-| Gigs | `DELETE /api/:artist/gigs/:id { hard: true }` |
+| Venues | `DELETE /api/:artist/venues/:id?hard=1` |
+| Organizers | `DELETE /api/:artist/organizers/:id?hard=1` |
+| Gigs | `DELETE /api/:artist/gigs/:id?hard=1` |
 | Users | `DELETE /api/:artist/members` at end of multi-user auth tests |
 
 If a test run is interrupted mid-way, any `[TEST]` records left in the dev DB can be removed manually:
-- Setlists → `/setlist-history`
+- Setlists → `/setlist?view=history`
 - Users → `/<slug>/settings` (Members)
 - Venues/organizers/gigs → their respective management pages

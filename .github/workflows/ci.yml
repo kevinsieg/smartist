@@ -108,7 +108,9 @@ jobs:
   # a minute or two before the new code goes live. For that window the code on
   # main runs against the new schema: this runs main's own API suite on it. A
   # column dropped while main still reads it, or a NOT NULL column main does
-  # not fill, fails here. Skipped when schema.sql matches main.
+  # not fill, fails here. Skipped when schema.sql matches main. First, the
+  # same database upgraded from main's schema must match a fresh one
+  # (tests/schema-upgrade.js), whether or not schema.sql changed.
   live-code-new-schema:
     name: Live code on the new schema
     runs-on: ubuntu-latest
@@ -140,6 +142,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - run: npm ci
+      # Production databases get schema.sql on top of the schema they have; the
+      # other jobs start from an empty database. Both must end up the same.
+      - name: Upgraded database matches a fresh one
+        run: node tests/schema-upgrade.js
       - name: Did the schema change?
         id: diff
         run: |
@@ -151,7 +158,6 @@ jobs:
       - if: steps.diff.outputs.changed == 'true'
         name: New schema, main's code
         run: |
-          npm ci
           node scripts/apply_schema.js --yes
           git worktree add live origin/main
           cd live && npm ci
@@ -181,16 +187,14 @@ jobs:
     # Secrets are unavailable to pull requests from forks and cannot be read in
     # a job-level `if`, so the job runs everywhere and the steps skip themselves
     # when VERCEL_TOKEN or the protection-bypass secret is absent.
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      # Preview deployments sit behind Vercel Deployment Protection; the suite
-      # needs the project's "Protection Bypass for Automation" secret to reach them.
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    # Each secret is set only on the step that needs it: the test suite is the
+    # pushed branch's code, and it never sees the deploy token.
     steps:
       - name: Check for Vercel credentials
         id: creds
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "No VERCEL_TOKEN — skipping integration tests."
@@ -208,15 +212,21 @@ jobs:
           node-version: '24'
 
       # tests/ has no dependencies of its own; it resolves from the root install.
+      # No install scripts: they would run before the deploy step that holds
+      # VERCEL_TOKEN, in the same workspace.
       - name: Install Vercel CLI and dependencies
         if: steps.creds.outputs.ok == 'true'
         run: |
-          npm install -g vercel@59.26.0
-          npm ci
+          npm install -g --ignore-scripts vercel@59.26.0
+          npm ci --ignore-scripts
 
       - name: Deploy preview
         id: deploy
         if: steps.creds.outputs.ok == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" > /dev/null
           DEPLOY_URL=$(vercel deploy --token="$VERCEL_TOKEN" 2> deploy.err) || { tail -n 20 deploy.err; exit 1; }
@@ -226,6 +236,9 @@ jobs:
         if: steps.creds.outputs.ok == 'true'
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
+          # Preview deployments sit behind Vercel Deployment Protection; the suite
+          # needs the project's "Protection Bypass for Automation" secret to reach them.
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           # The suite logs in as a named user of a Pro workspace (tests/api.js).
           # The email is a secret, not a variable: Actions logs of a public
           # repository are public, and secrets are masked in them.

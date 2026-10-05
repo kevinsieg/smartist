@@ -5,15 +5,14 @@
 // below sends it to its handler. A new route is a line in ROUTES, not a
 // file under api/ (Vercel Hobby allows twelve functions). Handlers live in
 // files and directories prefixed `_`, which Vercel does not turn into
-// functions of their own.
-//
-// Not a catch-all file (`api/[...route].js`): outside Next.js, Vercel matched
-// that for one-segment paths only, so /api/config worked and /api/:artist/…
-// was Vercel's own 404.
+// functions of their own. (Not a catch-all `api/[...route].js`: outside
+// Next.js, Vercel matches that for one-segment paths only.)
 //
 // A handler gets `req.query`: the URL's own query string, plus `artist` and the
 // route's parameters, plus `path` (the segments after the resource) for the
 // item handlers. Handlers read these and never parse `req.url` themselves.
+// Route parameters come from the path only: `?id=` in a query string is
+// dropped, so `/gigs?id=5` is the gig list, not gig 5.
 
 const HANDLERS = {
   config:     () => require('./_config'),
@@ -29,9 +28,6 @@ const HANDLERS = {
   venue:      () => require('./_band/venues/item'),
   organizers: () => require('./_band/organizers'),
   organizer:  () => require('./_band/organizers/item'),
-  // vercel.json rewrites /api/docs to the static page; should the function be
-  // matched first, it sends the browser there itself.
-  docs:       () => (req, res) => { res.writeHead(307, { Location: '/app/api-docs.html' }); res.end(); },
 };
 
 // [pattern, handler, fixed query]. First match wins. `:name` matches one
@@ -39,8 +35,30 @@ const HANDLERS = {
 /** @type {[string, string, object?][]} */
 const TABLE = [
   ['/api/config',                                          'config'],
+  ['/api/config/upgrade',                                  'config', { action: 'upgrade' }],
+  ['/api/config/downgrade',                                'config', { action: 'downgrade' }],
+  ['/api/config/photo-url',                                'config', { action: 'photo-url' }],
+  ['/api/config/favicon-url',                              'config', { action: 'favicon-url' }],
   ['/api/login',                                           'config', { action: 'login' }],
-  ['/api/docs',                                            'docs'],
+  ['/api/auth/magic-login',                                'config', { action: 'magic-login' }],
+  ['/api/auth/oauth-session',                              'config', { action: 'oauth-session' }],
+  ['/api/auth/google-url',                                 'config', { action: 'google-url' }],
+  ['/api/auth/facebook-url',                               'config', { action: 'facebook-url' }],
+  ['/api/auth/logout-everywhere',                          'config', { action: 'logout-everywhere' }],
+  ['/api/auth/request-reset',                              'config', { action: 'request-reset' }],
+  ['/api/auth/set-password',                               'config', { action: 'set-password' }],
+  ['/api/auth/artists',                                    'config', { action: 'artists' }],
+  ['/api/auth/deletion-preflight',                         'config', { action: 'deletion-preflight' }],
+  ['/api/auth/request-deletion',                           'config', { action: 'request-deletion' }],
+  ['/api/auth/confirm-deletion',                           'config', { action: 'confirm-deletion' }],
+  ['/api/signup',                                          'config', { action: 'signup' }],
+  ['/api/signup/link',                                     'config', { action: 'signup-link' }],
+  ['/api/signup/verify',                                   'config', { action: 'verify-signup-token' }],
+  ['/api/signup/check-slug',                               'config', { action: 'check-slug' }],
+  ['/api/admin/overview',                                  'config', { action: 'admin-overview' }],
+  ['/api/admin/set-plan',                                  'config', { action: 'admin-set-plan' }],
+  ['/api/subscribe',                                       'config', { action: 'subscribe' }],
+  ['/api/contact',                                         'config', { action: 'contact' }],
   // The OAuth provider returns to /auth/callback, rewritten here by vercel.json.
   ['/auth/callback',                                       'config', { action: 'oauth-callback' }],
 
@@ -62,6 +80,9 @@ const TABLE = [
   ['/api/:artist/organizers',                              'organizers'],
   ['/api/:artist/organizers/*',                            'organizer'],
 ];
+
+// Names only the route table sets; a query string cannot supply them.
+const ROUTE_PARAMS = ['__path', 'artist', 'id', 'sub', 'path'];
 
 const ROUTES = TABLE.map(([pattern, handler, fixed = {}]) => {
   const names = [];
@@ -98,9 +119,14 @@ module.exports = async function route(req, res) {
   }
   if (!found) return res.status(404).json({ error: 'Not found' });
   const query = Object.fromEntries(url.searchParams);
-  delete query.__path;
+  for (const k of ROUTE_PARAMS) delete query[k];
+  // The action is a URL path (the route table sets it). The one query-string
+  // action left is the health check the monitors call; any other `?action=`
+  // would be a second, undocumented copy of a route.
+  if (query.action !== 'health') delete query.action;
   req.query = { ...query, ...found.params };
   return HANDLERS[found.handler]()(req, res);
 };
 
 module.exports.match = match;
+module.exports.TABLE = TABLE;

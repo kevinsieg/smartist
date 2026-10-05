@@ -13,19 +13,19 @@ function run(r) {
 
   test('parseCsvLine keeps quoted commas inside a field', () => {
     assertEq(
-      gemaImport.parseCsvLine('15299392-001,"Song, With Comma",DEUTSCH'),
-      ['15299392-001', 'Song, With Comma', 'DEUTSCH']
+      gemaImport.parseCsvLine('12345678-001,"Song, With Comma",DEUTSCH'),
+      ['12345678-001', 'Song, With Comma', 'DEUTSCH']
     );
   });
   test('parseCsv skips preamble and ignores rows without Werknummer', () => {
     const csv = [
       'Downloaded from GEMA',
       'Werknummer,Titel,Sprache,Dauer,Erstmals geladen',
-      '15299392-001,Über den Wolken,DEUTSCH,03:42,05.11.2026',
+      '12345678-001,Über den Wolken,DEUTSCH,03:42,05.11.2026',
       ',Missing Work Number,DEUTSCH,01:00,05.11.2026',
     ].join('\n');
     assertEq(gemaImport.parseCsv(csv), [{
-      Werknummer: '15299392-001',
+      Werknummer: '12345678-001',
       Titel: 'Über den Wolken',
       Sprache: 'DEUTSCH',
       Dauer: '03:42',
@@ -44,12 +44,12 @@ function run(r) {
   });
   test('parseBeteiligte maps duplicate-index columns and normalises shares/roles', () => {
     const row = [
-      '15299392-001', '', 'Jane Writer', 'IP-123', 'KOMPONIST/-IN', '1', '',
+      '12345678-001', '', 'Jane Writer', 'IP-123', 'KOMPONIST/-IN', '1', '',
       '"12,5"', '-', '25', '"50,25"', 'GEMA', 'ASCAP', '', '', 'Rep Publisher',
       'IP-999', 'TEXTDICHTER/-IN',
     ].join(',');
     assertEq(gemaImport.parseBeteiligte(`Preamble\nWerknummer,unused\n${row}`), [{
-      gema_work_number: '15299392-001',
+      gema_work_number: '12345678-001',
       name: 'Jane Writer',
       ip_name_number: 'IP-123',
       role: 'composer',
@@ -84,13 +84,35 @@ function run(r) {
     assertEq(gemaImport.parseGermanDate('05.11.2026'), '2026-11-05');
     assertEq(gemaImport.parseGermanDate('2026-11-05'), null);
   });
+  return runSaveErrors(r);
+}
+
+// A row the database refuses says so in the preview without the database's
+// own message: that names constraints, columns and values.
+async function runSaveErrors(r) {
+  const { testAsync, assert, assertEq } = r;
+  await testAsync('a row that fails to save gets a generic error, not the database message', async () => {
+    const dbMessage = 'duplicate key value violates unique constraint "gema_works_artist_id_gema_work_number_key"';
+    const sql = (strings) => {
+      const text = strings.join('?');
+      if (/INSERT INTO gema_works/.test(text)) return Promise.reject(new Error(dbMessage));
+      return Promise.resolve([]);
+    };
+    sql.json = v => v;
+    const csv = 'Werknummer,Titel,Sprache,Dauer,Erstmals geladen\n12345678-001,Song,DEUTSCH,03:42,05.11.2026';
+    const res = await gemaImport.importWorks(sql, { id: 1, config: {} }, 'own', csv, { dryRun: false });
+    assertEq(res.status, 200);
+    const failed = res.body.rows.filter(x => x.error);
+    assert(failed.length === 1, `rows with an error: ${failed.length}`);
+    assert(!failed[0].error.includes('constraint'), `leaked: ${failed[0].error}`);
+    assertEq(res.body.summary.errors, 1);
+  });
 }
 
 if (require.main === module) {
   const { makeRunner } = require('./_runner');
   const r = makeRunner();
-  run(r);
-  process.exit(r.summary() > 0 ? 1 : 0);
+  run(r).then(() => process.exit(r.summary() > 0 ? 1 : 0));
 }
 
 module.exports = run;

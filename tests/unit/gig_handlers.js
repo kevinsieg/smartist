@@ -24,10 +24,11 @@ function mockRes() {
   return r;
 }
 
-function loadHandler(route, r2 = {}) {
+function loadHandler(route, r2 = {}, { user = { id: 1, role: 'member' } } = {}) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), r2Path = mp('api/_r2');
   const handlerPath = mp('api/_band/gigs.js');
-  for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
+  // api/_domain/gigs.js deletes the poster files through _r2: rebuilt too.
+  for (const p of [dbPath, authPath, handlerPath, mp('api/_domain/gigs')]) delete require.cache[p];
   const calls = [];
   const sql = (strings, ...values) => {
     // sql({ col: value }) — the insert/update helper: keep the object.
@@ -51,7 +52,7 @@ function loadHandler(route, r2 = {}) {
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true,
     exports: { refuseDemo: (req, res) => { if (req.user && req.user.id === null) { res.status(403).json({ error: 'demo' }); return true; } return false; },
-      requireAuth: async req => { req.user = { id: 1, role: 'member' }; return ARTIST; },
+      requireAuth: async req => { req.user = user; return ARTIST; },
       getAccess: async () => ({ artist: ARTIST, user: { id: 1, role: 'member' } }),
       // Handlers ask these directly now; a stub that omits them throws.
       canBrowseCatalogue: () => false,
@@ -65,6 +66,8 @@ function loadHandler(route, r2 = {}) {
       deleteFromR2: async () => {}, verifyUpload: async () => ({ size: 1, contentType: 'image/jpeg' }),
       keyFromUrl: () => 'k', filenameFromUrl: () => 'f',
       ...r2,
+      // Confirms move the upload out of pending/; here that is the same HEAD.
+      promoteUpload: r2?.promoteUpload || r2?.verifyUpload || (async () => ({ size: 1, contentType: 'image/jpeg' })),
     },
   };
   const rlPath = mp('api/_ratelimit');
@@ -180,12 +183,32 @@ async function run(r) {
 
   await testAsync('PUT poster saves this gig\'s upload and removes the one it replaces', async () => {
     const { r2, seen } = posterR2();
-    const { handler, calls } = loadHandler(gigRow({ poster_url: 'old-p', thumb_url: 'old-t' }), r2);
+    const OLD_P = 'https://cdn.example.test/gigs/test/7-old-poster.jpg';
+    const OLD_T = 'https://cdn.example.test/gigs/test/7-old-thumb.jpg';
+    const { handler, calls } = loadHandler(gigRow({ poster_url: OLD_P, thumb_url: OLD_T }), r2);
     const res = await call(handler, 'PUT', '/api/test/gigs/7/poster', { body: { posterUrl: OWN, thumbUrl: OWN_THUMB } });
     assertEq(res.statusCode, 200);
     const upd = calls.find(c => /UPDATE gigs SET poster_url/.test(c.text));
     assert(upd && upd.values.includes(OWN) && upd.values.includes(OWN_THUMB), 'poster not saved');
-    assertEq(seen.deleted.sort(), ['old-p', 'old-t']);
+    assertEq(seen.deleted.sort(), [OLD_P, OLD_T]);
+  });
+
+  await testAsync('PUT poster sent again (a retry) keeps the files it already stored', async () => {
+    const { r2, seen } = posterR2();
+    const { handler } = loadHandler(gigRow({ poster_url: OWN, thumb_url: OWN_THUMB }), r2);
+    const res = await call(handler, 'PUT', '/api/test/gigs/7/poster', { body: { posterUrl: OWN, thumbUrl: OWN_THUMB } });
+    assertEq(res.statusCode, 200);
+    assertEq(seen.deleted, [], 'a retried confirm deleted the live poster');
+  });
+
+  await testAsync('hard delete takes the poster files along; the demo session keeps them', async () => {
+    for (const [user, expected] of [[{ id: 1, role: 'member' }, [OWN, OWN_THUMB]], [{ id: null, role: 'member' }, []]]) {
+      const { r2, seen } = posterR2();
+      const { handler } = loadHandler(gigRow({ poster_url: OWN, thumb_url: OWN_THUMB }), r2, { user });
+      const res = await call(handler, 'DELETE', '/api/test/gigs/7?hard=1');
+      assertEq(res.statusCode, 200);
+      assertEq(seen.deleted.sort(), expected.sort(), `user ${user.id}`);
+    }
   });
 
   await testAsync('PUT poster refuses another gig\'s or band\'s file before asking storage', async () => {
@@ -232,6 +255,68 @@ async function run(r) {
     assert(calls.some(c => /SET poster_url = NULL, thumb_url = NULL/.test(c.text)), 'columns not cleared');
     assert(!calls.some(c => /SET deleted/.test(c.text)), 'deleted the gig');
   });
+
+  // ── Every method on /gigs/:id gets an answer ──────────────────────────────────
+  await testAsync('POST /gigs/:id (no sub-resource) → 405, not a request left hanging', async () => {
+    const { handler, calls } = loadHandler(() => [GIG]);
+    const res = await call(handler, 'POST', '/api/test/gigs/7', { body: {} });
+    assertEq(res.statusCode, 405);
+    assertEq(calls.length, 0, 'answered before any query');
+  });
+
+  await testAsync('every method of /gigs/:id and its sub-resources answers', async () => {
+    const cases = [
+      ['PATCH', '/api/test/gigs/7', 405], ['POST', '/api/test/gigs/7/poster', 405],
+      ['GET', '/api/test/gigs/7/poster-url', 405], ['GET', '/api/test/gigs/7/nothing', 404],
+    ];
+    for (const [method, url, status] of cases) {
+      const { handler } = loadHandler(() => [GIG]);
+      const res = await call(handler, method, url, { body: {} });
+      assertEq(res.statusCode, status, `${method} ${url}`);
+      assert(res.headersSent, `${method} ${url} sent nothing`);
+    }
+  });
+
+  await testAsync('?id= in the query string is not a gig id: /gigs?id=7 is the list', async () => {
+    const { handler } = loadHandler(() => [{ ...GIG, total: 1 }]);
+    const res = await call(handler, 'GET', '/api/test/gigs?id=7');
+    assertEq(res.statusCode, 200);
+    assert(Array.isArray(res.body?.rows), 'expected the list');
+  });
+
+  await testAsync('poster-url needs no contentType: both files are always JPEG', async () => {
+    const { handler } = loadHandler(text => (text.includes('FROM gigs') ? [GIG] : []));
+    const res = await call(handler, 'POST', '/api/test/gigs/7/poster-url', { body: { posterSize: 1000, thumbSize: 100 } });
+    assertEq(res.statusCode, 200);
+  });
+
+  await testAsync('a hard delete with a cascade that is not a list → 400, nothing deleted', async () => {
+    for (const cascade of [5, 'setlists', ['gigs']]) {
+      const { handler, calls } = loadHandler(text => (text.includes('FROM gigs') ? [GIG] : []));
+      const res = await call(handler, 'DELETE', '/api/test/gigs/7', { body: { hard: true, cascade } });
+      assertEq(res.statusCode, 400, `cascade ${JSON.stringify(cascade)}`);
+      assert(!calls.some(c => /^DELETE/.test(c.text)), 'nothing may be deleted');
+    }
+  });
+
+  // ── Calendar feed ───────────────────────────────────────────────────────────
+  const { icsEnd, icsFold } = require(path.join(__dirname, '../../api/_band/gigs.js'));
+  await testAsync('a gig ending after midnight ends on the next day', async () => {
+    assertEq(icsEnd('2026-10-03', '21:00:00', '01:00:00'), '20261004T010000');
+    assertEq(icsEnd('2026-10-03', '20:00:00', '23:30:00'), '20261003T233000');
+  });
+  await testAsync('without an end a late gig lasts two hours into the next day (and year)', async () => {
+    assertEq(icsEnd(new Date(Date.UTC(2026, 11, 31)), '23:00:00', null), '20270101T010000');
+  });
+  await testAsync('long lines fold at 75 octets without splitting a character', async () => {
+    const line = 'SUMMARY:' + 'ä'.repeat(80);
+    const parts = icsFold(line).split('\r\n');
+    assert(parts.length > 1, 'not folded');
+    assert(parts.every(p => Buffer.byteLength(p) <= 75), 'a part is over 75 octets');
+    assertEq(parts.map((p, i) => (i ? p.slice(1) : p)).join(''), line);
+    assertEq(icsFold('SUMMARY:short'), 'SUMMARY:short');
+  });
+
 }
 
 if (require.main === module) {

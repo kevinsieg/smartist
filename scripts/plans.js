@@ -7,7 +7,7 @@
  *   node scripts/plans.js --artist <slug> --plan <free|pro>  # set plan for a band
  *   node scripts/plans.js --recount                    # recompute storage_used_bytes from R2
  *
- * Reads DATABASE_URL and ARTIST_SLUG from .env / .env.local in the project root.
+ * Reads DATABASE_URL from .env / .env.local in the project root.
  */
 
 'use strict';

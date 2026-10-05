@@ -83,6 +83,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
       filenameFromUrl: url => String(url).split('/').pop(),
       keyFromUrl: url => (String(url).startsWith(BASE) ? String(url).slice(BASE.length + 1) : null),
       verifyUpload: async key => (SIZES[key] == null ? null : { size: SIZES[key], contentType: 'audio/mpeg' }),
+      promoteUpload: async key => (SIZES[key] == null ? null : { size: SIZES[key], contentType: 'audio/mpeg' }),
     } };
   require.cache[dbPath]    = { id: dbPath, filename: dbPath, loaded: true,
     exports: {
@@ -181,7 +182,7 @@ async function run(r) {
     const { handler, token, deltas, deleted } = loadSongs({ counterFull: true });
     const res = await call(handler, token, confirmAudio);
     assertEq(res.statusCode, 402);
-    assertEq(res.body.error, 'storage_limit');
+    assertEq(res.body.code, 'storage_limit');
     assertEq(deltas, []);
     assertEq(deleted, [NEW_URL]);
   });

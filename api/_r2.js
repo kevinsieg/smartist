@@ -36,6 +36,9 @@ const STORAGE = {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Uploads not yet confirmed (see createPresignedUrl).
+const PENDING_PREFIX = 'pending/';
+
 function getR2Client() {
   const { S3Client } = sdk();
   return new S3Client({
@@ -48,7 +51,8 @@ function getR2Client() {
 
 function keyFromUrl(url) {
   const base = STORAGE.publicUrl();
-  if (base && url && url.startsWith(base)) return url.slice(base.length + 1);
+  // `${base}/`, not `base`: https://<bucket host>.example.org/… is not ours.
+  if (base && typeof url === 'string' && url.startsWith(`${base}/`)) return url.slice(base.length + 1);
   return null;
 }
 
@@ -74,12 +78,22 @@ async function deleteFromR2(url) {
 // contentLength, when given, is signed into the URL: the upload must be exactly
 // that many bytes, so a presigned URL cannot be used to park an arbitrarily
 // large file in the bucket (the size is otherwise only checked at confirm).
-async function createPresignedUrl(key, contentType, contentLength) {
-  const params = { Bucket: STORAGE.bucket(), Key: key, ContentType: contentType };
+//
+// pending: the upload lands under PENDING_PREFIX and promoteUpload moves it to
+// its key on confirm. A bucket lifecycle rule expires that prefix after a day
+// (docs/deployment.md), so a file that is uploaded and never confirmed, which
+// no storage counter knows about, does not stay in the bucket. publicUrl is
+// always the final address.
+async function createPresignedUrl(key, contentType, contentLength, { pending = false } = {}) {
+  const params = { Bucket: STORAGE.bucket(), Key: pending ? PENDING_PREFIX + key : key, ContentType: contentType };
   if (Number.isInteger(contentLength) && contentLength > 0) params.ContentLength = contentLength;
   const { PutObjectCommand, getSignedUrl } = sdk();
   const command = new PutObjectCommand(params);
-  const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 300 });
+  // The type is signed too: unsigned, the uploader could send text/html or
+  // SVG under a URL presigned for an image or audio file, and the bucket
+  // serves back whatever type the upload carried.
+  const uploadUrl = await getSignedUrl(getR2Client(), command,
+    { expiresIn: 300, signableHeaders: new Set(['content-type']) });
   const publicUrl = `${STORAGE.publicUrl()}/${key}`;
   return { uploadUrl, publicUrl };
 }
@@ -93,4 +107,30 @@ async function verifyUpload(key) {
   }
 }
 
-module.exports = { getR2Client, keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload };
+// Confirm step for a pending upload: the object under its final key, moved
+// there from PENDING_PREFIX if it is not there yet (a retried confirm finds it
+// in place, as does an upload presigned before uploads went through pending/).
+// Returns verifyUpload's { size, contentType }, or null when neither exists.
+async function promoteUpload(key) {
+  const done = await verifyUpload(key);
+  if (done) return done;
+  const head = await verifyUpload(PENDING_PREFIX + key);
+  if (!head) return null;
+  const { CopyObjectCommand, DeleteObjectCommand } = sdk();
+  const client = getR2Client();
+  await client.send(new CopyObjectCommand({
+    Bucket: STORAGE.bucket(), Key: key,
+    CopySource: `${STORAGE.bucket()}/${encodeURI(PENDING_PREFIX + key)}`,
+  }));
+  // The copy is what counts; a pending copy left behind expires with the rule.
+  await client.send(new DeleteObjectCommand({ Bucket: STORAGE.bucket(), Key: PENDING_PREFIX + key })).catch(() => null);
+  return head;
+}
+
+// The bucket's public base URL without a trailing slash, or null when unset:
+// what the pages prefix media keys with (mediaBase in /api/config).
+function publicBaseUrl() {
+  return (STORAGE.publicUrl() || '').replace(/\/+$/, '') || null;
+}
+
+module.exports = { keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload, promoteUpload, publicBaseUrl, PENDING_PREFIX };

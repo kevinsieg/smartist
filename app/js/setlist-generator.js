@@ -41,24 +41,6 @@ var FEEL_LABELS = [
   { max: 1.01, icon: '🔥', get label() { return t('setlist.feelTriathlon'); }      },
 ];
 
-// --- Demo personalisation ---
-
-function applyDemoFilters() {
-  var raw = sessionStorage.getItem('demo_genres');
-  if (!raw) return;
-  var genres;
-  try { genres = JSON.parse(raw); } catch { return; }
-  if (!Array.isArray(genres) || !genres.length) return;
-  var normalized = genres.map(function (g) { return g.toLowerCase(); });
-  document.querySelectorAll('.filter-btn').forEach(function (btn) {
-    var val = (btn.dataset.value || '').toLowerCase();
-    var matches = normalized.some(function (g) {
-      return val === g || val.includes(g) || g.includes(val);
-    });
-    if (matches && !btn.classList.contains('active')) btn.click();
-  });
-}
-
 // --- Helpers ---
 
 function getFieldValue(song, field) {
@@ -618,7 +600,12 @@ async function _saveQuickSong() {
       length_min: length,
       active:     true,
     });
-    if (!r.ok) throw new Error('create failed');
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      const err = new Error(d.error || 'create failed');
+      if ((d.code || d.error) === 'song_limit') err.limit = d.limit;
+      throw err;
+    }
     const song = await r.json();
     invalidateConfigCache();
     allSongs.push(song);
@@ -626,8 +613,8 @@ async function _saveQuickSong() {
     _splitAt = null;
     _closeQuickSong();
     renderResult(currentSet);
-  } catch {
-    errEl.textContent = t('songs.saveFailed');
+  } catch (err) {
+    errEl.textContent = err && err.limit ? t('songs.limitReached', { limit: err.limit }) : t('songs.saveFailed');
     errEl.className   = 'status-msg error';
   } finally {
     btn.disabled = false;
@@ -819,44 +806,28 @@ document.getElementById('create-gig-btn').addEventListener('click', async () => 
 });
 
 document.getElementById('save-btn').addEventListener('click', async () => {
-  const token   = getToken();
   const title   = document.getElementById('setlist-title').value.trim();
   const gigId   = document.getElementById('gig-select').value || null;
   const comment = document.getElementById('setlist-comment').value.trim() || null;
   const songIds = currentSet.map(s => s.id).filter(id => Number.isInteger(id) && id > 0);
 
+  const titleEl = document.getElementById('setlist-title');
+  titleEl.setAttribute('aria-invalid', String(!title));
   if (!title) {
-    const err = document.getElementById('save-error');
-    err.textContent = t('setlist.nameRequired');
-    err.className = 'status-msg error';
-    document.getElementById('setlist-title').focus();
+    setStatus('save-error', t('setlist.nameRequired'), true);
+    titleEl.focus();
     return;
   }
 
   if (songIds.length !== currentSet.length) {
-    const err = document.getElementById('save-error');
-    err.textContent = t('setlist.missingIds');
-    err.className = 'status-msg error';
+    setStatus('save-error', t('setlist.missingIds'), true);
     return;
   }
 
-  const r = await withBusy(document.getElementById('save-btn'), () => fetch(`/api/${artistSlug}/setlists`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ title: title || null, gig_id: gigId ? Number(gigId) : null, comment, song_ids: songIds }),
-  }));
+  // apiFetch sends an ended session to the login page and throws.
+  const r = await withBusy(document.getElementById('save-btn'), () => apiFetch(`/api/${artistSlug}/setlists`, 'POST',
+    { title: title || null, gig_id: gigId ? Number(gigId) : null, comment, song_ids: songIds }).catch(() => null));
   if (!r) return;
-
-  if (r.status === 401) {
-    clearToken();
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    document.getElementById('save-step').style.display = 'none';
-    document.getElementById('auth-step').style.display = 'block';
-    const err = document.getElementById('auth-error');
-    err.textContent = t('setlist.sessionExpired');
-    err.className = 'status-msg error';
-    return;
-  }
 
   if (r.ok) {
     const saved = await r.json();
@@ -865,9 +836,7 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     _histPendingOpenId = String(saved.id);
     switchTab('history');
   } else {
-    const err = document.getElementById('save-error');
-    err.textContent = t('setlist.saveFailed');
-    err.className = 'status-msg error';
+    setStatus('save-error', t('setlist.saveFailed'), true);
   }
 });
 
@@ -878,6 +847,7 @@ document.getElementById('accept-modal').addEventListener('click', e => {
 // --- PDF export ---
 
 async function printSetlist() {
-  var cfg = await loadConfig();
+  // The header needs the band's name, logo and field settings, not its songs.
+  var cfg = await loadConfig(undefined, { light: true });
   printSetlistSongs(currentSet, '', cfg, { headings: _groupByTagOn() ? tagGroupStarts(currentSet) : null });
 }

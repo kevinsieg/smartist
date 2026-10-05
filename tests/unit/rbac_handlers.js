@@ -84,6 +84,7 @@ function loadHandler(relPath, { role = 'admin', rows } = {}) {
       filenameFromUrl: url => String(url).split('/').pop(),
       keyFromUrl: () => 'key',
       verifyUpload: async () => ({ size: 1, contentType: 'audio/mpeg' }),
+      promoteUpload: async () => ({ size: 1, contentType: 'audio/mpeg' }),
     },
   };
   require.cache[dbPath] = {

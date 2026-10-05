@@ -31,7 +31,7 @@ function makeSqlStub(responders = []) {
 // `tokens` overrides individual _token exports. The defaults below are what
 // every pre-existing test in this file expects; the password-reset tests need
 // real verification behaviour, so they pass their own.
-function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, authFails = false, tokens = {} } = {}) {
+function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, authFails = false, tokens = {}, mailLimited = async () => false } = {}) {
   const dbPath       = require.resolve(path.join(__dirname, '../../api/_db'));
   const authPath     = require.resolve(path.join(__dirname, '../../api/_auth'));
   const tokenPath    = require.resolve(path.join(__dirname, '../../api/_token'));
@@ -90,7 +90,7 @@ function makeHandler({ sql, user = { id: 1, role: 'admin' }, artist = ARTIST, au
   };
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
-    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, clientIp: () => '127.0.0.1' },
+    exports: { loginLocked: async () => false, countLoginFailure: async () => {}, checkRateLimit: async () => false, outboundMailLimited: mailLimited, clientIp: () => '127.0.0.1', loginOkPrefix: e => `login-ok:${e} ` },
   };
   require.cache[bcryptPath] = {
     id: bcryptPath, filename: bcryptPath, loaded: true,
@@ -127,7 +127,7 @@ async function run(r) {
     let updated = null;
     const sql = makeSqlStub([
       {
-        match: text => text.includes('SELECT * FROM users') && text.includes('invite_token_hash'),
+        match: text => text.includes('FROM users u WHERE') && text.includes('invite_token_hash'),
         rows: (_text, values) => {
           assertEq(values[0], ARTIST.id, 'artist id scoped in invite lookup');
           assertEq(values[1], tokenHash, 'raw invite token is hashed before lookup');
@@ -343,7 +343,7 @@ async function run(r) {
       { match: text => text.includes('SELECT * FROM users'), rows: () => [{ id: 7, email: 'old@example.com', password_hash: 'stored-hash' }] },
       {
         match: text => text.includes('UPDATE users') && text.includes('pending_email'),
-        rows: (_text, values) => { written = values; return []; },
+        rows: (_text, values) => { written = values; return [{ taken: false }]; },
       },
     ]);
     const handler = makeHandler({ sql, user: { id: 7, role: 'member' } });
@@ -436,7 +436,52 @@ async function run(r) {
     assert(sentMail && sentMail.to === 'old@example.com', 'notice goes to the OLD address');
   });
 
-  await testAsync('POST confirm-email-change refuses an address already used in an affected band', async () => {
+  await testAsync('POST request-email-change to an address that already has an account looks like any other', async () => {
+    // Moving onto it would merge the accounts (confirm-email-change refuses
+    // it). The reply, the stored request (the export shows pending_email) and
+    // the mail cap must not differ from a free address, or the request tells
+    // anyone which addresses have an account.
+    let written = null;
+    const sql = makeSqlStub([
+      { match: text => text.includes('SELECT * FROM users'), rows: () => [{ id: 7, email: 'old@example.com', password_hash: 'stored-hash' }] },
+      {
+        match: text => text.includes('UPDATE users') && text.includes('pending_email'),
+        rows: (_text, values) => { written = values; return [{ taken: true }]; },
+      },
+    ]);
+    let mailCountedFor = null;
+    const handler = makeHandler({ sql, user: { id: 7, role: 'member' }, mailLimited: async who => { mailCountedFor = who; return false; } });
+    const res = mockRes();
+    sentMail = null;
+
+    await handler(authReq('POST', '/api/test/members/request-email-change', {
+      currentPassword: 'correct-password', newEmail: 'someone@example.com',
+    }, { authorization: 'Bearer member' }), res);
+
+    assertEq(res.statusCode, 200);
+    assertEq(res._body, { ok: true });
+    assertEq(written[0], 'someone@example.com', 'stored like a free address');
+    assertEq(mailCountedFor, 'old@example.com', 'the notice counts against the sender\'s mail cap');
+    assert(sentMail && sentMail.to === 'someone@example.com', 'the address is told');
+    assert(!/confirm-email/.test(sentMail.html), 'no confirm link');
+  });
+
+  await testAsync('POST request-email-change past the sender\'s daily mail cap → 429, nothing stored', async () => {
+    const sql = makeSqlStub([
+      { match: text => text.includes('SELECT * FROM users'), rows: () => [{ id: 7, email: 'old@example.com', password_hash: 'stored-hash' }] },
+    ]);
+    const handler = makeHandler({ sql, user: { id: 7, role: 'member' }, mailLimited: async () => true });
+    const res = mockRes();
+    sentMail = null;
+    await handler(authReq('POST', '/api/test/members/request-email-change', {
+      currentPassword: 'correct-password', newEmail: 'someone@example.com',
+    }, { authorization: 'Bearer member' }), res);
+    assertEq(res.statusCode, 429);
+    assert(!sql.calls.some(c => c.text.includes('UPDATE users')), 'nothing stored');
+    assertEq(sentMail, null);
+  });
+
+  await testAsync('POST confirm-email-change refuses an address with an account in any band', async () => {
     const rawToken = 'd'.repeat(64);
     const sql = makeSqlStub([
       {
@@ -455,7 +500,73 @@ async function run(r) {
 
     assertEq(res.statusCode, 409);
     assertEq(sql.calls.filter(c => c.text.includes('SET email')).length, 0);
+    const check = sql.calls.find(c => c.text.includes('SELECT 1 FROM users'));
+    assert(!/artist_id/.test(check.text), 'not limited to the bands the change touches');
   });
+
+  console.log(B('\ninviting an address that already has an account'));
+  for (const known of [true, false]) {
+    await testAsync(known
+      ? 'an existing account gets a join link; the row is a pending invite'
+      : 'a new address gets an invite link to set a password', async () => {
+      const sql = makeSqlStub([
+        { match: t => t.includes('AS here'), rows: () => [{ here: false, known }] },
+        { match: t => t.startsWith('INSERT INTO users'), rows: () => [{ id: 99, email: 'p@example.com', role: 'member' }] },
+      ]);
+      const handler = makeHandler({ sql });
+      const res = mockRes();
+      await handler(authReq('POST', '/api/test/members/invite', { email: 'P@example.com', role: 'member' }), res);
+      assertEq(res.statusCode, 201);
+      const insert = sql.calls.find(c => c.text.startsWith('INSERT INTO users'));
+      assert(!/password_hash/.test(insert.text), 'an invite row never takes a password: it would count as accepted');
+      assert(typeof insert.values[3] === 'string' && insert.values[3].length === 64, 'invite token hash stored');
+      assertEq(/#join=/.test(sentMail.html), known, 'join link for an existing account');
+      assertEq(/#invite=/.test(sentMail.html), !known, 'set-password link for a new address');
+      assert(sentMail.html.includes('next=%2Ftest%2Fdashboard'), 'the link names the band');
+    });
+  }
+
+  await testAsync('an existing account joins with the link, no password, and keeps its own', async () => {
+    const sql = makeSqlStub([
+      { match: t => t.includes('FROM users u WHERE') && t.includes('invite_token_hash'),
+        rows: () => [{ id: 42, email: 'known@example.com', role: 'viewer', known: true }] },
+      { match: t => t.startsWith('UPDATE users SET invite_token_hash = NULL'), rows: () => [{ password_hash: 'their-hash' }] },
+    ]);
+    const handler = makeHandler({ sql });
+    const res = mockRes();
+    await handler(authReq('POST', '/api/test/members/accept-invite', { token: 'join-token' }), res);
+    assertEq(res.statusCode, 200);
+    assertEq(res._body.token, 'session:42:viewer:28800000');
+    assert(!sql.calls.some(c => /SET password_hash = \?/.test(c.text)), 'no new password written');
+    const join = sql.calls.find(c => c.text.startsWith('UPDATE users SET invite_token_hash = NULL'));
+    assert(/WHERE id = \?/.test(join.text) && join.values.includes(42), 'only this invite is accepted');
+  });
+
+  await testAsync('a new address sets a password; its other bands\' invites stay open', async () => {
+    const sql = makeSqlStub([
+      { match: t => t.includes('FROM users u WHERE') && t.includes('invite_token_hash'),
+        rows: () => [{ id: 42, email: 'new@example.com', role: 'member', known: false }] },
+    ]);
+    const handler = makeHandler({ sql });
+    const res = mockRes();
+    await handler(authReq('POST', '/api/test/members/accept-invite', { token: 't' }), res);
+    assertEq(res.statusCode, 400, 'a new address needs a password');
+    await handler(authReq('POST', '/api/test/members/accept-invite', { token: 't', password: 'long-enough' }), mockRes());
+    const write = sql.calls.find(c => /SET password_hash = \?/.test(c.text));
+    assert(/password_hash IS NOT NULL OR invite_token_hash IS NULL/.test(write.text), 'open invites are skipped');
+  });
+
+  await testAsync('a password change leaves open invites open', async () => {
+    const sql = makeSqlStub([
+      { match: t => t.startsWith('SELECT * FROM users WHERE id'), rows: () => [{ id: 1, email: 'a@example.com', role: 'admin', password_hash: 'h' }] },
+    ]);
+    const handler = makeHandler({ sql });
+    const res = mockRes();
+    await handler(authReq('POST', '/api/test/members/change-password', { currentPassword: 'correct-password', newPassword: 'new-password' }), res);
+    const write = sql.calls.find(c => /SET password_hash = \?/.test(c.text));
+    assert(write && /password_hash IS NOT NULL OR invite_token_hash IS NULL/.test(write.text), 'open invites are skipped: ' + res.statusCode);
+  });
+
 }
 
 if (require.main === module) {

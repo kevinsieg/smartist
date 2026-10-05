@@ -28,11 +28,16 @@ module.exports = [
   },
 
   // Page scripts are classic <script> files sharing one global scope: a name
-  // defined in core.js is used by every page, so undefined-name and unused
-  // checks cannot see across files and stay off here.
+  // defined in core.js is used by every page, so undefined-name checks cannot
+  // see across files and stay off here. Unused names are checked for locals
+  // only (vars: 'local'); a top-level name may be used by another file.
   {
     files: ['app/**/*.js'],
     languageOptions: { sourceType: 'script', globals: { ...globals.browser } },
-    rules: { 'no-undef': 'off', 'no-unused-vars': 'off', 'no-redeclare': 'off' },
+    rules: {
+      'no-undef': 'off',
+      'no-redeclare': 'off',
+      'no-unused-vars': ['error', { vars: 'local', args: 'none', caughtErrors: 'none' }],
+    },
   },
 ];

@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
-const { checkRateLimit } = require('../_ratelimit');
+const { checkRateLimit, loginOkPrefix } = require('../_ratelimit');
 const { generateMagicToken, verifyMagicToken, generateUserToken, passwordlessSeed, TTL_8H } = require('../_token');
 const { sendEmail } = require('../_email');
 const { getArtistsForUser } = require('./artist');
@@ -23,15 +23,16 @@ const logger = require('../_logger');
 // is the bug this fixes, moved somewhere less obvious.
 const MAX_ROWS = 10;
 
-// Every row for this address, lowest id first. The first is the *anchor*: its
-// hash is the token's signing key, so setting a password changes the seed and
-// the link that set it stops verifying, along with any other outstanding link.
+// Every row for this address, accepted memberships first, then lowest id. The
+// first is the *anchor*: its hash is the token's signing key, so setting a
+// password changes the seed and the link that set it stops verifying, along
+// with any other outstanding link.
 async function _rowsFor(addr, sql) {
   return await sql`
     SELECT id, email, role, password_hash
     FROM users
     WHERE email = ${addr}
-    ORDER BY id
+    ORDER BY (password_hash IS NOT NULL OR invite_token_hash IS NULL) DESC, id
     LIMIT ${MAX_ROWS}
   `;
 }
@@ -42,7 +43,7 @@ function _seed(row) {
   return row.password_hash || passwordlessSeed(row.id);
 }
 
-// POST ?action=request-reset
+// POST /api/auth/request-reset
 async function requestReset({ body, ip, origin }) {
   const addr = String(body.email ?? '').trim().toLowerCase();
   // Always the same answer, with or without an account — otherwise this endpoint
@@ -80,7 +81,7 @@ async function requestReset({ body, ip, origin }) {
   return ok({ ok: true });
 }
 
-// POST ?action=set-password
+// POST /api/auth/set-password
 async function setPassword({ body }) {
   const { token, hint, password } = body;
   if (!token || !hint || !password)   return fail(400, 'token, hint and password required');
@@ -100,12 +101,32 @@ async function setPassword({ body }) {
     return fail(400, 'Invalid or expired link');
 
   const hash = await bcrypt.hash(String(password), 12);
-  await sql`UPDATE users SET password_hash = ${hash} WHERE email = ${addr}`;
+  // Email-change and deletion links still outstanding end with the old password,
+  // and so does the known-IP exemption of whoever signed in with it.
+  await sql`
+    WITH u AS (
+      UPDATE users SET password_hash = ${hash},
+          pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
+          delete_token_hash = NULL, delete_token_expires = NULL
+      -- A password accepts an open invite, so an account's invites to other
+      -- bands stay open (each is joined on its own). An address that has only
+      -- invites sets its first password here, which accepts them, as the
+      -- invite link would.
+      WHERE email = ${addr}
+        AND (password_hash IS NOT NULL OR invite_token_hash IS NULL
+             OR NOT EXISTS (SELECT 1 FROM users WHERE email = ${addr}
+                            AND (password_hash IS NOT NULL OR invite_token_hash IS NULL)))
+      RETURNING 1
+    ), forget AS (
+      DELETE FROM rate_limits
+      WHERE key >= ${loginOkPrefix(addr)} AND key < ${loginOkPrefix(addr)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(addr)})
+    )
+    SELECT count(*) FROM u`;
 
   // Setting the password is what logs them in; they are here because they could
   // not, and handing them back to the login form would be a joke.
   const anchor       = rows[0];
-  const sessionToken = generateUserToken(anchor.id, anchor.role, TTL_8H, hash);
+  const sessionToken = generateUserToken(anchor.id, anchor.role, TTL_8H, hash, anchor.email);
   const artists      = await getArtistsForUser(anchor.id, sql);
   await logger.info('password_set_via_reset', { email: addr, workspaces: rows.length });
   return ok({ ok: true, token: sessionToken, role: anchor.role, email: anchor.email, artists });

@@ -41,13 +41,21 @@ function flatten(row) {
 function toCsv(rows) {
   if (!rows.length) return '';
   const flat = rows.map(flatten);
-  const cols = [];
+  // Columns in first-seen order, keeping only those with a value somewhere.
+  // One pass: asking every row about every empty column was quadratic, seconds
+  // for a few thousand songs.
+  const seen = new Set();
+  const filled = new Set();
+  const order = [];
   for (const r of flat) {
-    for (const k of Object.keys(r)) {
-      if (!cols.includes(k) && flat.some(x => !isEmpty(x[k]))) cols.push(k);
+    for (const [k, v] of Object.entries(r)) {
+      if (!seen.has(k)) { seen.add(k); order.push(k); }
+      if (!isEmpty(v)) filled.add(k);
     }
   }
-  const lines = [cols.join(','), ...flat.map(r => cols.map(c => cell(r[c])).join(','))];
+  const cols = order.filter(k => filled.has(k));
+  // Header cells go through cell() too: extra keys are member-chosen text.
+  const lines = [cols.map(cell).join(','), ...flat.map(r => cols.map(c => cell(r[c])).join(','))];
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 

@@ -3,7 +3,7 @@
 (function () {
   var SUPPORTED_LOCALES = ['en', 'fr', 'de'];
   var DEFAULT_LOCALE = 'en';
-  var I18N_VERSION = 54;
+  var I18N_VERSION = 60;
 
   function resolveLocale(stored, navLangs, supported, def) {
     supported = supported || SUPPORTED_LOCALES;
@@ -147,7 +147,10 @@
     btn.className = 'lang-switcher-toggle';
     btn.setAttribute('aria-haspopup', 'true');
     btn.setAttribute('aria-expanded', 'false');
-    btn.setAttribute('aria-label', 'Change language');
+    // The name contains the visible code (2.5.3), in the page's language.
+    var langLabel = t('profile.languageLabel');
+    if (langLabel === 'profile.languageLabel') langLabel = 'Language';
+    btn.setAttribute('aria-label', langLabel + ': ' + locale.toUpperCase());
     btn.innerHTML = FLAGS[locale] + '<span>' + locale.toUpperCase() + '</span>';
     var menu = document.createElement('div');
     menu.className = 'lang-switcher-menu';
@@ -155,6 +158,7 @@
       var item = document.createElement('button');
       item.type = 'button';
       item.className = 'lang-switcher-item' + (loc === locale ? ' current' : '');
+      if (loc === locale) item.setAttribute('aria-current', 'true');
       item.innerHTML = FLAGS[loc] + '<span>' + ENDONYMS[loc] + '</span>';
       item.addEventListener('click', function () { if (loc !== locale) setLocale(loc); });
       menu.appendChild(item);
@@ -163,6 +167,28 @@
       e.preventDefault();
       var open = wrap.classList.toggle('open');
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) { var cur = menu.querySelector('.current') || menu.firstChild; if (cur) cur.focus(); }
+    });
+    function close() {
+      wrap.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    wrap.addEventListener('keydown', function (e) {
+      if (!wrap.classList.contains('open')) return;
+      var items = [].slice.call(menu.querySelectorAll('button'));
+      var i = items.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); close(); btn.focus(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); (items[i + 1] || items[0]).focus(); }
+      else if (e.key === 'ArrowUp')   { e.preventDefault(); (items[i - 1] || items[items.length - 1]).focus(); }
+    });
+    // Tab out of the menu closes it; a press inside does not (Safari blurs
+    // the focused item without focusing the one pressed).
+    var pressing = false;
+    wrap.addEventListener('pointerdown', function () { pressing = true; });
+    wrap.addEventListener('click', function () { pressing = false; });
+    wrap.addEventListener('focusout', function (e) {
+      if (pressing || wrap.contains(e.relatedTarget)) return;
+      close();
     });
     wrap.appendChild(btn);
     wrap.appendChild(menu);

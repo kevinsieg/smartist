@@ -37,7 +37,8 @@ It runs what CI runs, with no Vercel login and no remote database. Sign in at
 
 - **Allowed:** the test and dev scripts, `apply_schema.js --check`, read-only git.
 - **Ask first:** every script that writes data (`seed`, `import_*`,
-  `create_user`, `plans`, `apply_schema`, `demo_reset`, `setup`).
+  `create_user`, `plans`, `apply_schema`, `demo_reset`, `setup`), and
+  `db_backup` / `db_restore`.
 - **Denied:** pushes to `main`, `delete_artist.js`, `vercel env` and production
   deploys, and reading `.env` / `.env.local`.
 
@@ -50,12 +51,14 @@ Set these once; nothing in the repository can enforce them.
 
 1. **Protect `main` on GitHub** (Settings → Branches → Add rule for `main`):
    require a pull request before merging, require the status checks
-   *Unit tests* and *Integration + browser tests (local Postgres)*, and do not
-   allow force pushes or deletions.
+   *Unit tests*, *Integration + browser tests (local Postgres)* and *Live code
+   on the new schema*, and do not allow force pushes or deletions.
 2. **No production credentials in agent environments.** The cloud environment
    an agent runs in (environment settings → environment variables) should hold
    at most the **dev** database URL — the session hook points `DATABASE_URL` at
    the local database anyway. Production connection strings stay with people;
-   schema changes and data scripts against production are run by hand.
+   schema changes reach production through each deployment's build
+   (`scripts/deploy_migrate.js`), and data scripts against production are run
+   by hand.
 3. **Vercel tokens** in CI are repository secrets used only by the preview job;
    agents do not need them.

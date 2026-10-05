@@ -32,6 +32,7 @@ jobs:
     name: Back up databases and uploads
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Upstream only; on a fork, change this to your own owner/name.
     if: ${{ github.repository == 'kevinsieg/smartist' }}
     # Scratch Postgres for the restore check. Same major version as the client
     # below (PG_MAJOR), and at least the production servers' version.
@@ -43,6 +44,9 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 15
+    # Secrets at job level, unlike ci.yml: the steps' `if:` conditions read
+    # them, and this job runs only on schedule or by hand, on the default
+    # branch, with every action pinned to a commit. No pushed code runs here.
     env:
       PG_MAJOR: '17'
       BACKUP_DATABASES: ${{ secrets.BACKUP_DATABASES }}
@@ -100,8 +104,10 @@ jobs:
           node-version: '24'
       - if: steps.cfg.outputs.ok == 'true'
         name: Install dependencies, Postgres client, age and rclone
+        # --ignore-scripts: this job's environment holds every production
+        # connection string and bucket key, and no install script needs them.
         run: |
-          npm ci
+          npm ci --ignore-scripts
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-common age rclone > /dev/null
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null

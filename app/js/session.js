@@ -3,13 +3,18 @@
 
 const AUTH_TOKEN_KEY = 'smartist_token';
 
-var _GLOBAL_PAGES = new Set(['login','signup','onboarding','workspaces','demo','contact','profile']);
+var _GLOBAL_PAGES = new Set(['login','signup','onboarding','workspaces','demo','contact','profile','privacy','confirm-email','admin']);
 // Global pages are single-segment paths; deeper paths under the same name are
 // workspace routes (e.g. /demo is the demo gate, /demo/dashboard is the demo
 // artist's dashboard).
 var _pathParts    = window.location.pathname.split('/').filter(Boolean);
 var _rawSegment   = _pathParts[0] || '';
-var _artistSlug   = (_GLOBAL_PAGES.has(_rawSegment) && _pathParts.length === 1) ? '' : _rawSegment;
+// The segment is only a slug when it looks like one (signup's format, plus the
+// short and underscore slugs scripts/setup.js allows): it is built into URLs
+// and markup, and the address bar is anyone's to write — /x');apiFetch(…)… is
+// a path too.
+var _SLUG_RE      = /^[a-z0-9_-]{1,64}$/;
+var _artistSlug   = (_GLOBAL_PAGES.has(_rawSegment) && _pathParts.length === 1) || !_SLUG_RE.test(_rawSegment) ? '' : _rawSegment;
 var _CONFIG_KEY       = 'artist_config_cache_' + (_artistSlug || 'default');
 var _CONFIG_KEY_LIGHT = _CONFIG_KEY + '_light';
 
@@ -48,10 +53,18 @@ function isViewMode() {
 
 // opts.light skips the songs payload — use it on pages that only need
 // name/config/counts. Light and full responses are cached under separate keys.
+// The media bucket's base URL, from the last config loaded (songs-media.js
+// frames only its own bucket's PDFs without a sandbox).
+var _mediaBase = '';
+
 async function loadConfig(slugOverride, opts) {
   var slug  = (slugOverride !== undefined) ? slugOverride : _artistSlug;
   var light = !!(opts && opts.light);
-  var key   = 'artist_config_cache_' + (slug || 'default') + (light ? '_light' : '');
+  // Send the token when present — private workspaces only serve full config
+  // (songs, counts) to authenticated members. A signed-out answer is cached
+  // apart (_anon), so a page after sign-in never renders from it.
+  var _cfgToken = getToken();
+  var key   = 'artist_config_cache_' + (slug || 'default') + (light ? '_light' : '') + (_cfgToken ? '' : '_anon');
   let cached = null;
   try { cached = JSON.parse(sessionStorage.getItem(key)); } catch {}
 
@@ -59,17 +72,17 @@ async function loadConfig(slugOverride, opts) {
   if (slug)  params.push('slug=' + encodeURIComponent(slug));
   if (light) params.push('light=1');
   var url = '/api/config' + (params.length ? '?' + params.join('&') : '');
-  // Send the token when present — private workspaces only serve full config
-  // (songs, counts) to authenticated members.
-  var _cfgToken = getToken();
   const fetchFresh = fetch(url, _cfgToken ? { headers: { Authorization: 'Bearer ' + _cfgToken } } : undefined)
     .then(r => { if (!r.ok) throw new Error('config unavailable'); return r.json(); })
     .then(cfg => {
-      try { sessionStorage.setItem(key, JSON.stringify(cfg)); } catch {}
+      // Not if the session changed while this was in flight.
+      if (getToken() === _cfgToken) { try { sessionStorage.setItem(key, JSON.stringify(cfg)); } catch {} }
+      _mediaBase = (cfg && cfg.mediaBase) || '';
       return cfg;
     });
 
   if (cached) {
+    _mediaBase = cached.mediaBase || '';
     fetchFresh.catch(() => {});
     return cached;
   }
@@ -133,11 +146,11 @@ function getAuthRole() {
 
 // Authenticated fetch. Adds the auth header when a token exists. On 401 clears
 // the token and redirects to login (then throws so callers abort cleanly).
-// my-artists answers 401 once the token's user is gone. Anything else,
+// /api/auth/artists answers 401 once the token's user is gone. Anything else,
 // network failures included, counts as alive: never log out on a guess.
 async function _sessionAlive(token) {
   try {
-    const r = await fetch('/api/config?action=my-artists', { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch('/api/auth/artists', { headers: { Authorization: `Bearer ${token}` } });
     return r.status !== 401;
   } catch { return true; }
 }
@@ -150,6 +163,11 @@ function _endDeadSession() {
 }
 
 async function apiFetch(url, method = 'GET', body) {
+  // The session token goes to this site's own API and nowhere else, whatever
+  // URL a caller (or markup calling it through data-on*) hands in.
+  var _target = new URL(url, location.href);
+  if (_target.origin !== location.origin || !_target.pathname.startsWith('/api/'))
+    throw new Error('apiFetch: not this site\'s API');
   const opts = { method, headers: {} };
   const token = getToken();
   if (token) opts.headers.Authorization = `Bearer ${token}`;

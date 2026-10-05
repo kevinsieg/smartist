@@ -20,7 +20,6 @@ function _gigTypeLabel(type) {
 }
 
 var _gigFilters = { gig: '', venue: '', setlist: '', song: '' };
-var _gigAllSetlists = [];
 var _gigSongTimer = null;
 var _gigSongMatchGigIds = null;  // null = no filter; Set<gigId>
 var cfg = null;
@@ -43,26 +42,32 @@ function _canvasToJpegBlob(canvas, quality) {
   });
 }
 
+// The poster's long edge: a phone photo (4000 px and more) is cut down to this
+// before upload. Still sharp in the lightbox, and well under a megabyte.
+var POSTER_MAX_EDGE = 2000;
+
+function _posterCanvas(img, maxEdge) {
+  var scale  = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+  var canvas = document.createElement('canvas');
+  canvas.width  = Math.max(1, Math.round(img.naturalWidth  * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  var ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+// A JPEG of at most POSTER_MAX_EDGE px (never upscaled), at quality 0.85; smaller
+// steps only if that is still over the 5 MB the API accepts.
 async function generatePosterBlob(file) {
   var img = await _loadImage(file);
-  var limits = [0, 2048, 1600, 1200]; // 0 = natural size first
+  var limits = [POSTER_MAX_EDGE, 1600, 1200];
   for (var i = 0; i < limits.length; i++) {
-    var maxEdge = limits[i] || Math.max(img.naturalWidth, img.naturalHeight);
-    var scale   = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
-    var canvas  = document.createElement('canvas');
-    canvas.width  = Math.round(img.naturalWidth  * scale);
-    canvas.height = Math.round(img.naturalHeight * scale);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    var blob = await _canvasToJpegBlob(canvas, 0.85);
+    var blob = await _canvasToJpegBlob(_posterCanvas(img, limits[i]), 0.85);
     if (blob.size <= 5 * 1024 * 1024) return blob;
   }
   // Last resort: 1200px max, quality 0.6
-  var canvas2 = document.createElement('canvas');
-  var s2 = Math.min(1, 1200 / Math.max(img.naturalWidth, img.naturalHeight));
-  canvas2.width  = Math.round(img.naturalWidth  * s2);
-  canvas2.height = Math.round(img.naturalHeight * s2);
-  canvas2.getContext('2d').drawImage(img, 0, 0, canvas2.width, canvas2.height);
-  return _canvasToJpegBlob(canvas2, 0.6);
+  return _canvasToJpegBlob(_posterCanvas(img, 1200), 0.6);
 }
 
 async function generateThumbBlob(file) {
@@ -140,7 +145,7 @@ function renderPosterRow(g) {
   if (g.thumb_url) {
     row.innerHTML =
       '<div class="gig-poster-row">' +
-        '<img class="gig-poster-thumb" src="' + escHtml(g.thumb_url) + '">' +
+        '<img class="gig-poster-thumb" src="' + escHtml(g.thumb_url) + '" alt="' + escHtml(t('gigs.posterAlt')) + '">' +
         '<div class="gig-poster-actions">' +
           '<button class="btn" type="button" data-onclick="clickById(\'gm-poster-input\')">' + t('gigs.replaceBtn') + '</button>' +
           '<button class="btn" type="button" id="gm-poster-remove-btn" data-onclick="confirmRemovePoster()">' + t('gigs.removeBtn') + '</button>' +
@@ -182,10 +187,10 @@ var GIG_COLUMNS = [
   { field: 'thumb_url', label: '', width: '44px', sortable: false,
     render: function(g) {
       if (g.thumb_url) {
-        return '<div class="gig-thumb-wrap" data-poster="' + escHtml(g.poster_url) + '" data-onclick="event.stopPropagation();openLightbox(this.dataset.poster)">' +
-               '<img class="gig-thumb" src="' + escHtml(g.thumb_url) + '" loading="lazy"></div>';
+        return '<div class="gig-thumb-wrap" role="button" tabindex="0" aria-label="' + escHtml(t('gigs.posterAlt')) + '" data-poster="' + escHtml(g.poster_url) + '" data-onclick="event.stopPropagation();openLightbox(this.dataset.poster)">' +
+               '<img class="gig-thumb" src="' + escHtml(g.thumb_url) + '" alt="" loading="lazy"></div>';
       }
-      return '<div class="gig-thumb-placeholder gig-thumb-add" data-onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="' + t('gigs.uploadPosterBtn') + '"></div>';
+      return '<div class="gig-thumb-placeholder gig-thumb-add" role="button" tabindex="0" aria-label="' + escHtml(t('gigs.uploadPosterBtn')) + '" data-onclick="event.stopPropagation();openEditModal(' + g.id + ')" title="' + t('gigs.uploadPosterBtn') + '"></div>';
     }
   },
   { field: 'date', get label() { return t('gigs.colDate'); }, width: '75px', sortable: true, type: 'date',
@@ -200,7 +205,7 @@ var GIG_COLUMNS = [
     var vm = isViewMode();
     if (g.deleted) return '<span class="sl-deleted-badge">' + t('gigs.deletedBadge') + '</span>' +
       (vm ? '' : '<button class="btn sl-edit-btn" title="' + t('gigs.permanentlyDeleteTitle') + '" style="color:#e55;" data-onclick="event.stopPropagation();deleteGigFromPopup(' + g.id + ')">' + t('gigs.eraseBtn') + '</button>');
-    var hasSetlist = _gigAllSetlists.some(function(s) { return s.gig_id === g.id; });
+    var hasSetlist = (g.setlist_titles || []).length > 0;
     var setsBtn = hasSetlist ? '<button class="btn sl-sets-btn" title="' + t('gigs.viewSetlistsTitle') + '" data-onclick="event.stopPropagation();openGigSetlists(' + g.id + ')">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="5" y="2" width="14" height="20" rx="2"/>' +
@@ -219,9 +224,14 @@ function _ensureLightbox() {
   if (_gigLightboxEl) return;
   _gigLightboxEl = document.createElement('div');
   _gigLightboxEl.className = 'gig-lightbox';
-  _gigLightboxEl.innerHTML = '<img class="gig-lightbox-img" src="" alt="' + t('gigs.posterAlt') + '">';
+  // A dialog holding only the image: it takes focus, any key or click closes it.
+  _gigLightboxEl.setAttribute('role', 'dialog');
+  _gigLightboxEl.setAttribute('aria-modal', 'true');
+  _gigLightboxEl.setAttribute('aria-label', t('gigs.posterAlt'));
+  _gigLightboxEl.tabIndex = -1;
+  _gigLightboxEl.innerHTML = '<img class="gig-lightbox-img" src="" alt="' + escHtml(t('gigs.posterAlt')) + '">';
   _gigLightboxEl.addEventListener('click', closeLightbox);
-  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+  _gigLightboxEl.addEventListener('keydown', function(e) { if (e.key === 'Escape' || e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); closeLightbox(); } });
   document.body.appendChild(_gigLightboxEl);
 }
 
@@ -229,11 +239,18 @@ function openLightbox(url) {
   if (!url) return;
   _ensureLightbox();
   _gigLightboxEl.querySelector('.gig-lightbox-img').src = url;
+  _gigLightboxOpener = document.activeElement;
   _gigLightboxEl.style.display = 'flex';
+  _gigLightboxEl.focus();
 }
 
+var _gigLightboxOpener = null;
+
 function closeLightbox() {
-  if (_gigLightboxEl) _gigLightboxEl.style.display = 'none';
+  if (!_gigLightboxEl || _gigLightboxEl.style.display === 'none') return;
+  _gigLightboxEl.style.display = 'none';
+  if (_gigLightboxOpener && _gigLightboxOpener.isConnected) _gigLightboxOpener.focus();
+  _gigLightboxOpener = null;
 }
 
 function _insertYearDividers(containerId) {
@@ -272,6 +289,7 @@ initPage(async function(config) {
     _copyEl.addEventListener('click', function() {
       navigator.clipboard.writeText(this.dataset.url).then(function() {
         _copyEl.textContent = t('gigs.copiedMsg');
+        announce(t('gigs.copiedMsg'));
         setTimeout(function() { _copyEl.textContent = t('gigs.copyLink'); }, 2000);
       });
     });
@@ -304,8 +322,8 @@ initPage(async function(config) {
     emptyHint:       t('gigs.noPastGigs'),
   });
 
-  // The setlists for the cross-entity filter load alongside the gigs.
-  var _setsPromise = apiFetch('/api/' + artistSlug + '/setlists').catch(function() { return null; });
+  // Each gig row carries its setlists' titles (setlist_titles) for the
+  // "has setlist" button and the setlist filter.
   await loadGigs();
 
   // Re-insert year dividers after sort bar re-renders the past list
@@ -315,13 +333,6 @@ initPage(async function(config) {
       if (e.target.closest('.sort-btn')) setTimeout(function() { _insertYearDividers('past-list'); }, 0);
     });
   }
-
-  // Fetch setlists for cross-entity filter
-  try {
-    var setsRes = await _setsPromise;
-    _gigAllSetlists = await setsRes.json();
-    if (!Array.isArray(_gigAllSetlists)) _gigAllSetlists = [];
-  } catch { _gigAllSetlists = []; }
 
   // Filter toggle
   var _filterPanelOpen = false;
@@ -410,9 +421,9 @@ function _applyGigsFilter() {
   var visible = allGigs.filter(function(g) {
     if (f.gig      && !(g.title          || '').toLowerCase().includes(f.gig))      return false;
     if (f.venue    && !(g.venue_name     || '').toLowerCase().includes(f.venue))    return false;
-if (f.setlist) {
-      var hasSet = _gigAllSetlists.some(function(s) {
-        return s.gig_id === g.id && (s.name || '').toLowerCase().includes(f.setlist);
+    if (f.setlist) {
+      var hasSet = (g.setlist_titles || []).some(function(title) {
+        return (title || '').toLowerCase().includes(f.setlist);
       });
       if (!hasSet) return false;
     }
@@ -738,7 +749,7 @@ async function openGigSetlists(gigId) {
   openModal('setlist-detail-modal');
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&refs=1');
+      const r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?refs=1');
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
@@ -770,8 +781,8 @@ function deleteGigFromPopup(id) {
   closeGigModal();
   openHardDeleteModal({
     title: t('gigs.permanentlyDeleteGig'),
-    refsUrl: '/api/' + artistSlug + '/gigs?id=' + id + '&refs=1',
-    deleteUrl: '/api/' + artistSlug + '/gigs?id=' + id,
+    refsUrl: '/api/' + artistSlug + '/gigs/' + id + '?refs=1',
+    deleteUrl: '/api/' + artistSlug + '/gigs/' + id,
     buildRefsMsg: function(refs) {
       if (!refs.setlists.length) return t('gigs.noLinkedSetlists');
       return t('gigs.linkedSetlists') + '<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
@@ -808,7 +819,7 @@ async function saveGig() {
     comment:         document.getElementById('gm-comment').value.trim()   || null,
   };
   setStatus('gm-status', '');
-  const url = editingId ? `/api/${artistSlug}/gigs?id=${editingId}` : `/api/${artistSlug}/gigs`;
+  const url = editingId ? `/api/${artistSlug}/gigs/${editingId}` : `/api/${artistSlug}/gigs`;
   const res = await withBusy(document.getElementById('gm-save-btn'), async () => {
     const r = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
     return { r, json: await r.json() };
@@ -831,7 +842,7 @@ async function renderGigRelated(gigId) {
 
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await apiFetch(`/api/${artistSlug}/gigs?id=${gigId}&refs=1`);
+      const r = await apiFetch(`/api/${artistSlug}/gigs/${gigId}?refs=1`);
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {

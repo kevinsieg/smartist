@@ -40,7 +40,12 @@ async function init() {
       if (printLogo) printLogo.src = cfg.config.logoUrl.replace(/^http:/i, 'https:');
     }
     // Show tab bar and route to the correct tab
-    _activeView = new URLSearchParams(location.search).get('view') || 'generator';
+    var _setlistQp = new URLSearchParams(location.search);
+    _activeView = _setlistQp.get('view') || 'generator';
+    // ?view=history&set=N (a song's appearances) opens that saved set.
+    if (_activeView === 'history' && Number(_setlistQp.get('set')) > 0) {
+      _histPendingOpenId = String(Number(_setlistQp.get('set')));
+    }
     var tabsEl = document.getElementById('setlist-tabs');
     if (tabsEl) {
       tabsEl.style.display = '';
@@ -61,7 +66,6 @@ async function init() {
       await _renderHistoryTab();
     } else {
       renderControls();
-      applyDemoFilters();
     }
     injectModalCloseButtons();
   } catch {
@@ -90,7 +94,6 @@ function switchTab(view) {
     _renderHistoryTab();
   } else {
     renderControls();
-    applyDemoFilters();
   }
 }
 

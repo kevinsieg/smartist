@@ -10,8 +10,13 @@ const PLANS = {
   },
   pro: {
     label: 'Pro',
-    limits: { storageMB: null, songs: null }, // null = unlimited
-    features: ['songs', 'setlists', 'gigs', 'hub', 'venues', 'organizers', 'pro-import', 'booking'],
+    // Pro is a free self-serve switch until paid billing exists, so its
+    // limits are finite: unlimited space in a public bucket is free file
+    // hosting, and unlimited songs (each with lyrics, arrangements and
+    // history) fill the shared database, for anyone who signs up.
+    // null = unlimited.
+    limits: { storageMB: 2048, songs: 5000 },
+    features: ['songs', 'setlists', 'gigs', 'hub', 'venues', 'organizers', 'pro-import'],
   },
 };
 
@@ -36,12 +41,6 @@ function songLimit(artist) {
   return getPlan(artist).limits.songs;
 }
 
-function wouldExceedStorage(artist, usedBytes, addBytes) {
-  const limit = storageLimitBytes(artist);
-  if (limit == null) return false;
-  return Number(usedBytes) + Number(addBytes) > limit;
-}
-
 function planSummary(artist) {
   const key = planKey(artist);
   const p = PLANS[key];
@@ -51,11 +50,11 @@ function planSummary(artist) {
 // Writes a 402 and returns false when the band's plan lacks `key`.
 function requireFeature(res, artist, key) {
   if (hasFeature(artist, key)) return true;
-  res.status(402).json({ error: 'upgrade_required', feature: key });
+  res.status(402).json({ error: 'This needs a paid plan', code: 'upgrade_required', feature: key });
   return false;
 }
 
 module.exports = {
   PLANS, getPlan, hasFeature, storageLimitBytes, songLimit,
-  wouldExceedStorage, planSummary, requireFeature,
+  planSummary, requireFeature,
 };

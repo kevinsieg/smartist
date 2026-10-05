@@ -1,27 +1,27 @@
 const postgres = require('postgres');
+const logger = require('./_logger');
+const { trimHistory } = require('./_domain/songs');
 
 // ── Database provider ─────────────────────────────────────────────────────────
-// Current: postgres.js (standard PostgreSQL wire protocol, supports transactions)
-// postgres.js connects over port 5432. Neon supports both the HTTP endpoint
-// (@neondatabase/serverless) and the standard wire protocol — the DATABASE_URL
-// pooler connection string works with both.
-//
-// postgres.js was chosen over @neondatabase/serverless because:
-//   - sql.begin() / transactions are required for multi-step writes
-//   - the tagged-template interface is identical — no query changes needed
-//
-// To switch drivers, replace the connect line only:
-//   neon HTTP (no transactions; npm install it first): connect: url => require('@neondatabase/serverless').neon(url)
-//   pg Pool:                     connect: url => { ... }  (see DATABASE.md)
+// postgres.js over the standard PostgreSQL wire protocol (port 5432): it has
+// transactions (sql.begin), which multi-step writes need, and Neon's pooled
+// DATABASE_URL takes it. A different driver with the same tagged-template
+// interface replaces the connect line only (DATABASE.md).
 // prepare: false — Neon's pooler keeps named prepared statements on its server
 // connections, so after a column changes type every `SELECT *` on that table
-// failed with "cached plan must not change result type" until the pool recycled.
+// fails with "cached plan must not change result type" until the pool recycles.
 // Cost of that: postgres.js sends every query with parameters as Parse/Describe,
 // waits for the parameter types, then Bind/Execute — two round-trips — and a
-// query waiting for its description holds up the ones behind it. So on this
-// single connection (max: 1) queries started together with Promise.all still
-// run one after the other. Fewer statements (one CTE instead of three
-// queries) is what saves time here, not more parallelism.
+// query waiting for its description holds up the ones behind it on its
+// connection. Fewer statements (one CTE instead of three queries) is still
+// what saves the most time.
+// max: 4 — with Fluid compute one instance serves several requests at once,
+// and on a single connection a slow one (an export, an import, a transaction,
+// which holds its connection to the end) stalled every other request on that
+// instance. Connections open only when needed, so an instance serving one
+// request at a time keeps one, unless it runs queries side by side
+// (Promise.all), which then overlap for real. Neon's pooled endpoint takes
+// thousands of client connections (health warns about a direct one).
 // connect_timeout: fail a request after 10 s instead of the 30 s default when
 // the database does not answer (a suspended compute that never wakes).
 // fetch_types stays on: without it postgres.js cannot send JS arrays as
@@ -30,7 +30,7 @@ const postgres = require('postgres');
 const DB = {
   connect: url => postgres(url, {
     ssl: /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url) ? false : 'require',
-    max: 1, prepare: false, connect_timeout: 10,
+    max: 4, prepare: false, connect_timeout: 10,
   }),
 };
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,34 +55,62 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
       VALUES (${artistId}, ${songId}, ${action}, ${songData})
     `;
   } catch (err) {
-    console.error('[audit] failed to log:', err.message);
+    await logger.error('audit_log_failed', { songId, error: err.message });
   }
-  await trimSongLogs(sql, artistId);
+  await trimSongLogs(sql, artistId, songId);
 }
 
 // Each entry is a full snapshot of the song, so the history would grow with
-// every edit forever. A song keeps its newest SONG_LOG_KEEP entries: the last
-// one is what restore reads, and the list shows 20 at most. Entries of songs
-// that no longer exist (song_id NULL) are left alone. About one logged write
-// in TRIM_EVERY trims the whole band, like the rate_limits sweep; a failed
-// trim never fails the request.
-const SONG_LOG_KEEP = 20;
-const TRIM_EVERY = 10;
-async function trimSongLogs(sql, artistId, { always = false } = {}) {
-  if (!always && Math.random() >= 1 / TRIM_EVERY) return;
+// every edit forever. A song keeps its newest SONG_LOG_KEEP entries
+// (api/_constants.js): the last one is what restore reads, and the list shows
+// 20 at most. Only the songs a write touched are trimmed, on every write. The
+// song edits do it inside their own statement (a `trimmed` step built by
+// trimHistory); this is for the writes that log separately (media). Takes one
+// song id or a list. A failed trim never fails the request.
+async function trimSongLogs(sql, artistId, songIds) {
+  const ids = (Array.isArray(songIds) ? songIds : [songIds]).map(Number).filter(n => Number.isInteger(n) && n > 0);
+  if (!ids.length) return;
+  try {
+    await trimHistory(sql, artistId, sql`SELECT unnest(${ids}::int[])`);
+  } catch (err) {
+    await logger.error('audit_trim_failed', { error: err.message });
+  }
+}
+
+// Deleted songs stay restorable from the change log, but they never left the
+// database: row, lyrics, arrangements and history piled up for good, outside
+// the plan's song count. A song deleted more than PURGE_AFTER_DAYS ago goes
+// for good, with its history, unless it still has an uploaded file (those
+// count towards the band's storage, and removing them is the media endpoints'
+// job). A saved setlist that still lists it keeps the row (setlist history
+// shows its title), but its lyrics, arrangements and history go: otherwise
+// "create, save as a setlist, delete" would store without bound. About one
+// deletion in PURGE_EVERY sweeps the band; a failed sweep never fails the
+// request.
+const PURGE_AFTER_DAYS = 90;
+const PURGE_EVERY = 10;
+async function purgeDeletedSongs(sql, artistId, { always = false } = {}) {
+  if (!always && Math.random() >= 1 / PURGE_EVERY) return;
   try {
     await sql`
-      DELETE FROM song_logs WHERE id IN (
-        SELECT id FROM (
-          SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
-          FROM song_logs
-          WHERE artist_id = ${artistId} AND song_id IS NOT NULL
-        ) ranked
-        WHERE n > ${SONG_LOG_KEEP}
+      WITH old AS (
+        SELECT s.id, EXISTS (SELECT 1 FROM setlist_songs ss WHERE ss.song_id = s.id) AS listed
+        FROM songs s
+        WHERE s.artist_id = ${artistId} AND s.deleted
+          AND NOT (s.extra ?| ARRAY['listenUrl', 'sheetUrl', 'playbackUrl'])
+          AND (SELECT max(l.changed_at) FROM song_logs l WHERE l.song_id = s.id)
+              < now() - make_interval(days => ${PURGE_AFTER_DAYS})
+      ), logs AS (
+        DELETE FROM song_logs WHERE song_id IN (SELECT id FROM old)
+      ), lyrics AS (
+        DELETE FROM song_lyrics WHERE song_id IN (SELECT id FROM old WHERE listed) AND artist_id = ${artistId}
+      ), charts AS (
+        DELETE FROM song_arrangements WHERE song_id IN (SELECT id FROM old WHERE listed) AND artist_id = ${artistId}
       )
+      DELETE FROM songs WHERE id IN (SELECT id FROM old WHERE NOT listed) AND artist_id = ${artistId}
     `;
   } catch (err) {
-    console.error('[audit] failed to trim:', err.message);
+    await logger.error('song_purge_failed', { error: err.message });
   }
 }
 
@@ -97,4 +125,7 @@ function parsePage(req) {
   return { limit, offset };
 }
 
-module.exports = { getDb, getArtist, insertAuditLog, trimSongLogs, SONG_LOG_KEEP, getSlug, parsePage };
+module.exports = {
+  getDb, getArtist, insertAuditLog, trimSongLogs, purgeDeletedSongs, PURGE_AFTER_DAYS,
+  getSlug, parsePage,
+};

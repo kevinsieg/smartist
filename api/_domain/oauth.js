@@ -37,7 +37,7 @@ function readNonceCookie(headers) {
   return m ? m[1] : null;
 }
 
-// GET ?action=google-url — start Google OAuth flow.
+// GET /api/auth/google-url — start Google OAuth flow.
 async function googleUrl({ query, origin }) {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
     return fail(503, 'Google login is not configured');
@@ -54,7 +54,7 @@ async function googleUrl({ query, origin }) {
   return { ...ok({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` }), headers: { 'Set-Cookie': header } };
 }
 
-// GET ?action=facebook-url — start Facebook OAuth flow.
+// GET /api/auth/facebook-url — start Facebook OAuth flow.
 async function facebookUrl({ query, origin }) {
   if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET)
     return fail(503, 'Facebook login is not configured');
@@ -76,11 +76,11 @@ async function facebookUrl({ query, origin }) {
   return { ...ok({ url: `https://www.facebook.com/${FB_GRAPH_VERSION}/dialog/oauth?${params}` }), headers: { 'Set-Cookie': header } };
 }
 
-// GET ?action=oauth-callback — OAuth provider redirects here (routed from
-// /auth/callback via vercel.json rewrite). Validates state, exchanges code for
+// GET /auth/callback — OAuth provider redirects here (routed to the function
+// by the vercel.json rewrite). Validates state, exchanges code for
 // email, and on success sets the oauth_session cookie and redirects to
 // /login#oauth=1, where home.js redeems the cookie (oauthSession below) and
-// verifies the token against the slug-independent my-artists endpoint.
+// verifies the token against the slug-independent /api/auth/artists endpoint.
 async function oauthCallback({ query, headers, ip, origin }) {
   const o = origin;
   // Everything that can go wrong answers the visitor identically. The reason
@@ -127,8 +127,11 @@ async function oauthCallback({ query, headers, ip, origin }) {
   if (!email) return failed('no_email_from_provider');
 
   const sql = getDb();
-  const [firstUser] = await sql`
-    SELECT u.id, u.role, u.password_hash FROM users u WHERE u.email = ${email.toLowerCase()} ORDER BY u.id LIMIT 1
+  const addr = email.toLowerCase();
+  let [firstUser] = await sql`
+    SELECT id, role, password_hash FROM users
+    WHERE email = ${addr} AND (password_hash IS NOT NULL OR invite_token_hash IS NULL)
+    ORDER BY id LIMIT 1
   `;
 
   // Facebook has no verified-email flag (see identity.js), so its address proves
@@ -138,6 +141,18 @@ async function oauthCallback({ query, headers, ip, origin }) {
   // deployment opts in, a new Facebook address goes through the emailed
   // signup link instead.
   const untrustedFacebook = provider === 'facebook' && process.env.FACEBOOK_TRUST_EMAIL !== 'true';
+
+  // An address with no account yet, only invites: the provider has shown this
+  // is the address they were sent to, so signing in accepts them, as setting a
+  // password through the invite link would. An existing account's invites
+  // stay open; it joins each band from the link.
+  if (!firstUser && !untrustedFacebook) {
+    const joined = await sql`
+      UPDATE users SET invite_token_hash = NULL, invite_expires_at = NULL
+      WHERE email = ${addr} AND password_hash IS NULL AND invite_expires_at > now()
+      RETURNING id, role, password_hash`;
+    firstUser = joined.sort((x, y) => x.id - y.id)[0];
+  }
 
   // A new address goes on to set up a workspace, whichever button started the
   // flow: "Continue with Google" on the login page used to answer a new
@@ -163,7 +178,7 @@ async function oauthCallback({ query, headers, ip, origin }) {
   if (untrustedFacebook) return failed('facebook_email_not_trusted');
 
   const artists = await getArtistsForUser(firstUser.id, sql);
-  const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash);
+  const userToken = generateUserToken(firstUser.id, firstUser.role, TTL_8H, firstUser.password_hash, email);
   const hint = Buffer.from(email.toLowerCase()).toString('base64url');
   await logger.info('oauth_login', { provider, email });
   // This is a finished session, not a link to be redeemed. It used to travel
@@ -177,7 +192,7 @@ async function oauthCallback({ query, headers, ip, origin }) {
   return redirect(`${o}/login#oauth=1&hint=${hint}&next=${encodeURIComponent(next)}`);
 }
 
-// POST action=oauth-session — hands the login page the session the callback
+// POST /api/auth/oauth-session — hands the login page the session the callback
 // left in its cookie, once. SameSite=Strict keeps the cookie off requests other
 // sites start, and only a script on this origin can read the answer.
 async function oauthSession({ headers }) {

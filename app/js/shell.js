@@ -47,7 +47,7 @@ function applyNav(bandName, bandConfig) {
     }
   });
   document.querySelectorAll('.app-logo').forEach(el => {
-    el.setAttribute('aria-label', bandName || '');
+    el.setAttribute('aria-label', bandName || 'smartist');
   });
 
   const faviconUrl = bandConfig?.faviconUrl;
@@ -102,7 +102,7 @@ function updateAuthIndicator() {
       ? '<img class="nav-auth-avatar-img" src="' + escHtml(_photoUrl) + '" alt="">'
       : '<span class="nav-auth-avatar-mono">' + escHtml(_initials || '&#10004;') + '</span>';
     var _emailHtml = _email ? '<span class="nav-auth-email">' + escHtml(_email) + '</span>' : '';
-    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" data-onclick="_openAuthMenu(this)" aria-haspopup="true" aria-label="' + t('nav.accountMenu') + '">' +
+    el.innerHTML = '<button class="nav-auth-btn" id="nav-auth-btn" data-onclick="_openAuthMenu(this)" aria-haspopup="true" aria-expanded="false" aria-label="' + t('nav.accountMenu') + '">' +
       _avatarHtml + _emailHtml +
     '</button>';
   } else {
@@ -129,7 +129,7 @@ function updateAuthIndicator() {
 function _navFromAuthMenu(href) {
   navigate(href);
   var menu = document.getElementById('nav-auth-menu');
-  if (menu) menu.remove();
+  if (menu) { if (menu._close) menu._close(false); else menu.remove(); }
 }
 
 function doLogout() {
@@ -159,7 +159,7 @@ window.switchWorkspace = switchWorkspace;
 
 function _openAuthMenu(btn) {
   var existing = document.getElementById('nav-auth-menu');
-  if (existing) { existing.remove(); return; }
+  if (existing) { if (existing._close) existing._close(false); else existing.remove(); return; }
   var _profilePath = _artistSlug ? '/' + _artistSlug + '/profile' : '/profile';
   // Switch-workspace needs a personal account: the demo session is bound to
   // the demo band. We don't gate on singleTenant — local dev sets ARTIST_SLUG
@@ -170,15 +170,15 @@ function _openAuthMenu(btn) {
   menu.id = 'nav-auth-menu';
   menu.className = 'nav-auth-menu';
   menu.innerHTML =
-    '<div class="nav-auth-menu-item" data-onclick="_navFromAuthMenu(\'' + _profilePath + '\')">' +
+    '<button type="button" class="nav-auth-menu-item" data-onclick="_navFromAuthMenu(' + onArg(_profilePath) + ')">' +
       t('nav.profile') +
-    '</div>' +
+    '</button>' +
     (_showSwitch
-      ? '<div class="nav-auth-menu-item" data-onclick="switchWorkspace()">' + t('nav.switchWorkspace') + '</div>'
+      ? '<button type="button" class="nav-auth-menu-item" data-onclick="switchWorkspace()">' + t('nav.switchWorkspace') + '</button>'
       : '') +
-    '<div class="nav-auth-menu-item" data-onclick="doLogout()">' +
+    '<button type="button" class="nav-auth-menu-item" data-onclick="doLogout()">' +
       t('nav.logout') +
-    '</div>';
+    '</button>';
   var rect = btn.getBoundingClientRect();
   // Top edge sits on the nav bar's bottom border (same line as the More dropdown).
   var _hdrEl = document.querySelector('.app-header');
@@ -187,13 +187,7 @@ function _openAuthMenu(btn) {
   document.body.appendChild(menu);
   var overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
   if (overflow > 0) menu.style.right = '8px';
-  function _closeAuthMenu(e) {
-    if (!menu.contains(e.target) && e.target !== btn) {
-      menu.remove();
-      document.removeEventListener('click', _closeAuthMenu);
-    }
-  }
-  setTimeout(function() { document.addEventListener('click', _closeAuthMenu); }, 0);
+  wirePopupMenu(btn, menu);
 }
 
 // Standard page bootstrap: config → nav → page-specific callback.
@@ -242,8 +236,14 @@ function _isShellScript(el) {
 var _navVersion = 0;
 var _htmlCache  = new Map(); // href → HTML string, populated by warmPage
 
+// navigate() and warmPage() fetch a page and run its scripts here: only this
+// site's own pages, never an address that reached them from data.
+function _ownPage(href) {
+  try { return new URL(href, location.href).origin === location.origin; } catch { return false; }
+}
+
 async function warmPage(href) {
-  if (_htmlCache.has(href)) return;
+  if (!_ownPage(href) || _htmlCache.has(href)) return;
   _htmlCache.set(href, null); // mark in-flight so concurrent calls skip
   try {
     const r = await fetch(href);
@@ -287,6 +287,7 @@ function _markMainContent() {
 }
 
 async function navigate(href) {
+  if (!_ownPage(href)) return;
   // Remap bare artist-page paths to slugged paths when on a slugged page
   if (_artistSlug) {
     var _navUrl  = new URL(href, location.origin);
@@ -419,7 +420,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
       // No workspace in the URL means we are outside the app (login, root
       // contact page): the way back is the marketing site, not a band.
       (_artistSlug
-        ? '<a href="/" class="app-logo" aria-label="">' +
+        ? '<a href="/" class="app-logo" aria-label="smartist">' +
             '<img src="" alt="" class="app-logo-img">' +
             '<span class="app-logo-initials" aria-hidden="true"></span>' +
             '<span class="band-name"></span>' +
@@ -475,7 +476,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
           img.src = cached.config.logoUrl.replace(/^http:/i, 'https:'); img.alt = cached.name || '';
           img.onerror = function() { this.style.display = 'none'; const s = this.nextElementSibling; if (s) s.classList.add('app-logo-initials--show'); };
         });
-        document.querySelectorAll('.app-logo').forEach(el => { el.setAttribute('aria-label', cached.name || ''); });
+        document.querySelectorAll('.app-logo').forEach(el => { el.setAttribute('aria-label', cached.name || 'smartist'); });
       } else {
         document.querySelectorAll('.app-logo-initials').forEach(el => el.classList.add('app-logo-initials--show'));
       }
@@ -630,9 +631,6 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
   if (!demoName) return;
   var ready = (window.i18n && window.i18n.ready) ? window.i18n.ready : Promise.resolve();
   ready.then(function() {
-    var genres = [];
-    try { genres = JSON.parse(sessionStorage.getItem('demo_genres') || '[]'); } catch {}
-    var sub = genres.length ? genres.slice(0, 3).join(', ') : t('demo.bannerLiveWorkspace');
     var initials = demoName.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
     var bar = document.createElement('div');
     bar.id = 'demo-banner';
@@ -642,7 +640,6 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
       '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#b06a2a;color:#f5f0ea;font-weight:700;font-size:0.7rem;letter-spacing:0.05em;border-radius:2px;flex-shrink:0;">' + escHtml(initials) + '</span>' +
       '<span><strong style="color:#f9bf8f">' + escHtml(demoName) + '</strong>' +
       ' &mdash; ' + t('demo.bannerLiveWorkspace') +
-      (genres.length ? ' · <span style="color:#666">' + escHtml(sub) + '</span>' : '') +
       '</span></span>' +
       '<button data-onclick="removeParent(this)" style="background:none;border:none;color:#555;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0;" aria-label="' + t('demo.bannerDismiss') + '">&times;</button>';
     var header = document.querySelector('.app-header');

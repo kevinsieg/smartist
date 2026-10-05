@@ -1,5 +1,5 @@
 const path = require('path');
-const { validateSongIds, validateStr, validateNum, validateEmail, F, parseFields } =
+const { validateSongIds, positiveId, validateOptions, deleteMode, likePattern, validateStr, validateNum, validateEmail, F, parseFields, unsafeKey } =
   require(path.join(__dirname, '../../api/_validate'));
 
 function run(r) {
@@ -16,36 +16,36 @@ function run(r) {
   test('empty array → []', () => {
     assertEq(validateSongIds([]), []);
   });
-  test('null → null', () => {
-    assertEq(validateSongIds(null), null);
+  test('null → false', () => {
+    assertEq(validateSongIds(null), false);
   });
-  test('string → null', () => {
-    assertEq(validateSongIds('1,2,3'), null);
+  test('string → false', () => {
+    assertEq(validateSongIds('1,2,3'), false);
   });
-  test('number → null', () => {
-    assertEq(validateSongIds(5), null);
+  test('number → false', () => {
+    assertEq(validateSongIds(5), false);
   });
-  test('contains zero → null', () => {
-    assertEq(validateSongIds([1, 0, 3]), null);
+  test('contains zero → false', () => {
+    assertEq(validateSongIds([1, 0, 3]), false);
   });
-  test('contains negative → null', () => {
-    assertEq(validateSongIds([1, -2, 3]), null);
+  test('contains negative → false', () => {
+    assertEq(validateSongIds([1, -2, 3]), false);
   });
-  test('contains float → null', () => {
-    assertEq(validateSongIds([1, 1.5, 3]), null);
+  test('contains float → false', () => {
+    assertEq(validateSongIds([1, 1.5, 3]), false);
   });
-  test('contains non-number string → null', () => {
-    assertEq(validateSongIds([1, 'abc', 3]), null);
+  test('contains non-number string → false', () => {
+    assertEq(validateSongIds([1, 'abc', 3]), false);
   });
-  test('contains NaN (as string "NaN") → null', () => {
-    assertEq(validateSongIds([1, NaN, 3]), null);
+  test('contains NaN (as string "NaN") → false', () => {
+    assertEq(validateSongIds([1, NaN, 3]), false);
   });
-  test('duplicates → null', () => {
-    assertEq(validateSongIds([1, 2, 2, 3]), null);
+  test('duplicates → false', () => {
+    assertEq(validateSongIds([1, 2, 2, 3]), false);
   });
-  test('201 items → null', () => {
+  test('201 items → false', () => {
     const ids = Array.from({ length: 201 }, (_, i) => i + 1);
-    assertEq(validateSongIds(ids), null);
+    assertEq(validateSongIds(ids), false);
   });
   test('200 items → array of 200', () => {
     const ids = Array.from({ length: 200 }, (_, i) => i + 1);
@@ -54,6 +54,69 @@ function run(r) {
     assertEq(result.length, 200);
     assertEq(result[0], 1);
     assertEq(result[199], 200);
+  });
+
+  test('numeric strings and the largest integer id pass', () => {
+    assertEq(validateSongIds(['3', 2147483647]), [3, 2147483647]);
+  });
+  test('booleans and ids past the integer column → false', () => {
+    assertEq(validateSongIds([true]), false);
+    assertEq(validateSongIds([2147483648]), false);
+  });
+
+  console.log(B('\npositiveId'));
+
+  test('missing → null, a positive integer (or its digits) → the number', () => {
+    assertEq(positiveId(undefined), null);
+    assertEq(positiveId(null), null);
+    assertEq(positiveId(''), null);
+    assertEq(positiveId(7), 7);
+    assertEq(positiveId('42'), 42);
+  });
+  test('anything else → false, never a value the database rejects', () => {
+    for (const v of ['abc', '1.5', 1.5, 0, -3, '0x10', '1e3', true, {}, [], 2147483648, '99999999999'])
+      assertEq(positiveId(v), false, `${JSON.stringify(v)} passed`);
+  });
+
+  console.log(B('\ndeleteMode'));
+  test('the URL decides: ?hard=1&cascade=gigs,setlists', () => {
+    assertEq(deleteMode({ hard: '1', cascade: 'gigs,setlists' }, { hard: false }, ['gigs', 'setlists']),
+      { hard: true, cascade: ['gigs', 'setlists'] });
+  });
+  test('no query, no body → a soft delete', () => {
+    assertEq(deleteMode({}, undefined, ['gigs']), { hard: false, cascade: [] });
+  });
+  test('an unknown cascade in the URL → false', () => {
+    assertEq(deleteMode({ hard: '1', cascade: 'gigs,users' }, null, ['gigs']), false);
+  });
+  test('the old body form still works', () => {
+    assertEq(deleteMode({}, { hard: true, cascade: ['gigs'] }, ['gigs']), { hard: true, cascade: ['gigs'] });
+  });
+  test('a body hard that is not true is a soft delete', () => {
+    assertEq(deleteMode({}, { hard: 'yes' }, ['gigs']).hard, false);
+  });
+
+  console.log(B('\nvalidateOptions'));
+
+  test('missing → [], a list of known values → the list', () => {
+    assertEq(validateOptions(undefined, ['gigs']), []);
+    assertEq(validateOptions(null, ['gigs']), []);
+    assertEq(validateOptions(['gigs', 'setlists'], ['gigs', 'setlists']), ['gigs', 'setlists']);
+  });
+  test('a string, a number or an unknown value → false', () => {
+    assertEq(validateOptions('gigs,setlists', ['gigs', 'setlists']), false);
+    assertEq(validateOptions(5, ['gigs']), false);
+    assertEq(validateOptions(['gig'], ['gigs']), false);
+  });
+
+  console.log(B('\nlikePattern'));
+
+  test('an empty query → null; a term → %term% with % and _ escaped', () => {
+    assertEq(likePattern(''), null);
+    assertEq(likePattern('  '), null);
+    assertEq(likePattern(undefined), null);
+    assertEq(likePattern(' Club '), '%Club%');
+    assertEq(likePattern('100%_\\'), '%100\\%\\_\\\\%');
   });
 
   console.log(B('\nvalidateStr'));
@@ -161,6 +224,15 @@ function run(r) {
     assertEq(validateEmail('user@do main.com'), false);
   });
 
+  console.log(B('\nobjects where text is expected'));
+  test('validateStr refuses an object instead of storing "[object Object]"', () => {
+    assertEq(validateStr({ a: 1 }, 100), false);
+    assertEq(validateStr(['a'], 100), false);
+  });
+  test('a text field given an object is a 400, not a stored string', () => {
+    assert(/single value/.test(parseFields({ t: { a: 1 } }, { t: F.text(100) }).error));
+  });
+
   console.log(B('\nF.object maxBytes'));
   const SPEC = { links: F.object({ maxBytes: 100 }) };
   test('an object under the cap passes', () => {
@@ -169,6 +241,13 @@ function run(r) {
   test('an object over the cap is refused', () => {
     assertEq(parseFields({ links: { a: 'x'.repeat(200) } }, SPEC).error, 'links is too large');
   });
+
+  console.log(B('\nunsafeKey'));
+  for (const k of ['audio/12/uuid-take.mp3', 'bands/my-band/photo', 'bands/my-band/photo?v=123', 'gigs/my-band/4-uuid-poster.jpg'])
+    test(`a plain key passes: ${k}`, () => assertEq(unsafeKey(k), false));
+  for (const k of ['bands/mine/../other/photo', 'audio/12/../99/x.mp3', 'audio/..', './audio/1/x', 'audio//1/x',
+                   'bands/mine/%2e%2e/other/photo', 'bands/mine%2fother/photo', 'bands\\mine/x', '', null])
+    test(`a key a storage layer could read differently is refused: ${k}`, () => assertEq(unsafeKey(k), true));
 }
 
 if (require.main === module) {
