@@ -255,10 +255,9 @@
     _renderer   = L.canvas({ padding: 0.5 });
     _layerGroup = _makeMarkerLayer();
     _map = L.map(canvas, { zoomControl: true, preferCanvas: true }).setView([48.5, 9.0], 5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
-      subdomains: 'abcd',
     }).addTo(_map);
     _layerGroup.addTo(_map);
   }
