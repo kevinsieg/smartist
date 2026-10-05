@@ -4,6 +4,30 @@
 
 // --- Lyrics column ---
 
+var _lyricsChordsOn = localStorage.getItem('lyrics_chords') !== '0';
+var _lyricsSteps    = 0;
+var _lyricsText     = '';
+
+function _lyricsShow(text) {
+  _lyricsText = text || '';
+  var view = document.getElementById('lyrics-view');
+  view.innerHTML = chordsRender(_lyricsText, { chords: _lyricsChordsOn, steps: _lyricsSteps });
+  document.getElementById('lyrics-chord-bar').style.display = chordsHas(_lyricsText) ? '' : 'none';
+  document.getElementById('lyrics-chords-toggle').setAttribute('aria-pressed', String(_lyricsChordsOn));
+  document.getElementById('lyrics-transpose-val').textContent = (_lyricsSteps > 0 ? '+' : '') + _lyricsSteps;
+}
+
+function lyricsToggleChords() {
+  _lyricsChordsOn = !_lyricsChordsOn;
+  localStorage.setItem('lyrics_chords', _lyricsChordsOn ? '1' : '0');
+  _lyricsShow(_lyricsText);
+}
+
+function lyricsTranspose(d) {
+  _lyricsSteps = Math.max(-11, Math.min(11, _lyricsSteps + d));
+  _lyricsShow(_lyricsText);
+}
+
 function _lyricsSetMode(mode) { // 'view' or 'edit'
   document.getElementById('lyrics-suggest-preview').style.display = 'none';
   document.getElementById('lyrics-view').style.display        = mode === 'view' ? '' : 'none';
@@ -36,8 +60,14 @@ async function openLyrics(sid) {
 
   currentLyricsSid = sid;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
-  document.getElementById('lyrics-view').textContent  = song?.lyrics === undefined ? t('songs.loading') : (song.lyrics ?? '');
-  document.getElementById('lyrics-edit').value        = song?.lyrics ?? '';
+  _lyricsSteps = 0;
+  if (song?.lyrics === undefined) {
+    document.getElementById('lyrics-view').textContent = t('songs.loading');
+    document.getElementById('lyrics-chord-bar').style.display = 'none';
+  } else {
+    _lyricsShow(song.lyrics);
+  }
+  document.getElementById('lyrics-edit').value        = chordsToAbove(song?.lyrics ?? '');
   document.getElementById('lyrics-delete-confirm').style.display = 'none';
   document.getElementById('lyrics-delete-btn').style.display     = _viewMode ? 'none' : '';
   _lyricsSetMode('view');
@@ -45,8 +75,8 @@ async function openLyrics(sid) {
 
   const text = await _lyricsLoad(sid, song);
   if (text === null) return;
-  document.getElementById('lyrics-view').textContent = text;
-  document.getElementById('lyrics-edit').value       = text;
+  _lyricsShow(text);
+  document.getElementById('lyrics-edit').value       = chordsToAbove(text);
 }
 
 async function openLyricsEdit(sid) {
@@ -55,7 +85,7 @@ async function openLyricsEdit(sid) {
 
   currentLyricsSid = sid;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
-  document.getElementById('lyrics-edit').value        = song?.lyrics ?? '';
+  document.getElementById('lyrics-edit').value        = chordsToAbove(song?.lyrics ?? '');
   _lyricsSetMode('edit');
   document.getElementById('lyrics-modal').classList.add('open');
   document.getElementById('lyrics-edit').focus();
@@ -67,7 +97,7 @@ async function openLyricsEdit(sid) {
   edit.disabled = false;
   if (text === null) return;
   // Only fill it if nothing was typed while the text was loading.
-  if (!edit.value) edit.value = text;
+  if (!edit.value) edit.value = chordsToAbove(text);
   edit.focus();
 }
 
@@ -132,7 +162,7 @@ function _lyricsDiscardSuggestion() {
 
 function startEditLyrics() {
   const song = songs.find(s => String(s.id) === String(currentLyricsSid));
-  document.getElementById('lyrics-edit').value = song?.lyrics ?? '';
+  document.getElementById('lyrics-edit').value = chordsToAbove(song?.lyrics ?? '');
   _lyricsSetMode('edit');
   document.getElementById('lyrics-edit').focus();
 }
@@ -157,7 +187,7 @@ function _lyricsSaveStatus(msg, isError) {
 async function saveLyrics() {
   const sid = currentLyricsSid;
   if (!sid) return;
-  const text = document.getElementById('lyrics-edit').value;
+  const text = chordsToPro(document.getElementById('lyrics-edit').value);
 
   // New, unsaved song: stash lyrics in the panel; they persist when it's created.
   if (_isNewPanelSid(sid)) {
@@ -207,7 +237,7 @@ async function saveLyrics() {
     }
 
     if (trimmed) {
-      document.getElementById('lyrics-view').textContent = trimmed;
+      _lyricsShow(trimmed);
       _lyricsSetMode('view');
     } else {
       closeLyrics();

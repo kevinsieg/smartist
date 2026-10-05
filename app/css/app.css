@@ -989,6 +989,15 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
     margin: 0.75rem 0; box-sizing: border-box;
 }
 .lyrics-edit:focus { outline: none; border-color: var(--secondary-ink); }
+.lyrics-edit { font-family: var(--font-mono); }
+.lyrics-chord-bar { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; }
+.lyrics-transpose-val { min-width: 2ch; text-align: center; font-size: 0.85rem; color: var(--third-color); }
+.chord-row { white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
+.chord-row--chords { line-height: 1.25; margin-top: 0.15rem; }
+.ch-seg { display: inline-block; vertical-align: bottom; white-space: pre-wrap; }
+.ch { display: block; min-height: 1.2em; font-size: 0.85em; font-weight: 700; color: var(--secondary-ink); }
+.ch-tx { display: block; }
+.chord-label { font-weight: 700; margin-top: 0.6rem; }
 .lyrics-suggest-header { font-size: 0.78rem; color: var(--third-color); margin: 0.5rem 0 0.25rem; }
 .lyrics-suggest-text   { border: 1px solid rgba(221,213,200,0.3); border-radius: 4px; padding: 0.5rem; }
 
