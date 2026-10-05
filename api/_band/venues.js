@@ -1,8 +1,9 @@
 const { getDb, getSlug, parsePage } = require('../_db');
 const { requireAuth } = require('../_auth');
 const { wrap } = require('../_handler');
-const { validateStr, parseFields, F } = require('../_validate');
+const { validateStr, parseFields, positiveId, likePattern, F } = require('../_validate');
 const { VENUE_FIELDS } = require('../_domain/records');
+const { MSG } = require('../_domain/http');
 const { requireFeature } = require('../_plans');
 
 module.exports = wrap(async function handler(req, res) {
@@ -67,55 +68,29 @@ module.exports = wrap(async function handler(req, res) {
     const rawLetter = (req.query.letter || '').trim();
     const letter    = /^[A-Za-z]$/.test(rawLetter) ? `${rawLetter}%` : null;
     const nonAlpha  = rawLetter === '#';
+    // Status, category and country are picked from lists: exact values, any case.
     const status   = (req.query.status   || '').trim() || null;
     const category = (req.query.category || '').trim() || null;
     const country  = (req.query.country  || '').trim() || null;
-    const has_gigs = req.query.has_gigs === '1';
-    const pattern  = q ? `%${q}%` : null;
-    let rows;
-    if (has_gigs) {
-      rows = await sql`
-        SELECT *, COUNT(*) OVER() AS total
-        FROM venues
-        WHERE artist_id = ${artist.id}
-          AND (${pattern}::text IS NULL
-            OR name     ILIKE ${pattern}
-            OR city     ILIKE ${pattern}
-            OR country  ILIKE ${pattern}
-            OR postcode ILIKE ${pattern})
-          AND (${status}::text   IS NULL OR status   ILIKE ${status})
-          AND (${category}::text IS NULL OR category ILIKE ${category})
-          AND (${country}::text  IS NULL OR country  ILIKE ${country})
-          AND (${letter}::text IS NULL OR name ILIKE ${letter})
-          AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
-          AND (NOT ${favourite} OR heart)
-          AND EXISTS (
-            SELECT 1 FROM gigs g
-            WHERE g.venue_id = venues.id AND g.artist_id = venues.artist_id AND g.deleted = false
-          )
-        ORDER BY deleted ASC, ${orderBy}
-        LIMIT ${limit} OFFSET ${offset}
-      `;
-    } else {
-      rows = await sql`
-        SELECT *, COUNT(*) OVER() AS total
-        FROM venues
-        WHERE artist_id = ${artist.id}
-          AND (${pattern}::text IS NULL
-            OR name     ILIKE ${pattern}
-            OR city     ILIKE ${pattern}
-            OR country  ILIKE ${pattern}
-            OR postcode ILIKE ${pattern})
-          AND (${status}::text   IS NULL OR status   ILIKE ${status})
-          AND (${category}::text IS NULL OR category ILIKE ${category})
-          AND (${country}::text  IS NULL OR country  ILIKE ${country})
-          AND (${letter}::text IS NULL OR name ILIKE ${letter})
-          AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
-          AND (NOT ${favourite} OR heart)
-        ORDER BY deleted ASC, ${orderBy}
-        LIMIT ${limit} OFFSET ${offset}
-      `;
-    }
+    const pattern  = likePattern(q);
+    const rows = await sql`
+      SELECT *, COUNT(*) OVER() AS total
+      FROM venues
+      WHERE artist_id = ${artist.id}
+        AND (${pattern}::text IS NULL
+          OR name     ILIKE ${pattern}
+          OR city     ILIKE ${pattern}
+          OR country  ILIKE ${pattern}
+          OR postcode ILIKE ${pattern})
+        AND (${status}::text   IS NULL OR lower(status)   = lower(${status}))
+        AND (${category}::text IS NULL OR lower(category) = lower(${category}))
+        AND (${country}::text  IS NULL OR lower(country)  = lower(${country}))
+        AND (${letter}::text IS NULL OR name ILIKE ${letter})
+        AND (NOT ${nonAlpha} OR name !~* '^[a-z]')
+        AND (NOT ${favourite} OR heart)
+      ORDER BY deleted ASC, ${orderBy}
+      LIMIT ${limit} OFFSET ${offset}
+    `;
     const total = Number(rows[0]?.total ?? 0);
     return res.json({ rows: rows.map(({ total: _, ...r }) => r), total, limit, offset });
   }
@@ -142,10 +117,11 @@ module.exports = wrap(async function handler(req, res) {
     if (updates.length > 200)
       return res.status(400).json({ error: 'Too many updates (max 200)' });
 
-    const ids = updates.map(u => Number(u.id)).filter(n => Number.isInteger(n) && n > 0);
-    if (!ids.length) return res.json({ ok: true, count: 0 });
-    const rows = await sql`
-      SELECT * FROM venues WHERE artist_id = ${artist.id} AND deleted = false AND id = ANY(${ids}::int[])`;
+    // A row that is not an object, or has no valid id, is rejected on its own.
+    const rowId = u => (u && typeof u === 'object' ? positiveId(u.id) : false);
+    const ids = updates.map(rowId).filter(Boolean);
+    const rows = ids.length ? await sql`
+      SELECT * FROM venues WHERE artist_id = ${artist.id} AND deleted = false AND id = ANY(${ids}::int[])` : [];
     const byId = new Map(rows.map(r => [r.id, r]));
 
     // field → max length; dates are validated separately.
@@ -158,9 +134,10 @@ module.exports = wrap(async function handler(req, res) {
     const rejected = [];
     const accepted = [];
     for (const update of updates) {
-      const id = Number(update.id);
+      const id = rowId(update);
+      if (!id) { rejected.push({ id: update?.id ?? null, error: 'invalid venue id' }); continue; }
       const venue = byId.get(id);
-      if (!venue) { rejected.push({ id: update.id, error: 'venue not found' }); continue; }
+      if (!venue) { rejected.push({ id, error: 'venue not found' }); continue; }
 
       const next = { id };
       let error = null;
@@ -181,39 +158,37 @@ module.exports = wrap(async function handler(req, res) {
       else accepted.push(next);
     }
 
-    // One statement for the whole batch instead of up to 200 round-trips, inside a
-    // transaction so a failure cannot leave half the rows written.
+    // One statement for the whole batch instead of up to 200 round-trips (and,
+    // being one statement, all rows or none).
     let count = 0;
     if (accepted.length) {
       const col = f => accepted.map(r => r[f] ?? null);
-      await sql.begin(async tx => {
-        const updated = await tx`
-          UPDATE venues SET
-            status             = u.status,
-            category           = u.category,
-            booking_channel    = u.booking_channel,
-            remuneration       = u.remuneration,
-            season             = u.season,
-            preferred_period   = u.preferred_period,
-            comment            = u.comment,
-            last_communication = u.last_communication,
-            deadline           = u.deadline,
-            heart              = u.heart::boolean,  -- sent as text: postgres.js does not serialise boolean arrays
-            last_updated       = NOW()
-          FROM unnest(${col('id')}::int[], ${col('status')}::text[], ${col('category')}::text[],
-                      ${col('booking_channel')}::text[], ${col('remuneration')}::text[], ${col('season')}::text[],
-                      ${col('preferred_period')}::text[], ${col('comment')}::text[],
-                      ${col('last_communication')}::date[], ${col('deadline')}::date[], ${col('heart').map(String)}::text[])
-               AS u(id, status, category, booking_channel, remuneration, season,
-                    preferred_period, comment, last_communication, deadline, heart)
-          WHERE venues.id = u.id AND venues.artist_id = ${artist.id} AND venues.deleted = false
-          RETURNING venues.id`;
-        count = updated.length;
-      });
+      const updated = await sql`
+        UPDATE venues SET
+          status             = u.status,
+          category           = u.category,
+          booking_channel    = u.booking_channel,
+          remuneration       = u.remuneration,
+          season             = u.season,
+          preferred_period   = u.preferred_period,
+          comment            = u.comment,
+          last_communication = u.last_communication,
+          deadline           = u.deadline,
+          heart              = u.heart::boolean,  -- sent as text: postgres.js does not serialise boolean arrays
+          last_updated       = NOW()
+        FROM unnest(${col('id')}::int[], ${col('status')}::text[], ${col('category')}::text[],
+                    ${col('booking_channel')}::text[], ${col('remuneration')}::text[], ${col('season')}::text[],
+                    ${col('preferred_period')}::text[], ${col('comment')}::text[],
+                    ${col('last_communication')}::date[], ${col('deadline')}::date[], ${col('heart').map(String)}::text[])
+             AS u(id, status, category, booking_channel, remuneration, season,
+                  preferred_period, comment, last_communication, deadline, heart)
+        WHERE venues.id = u.id AND venues.artist_id = ${artist.id} AND venues.deleted = false
+        RETURNING venues.id`;
+      count = updated.length;
     }
 
     return res.json({ ok: true, count, rejected });
   }
 
-  res.status(405).json({ error: 'Method not allowed' });
+  res.status(405).json({ error: MSG.methodNotAllowed });
 });

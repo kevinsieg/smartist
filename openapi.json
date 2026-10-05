@@ -616,6 +616,10 @@
           },
           "deleted": {
             "type": "boolean"
+          },
+          "heart": {
+            "type": "boolean",
+            "description": "Marked as a favourite: listed first"
           }
         }
       },
@@ -666,6 +670,10 @@
           },
           "deleted": {
             "type": "boolean"
+          },
+          "heart": {
+            "type": "boolean",
+            "description": "Marked as a favourite: listed first"
           }
         }
       }
@@ -747,6 +755,15 @@
               ]
             },
             "description": "`health`: post-deploy check — `{ ok, missing, warnings, database, schema, schemaVersion }` (variable names only, never values); 503 when a required variable is missing, the database does not answer, or it lacks the newest migration. The other account and band actions have their own paths (`/api/auth/*`, `/api/signup/*`, `/api/config/*`)."
+          },
+          {
+            "name": "light",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`1`: name, config, counts and flags without the songs payload (most pages need no more)"
           }
         ],
         "description": "Band slug, name, branding config, plan and usage. `songs` and `counts` are included only with a session or when the band has a public catalogue. `role` is the caller's role in this band (null without a session). The `slug` is the `{band}` path parameter for every other endpoint.",
@@ -1078,6 +1095,42 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/band"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Anonymous public catalogue only: page size (at most 30)"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Anonymous public catalogue only: rows to skip"
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Anonymous public catalogue only: `0` includes inactive songs"
+          },
+          {
+            "name": "lyrics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`1` (members): each song carries its lyrics text, for the CSV export"
           }
         ],
         "description": "With a session: every non-deleted song with play stats, as an array. Without a session only when the band has a public catalogue — then paged (`limit` ≤ 30, `offset`, `active=0` to include inactive songs) and returned as `{ rows, total, limit, offset }`.",
@@ -2955,6 +3008,9 @@
               }
             }
           },
+          "400": {
+            "description": "`cascade` is not a list of known values"
+          },
           "401": {
             "$ref": "#/components/responses/401"
           },
@@ -3434,35 +3490,32 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Substring of name, city, country or postcode (any case; `%` and `_` match themselves)"
           },
           {
             "name": "status",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Exact value, any case"
           },
           {
             "name": "category",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Exact value, any case"
           },
           {
             "name": "country",
             "in": "query",
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "has_gigs",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
+            },
+            "description": "Exact value, any case"
           },
           {
             "name": "sort",
@@ -3506,6 +3559,36 @@
               "type": "string"
             },
             "description": "Any value: a plain array of `{ id, name, … }` for pickers instead of the paged object"
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Any value: every venue with coordinates as a plain array, for the map (no comment, no audit columns); `status` narrows it"
+          },
+          {
+            "name": "facet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "country"
+              ]
+            },
+            "description": "`country`: the distinct countries of the band's venues, as an array of strings"
+          },
+          {
+            "name": "favourite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`1`: only venues marked with a heart"
           }
         ],
         "description": "Pro plan (402 otherwise). Private CRM data — always needs a session. Paged: `{ rows, total, limit, offset }`.",
@@ -3977,6 +4060,17 @@
                 "properties": {
                   "hard": {
                     "type": "boolean"
+                  },
+                  "cascade": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "gigs",
+                        "setlists"
+                      ]
+                    },
+                    "description": "With `hard`: also delete the gigs that point at the record, and their setlists"
                   }
                 }
               }
@@ -3993,6 +4087,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`cascade` is not a list of known values"
           },
           "401": {
             "$ref": "#/components/responses/401"
@@ -4020,6 +4117,9 @@
           "404": {
             "$ref": "#/components/responses/404"
           },
+          "409": {
+            "description": "A hard delete without `gigs` in `cascade` while gigs still point at the record"
+          },
           "500": {
             "$ref": "#/components/responses/500"
           }
@@ -4046,7 +4146,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Substring of name, type, city, country or email (any case; `%` and `_` match themselves)"
           },
           {
             "name": "limit",
@@ -4069,6 +4170,15 @@
               "type": "string"
             },
             "description": "Any value: a plain array of `{ id, name, … }` for pickers instead of the paged object"
+          },
+          {
+            "name": "favourite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`1`: only organizers marked with a heart"
           }
         ],
         "description": "Pro plan (402 otherwise). Private CRM data — always needs a session. Paged: `{ rows, total, limit, offset }`.",
@@ -4382,6 +4492,17 @@
                 "properties": {
                   "hard": {
                     "type": "boolean"
+                  },
+                  "cascade": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "gigs",
+                        "setlists"
+                      ]
+                    },
+                    "description": "With `hard`: also delete the gigs that point at the record, and their setlists"
                   }
                 }
               }
@@ -4398,6 +4519,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`cascade` is not a list of known values"
           },
           "401": {
             "$ref": "#/components/responses/401"
@@ -4424,6 +4548,9 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "description": "A hard delete without `gigs` in `cascade` while gigs still point at the record"
           },
           "500": {
             "$ref": "#/components/responses/500"

@@ -639,7 +639,7 @@ function renderLogs(logs) {
 async function _songCreateError(r) {
   const d = await r.json().catch(() => ({}));
   const err = new Error(d.error || 'create failed');
-  if (d.error === 'song_limit') err.limit = d.limit;
+  if ((d.code || d.error) === 'song_limit') err.limit = d.limit;
   return err;
 }
 
@@ -653,7 +653,7 @@ async function restoreSong(songId) {
     await loadAndRender();
   } else {
     const d = await r.json().catch(() => ({}));
-    _setBulkStatus('error', d.error === 'song_limit' ? t('songs.limitReached', { limit: d.limit }) : t('songs.couldNotRestore'));
+    _setBulkStatus('error', (d.code || d.error) === 'song_limit' ? t('songs.limitReached', { limit: d.limit }) : t('songs.couldNotRestore'));
   }
 }
 

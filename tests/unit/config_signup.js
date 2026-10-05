@@ -28,7 +28,8 @@ async function run(r) {
     delete require.cache[authPath];
     delete require.cache[configPath];
     delete require.cache[tokenPath];
-    // config.js delegates to every module under api/_domain — bust them all so a
+    delete require.cache[require.resolve(path.join(__dirname, '../../api/_session'))];
+    // _config.js delegates to every module under api/_domain — bust them all so a
     // re-require rebuilds the whole chain against the stubs set below.
     const domainDir = path.join(__dirname, '../../api/_domain');
     require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {
@@ -314,8 +315,8 @@ async function run(r) {
     const artists = [{ slug: 'my-band', name: 'My Band', role: 'admin' }];
     let calls = 0;
     const handler = makeHandler(async (strings) => {
-      // sessionRowId is a subquery inside the statement, not a statement.
-      if (/^\(\s*SELECT id FROM users/.test(strings.join('?').trim())) return [];
+      // sessionRowId and the bands are fragments inside the statement.
+      if (!/FROM users me/.test(strings.join('?'))) return [];
       calls++;
       return [{ password_hash: null, sessions_valid_after: null, artists }];
     });
@@ -399,7 +400,7 @@ async function run(r) {
   await testAsync('PATCH config drops plan and upgradedAt but keeps other keys', async () => {
     let merged = null;
     const handler = makeHandler(memberSql('admin', (q, values) => {
-      if (q.includes('UPDATE artists SET config')) { merged = values[0]; return [{ id: 1 }]; }
+      if (q.includes('UPDATE artists SET name')) { merged = values[1]; return [{ id: 1 }]; }
     }));
     const res = mockRes();
     await handler({
@@ -416,7 +417,7 @@ async function run(r) {
     const handler = makeHandler(memberSql('admin', (q) => {
       // The row matches only while the merged config stays under the cap; a
       // database that refuses it returns no row.
-      if (q.includes('UPDATE artists SET config')) { guarded = /octet_length/.test(q); return []; }
+      if (q.includes('UPDATE artists SET name')) { guarded = /octet_length/.test(q); return []; }
     }));
     const res = mockRes();
     await handler({
@@ -426,6 +427,32 @@ async function run(r) {
     }, res);
     assert(guarded, 'expected the size check in the UPDATE');
     assertEq(res._status, 413);
+  });
+
+  for (const [label, config] of [['a string', 'ab'], ['an array', ['a']], ['null', null], ['a number', 5]]) {
+    await testAsync(`PATCH config with ${label} → 400, nothing written`, async () => {
+      let written = false;
+      const handler = makeHandler(memberSql('admin', (q) => { if (q.includes('UPDATE artists')) written = true; }));
+      const res = mockRes();
+      await handler({ method: 'PATCH', query: { slug: 'test' }, body: { name: 'New name', config },
+        headers: { authorization: bearer() } }, res);
+      assertEq(res._status, 400);
+      assert(!written, 'a bad config must not save the name either');
+    });
+  }
+
+  await testAsync('PATCH name and config → one statement; a refused config keeps the old name', async () => {
+    const updates = [];
+    const handler = makeHandler(memberSql('admin', (q, values) => {
+      if (q.includes('UPDATE artists')) { updates.push({ q, values }); return []; }
+    }));
+    const res = mockRes();
+    await handler({ method: 'PATCH', query: { slug: 'test' }, body: { name: 'New name', config: { a: 1 } },
+      headers: { authorization: bearer() } }, res);
+    assertEq(res._status, 413);
+    assertEq(updates.length, 1, 'name and config in one UPDATE');
+    assert(/SET name = COALESCE/.test(updates[0].q) && /octet_length/.test(updates[0].q), updates[0].q);
+    assertEq(updates[0].values.slice(0, 2), ['New name', { a: 1 }]);
   });
 
   await testAsync('anonymous config carries only the public keys', async () => {
@@ -487,7 +514,8 @@ async function run(r) {
   function superAdminSql(email, onQuery) {
     return async function(strings, ...values) {
       const q = strings.join('?');
-      if (/SELECT email(, password_hash(, sessions_valid_after)?)? FROM users/.test(q)) return email ? [{ email }] : [];
+      // The session lookup (api/_session.js): the users row of the token.
+      if (/FROM users me WHERE me\.id/.test(q)) return email ? [{ email, password_hash: null, sessions_valid_after: null }] : [];
       return (onQuery && onQuery(q, values)) || [];
     };
   }

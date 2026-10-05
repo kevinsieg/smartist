@@ -743,7 +743,7 @@ async function openGigSetlists(gigId) {
   openModal('setlist-detail-modal');
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await apiFetch('/api/' + artistSlug + '/gigs?id=' + gigId + '&refs=1');
+      const r = await apiFetch('/api/' + artistSlug + '/gigs/' + gigId + '?refs=1');
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {
@@ -775,8 +775,8 @@ function deleteGigFromPopup(id) {
   closeGigModal();
   openHardDeleteModal({
     title: t('gigs.permanentlyDeleteGig'),
-    refsUrl: '/api/' + artistSlug + '/gigs?id=' + id + '&refs=1',
-    deleteUrl: '/api/' + artistSlug + '/gigs?id=' + id,
+    refsUrl: '/api/' + artistSlug + '/gigs/' + id + '?refs=1',
+    deleteUrl: '/api/' + artistSlug + '/gigs/' + id,
     buildRefsMsg: function(refs) {
       if (!refs.setlists.length) return t('gigs.noLinkedSetlists');
       return t('gigs.linkedSetlists') + '<ul style="margin:0.3rem 0 0;padding-left:1.2rem;">' +
@@ -813,7 +813,7 @@ async function saveGig() {
     comment:         document.getElementById('gm-comment').value.trim()   || null,
   };
   setStatus('gm-status', '');
-  const url = editingId ? `/api/${artistSlug}/gigs?id=${editingId}` : `/api/${artistSlug}/gigs`;
+  const url = editingId ? `/api/${artistSlug}/gigs/${editingId}` : `/api/${artistSlug}/gigs`;
   const res = await withBusy(document.getElementById('gm-save-btn'), async () => {
     const r = await apiFetch(url, editingId ? 'PUT' : 'POST', body);
     return { r, json: await r.json() };
@@ -836,7 +836,7 @@ async function renderGigRelated(gigId) {
 
   if (!_gigRefsCache[gigId]) {
     try {
-      const r = await apiFetch(`/api/${artistSlug}/gigs?id=${gigId}&refs=1`);
+      const r = await apiFetch(`/api/${artistSlug}/gigs/${gigId}?refs=1`);
       if (!r.ok) throw new Error(r.status);
       _gigRefsCache[gigId] = await r.json();
     } catch {

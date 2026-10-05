@@ -5,15 +5,14 @@
 // below sends it to its handler. A new route is a line in ROUTES, not a
 // file under api/ (Vercel Hobby allows twelve functions). Handlers live in
 // files and directories prefixed `_`, which Vercel does not turn into
-// functions of their own.
-//
-// Not a catch-all file (`api/[...route].js`): outside Next.js, Vercel matched
-// that for one-segment paths only, so /api/config worked and /api/:artist/…
-// was Vercel's own 404.
+// functions of their own. (Not a catch-all `api/[...route].js`: outside
+// Next.js, Vercel matches that for one-segment paths only.)
 //
 // A handler gets `req.query`: the URL's own query string, plus `artist` and the
 // route's parameters, plus `path` (the segments after the resource) for the
 // item handlers. Handlers read these and never parse `req.url` themselves.
+// Route parameters come from the path only: `?id=` in a query string is
+// dropped, so `/gigs?id=5` is the gig list, not gig 5.
 
 const HANDLERS = {
   config:     () => require('./_config'),
@@ -82,6 +81,9 @@ const TABLE = [
   ['/api/:artist/organizers/*',                            'organizer'],
 ];
 
+// Names only the route table sets; a query string cannot supply them.
+const ROUTE_PARAMS = ['__path', 'artist', 'id', 'sub', 'path'];
+
 const ROUTES = TABLE.map(([pattern, handler, fixed = {}]) => {
   const names = [];
   const rest  = pattern.endsWith('/*');
@@ -117,7 +119,7 @@ module.exports = async function route(req, res) {
   }
   if (!found) return res.status(404).json({ error: 'Not found' });
   const query = Object.fromEntries(url.searchParams);
-  delete query.__path;
+  for (const k of ROUTE_PARAMS) delete query[k];
   // The action is a URL path (the route table sets it). The one query-string
   // action left is the health check the monitors call; any other `?action=`
   // would be a second, undocumented copy of a route.

@@ -30,14 +30,19 @@ function handlerFile(name) {
 }
 
 // api/_config.js dispatches on the action the route table sets: the ones in
-// its POST block answer POST, the rest GET.
+// its POST_ACTIONS table answer POST; those in GET_ACTIONS, and the band
+// actions it checks one by one (`action === '…'`), answer GET.
 function configActionMethods() {
   const src = fs.readFileSync(path.join(ROOT, 'api', '_config.js'), 'utf8');
-  const start = src.indexOf("if (req.method === 'POST') {");
-  const end = src.indexOf('\n  }\n', start);
+  const keys = name => {
+    const start = src.indexOf(`const ${name} = {`);
+    const body = src.slice(start, src.indexOf('\n};', start));
+    return [...body.matchAll(/^\s+'([\w-]+)':/gm)].map(m => m[1]);
+  };
   const methods = {};
-  for (const m of src.matchAll(/if \(action === '([\w-]+)'\)/g))
-    methods[m[1]] = m.index > start && m.index < end ? 'POST' : 'GET';
+  for (const a of keys('POST_ACTIONS')) methods[a] = 'POST';
+  for (const a of keys('GET_ACTIONS')) methods[a] = 'GET';
+  for (const m of src.matchAll(/action === '([\w-]+)'/g)) methods[m[1]] ??= 'GET';
   return methods;
 }
 
@@ -73,9 +78,48 @@ async function run(r) {
     const missing = [];
     for (const h of new Set(TABLE.map(([, handler]) => handler))) {
       if (h === 'config') continue;  // per action, below
-      const src = fs.readFileSync(handlerFile(h), 'utf8');
-      for (const [, m] of src.matchAll(/method\s*[!=]==\s*'([A-Z]+)'/g))
+      let src = fs.readFileSync(handlerFile(h), 'utf8');
+      // A handler built by the shared record handler answers what that does.
+      if (src.includes("require('../record_item')"))
+        src += fs.readFileSync(path.join(ROOT, 'api', '_band', 'record_item.js'), 'utf8');
+      // `req.method === 'PUT'`, or a method table `{ PUT: put, … }`.
+      const found = [...src.matchAll(/method\s*[!=]==\s*'([A-Z]+)'/g)].map(x => x[1])
+        .concat([...src.matchAll(/\b(GET|POST|PUT|PATCH|DELETE):\s*\w/g)].map(x => x[1]));
+      for (const m of found)
         if (!documented[h]?.has(m)) missing.push(`${m} ${h}`);
+    }
+    assertEq([...new Set(missing)], []);
+  });
+
+  // A query parameter a band handler reads is part of its API: it is in the
+  // spec on one of the paths that handler serves. Route parameters (set by the
+  // router) are not query parameters.
+  test('every query parameter a band handler reads is documented', () => {
+    const ROUTE = new Set(['artist', 'path', 'id', 'sub', 'action']);
+    const documented = {};
+    const paramName = p => (p.$ref ? spec.components.parameters[p.$ref.split('/').pop()] : p);
+    for (const p of specPaths) {
+      const h = match(sample(p))?.handler;
+      if (!h) continue;
+      for (const m of METHODS) {
+        for (const prm of spec.paths[p][m]?.parameters || []) {
+          const d = paramName(prm);
+          if (d?.in === 'query') (documented[h] ??= new Set()).add(d.name);
+        }
+      }
+    }
+    const missing = [];
+    for (const h of new Set(TABLE.map(([, handler]) => handler))) {
+      if (h === 'config') continue;
+      let src = fs.readFileSync(handlerFile(h), 'utf8');
+      if (src.includes("require('../record_item')"))
+        src += fs.readFileSync(path.join(ROOT, 'api', '_band', 'record_item.js'), 'utf8');
+      for (const [, name] of src.matchAll(/req\.query\??\.(\w+)/g))
+        if (!ROUTE.has(name) && !documented[h]?.has(name)) missing.push(`${h}: ${name}`);
+      // `const { songId } = req.query`
+      for (const [, names] of src.matchAll(/const \{([^}]+)\} = req\.query\b/g))
+        for (const name of names.split(',').map(n => n.trim().split(/[:\s=]/)[0]).filter(Boolean))
+          if (!ROUTE.has(name) && !documented[h]?.has(name)) missing.push(`${h}: ${name}`);
     }
     assertEq([...new Set(missing)], []);
   });

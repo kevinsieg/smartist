@@ -1,39 +1,39 @@
 const { getDb, getSlug } = require('../../_db');
 const { requireAuth, getAccess, canOpenStage, refuseDemo } = require('../../_auth');
-const { validateSongIds, validateStr, validateEmail } = require('../../_validate');
+const { validateSongIds, validateStr, validateEmail, positiveId } = require('../../_validate');
 const { ownsRefs } = require('../../_ownership');
 const { checkRateLimit, clientIp, outboundMailLimited } = require('../../_ratelimit');
 const { buildSetlistPdf, setlistTitle } = require('../../_pdf');
 const { sendEmail } = require('../../_email');
 const { wrap } = require('../../_handler');
 const logger = require('../../_logger');
-const { duplicateSetlist, setlistForShare } = require('../../_domain/setlists');
+const { gigColumns, gigJoins, duplicateSetlist, setlistForShare } = require('../../_domain/setlists');
+const { MSG } = require('../../_domain/http');
 const { publicSong } = require('../../_domain/songs');
 
 module.exports = wrap(async function handler(req, res) {
   const [rawId, action] = req.query.path || [];
   const slug = getSlug(req);
 
-  const setlistId = Number(rawId);
-  if (!Number.isInteger(setlistId) || setlistId <= 0)
-    return res.status(400).json({ error: 'Invalid setlist id' });
+  const setlistId = positiveId(rawId);
+  if (!setlistId) return res.status(400).json({ error: 'Invalid setlist id' });
 
   const sql = getDb();
 
   // ── GET/PUT/DELETE setlist ────────────────────────────────────────────────
   if (!action) {
-    if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
+    if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ error: MSG.methodNotAllowed });
 
     if (req.method === 'GET') {
       const { artist: band, user } = await getAccess(req, slug);
-      if (!band) return res.status(404).json({ error: 'Band not found' });
+      if (!band) return res.status(404).json({ error: MSG.artistNotFound });
       // A single setlist by id is what a shared /stage link opens. The list of
       // setlists stays private, so nobody can enumerate them from here.
       if (!user && !canOpenStage(band))
-        return res.status(401).json({ error: 'Sign in to view this' });
+        return res.status(401).json({ error: MSG.signIn });
       // The setlist and its songs in one statement.
       const [setlist] = await sql`
-        SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
+        SELECT s.*, ${gigColumns(sql)},
           COALESCE((
             SELECT json_agg(to_jsonb(songs) || jsonb_build_object(
                      'position', ss.position,
@@ -44,8 +44,7 @@ module.exports = wrap(async function handler(req, res) {
             WHERE ss.setlist_id = s.id AND songs.artist_id = s.artist_id
           ), '[]') AS songs
         FROM setlists s
-        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        ${gigJoins(sql)}
         WHERE s.id = ${setlistId} AND s.artist_id = ${band.id}
       `;
       if (!setlist) return res.status(404).json({ error: 'Setlist not found' });
@@ -72,12 +71,11 @@ module.exports = wrap(async function handler(req, res) {
     if (!validIds) return res.status(400).json({ error: 'Invalid song_ids' });
 
     const title = validateStr(rawTitle, 200);
-    if (title === false) return res.status(400).json({ error: 'title too long' });
+    if (title === false) return res.status(400).json({ error: 'title too long (max 200)' });
     const comment = validateStr(rawComment, 2000);
-    if (comment === false) return res.status(400).json({ error: 'comment too long' });
-    const gigId = rawGigId != null ? Number(rawGigId) : null;
-    if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
-      return res.status(400).json({ error: 'Invalid gig_id' });
+    if (comment === false) return res.status(400).json({ error: 'comment too long (max 2000)' });
+    const gigId = positiveId(rawGigId);
+    if (gigId === false) return res.status(400).json({ error: 'Invalid gig_id' });
     const owned = await ownsRefs(sql, band.id, { songIds: validIds, gigId });
     if (!owned.songs) return res.status(400).json({ error: 'Invalid song_ids' });
     if (!owned.gig)   return res.status(400).json({ error: 'Invalid gig_id' });
@@ -106,11 +104,9 @@ module.exports = wrap(async function handler(req, res) {
           DELETE FROM setlist_songs
           WHERE setlist_id IN (SELECT id FROM s) AND position >= ${validIds.length}::int
         )
-        SELECT s.*, g.title AS gig_name, g.date AS gig_date, COALESCE(v.name, g.location) AS gig_venue,
-               ${validIds.length}::int AS song_count
+        SELECT s.*, ${gigColumns(tx)}, ${validIds.length}::int AS song_count
         FROM s
-        LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-        LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+        ${gigJoins(tx)}
       `,
     ]);
     if (!updated) return res.status(404).json({ error: 'Setlist not found' });
@@ -119,7 +115,7 @@ module.exports = wrap(async function handler(req, res) {
 
   // ── POST /setlists/:id/duplicate — copy the row and its songs ─────────────
   if (action === 'duplicate' || action === 'share') {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    if (req.method !== 'POST') return res.status(405).json({ error: MSG.methodNotAllowed });
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
 
@@ -164,5 +160,5 @@ module.exports = wrap(async function handler(req, res) {
     return res.json({ ok: true });
   }
 
-  return res.status(404).json({ error: 'Not found' });
+  return res.status(404).json({ error: MSG.notFound });
 });
