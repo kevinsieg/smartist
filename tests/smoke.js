@@ -39,7 +39,7 @@ const EMAIL    = process.env.ARTIST_EMAIL;
 const PASSWORD = process.env.ARTIST_PASSWORD;
 
 const PAGES = [
-  'dashboard', 'songs', 'setlist', 'setlist?view=history', 'setlist-history', 'gigs',
+  'dashboard', 'songs', 'setlist', 'setlist?view=history', 'gigs',
   'venues', 'organizers', 'hub', 'pro-import', 'song-import', 'settings', 'profile',
 ];
 

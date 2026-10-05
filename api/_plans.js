@@ -50,7 +50,7 @@ function planSummary(artist) {
 // Writes a 402 and returns false when the band's plan lacks `key`.
 function requireFeature(res, artist, key) {
   if (hasFeature(artist, key)) return true;
-  res.status(402).json({ error: 'upgrade_required', feature: key });
+  res.status(402).json({ error: 'This needs a paid plan', code: 'upgrade_required', feature: key });
   return false;
 }
 

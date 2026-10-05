@@ -29,6 +29,9 @@ async function run(r) {
     delete require.cache[configPath];
     delete require.cache[tokenPath];
     delete require.cache[require.resolve(path.join(__dirname, '../../api/_session'))];
+    // Other suites leave a stub _r2 behind; config reads the real one's
+    // publicBaseUrl.
+    delete require.cache[require.resolve(path.join(__dirname, '../../api/_r2'))];
     // _config.js delegates to every module under api/_domain — bust them all so a
     // re-require rebuilds the whole chain against the stubs set below.
     const domainDir = path.join(__dirname, '../../api/_domain');

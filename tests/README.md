@@ -37,7 +37,6 @@ node tests/history-client.js
 | `tests/unit/gema.js` | `api/_domain/gema.js` | CSV parsers, GEMA normalizers |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
-| `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
 | `tests/unit/tenant_isolation.js` | handlers, `api/_ownership.js`, `api/_token.js` | cross-band ids refused, script links refused, demo token is a member session, token purposes, sessions end on password change |
 | `tests/unit/*_handlers.js`, `auth.js`, `oauth_callback.js`, … | API handlers with a stubbed database | auth, roles, reset, signup, deletion, OAuth callback (incl. the `oauth_nonce` cookie), storage accounting |
 | `tests/*-client.js` | page scripts in `app/js/` | run in a stubbed DOM (songs, gigs, map, workspaces, logout, …) |

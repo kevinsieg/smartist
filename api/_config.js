@@ -4,7 +4,7 @@ const { validateStr, unsafeKey } = require('./_validate');
 const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
 const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
 const { sessionAccount } = require('./_session');
-const { createPresignedUrl, keyFromUrl } = require('./_r2');
+const { createPresignedUrl, keyFromUrl, publicBaseUrl } = require('./_r2');
 const { isSlugAvailable, SLUG_RE } = require('./_domain/artist');
 const { configSongs, publicSong } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
@@ -318,6 +318,6 @@ async function publicConfig(req, res, slugParam) {
     singleTenant:  !!process.env.ARTIST_SLUG,
     // Where uploaded media lives (it is in every media URL anyway): the songs
     // page frames only this bucket's PDFs without a sandbox.
-    mediaBase:     (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '') || null,
+    mediaBase:     publicBaseUrl(),
   });
 }

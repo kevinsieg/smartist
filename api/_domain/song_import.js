@@ -409,6 +409,21 @@ async function insertSongs(sql, artistId, records, maxSongs = null) {
   return { imported: res?.count ?? 0, live: res?.live ?? 0 };
 }
 
+// Error bodies: a message for people in `error`, the machine code the page
+// translates in `code` (api/_domain/http.js).
+const IMPORT_MESSAGES = {
+  file_too_large: 'The file is too large',
+  empty_file: 'The file is empty',
+  no_title_column: 'The file has no title column',
+  duplicate_column: 'A column appears twice',
+  no_rows: 'There are no rows to import',
+  too_many_rows: 'Too many rows',
+  rows_need_attention: 'Some rows need attention',
+  song_limit: 'Song limit reached',
+};
+const importFail = (status, code, extra) =>
+  ({ status, body: { error: IMPORT_MESSAGES[code] || code, code, ...extra } });
+
 // The whole request body: { csv } (a new file) or
 // { rows, commit } (a re-check after edits, or the import itself).
 // maxSongs: the plan's song limit, or null. → { status, body }
@@ -417,13 +432,16 @@ async function songImport(sql, artistId, input, { maxSongs = null } = {}) {
   let parsed = null;
   let rows;
   if (typeof inp.csv === 'string') {
-    if (inp.csv.length > MAX_CSV) return { status: 413, body: { error: 'file_too_large' } };
+    if (inp.csv.length > MAX_CSV) return importFail(413, 'file_too_large');
     parsed = parseSongCsv(inp.csv);
-    if (parsed.error) return { status: 400, body: parsed };
+    if (parsed.error) {
+      const { error: code, ...extra } = parsed;
+      return importFail(400, code, extra);
+    }
     rows = parsed.rows;
   } else if (Array.isArray(inp.rows)) {
-    if (!inp.rows.length) return { status: 400, body: { error: 'no_rows' } };
-    if (inp.rows.length > MAX_ROWS) return { status: 400, body: { error: 'too_many_rows', max: MAX_ROWS } };
+    if (!inp.rows.length) return importFail(400, 'no_rows');
+    if (inp.rows.length > MAX_ROWS) return importFail(400, 'too_many_rows', { max: MAX_ROWS });
     rows = inp.rows;
   } else {
     return { status: 400, body: { error: 'csv or rows required' } };
@@ -442,11 +460,11 @@ async function songImport(sql, artistId, input, { maxSongs = null } = {}) {
     } };
   }
   if (summary.error || summary.duplicate)
-    return { status: 422, body: { error: 'rows_need_attention', rows: view, summary } };
+    return importFail(422, 'rows_need_attention', { rows: view, summary });
   const records = checked.filter(r => r.record).map(r => r.record);
-  if (!records.length) return { status: 400, body: { error: 'no_rows' } };
+  if (!records.length) return importFail(400, 'no_rows');
   if (room != null && records.length > room)
-    return { status: 402, body: { error: 'song_limit', limit: maxSongs, room } };
+    return importFail(402, 'song_limit', { limit: maxSongs, room });
   // The count above is an early answer only: parallel imports all read the
   // same count. The insert re-counts under the band's lock.
   const done = maxSongs == null ? await insertSongs(sql, artistId, records)
@@ -455,7 +473,7 @@ async function songImport(sql, artistId, input, { maxSongs = null } = {}) {
       return insertSongs(tx, artistId, records, maxSongs);
     });
   if (!done.imported)
-    return { status: 402, body: { error: 'song_limit', limit: maxSongs, room: Math.max(0, (maxSongs ?? 0) - done.live) } };
+    return importFail(402, 'song_limit', { limit: maxSongs, room: Math.max(0, (maxSongs ?? 0) - done.live) });
   return { status: 201, body: { ok: true, imported: done.imported } };
 }
 

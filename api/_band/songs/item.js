@@ -8,6 +8,8 @@ const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
 const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
 const { lockSongLimit } = require('../../_domain/song_import');
+const { MSG } = require('../../_domain/http');
+const { gigColumns, gigJoins } = require('../../_domain/setlists');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
 
@@ -76,7 +78,7 @@ module.exports = wrap(async function handler(req, res) {
   // Public — no auth required; arrangements are read-only display data (used by stage view)
   if (action === 'arrangements' && !arrId && req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // Stage reads this for the active chart, and a public catalogue shows it.
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
@@ -212,7 +214,7 @@ module.exports = wrap(async function handler(req, res) {
   // ── GET single song (song details, stage view); includes lyrics and arrangements
   if (!action && req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // One song by id: what a stage link opens, and what a public catalogue
     // lists. The song list itself is gated separately in songs.js.
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
@@ -287,7 +289,7 @@ module.exports = wrap(async function handler(req, res) {
       `;
     });
     if (restored.id != null) return res.status(201).json(restored);
-    if (full) return res.status(402).json({ error: 'song_limit', limit: max });
+    if (full) return res.status(402).json({ error: 'Song limit reached', code: 'song_limit', limit: max });
 
     // Nothing came back: the song is live, or there is no deleted row. A
     // hard-deleted song cannot be restored by id: song_logs.song_id is
@@ -303,7 +305,7 @@ module.exports = wrap(async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // Which setlists a song appears in — gig history for that song.
     if (!user && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
@@ -312,14 +314,12 @@ module.exports = wrap(async function handler(req, res) {
     // A visitor of the public catalogue sees where the song was played, not
     // the band's notes on its setlists: the setlists list is never public.
     const setlists = await sql`
-      SELECT sl.id, sl.title, sl.comment, sl.created_at,
-             g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
-      FROM setlists sl
-      JOIN setlist_songs ss ON ss.setlist_id = sl.id
-      LEFT JOIN gigs g ON sl.gig_id = g.id AND g.artist_id = sl.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      WHERE ss.song_id = ${songId} AND sl.artist_id = ${band.id}
-      ORDER BY sl.created_at DESC
+      SELECT s.id, s.title, s.comment, s.created_at, ${gigColumns(sql)}
+      FROM setlists s
+      JOIN setlist_songs ss ON ss.setlist_id = s.id
+      ${gigJoins(sql)}
+      WHERE ss.song_id = ${songId} AND s.artist_id = ${band.id}
+      ORDER BY s.created_at DESC
     `;
     return res.json(user ? setlists : setlists.map(sl => ({ ...sl, comment: null })));
   }
@@ -329,7 +329,7 @@ module.exports = wrap(async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // GEMA registration data is rights administration, never public.
     if (!user)
       return res.status(401).json({ error: 'Sign in to view this' });

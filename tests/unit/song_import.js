@@ -199,7 +199,7 @@ async function run(r) {
       { line: 3, values: { title: 'Wonderwall' } },
     ] });
     assertEq(res.status, 422);
-    assertEq(res.body.error, 'rows_need_attention');
+    assertEq(res.body.code, 'rows_need_attention');
     assertEq(inserts().length, 0);
   });
 
@@ -252,7 +252,7 @@ async function run(r) {
     const rows = [{ line: 2, values: { title: 'A' } }, { line: 3, values: { title: 'B' } }];
     const res = await songImport(sql, 1, { commit: true, rows }, { maxSongs: 100 });
     assertEq(res.status, 402);
-    assertEq(res.body.error, 'song_limit');
+    assertEq(res.body.code, 'song_limit');
     assertEq(res.body.room, 1);
   });
 

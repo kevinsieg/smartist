@@ -3,14 +3,15 @@ const { requireAuth, getAccess, canBrowseCatalogue } = require('../_auth');
 const { validateStr, validateNum, jsonBytes } = require('../_validate');
 const { wrap } = require('../_handler');
 const { checkRateLimit } = require('../_ratelimit');
-const { MEDIA_LOG_ACTIONS, SONG_LOG_KEEP } = require('../_constants');
+const { MEDIA_LOG_ACTIONS } = require('../_constants');
 const { keyFromUrl } = require('../_r2');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
-  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong,
+  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong, trimHistory,
 } = require('../_domain/songs');
 const { songImport, SONG_LIMIT_LOCK } = require('../_domain/song_import');
+const { MSG } = require('../_domain/http');
 
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
@@ -97,7 +98,7 @@ module.exports = wrap(async function handler(req, res) {
   // song's details (GET /songs/:id). ?lyrics=1 adds the text for the CSV export.
   if (req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     const viewMode = !user;
     if (viewMode && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
@@ -208,7 +209,7 @@ module.exports = wrap(async function handler(req, res) {
       const tags = typedTags && cleanTags(typedTags, known.tags);
       return (await insertSong(tx, matchGenre(typedGenre, known.genres), tags))[0] ?? null;
     });
-    if (!song) return res.status(402).json({ error: 'song_limit', limit: _max });
+    if (!song) return res.status(402).json({ error: 'Song limit reached', code: 'song_limit', limit: _max });
     return res.status(201).json(song);
   }
 
@@ -307,6 +308,8 @@ module.exports = wrap(async function handler(req, res) {
     // One statement for the whole batch — the rows, merged extra, one audit
     // entry each and the history trim — instead of two round-trips per song.
     let applied = 0;
+    /** @type {any[]} */
+    let saved = [];
     if (accepted.size) {
       const rows = [...accepted.values()];
       const updated = await sql`
@@ -339,22 +342,18 @@ module.exports = wrap(async function handler(req, res) {
         ), trimmed AS (
           -- This band's history of the songs written here, newest SONG_LOG_KEEP
           -- kept. The entry added above is not visible yet: it rides along.
-          DELETE FROM song_logs WHERE id IN (
-            SELECT id FROM (
-              SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
-              FROM song_logs
-              WHERE artist_id = ${band.id} AND song_id IN (SELECT id FROM u)
-            ) ranked
-            WHERE n > ${SONG_LOG_KEEP}
-          )
+          ${trimHistory(sql, band.id, sql`SELECT id FROM u`)}
         )
-        SELECT id FROM u
+        SELECT u.* FROM u
       `;
-      const done = new Set(updated.map(r => r.id));
+      saved = [...updated];
+      const done = new Set(saved.map(r => r.id));
       applied = done.size;
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
-    return res.json({ ok: true, count: applied, rejected });
+    // The rows as stored, so the page updates them in place instead of
+    // downloading the whole list again.
+    return res.json({ ok: true, count: applied, rejected, rows: saved });
   }
 
   res.status(405).json({ error: 'Method not allowed' });

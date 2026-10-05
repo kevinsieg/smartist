@@ -13,7 +13,7 @@ in [DATABASE.md](../DATABASE.md).
 | `/` | `app/js/home.js` |
 | `/dashboard` | `app/js/dashboard.js` |
 | `/setlist` | `setlist-generator.js` (generator, saving a set) + `setlist-history-tab.js` (History tab) + `setlist.js` (state, `init()`, tab switch — loaded last) |
-| `/setlist-history` | `app/js/setlist-history.js` — redirect to the setlist page's history tab |
+| `/setlist-history` | a redirect in `vercel.json` to `/setlist?view=history` (the setlist page's history tab) |
 | `/songs` | `app/js/songs.js` (init, data, filters, list view) + `songs-table.js` (bulk edit), `songs-panel.js` (side panel), `songs-media.js` (audio/sheet/playback), `songs-lyrics.js` (lyrics + URL preview) — one global scope, loaded in that order with `songs.js` last because it calls `init()`; `tests/songs-split-client.js` executes them together |
 | `/pro-import` | `app/js/pro-import.js` |
 | `/song-import` | `app/js/song-import.js` — CSV song import (template, preview, fixes, import); reached from the songs page's share menu. `SI_COLUMNS` mirrors `COLUMNS` in `_domain/song_import.js` (checked by `tests/unit/song_import.js`) |

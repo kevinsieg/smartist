@@ -521,13 +521,13 @@ async function testVenues(slug, config) {
     await test(`GET on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
       const { res, json } = await GET(`/api/${slug}/venues`, AUTH);
       assertStatus(res, json, 402);
-      assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
+      assert(json.code === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
     });
 
     await test(`GET /:id on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
       const { res, json } = await GET(`/api/${slug}/venues/999999999`, AUTH);
       assertStatus(res, json, 402);
-      assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
+      assert(json.code === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
     });
     return;
   }
@@ -1509,7 +1509,7 @@ async function testWrite(slug, token, firstSong, config) {
       const { res, json } = await POST(`/api/${slug}/songs`,
         { title: '[TEST] Temporary', key: 'G', active: false }, { token });
       assertStatus(res, json, 402);
-      assert(json.error === 'song_limit' && json.limit === songLimit, 'expected song_limit');
+      assert(json.code === 'song_limit' && json.limit === songLimit, 'expected song_limit');
     });
     skip('POST /songs creates song → 201', 'band at song limit');
     skip('POST /songs missing title → 400', 'band at song limit');
@@ -1737,7 +1737,7 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
     await test(`POST /${resource} on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
       const { res, json } = await POST(`/api/${slug}/${resource}`, createBody, { token });
       assertStatus(res, json, 402);
-      assert(json.error === 'upgrade_required' && json.feature === resource, 'expected upgrade_required');
+      assert(json.code === 'upgrade_required' && json.feature === resource, 'expected upgrade_required');
     });
     return;
   }

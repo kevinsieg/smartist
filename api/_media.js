@@ -123,7 +123,7 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
       RETURNING storage_used_bytes`;
     if (!row) {
       await deleteFromR2(publicUrl);
-      return out(402, { error: 'storage_limit', limit, used: Number(band.storage_used_bytes || 0) });
+      return out(402, { error: 'Storage limit reached', code: 'storage_limit', limit, used: Number(band.storage_used_bytes || 0) });
     }
   }
 

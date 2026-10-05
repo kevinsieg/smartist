@@ -134,7 +134,7 @@ async function run(r) {
     const { handler } = loadHandler(LIST, () => [], { artist: FREE_ARTIST });
     const res = await call(handler, 'GET', '/api/test/organizers');
     assertEq(res.statusCode, 402);
-    assertEq(res.body?.error, 'upgrade_required');
+    assertEq(res.body?.code, 'upgrade_required');
     assertEq(res.body?.feature, 'organizers');
   });
 

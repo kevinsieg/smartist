@@ -3,6 +3,7 @@
   "ignoreCommand": "if [ \"$SKIP_PREVIEW_BUILDS\" = 1 ] && [ \"$VERCEL_GIT_COMMIT_REF\" != dev ] && [ \"$VERCEL_GIT_COMMIT_REF\" != main ]; then echo \"Preview builds off for this project\"; exit 0; fi; exit 1",
   "redirects": [
     { "source": "/impressum", "destination": "https://smartist.studio/impressum", "permanent": false },
+    { "source": "/:slug/setlist-history", "destination": "/:slug/setlist?view=history", "permanent": false },
     {
       "source": "/",
       "has": [{ "type": "host", "value": "demo.smartist.studio" }],
@@ -30,7 +31,6 @@
     { "source": "/:slug/dashboard",        "destination": "/app/dashboard.html" },
     { "source": "/:slug/songs",            "destination": "/app/songs.html" },
     { "source": "/:slug/setlist",          "destination": "/app/setlist.html" },
-    { "source": "/:slug/setlist-history",  "destination": "/app/setlist-history.html" },
     { "source": "/:slug/gigs",             "destination": "/app/gigs.html" },
     { "source": "/:slug/venues",           "destination": "/app/venues.html" },
     { "source": "/:slug/organizers",       "destination": "/app/organizers.html" },
