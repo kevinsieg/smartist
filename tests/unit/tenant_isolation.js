@@ -25,10 +25,13 @@ function mockRes() {
 
 function makeSql(route) {
   const calls = [];
-  const sql = async (strings, ...values) => {
+  const sql = (strings, ...values) => {
+    // sql(identifier) and sql`fragment` nested in a statement are not statements.
+    if (!Array.isArray(strings)) return { fragment: String(strings) };
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
+    if (!/^(SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(text)) return { fragment: text, values };
     calls.push({ text, values });
-    return route(text, values);
+    return (async () => route(text, values))();
   };
   // Like postgres.js: begin resolves an array of queries to their results.
   sql.begin = async fn => { const r = await fn(sql); return Array.isArray(r) ? Promise.all(r) : r; };
@@ -40,7 +43,7 @@ function makeSql(route) {
 function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), r2Path = mp('api/_r2');
   const handlerPath = mp(rel), ownPath = mp('api/_ownership');
-  for (const p of [dbPath, authPath, r2Path, handlerPath, ownPath]) delete require.cache[p];
+  for (const p of [dbPath, authPath, r2Path, handlerPath, ownPath, mp('api/_domain/gigs'), mp('api/_band/record_item')]) delete require.cache[p];
   const sql = makeSql(route);
   require.cache[dbPath] = {
     id: dbPath, filename: dbPath, loaded: true,

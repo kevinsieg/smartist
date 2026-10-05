@@ -621,7 +621,7 @@ async function _saveQuickSong() {
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
       const err = new Error(d.error || 'create failed');
-      if (d.error === 'song_limit') err.limit = d.limit;
+      if ((d.code || d.error) === 'song_limit') err.limit = d.limit;
       throw err;
     }
     const song = await r.json();

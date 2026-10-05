@@ -112,7 +112,7 @@ async function songDetail(sql, artistId, songId) {
 function cleanLyrics(value) {
   if (value == null) return { value: null };
   if (typeof value !== 'string') return { error: 'lyrics must be a string' };
-  if (value.length > LYRICS_MAX) return { error: 'Lyrics too long (max 20 000 characters)' };
+  if (value.length > LYRICS_MAX) return { error: `Lyrics too long (max ${LYRICS_MAX} characters)` };
   return { value: value.trim() || null };
 }
 
@@ -139,6 +139,24 @@ function splitMovedKeys(extra) {
   return { extra: rest, lyrics: moved.lyrics, language: moved.language };
 }
 
+// The statement that trims the history of some songs to their newest
+// SONG_LOG_KEEP entries (api/_constants.js), as a fragment: run on its own
+// (trimSongLogs in api/_db.js) or as a `trimmed AS (…)` step of the write that
+// logged. `songIds` is a subquery fragment (`SELECT id FROM s`), so an entry
+// that same statement inserts is counted too. song_logs_song_id_idx finds
+// the rows, so the cost does not grow with the band.
+function trimHistory(sql, artistId, songIds) {
+  return sql`
+    DELETE FROM song_logs WHERE id IN (
+      SELECT id FROM (
+        SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
+        FROM song_logs
+        WHERE artist_id = ${artistId} AND song_id IN (${songIds})
+      ) ranked
+      WHERE n > ${SONG_LOG_KEEP}
+    )`;
+}
+
 // Saves (or, with null, removes) one song's lyrics, writes the audit entry and
 // trims the song's history, in one statement. Returns the song ({ id, title }) or null when the song is
 // not a live song of this band.
@@ -158,15 +176,7 @@ async function writeLyrics(sql, artistId, songId, lyrics, action = 'lyrics_updat
       INSERT INTO song_logs (artist_id, song_id, action, song_data)
       SELECT ${artistId}, id, ${action}, jsonb_build_object('title', title) FROM s
     ), trimmed AS (
-      -- The song's history, newest SONG_LOG_KEEP kept (the entry above rides along).
-      DELETE FROM song_logs WHERE id IN (
-        SELECT id FROM (
-          SELECT id, row_number() OVER (ORDER BY changed_at DESC, id DESC) AS n
-          FROM song_logs
-          WHERE artist_id = ${artistId} AND song_id IN (SELECT id FROM s)
-        ) ranked
-        WHERE n > ${SONG_LOG_KEEP}
-      )
+      ${trimHistory(sql, artistId, sql`SELECT id FROM s`)}
     )
     SELECT id, title FROM s
   `;
@@ -204,5 +214,5 @@ function publicSong(row) {
 
 module.exports = {
   LYRICS_MAX, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
-  splitMovedKeys, writeLyrics, lyricsSearchInfo,
+  splitMovedKeys, writeLyrics, lyricsSearchInfo, trimHistory,
 };

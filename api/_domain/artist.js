@@ -5,6 +5,10 @@ const RESERVED_SLUGS = new Set([
   'workspaces', 'profile', 'admin', 'confirm-email',
 ]);
 
+// What a workspace URL may be: lower case letters, digits and hyphens, 3 to 50
+// characters, not starting with a hyphen.
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,49}$/;
+
 async function isSlugAvailable(slug, sql) {
   if (RESERVED_SLUGS.has(slug)) return false;
   const [row] = await sql`SELECT EXISTS(SELECT 1 FROM artists WHERE slug = ${slug}) AS exists`;
@@ -21,4 +25,4 @@ async function getArtistsForUser(userId, sql) {
   `;
 }
 
-module.exports = { isSlugAvailable, getArtistsForUser };
+module.exports = { SLUG_RE, isSlugAvailable, getArtistsForUser };

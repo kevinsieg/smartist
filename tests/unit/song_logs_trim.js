@@ -4,13 +4,28 @@ const path = require('path');
 // entries, and purgeDeletedSongs. The statements are checked on a real database
 // by hand; here: who they touch, how often they run, and that a failure never
 // fails a request.
-const { trimSongLogs, SONG_LOG_KEEP, purgeDeletedSongs, PURGE_AFTER_DAYS } = require(path.join(__dirname, '../../api/_db'));
+require('./_runner').stubLogger();
+const { trimSongLogs, purgeDeletedSongs, PURGE_AFTER_DAYS } = require(path.join(__dirname, '../../api/_db'));
+const { SONG_LOG_KEEP } = require(path.join(__dirname, '../../api/_constants'));
 
+// Like postgres.js, a query runs when awaited; one nested in another is part
+// of that one's text and values.
 function fakeSql(fail = false) {
   const calls = [];
   const sql = (strings, ...values) => {
-    calls.push({ text: strings.join('?'), values });
-    return fail ? Promise.reject(new Error('db down')) : Promise.resolve([]);
+    let text = strings[0];
+    const flat = [];
+    values.forEach((v, i) => {
+      if (v && v.isQuery) { text += v.text; flat.push(...v.values); } else { text += '?'; flat.push(v); }
+      text += strings[i + 1];
+    });
+    return {
+      isQuery: true, text, values: flat,
+      then(ok, ko) {
+        calls.push({ text, values: flat });
+        return (fail ? Promise.reject(new Error('db down')) : Promise.resolve([])).then(ok, ko);
+      },
+    };
   };
   return { sql, calls };
 }
@@ -25,16 +40,16 @@ async function run(r) {
     await trimSongLogs(sql, 7, [3, 4]);
     assertEq(calls.length, 1);
     assertEq(SONG_LOG_KEEP, 20);
-    assertEq(calls[0].values, [[3, 4], 7, 20]);
+    assertEq(calls[0].values, [7, [3, 4], 20]);
     assert(/PARTITION BY song_id ORDER BY changed_at DESC, id DESC/.test(calls[0].text), 'newest first');
-    assert(/song_id = ANY/.test(calls[0].text), 'scoped to the songs written');
+    assert(/song_id IN \(SELECT unnest\(\?::int\[\]\)\)/.test(calls[0].text), 'scoped to the songs written');
   });
 
   await testAsync('runs on every write, and not without a song', async () => {
     const { sql, calls } = fakeSql();
     await trimSongLogs(sql, 7, 3);
     assertEq(calls.length, 1);
-    assertEq(calls[0].values[0], [3]);
+    assertEq(calls[0].values[1], [3]);
     await trimSongLogs(sql, 7, []);
     await trimSongLogs(sql, 7, null);
     assertEq(calls.length, 1);

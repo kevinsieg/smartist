@@ -2,10 +2,10 @@ const { getDb } = require('./_db');
 const { wrap } = require('./_handler');
 const { validateStr, unsafeKey } = require('./_validate');
 const { checkRateLimit, clientIp, presignLimited } = require('./_ratelimit');
-const { requireAuth, getAccess, canBrowseCatalogue, sessionRowId } = require('./_auth');
+const { requireAuth, getAccess, canBrowseCatalogue } = require('./_auth');
+const { sessionAccount } = require('./_session');
 const { createPresignedUrl, keyFromUrl } = require('./_r2');
-const { verifyUserToken, sessionValid } = require('./_token');
-const { isSlugAvailable } = require('./_domain/artist');
+const { isSlugAvailable, SLUG_RE } = require('./_domain/artist');
 const { configSongs, publicSong } = require('./_domain/songs');
 const { planSummary } = require('./_plans');
 const { envReport, SCHEMA_VERSION } = require('./_env');
@@ -16,64 +16,80 @@ const subscribe = require('./_domain/subscribe');
 const login = require('./_domain/login');
 const reset = require('./_domain/reset');
 const deletion = require('./_domain/deletion_handlers');
-const { toInput, send } = require('./_domain/http');
+const { handle, MSG } = require('./_domain/http');
 
 // ── Router ────────────────────────────────────────────────────────────────────
 // Feature groups live in ./_domain/*; the core config read/write stays here.
-// The account modules take plain input and return { status, body } — `run`
-// is the one place that turns a request into input and a result into a reply.
-const run = async (fn, req, res) => send(res, await fn(toInput(req)));
+// The account modules take plain input and return { status, body }; `handle`
+// (api/_domain/http.js) turns a request into that input and the result into a
+// reply. The action comes from the route table (POST /api/auth/magic-login
+// sets action 'magic-login'), never from the body.
+const POST_ACTIONS = {
+  'admin-set-plan':      handle(admin.setPlan),
+  'upgrade':             (req, res) => upgrade(req, res),
+  'downgrade':           (req, res) => downgrade(req, res),
+  'login':               handle(login.passwordLogin),
+  'oauth-session':       handle(oauth.oauthSession),
+  'magic-login':         handle(login.magicLogin),
+  'logout-everywhere':   handle(login.logoutEverywhere),
+  'request-reset':       handle(reset.requestReset),
+  'set-password':        handle(reset.setPassword),
+  'signup-link':         handle(signup.signupLink),
+  'verify-signup-token': handle(signup.verifySignup),
+  'signup':              handle(signup.signup),
+  'request-deletion':    handle(deletion.requestDeletion),
+  'confirm-deletion':    handle(deletion.confirmDeletion),
+  'contact':             handle(subscribe.contact),
+  'subscribe':           handle(subscribe.subscribe),
+};
+
+// GET actions that need no band, dispatched before the slug guard. OAuth
+// resolves the user by email, not by workspace, so it has no slug (the client
+// and the /auth/callback rewrite never send one).
+const GET_ACTIONS = {
+  'health':             (req, res) => health(req, res),
+  'check-slug':         (req, res) => checkSlug(req, res),
+  'artists':            (req, res) => listArtists(req, res),
+  'deletion-preflight': handle(deletion.preflight),
+  'admin-overview':     handle(admin.overview),
+  'google-url':         handle(oauth.googleUrl),
+  'facebook-url':       handle(oauth.facebookUrl),
+  'oauth-callback':     handle(oauth.oauthCallback),
+};
+
+// The band a config route is about: ?slug=, or the one band of a single-tenant
+// deployment. '' when neither.
+function bandSlug(req) {
+  return req.query.slug || process.env.ARTIST_SLUG || '';
+}
+
+// Which sign-in buttons the login page shows.
+function loginProviders() {
+  return {
+    googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
+  };
+}
 
 module.exports = wrap(async function handler(req, res) {
-  // The action comes from the route table (POST /api/auth/magic-login sets
-  // action 'magic-login'), never from the body.
   const action = req.query.action;
   if (req.method === 'POST') {
-    if (action === 'admin-set-plan')      return run(admin.setPlan, req, res);
-    if (action === 'upgrade')             return upgrade(req, res);
-    if (action === 'downgrade')           return downgrade(req, res);
-    if (action === 'login')               return run(login.passwordLogin, req, res);
-    if (action === 'oauth-session')       return run(oauth.oauthSession, req, res);
-    if (action === 'magic-login')         return run(login.magicLogin, req, res);
-    if (action === 'logout-everywhere')   return run(login.logoutEverywhere, req, res);
-    if (action === 'request-reset')       return run(reset.requestReset, req, res);
-    if (action === 'set-password')        return run(reset.setPassword, req, res);
-    if (action === 'signup-link')         return run(signup.signupLink, req, res);
-    if (action === 'verify-signup-token') return run(signup.verifySignup, req, res);
-    if (action === 'signup')              return run(signup.signup, req, res);
-    if (action === 'request-deletion')    return run(deletion.requestDeletion, req, res);
-    if (action === 'confirm-deletion')    return run(deletion.confirmDeletion, req, res);
-    if (action === 'contact')             return run(subscribe.contact, req, res);
-    if (action === 'subscribe')           return run(subscribe.subscribe, req, res);
-    return res.status(404).json({ error: 'Not found' });
+    const run = action && Object.hasOwn(POST_ACTIONS, action) ? POST_ACTIONS[action] : null;
+    return run ? run(req, res) : res.status(404).json({ error: MSG.notFound });
   }
 
   if (req.method === 'PATCH') return patchConfig(req, res);
 
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'GET') return res.status(405).json({ error: MSG.methodNotAllowed });
 
-  // Slug-independent GET endpoints — must be dispatched before the slug guard.
-  // OAuth resolves the user by email, not by workspace, so it has no slug (the
-  // client and the /auth/callback rewrite never send one).
-  if (action === 'health')             return health(req, res);
-  if (action === 'check-slug')         return checkSlug(req, res);
-  if (action === 'artists')            return myArtists(req, res);
-  if (action === 'deletion-preflight') return run(deletion.preflight, req, res);
-  if (action === 'admin-overview')     return run(admin.overview, req, res);
-  if (action === 'google-url')         return run(oauth.googleUrl, req, res);
-  if (action === 'facebook-url')       return run(oauth.facebookUrl, req, res);
-  if (action === 'oauth-callback')     return run(oauth.oauthCallback, req, res);
+  if (action && Object.hasOwn(GET_ACTIONS, action)) return GET_ACTIONS[action](req, res);
 
-  const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
+  const slugParam = bandSlug(req);
   if (!slugParam) {
     // Asking for an action still needs a band; a plain read does not. Without
     // this the root of a multi-tenant deployment 404s on every page load.
-    if (action) return res.status(404).json({ error: 'Artist not found' });
-    return res.json({
-      singleTenant:  false,
-      googleLogin:   !!(process.env.GOOGLE_CLIENT_ID   && process.env.GOOGLE_CLIENT_SECRET),
-      facebookLogin: !!(process.env.FACEBOOK_APP_ID    && process.env.FACEBOOK_APP_SECRET),
-    });
+    if (action) return res.status(404).json({ error: MSG.artistNotFound });
+    return res.json({ singleTenant: false, ...loginProviders() });
   }
 
   if (action === 'photo-url')          return presignedUpload(req, res, slugParam, 'photo', 'image/jpeg', PHOTO_TYPES);
@@ -117,8 +133,7 @@ async function health(req, res) {
 // later = return { mode:'checkout', url } here and let the provider webhook set
 // the plan instead.
 async function upgrade(req, res) {
-  const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
-  const band = await requireAuth(req, res, slugParam, 'admin');
+  const band = await requireAuth(req, res, bandSlug(req), 'admin');
   if (!band) return;
   const sql = getDb();
   await sql`UPDATE artists SET config = config || ${{ plan: 'pro', upgradedAt: new Date().toISOString() }} WHERE id = ${band.id}`;
@@ -128,8 +143,7 @@ async function upgrade(req, res) {
 // ── POST /api/config/downgrade — back to Free ──────────────────────────────────
 // upgradedAt is deliberately kept: it is the sticky demand metric.
 async function downgrade(req, res) {
-  const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
-  const band = await requireAuth(req, res, slugParam, 'admin');
+  const band = await requireAuth(req, res, bandSlug(req), 'admin');
   if (!band) return;
   const sql = getDb();
   await sql`UPDATE artists SET config = config || ${{ plan: 'free' }} WHERE id = ${band.id}`;
@@ -140,22 +154,25 @@ async function downgrade(req, res) {
 const CONFIG_MAX_BYTES = 64 * 1024;
 
 async function patchConfig(req, res) {
-  const slugParam = req.query.slug || process.env.ARTIST_SLUG || '';
+  const slugParam = bandSlug(req);
   if (!slugParam) return res.status(400).json({ error: 'slug required' });
   const band = await requireAuth(req, res, slugParam, 'admin');
   if (!band) return;
-  const sql = getDb();
-  if (req.body?.name !== undefined) {
-    const name = validateStr(req.body.name, 200);
+  const body = req.body ?? {};
+  let name = null;
+  if (body.name !== undefined) {
+    name = validateStr(body.name, 200);
     if (!name) return res.status(400).json({ error: 'Name required' });
-    await sql`UPDATE artists SET name = ${name} WHERE id = ${band.id}`;
   }
-  if (req.body?.config !== undefined) {
+  let update = {};
+  if (body.config !== undefined) {
+    const c = body.config;
+    if (!c || typeof c !== 'object' || Array.isArray(c))
+      return res.status(400).json({ error: 'config must be an object' });
     // Plan state changes only through /api/config/upgrade, /downgrade and /api/admin/set-plan
     // (later: the billing webhook), never through a generic config patch.
-    const update = { ...req.body.config };
-    delete update.plan;
-    delete update.upgradedAt;
+    const { plan: _p, upgradedAt: _u, ...rest } = c;
+    update = rest;
     // Image URLs pointing into our bucket must be this band's own uploads —
     // account deletion removes whatever these name (api/_domain/deletion.js).
     for (const k of ['logoUrl', 'faviconUrl']) {
@@ -166,21 +183,23 @@ async function patchConfig(req, res) {
       if (key !== null && (!key.startsWith(`bands/${band.slug}/`) || unsafeKey(key)))
         return res.status(400).json({ error: `Invalid ${k}` });
     }
-    // artists.* is read on every authenticated request of the band, so its
-    // settings stay small: a merge past CONFIG_MAX_BYTES is refused.
-    const [saved] = await sql`
-      UPDATE artists SET config = config || ${update}
-      WHERE id = ${band.id} AND octet_length((config || ${update})::text) <= ${CONFIG_MAX_BYTES}
-      RETURNING id`;
-    if (!saved) return res.status(413).json({ error: 'Settings too large' });
   }
+  if (name === null && !Object.keys(update).length) return res.json({ ok: true });
+  // Name and settings in one statement: both are saved, or neither. artists.*
+  // is read on every authenticated request of the band, so its settings stay
+  // small: a merge past CONFIG_MAX_BYTES is refused.
+  const [saved] = await getDb()`
+    UPDATE artists SET name = COALESCE(${name}::text, name), config = config || ${update}
+    WHERE id = ${band.id} AND octet_length((config || ${update})::text) <= ${CONFIG_MAX_BYTES}
+    RETURNING id`;
+  if (!saved) return res.status(413).json({ error: 'Settings too large' });
   return res.json({ ok: true });
 }
 
 // ── GET /api/signup/check-slug — is a slug available? ──────────────────────────
 async function checkSlug(req, res) {
   const slugToCheck = String(req.query.slug || '').trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9-]{2,49}$/.test(slugToCheck))
+  if (!SLUG_RE.test(slugToCheck))
     return res.json({ available: false });
   if (await checkRateLimit(`check-slug:${clientIp(req)}`, 30, 60))
     return res.status(429).json({ error: 'Too many requests' });
@@ -189,28 +208,20 @@ async function checkSlug(req, res) {
   return res.json({ available });
 }
 
-// ── GET /api/auth/artists — artists for current user ───────────────────────────
-async function myArtists(req, res) {
-  const authHeader = (req.headers.authorization || '').replace(/^Bearer /, '');
-  const claim = verifyUserToken(authHeader);
+// ── GET /api/auth/artists — the signed-in person's workspaces ────────────────
+// The session and the address's bands in one statement (the bands as
+// getArtistsForUser in api/_domain/artist.js lists them). No row means the
+// user is gone (account deleted) while its signed token is still in date.
+async function listArtists(req, res) {
   const sql = getDb();
-  if (claim) {
-    // The session row and the address's bands in one statement (the bands as
-    // getArtistsForUser lists them). No row means the user is gone (account
-    // deleted) while its signed token is still in date.
-    const [row] = await sql`
-      SELECT me.password_hash, me.sessions_valid_after,
-        COALESCE((
-          SELECT json_agg(json_build_object('slug', a.slug, 'name', a.name, 'role', u.role) ORDER BY a.name)
-          FROM users u JOIN artists a ON a.id = u.artist_id
-          WHERE u.email = me.email
-        ), '[]') AS artists
-      FROM users me WHERE me.id = ${sessionRowId(sql, claim)} LIMIT 1`;
-    if (!row || !sessionValid(claim, row) || !row.artists.length)
-      return res.status(401).json({ error: 'Unauthorised' });
-    return res.json({ artists: row.artists });
-  }
-  return res.status(401).json({ error: 'Unauthorised' });
+  const me = await sessionAccount(sql, req.headers, sql`
+    COALESCE((
+      SELECT json_agg(json_build_object('slug', a.slug, 'name', a.name, 'role', u.role) ORDER BY a.name)
+      FROM users u JOIN artists a ON a.id = u.artist_id
+      WHERE u.email = me.email
+    ), '[]') AS artists`);
+  if (!me || !me.artists.length) return res.status(401).json({ error: MSG.unauthorized });
+  return res.json({ artists: me.artists });
 }
 
 // ── GET /api/config/photo-url, /favicon-url — presigned upload URL (auth) ─────
@@ -254,7 +265,7 @@ const PUBLIC_CONFIG_KEYS = [
 async function publicConfig(req, res, slugParam) {
   const sql = getDb();
   const { artist: band, user } = await getAccess(req, slugParam);
-  if (!band) return res.status(404).json({ error: 'Band not found in database' });
+  if (!band) return res.status(404).json({ error: MSG.artistNotFound });
   // Without a session the songs payload only ships for a public catalogue.
   const priv  = !user && !canBrowseCatalogue(band);
   const light = priv || req.query.light === '1';
@@ -303,8 +314,7 @@ async function publicConfig(req, res, slugParam) {
       storageUsedBytes: Number(band.storage_used_bytes || 0),
       songs: (counts && counts.songs != null) ? counts.songs : null,
     } : undefined,
-    googleLogin:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-    facebookLogin: !!(process.env.FACEBOOK_APP_ID  && process.env.FACEBOOK_APP_SECRET),
+    ...loginProviders(),
     singleTenant:  !!process.env.ARTIST_SLUG,
     // Where uploaded media lives (it is in every media URL anyway): the songs
     // page frames only this bucket's PDFs without a sandbox.

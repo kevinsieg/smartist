@@ -42,8 +42,20 @@ function send(res, result) {
 // (req, res) handler for a domain function.
 const handle = fn => async (req, res) => send(res, await fn(toInput(req)));
 
+// Error bodies: { error: <message for people>, code?: <machine code> }. A
+// client that branches on a failure reads `code` (song_limit, upgrade_required,
+// demo_readonly, …), never the message. The messages every route shares:
+const MSG = {
+  unauthorized:     'Unauthorized',
+  forbidden:        'Forbidden',
+  artistNotFound:   'Artist not found',
+  notFound:         'Not found',
+  methodNotAllowed: 'Method not allowed',
+  signIn:           'Sign in to view this',
+};
+
 const reply = (status, body) => ({ status, body });
 const ok = body => ({ status: 200, body });
 const fail = (status, error, extra) => ({ status, body: { error, ...extra } });
 
-module.exports = { origin, toInput, send, handle, reply, ok, fail };
+module.exports = { toInput, send, handle, reply, ok, fail, MSG };

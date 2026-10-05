@@ -51,6 +51,7 @@ async function run(r) {
     ['/api/band/gigs',                      'gigs',     { artist: 'band' }],
     ['/api/band/gigs/5',                    'gigs',     { artist: 'band', id: '5' }],
     ['/api/band/gigs/5/poster',             'gigs',     { artist: 'band', id: '5', sub: 'poster' }],
+    ['/api/band/gigs/5/poster-url',         'gigs',     { artist: 'band', id: '5', sub: 'poster-url' }],
     ['/api/band/venues',                    'venues',   { artist: 'band' }],
     ['/api/band/venues/4',                  'venue',    { artist: 'band', path: ['4'] }],
     ['/api/band/organizers',                'organizers', { artist: 'band' }],
@@ -93,6 +94,22 @@ async function run(r) {
       });
     }
   })();
+
+  test('route parameters come from the path only, never from the query string', () => {
+    const gigsPath = require.resolve(path.join(ROOT, 'api', '_band', 'gigs.js'));
+    const saved = require.cache[gigsPath];
+    let seen = null;
+    require.cache[gigsPath] = { id: gigsPath, filename: gigsPath, loaded: true, exports: req => { seen = req.query; } };
+    try {
+      const route = require(path.join(ROOT, 'api', 'index.js'));
+      route({ url: '/api/band/gigs?id=5&sub=poster&path=x&artist=other&refs=1', query: {} }, {});
+      assertEq(seen, { refs: '1', artist: 'band' });
+      route({ url: '/api/band/gigs/7?id=5&sub=poster', query: {} }, {});
+      assertEq(seen, { artist: 'band', id: '7' });
+    } finally {
+      if (saved) require.cache[gigsPath] = saved; else delete require.cache[gigsPath];
+    }
+  });
 
   test('a malformed escape answers 400, not a crash', () => {
     const route = require(path.join(ROOT, 'api', 'index.js'));

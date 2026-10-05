@@ -8,8 +8,7 @@ const logger = require('./_logger');
 //
 // The request's buffered log lines go out in one call per request. Vercel can
 // freeze the function the moment the response is out, and a send started after
-// that point is lost (production logs stopped reaching the log service that
-// way), so the send is handed to the platform's waitUntil, which keeps the
+// that point is lost, so the send is handed to the platform's waitUntil, which keeps the
 // function alive for it after the response. Where there is no waitUntil (the
 // local stack, tests), res.end is held until the send is done instead.
 //
