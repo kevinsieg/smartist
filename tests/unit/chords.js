@@ -101,6 +101,20 @@ function run(r) {
     assertEq(html.includes('class="chord-label"'), true);
     assertEq(html.includes('Plain line'), true);
   });
+
+  test('plain lines come out byte-for-byte; only merged lines are normalised', () => {
+    assertEq(C.chordsToPro('x\ty\r\nz'), 'x\ty\r\nz');
+    assertEq(C.chordsToPro('line\twith tab'), 'line\twith tab');
+    assertEq(C.chordsToPro('a\r\nb'), 'a\r\nb');
+    assertEq(C.chordsToPro('a\tb\nG\r\nOne two\tx'), 'a\tb\n[G]One two x');
+  });
+
+  test('chordsToAbove keeps lines inline when the expanded form would not round-trip', () => {
+    for (const l of ['[x3]la', '[G]A', '[G]Am']) {
+      assertEq(C.chordsToAbove(l), l, l);
+      assertEq(C.chordsToPro(C.chordsToAbove(l)), l, l);
+    }
+  });
 }
 
 if (require.main === module) {

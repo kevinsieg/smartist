@@ -13,12 +13,11 @@ function _chCore(tok) { return tok.replace(/^[|:(]+/, '').replace(/[|:)]+$/, '')
 function _chIsChord(tok) { return _CH_CHORD.test(_chCore(tok)); }
 function _chIsToken(tok) { var c = _chCore(tok); return c === '' || _CH_MARK.test(c) || _CH_CHORD.test(c); }
 
-function _chNormalise(text) {
-  return String(text).replace(/\r\n?/g, '\n').split('\n').map(function (l) {
-    var out = '';
-    for (var i = 0; i < l.length; i++) out += l[i] === '\t' ? ' '.repeat(8 - (out.length % 8)) : l[i];
-    return out;
-  });
+function _chNorm1(l) {
+  l = l.replace(/\r$/, '');
+  var out = '';
+  for (var i = 0; i < l.length; i++) out += l[i] === '\t' ? ' '.repeat(8 - (out.length % 8)) : l[i];
+  return out;
 }
 
 function chordsIsLine(line) {
@@ -45,13 +44,14 @@ function _chMerge(chordLine, lyric) {
 }
 
 function chordsToPro(text) {
-  var lines = _chNormalise(text), out = [];
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
-    if (!chordsIsLine(line)) { out.push(line); continue; }
-    var lyricNext = _chIsLyric(lines[i + 1]);
-    if (/^\s*[A-G]\s*$/.test(line) && !lyricNext) { out.push(line); continue; }
-    if (lyricNext) { out.push(_chMerge(line, lines[i + 1])); i++; }
+  var raw = String(text).split('\n'), out = [];
+  for (var i = 0; i < raw.length; i++) {
+    var line = _chNorm1(raw[i]);
+    if (!chordsIsLine(line)) { out.push(raw[i]); continue; }
+    var next = i + 1 < raw.length ? _chNorm1(raw[i + 1]) : undefined;
+    var lyricNext = _chIsLyric(next);
+    if (/^\s*[A-G]\s*$/.test(line) && !lyricNext) { out.push(raw[i]); continue; }
+    if (lyricNext) { out.push(_chMerge(line, next)); i++; }
     else out.push(_chMerge(line, ''));
   }
   return out.join('\n');
@@ -86,7 +86,8 @@ function chordsToAbove(text) {
       }
       lyric += s.text;
     });
-    return lyric.trim() ? chords + '\n' + lyric.replace(/\s+$/, '') : chords;
+    var above = lyric.trim() ? chords + '\n' + lyric.replace(/\s+$/, '') : chords;
+    return chordsToPro(above).trimEnd() === line.trimEnd() ? above : line;
   }).join('\n');
 }
 
