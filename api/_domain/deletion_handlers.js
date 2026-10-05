@@ -1,9 +1,8 @@
 'use strict';
 const crypto = require('crypto');
 const { getDb } = require('../_db');
-const { verifyUserToken, sessionValid } = require('../_token');
 const { checkRateLimit } = require('../_ratelimit');
-const { sessionRowId } = require('../_auth');
+const { sessionAccount } = require('../_session');
 const { deleteFromR2 } = require('../_r2');
 const { sendEmail } = require('../_email');
 const logger = require('../_logger');
@@ -15,11 +14,8 @@ const TOKEN_TTL_MS = 30 * 60 * 1000;
 // Slug-independent: deletion spans every workspace, so there is no slug to
 // authenticate against. Same shape as myArtists in api/_config.js.
 async function _sessionEmail(headers, sql) {
-  const bearer = (headers.authorization || '').replace(/^Bearer /, '');
-  const claim  = verifyUserToken(bearer);
-  if (!claim) return null;
-  const [row] = await sql`SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${sessionRowId(sql, claim)} LIMIT 1`;
-  return row && sessionValid(claim, row) ? String(row.email).toLowerCase() : null;
+  const me = await sessionAccount(sql, headers);
+  return me ? String(me.email).toLowerCase() : null;
 }
 
 // GET /api/auth/deletion-preflight — what would happen, in the person's own words.

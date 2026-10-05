@@ -1,22 +1,15 @@
 const postgres = require('postgres');
-const { SONG_LOG_KEEP } = require('./_constants');
+const logger = require('./_logger');
+const { trimHistory } = require('./_domain/songs');
 
 // ── Database provider ─────────────────────────────────────────────────────────
-// Current: postgres.js (standard PostgreSQL wire protocol, supports transactions)
-// postgres.js connects over port 5432. Neon supports both the HTTP endpoint
-// (@neondatabase/serverless) and the standard wire protocol — the DATABASE_URL
-// pooler connection string works with both.
-//
-// postgres.js was chosen over @neondatabase/serverless because:
-//   - sql.begin() / transactions are required for multi-step writes
-//   - the tagged-template interface is identical — no query changes needed
-//
-// To switch drivers, replace the connect line only:
-//   neon HTTP (no transactions; npm install it first): connect: url => require('@neondatabase/serverless').neon(url)
-//   pg Pool:                     connect: url => { ... }  (see DATABASE.md)
+// postgres.js over the standard PostgreSQL wire protocol (port 5432): it has
+// transactions (sql.begin), which multi-step writes need, and Neon's pooled
+// DATABASE_URL takes it. A different driver with the same tagged-template
+// interface replaces the connect line only (DATABASE.md).
 // prepare: false — Neon's pooler keeps named prepared statements on its server
 // connections, so after a column changes type every `SELECT *` on that table
-// failed with "cached plan must not change result type" until the pool recycled.
+// fails with "cached plan must not change result type" until the pool recycles.
 // Cost of that: postgres.js sends every query with parameters as Parse/Describe,
 // waits for the parameter types, then Bind/Execute — two round-trips — and a
 // query waiting for its description holds up the ones behind it on its
@@ -62,7 +55,7 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
       VALUES (${artistId}, ${songId}, ${action}, ${songData})
     `;
   } catch (err) {
-    console.error('[audit] failed to log:', err.message);
+    await logger.error('audit_log_failed', { songId, error: err.message });
   }
   await trimSongLogs(sql, artistId, songId);
 }
@@ -70,27 +63,17 @@ async function insertAuditLog(sql, artistId, songId, action, songData) {
 // Each entry is a full snapshot of the song, so the history would grow with
 // every edit forever. A song keeps its newest SONG_LOG_KEEP entries
 // (api/_constants.js): the last one is what restore reads, and the list shows
-// 20 at most. Only the songs a write touched are trimmed, on every write:
-// song_logs_song_id_idx finds their rows, so the cost does not grow with the
-// band. The song edits do it inside their own statement (a `trimmed` CTE);
-// this is for the writes that log separately (media). Takes one song id or a
-// list. A failed trim never fails the request.
+// 20 at most. Only the songs a write touched are trimmed, on every write. The
+// song edits do it inside their own statement (a `trimmed` step built by
+// trimHistory); this is for the writes that log separately (media). Takes one
+// song id or a list. A failed trim never fails the request.
 async function trimSongLogs(sql, artistId, songIds) {
   const ids = (Array.isArray(songIds) ? songIds : [songIds]).map(Number).filter(n => Number.isInteger(n) && n > 0);
   if (!ids.length) return;
   try {
-    await sql`
-      DELETE FROM song_logs WHERE id IN (
-        SELECT id FROM (
-          SELECT id, row_number() OVER (PARTITION BY song_id ORDER BY changed_at DESC, id DESC) AS n
-          FROM song_logs
-          WHERE song_id = ANY(${ids}::int[]) AND artist_id = ${artistId}
-        ) ranked
-        WHERE n > ${SONG_LOG_KEEP}
-      )
-    `;
+    await trimHistory(sql, artistId, sql`SELECT unnest(${ids}::int[])`);
   } catch (err) {
-    console.error('[audit] failed to trim:', err.message);
+    await logger.error('audit_trim_failed', { error: err.message });
   }
 }
 
@@ -127,7 +110,7 @@ async function purgeDeletedSongs(sql, artistId, { always = false } = {}) {
       DELETE FROM songs WHERE id IN (SELECT id FROM old WHERE NOT listed) AND artist_id = ${artistId}
     `;
   } catch (err) {
-    console.error('[songs] failed to purge deleted songs:', err.message);
+    await logger.error('song_purge_failed', { error: err.message });
   }
 }
 
@@ -143,6 +126,6 @@ function parsePage(req) {
 }
 
 module.exports = {
-  getDb, getArtist, insertAuditLog, trimSongLogs, SONG_LOG_KEEP, purgeDeletedSongs, PURGE_AFTER_DAYS,
+  getDb, getArtist, insertAuditLog, trimSongLogs, purgeDeletedSongs, PURGE_AFTER_DAYS,
   getSlug, parsePage,
 };

@@ -143,7 +143,8 @@ async function run(r) {
     assertEq(JSON.stringify(batchRows(calls)[0].tags), '["Liebe","Arbeit"]');
     const q = calls.find(c => c.text.includes('unnest(tags)'));
     assert(q && q.values.every(v => v === 1 || Array.isArray(v)), 'known tags are scoped to the band');
-    assertEq(calls.filter(c => c.text.startsWith('SELECT')).length, 1, 'rows, genres and tags in one statement');
+    // The history trim's `SELECT id FROM u` is a fragment of the batch statement.
+    assertEq(calls.filter(c => c.text.startsWith('SELECT') && !/^SELECT id FROM u$/.test(c.text.trim())).length, 1, 'rows, genres and tags in one statement');
   });
 
   await testAsync('invalid tags reject the row', async () => {

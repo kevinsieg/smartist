@@ -49,12 +49,16 @@ async function runAbuseLimits(r) {
     const sql = (strings, ...values) => {
       const text = strings.join('?');
       if (!text.includes('INSERT INTO rate_limits')) return Promise.resolve([]);
-      // Several rows in one INSERT: each VALUES row binds its key first.
-      if (/\),\s*\(/.test(text)) { values.slice(0, 2).forEach(k => { counts[k] = (counts[k] || 0) + 1; }); return Promise.resolve([]); }
-      const key = values[0];
-      counts[key] = (counts[key] || 0) + 1;
-      return Promise.resolve([{ count: counts[key] }]);
+      // Every counter goes through countInWindows: one INSERT, the keys as a
+      // JSON recordset, one statement for all of them.
+      statements++;
+      return Promise.resolve(values[0].map(({ key }) => {
+        counts[key] = (counts[key] || 0) + 1;
+        return { key, count: counts[key] };
+      }));
     };
+    sql.json = v => v;
+    let statements = 0;
     const alarms = [];
     const logPath = require.resolve(path.join(__dirname, '../../api/_logger'));
     const saved = { db: require.cache[dbPath], rl: require.cache[rlPath], log: require.cache[logPath] };
@@ -66,7 +70,7 @@ async function runAbuseLimits(r) {
     require.cache[dbPath] = saved.db; require.cache[rlPath] = saved.rl; require.cache[logPath] = saved.log;
     if (!saved.db) delete require.cache[dbPath];
     if (!saved.log) delete require.cache[logPath];
-    return { mod, counts, alarms };
+    return { mod, counts, alarms, statements: () => statements };
   }
   const realRandom = Math.random;
   Math.random = () => 0.5;   // no sweep
@@ -101,6 +105,22 @@ async function runAbuseLimits(r) {
       assertEq(alarms.filter(a => a.key === 'presign-day').length, 1);
       assert(mod.PRESIGN_BAND_DAILY * 2 < mod.PRESIGN_DAILY, 'two bands must not reach the alarm');
     });
+    // A workspace costs one click: a cap per band alone let one account
+    // multiply it.
+    await testAsync('presigns are capped per person across all their bands', async () => {
+      const { mod, counts } = load();
+      counts['presign-person:a@x.test'] = mod.PRESIGN_PERSON_DAILY - 1;
+      assertEq(await mod.presignLimited(1, 'A@x.test'), false);
+      assertEq(await mod.presignLimited(2, 'a@x.test'), true);
+      assertEq(await mod.presignLimited(3, 'b@x.test'), false);
+      assert(mod.PRESIGN_PERSON_DAILY > mod.PRESIGN_BAND_DAILY, 'one band\'s day must fit in a person\'s');
+    });
+    await testAsync('a presign counts its four keys in one statement', async () => {
+      const { mod, counts, statements } = load();
+      await mod.presignLimited(1, 'a@x.test');
+      assertEq(statements(), 1);
+      assertEq(Object.keys(counts).sort(), ['presign-day', 'presign-day:1', 'presign-person:a@x.test', 'presign:1']);
+    });
     // A lock per address alone let anyone lock a person out by typing ten
     // wrong passwords for them; passwordLogin compares these counts with
     // LOGIN_FAIL_MAX (pair) and LOGIN_FAIL_ADDRESS_MAX (address).
@@ -108,10 +128,22 @@ async function runAbuseLimits(r) {
       const { mod, counts } = load();
       for (let i = 0; i < 3; i++) await mod.countLoginFailure('Owner@x.test', '6.6.6.6');
       await mod.countLoginFailure('owner@x.test', '1.1.1.1');
-      assertEq(counts['login-fail:owner@x.test|6.6.6.6'], 3);
-      assertEq(counts['login-fail:owner@x.test|1.1.1.1'], 1);
+      assertEq(counts['login-fail:owner@x.test 6.6.6.6'], 3);
+      assertEq(counts['login-fail:owner@x.test 1.1.1.1'], 1);
       assertEq(counts['login-fail:owner@x.test'], 4);
       assert(mod.LOGIN_FAIL_ADDRESS_MAX > mod.LOGIN_FAIL_MAX, 'the address-wide lock must need more than one IP');
+    });
+    // With `|` the "address" `owner@x.test|6.6.6.6` was the owner's own pair
+    // key: ten strangers tripped the lock meant for the owner's network.
+    await testAsync('no address key is another address\'s pair key, and no known-IP prefix covers another address', async () => {
+      const { mod } = load();
+      const { validateEmail } = require(path.join(__dirname, '../../api/_validate'));
+      const pair = mod.loginFailPairKey('owner@x.test', '6.6.6.6');
+      const forged = pair.slice('login-fail:'.length);
+      assert(!validateEmail(forged), 'an address that forges a pair key must be refused before counting');      assert(!mod.loginOkKey('owner@x.test|evil.test', '1.1.1.1').startsWith(mod.loginOkPrefix('owner@x.test')),
+        'another address must not share the known-IP prefix');
+      assert(!mod.loginOkKey('owner@x.tester', '1.1.1.1').startsWith(mod.loginOkPrefix('owner@x.test')),
+        'a longer address must not share the known-IP prefix');
     });
   } finally {
     Math.random = realRandom;

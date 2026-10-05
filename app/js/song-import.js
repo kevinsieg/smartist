@@ -220,7 +220,8 @@ function siToggleFilter(el) {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 function _siErrorText(data) {
-  var code = data && data.error;
+  // The machine code is in `code` (older answers carried it in `error`).
+  var code = data && (data.code || data.error);
   var known = ['empty_file', 'no_title_column', 'duplicate_column', 'no_rows', 'too_many_rows',
                'file_too_large', 'song_limit'];
   if (known.indexOf(code) >= 0) {

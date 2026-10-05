@@ -28,7 +28,11 @@ async function run(r) {
     delete require.cache[authPath];
     delete require.cache[configPath];
     delete require.cache[tokenPath];
-    // config.js delegates to every module under api/_domain — bust them all so a
+    delete require.cache[require.resolve(path.join(__dirname, '../../api/_session'))];
+    // Other suites leave a stub _r2 behind; config reads the real one's
+    // publicBaseUrl.
+    delete require.cache[require.resolve(path.join(__dirname, '../../api/_r2'))];
+    // _config.js delegates to every module under api/_domain — bust them all so a
     // re-require rebuilds the whole chain against the stubs set below.
     const domainDir = path.join(__dirname, '../../api/_domain');
     require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {
@@ -64,8 +68,8 @@ async function run(r) {
     return res;
   }
 
-  // ── POST ?action=signup-link ────────────────────────────────────────────────
-  console.log(B('\nPOST ?action=signup-link'));
+  // ── POST /api/signup/link ───────────────────────────────────────────────────
+  console.log(B('\nPOST /api/signup/link'));
 
   await testAsync('missing email → 400', async () => {
     const handler = makeHandler(async () => []);
@@ -151,8 +155,8 @@ async function run(r) {
     assert(!emailSent, 'expected NO email when honeypot is filled');
   });
 
-  // ── POST ?action=verify-signup-token ────────────────────────────────────────
-  console.log(B('\nPOST ?action=verify-signup-token'));
+  // ── POST /api/signup/verify ─────────────────────────────────────────────────
+  console.log(B('\nPOST /api/signup/verify'));
 
   await testAsync('missing token → 400', async () => {
     const handler = makeHandler(async () => []);
@@ -186,8 +190,8 @@ async function run(r) {
     assertEq(res._body && res._body.email, 'user@test.com');
   });
 
-  // ── POST ?action=signup ─────────────────────────────────────────────────────
-  console.log(B('\nPOST ?action=signup'));
+  // ── POST /api/signup ────────────────────────────────────────────────────────
+  console.log(B('\nPOST /api/signup'));
 
   await testAsync('missing token → 400', async () => {
     const handler = makeHandler(async () => []);
@@ -272,8 +276,8 @@ async function run(r) {
     assert(!inserted, 'no workspace may be created from a spent link');
   });
 
-  // ── GET ?action=check-slug ──────────────────────────────────────────────────
-  console.log(B('\nGET ?action=check-slug'));
+  // ── GET /api/signup/check-slug ──────────────────────────────────────────────
+  console.log(B('\nGET /api/signup/check-slug'));
 
   await testAsync('available slug → { available: true }', async () => {
     const sql = async () => [{ exists: false }];
@@ -314,8 +318,8 @@ async function run(r) {
     const artists = [{ slug: 'my-band', name: 'My Band', role: 'admin' }];
     let calls = 0;
     const handler = makeHandler(async (strings) => {
-      // sessionRowId is a subquery inside the statement, not a statement.
-      if (/^\(\s*SELECT id FROM users/.test(strings.join('?').trim())) return [];
+      // sessionRowId and the bands are fragments inside the statement.
+      if (!/FROM users me/.test(strings.join('?'))) return [];
       calls++;
       return [{ password_hash: null, sessions_valid_after: null, artists }];
     });
@@ -399,7 +403,7 @@ async function run(r) {
   await testAsync('PATCH config drops plan and upgradedAt but keeps other keys', async () => {
     let merged = null;
     const handler = makeHandler(memberSql('admin', (q, values) => {
-      if (q.includes('UPDATE artists SET config')) { merged = values[0]; return [{ id: 1 }]; }
+      if (q.includes('UPDATE artists SET name')) { merged = values[1]; return [{ id: 1 }]; }
     }));
     const res = mockRes();
     await handler({
@@ -416,7 +420,7 @@ async function run(r) {
     const handler = makeHandler(memberSql('admin', (q) => {
       // The row matches only while the merged config stays under the cap; a
       // database that refuses it returns no row.
-      if (q.includes('UPDATE artists SET config')) { guarded = /octet_length/.test(q); return []; }
+      if (q.includes('UPDATE artists SET name')) { guarded = /octet_length/.test(q); return []; }
     }));
     const res = mockRes();
     await handler({
@@ -426,6 +430,32 @@ async function run(r) {
     }, res);
     assert(guarded, 'expected the size check in the UPDATE');
     assertEq(res._status, 413);
+  });
+
+  for (const [label, config] of [['a string', 'ab'], ['an array', ['a']], ['null', null], ['a number', 5]]) {
+    await testAsync(`PATCH config with ${label} → 400, nothing written`, async () => {
+      let written = false;
+      const handler = makeHandler(memberSql('admin', (q) => { if (q.includes('UPDATE artists')) written = true; }));
+      const res = mockRes();
+      await handler({ method: 'PATCH', query: { slug: 'test' }, body: { name: 'New name', config },
+        headers: { authorization: bearer() } }, res);
+      assertEq(res._status, 400);
+      assert(!written, 'a bad config must not save the name either');
+    });
+  }
+
+  await testAsync('PATCH name and config → one statement; a refused config keeps the old name', async () => {
+    const updates = [];
+    const handler = makeHandler(memberSql('admin', (q, values) => {
+      if (q.includes('UPDATE artists')) { updates.push({ q, values }); return []; }
+    }));
+    const res = mockRes();
+    await handler({ method: 'PATCH', query: { slug: 'test' }, body: { name: 'New name', config: { a: 1 } },
+      headers: { authorization: bearer() } }, res);
+    assertEq(res._status, 413);
+    assertEq(updates.length, 1, 'name and config in one UPDATE');
+    assert(/SET name = COALESCE/.test(updates[0].q) && /octet_length/.test(updates[0].q), updates[0].q);
+    assertEq(updates[0].values.slice(0, 2), ['New name', { a: 1 }]);
   });
 
   await testAsync('anonymous config carries only the public keys', async () => {
@@ -438,7 +468,7 @@ async function run(r) {
     assertEq(res._body.config, { logoUrl: 'https://x.test/l.png', publicStage: true });
   });
 
-  await testAsync('POST action=downgrade sets plan free and leaves upgradedAt alone', async () => {
+  await testAsync('POST /api/config/downgrade sets plan free and leaves upgradedAt alone', async () => {
     let merged = null;
     const handler = makeHandler(memberSql('admin', (q, values) => {
       if (q.includes('UPDATE artists SET config')) merged = values[0];
@@ -452,7 +482,7 @@ async function run(r) {
     assertEq(merged, { plan: 'free' });
   });
 
-  await testAsync('POST action=downgrade by a member → 403, plan untouched', async () => {
+  await testAsync('POST /api/config/downgrade by a member → 403, plan untouched', async () => {
     let updated = false;
     const handler = makeHandler(memberSql('member', (q) => {
       if (q.includes('UPDATE artists')) updated = true;
@@ -466,7 +496,7 @@ async function run(r) {
     assert(!updated, 'member must not change the plan');
   });
 
-  await testAsync('POST action=upgrade sets plan pro with an ISO upgradedAt', async () => {
+  await testAsync('POST /api/config/upgrade sets plan pro with an ISO upgradedAt', async () => {
     let merged = null;
     const handler = makeHandler(memberSql('admin', (q, values) => {
       if (q.includes('UPDATE artists SET config')) merged = values[0];
@@ -487,7 +517,8 @@ async function run(r) {
   function superAdminSql(email, onQuery) {
     return async function(strings, ...values) {
       const q = strings.join('?');
-      if (/SELECT email(, password_hash(, sessions_valid_after)?)? FROM users/.test(q)) return email ? [{ email }] : [];
+      // The session lookup (api/_session.js): the users row of the token.
+      if (/FROM users me WHERE me\.id/.test(q)) return email ? [{ email, password_hash: null, sessions_valid_after: null }] : [];
       return (onQuery && onQuery(q, values)) || [];
     };
   }

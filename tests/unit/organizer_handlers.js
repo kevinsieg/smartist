@@ -56,7 +56,9 @@ function mockRes() {
 // authFails mirrors the real requireAuth: writes 401 and returns null.
 function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), handlerPath = mp(rel);
-  for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
+  // The item handler is built by api/_band/record_item.js: rebuilt too, so it
+  // picks up these stubs.
+  for (const p of [dbPath, authPath, handlerPath, mp('api/_band/record_item')]) delete require.cache[p];
   const calls = [];
   const sql = (strings, ...values) => {
     // sql({ col: value }) — the insert/update helper: keep the object.
@@ -65,7 +67,10 @@ function loadHandler(rel, route, { artist = ARTIST, authFails = false } = {}) {
     const text = strings.join(' ').replace(/\s+/g, ' ').trim();
     // sql`…` nested in another statement (a SET list) is a fragment, not a query.
     if (!/^(SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(text)) return { fragment: text, values };
-    calls.push({ text, values });
+    // A statement's text with its identifiers (sql('organizers')) in place.
+    const named = strings.reduce((t, str, i) => t + (i ? ` ${values[i - 1]?.fragment !== undefined && !values[i - 1].values ? values[i - 1].fragment : ''} ` : '') + str, '')
+      .replace(/\s+/g, ' ').trim();
+    calls.push({ text: named, values });
     return Promise.resolve(route(text));
   };
   // postgres.js awaits an array of queries returned from begin().
@@ -129,7 +134,7 @@ async function run(r) {
     const { handler } = loadHandler(LIST, () => [], { artist: FREE_ARTIST });
     const res = await call(handler, 'GET', '/api/test/organizers');
     assertEq(res.statusCode, 402);
-    assertEq(res.body?.error, 'upgrade_required');
+    assertEq(res.body?.code, 'upgrade_required');
     assertEq(res.body?.feature, 'organizers');
   });
 

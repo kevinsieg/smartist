@@ -187,16 +187,14 @@ jobs:
     # Secrets are unavailable to pull requests from forks and cannot be read in
     # a job-level `if`, so the job runs everywhere and the steps skip themselves
     # when VERCEL_TOKEN or the protection-bypass secret is absent.
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      # Preview deployments sit behind Vercel Deployment Protection; the suite
-      # needs the project's "Protection Bypass for Automation" secret to reach them.
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    # Each secret is set only on the step that needs it: the test suite is the
+    # pushed branch's code, and it never sees the deploy token.
     steps:
       - name: Check for Vercel credentials
         id: creds
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "No VERCEL_TOKEN — skipping integration tests."
@@ -214,7 +212,8 @@ jobs:
           node-version: '24'
 
       # tests/ has no dependencies of its own; it resolves from the root install.
-      # No install scripts: VERCEL_TOKEN is in this job's environment.
+      # No install scripts: they would run before the deploy step that holds
+      # VERCEL_TOKEN, in the same workspace.
       - name: Install Vercel CLI and dependencies
         if: steps.creds.outputs.ok == 'true'
         run: |
@@ -224,6 +223,10 @@ jobs:
       - name: Deploy preview
         id: deploy
         if: steps.creds.outputs.ok == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" > /dev/null
           DEPLOY_URL=$(vercel deploy --token="$VERCEL_TOKEN" 2> deploy.err) || { tail -n 20 deploy.err; exit 1; }
@@ -233,6 +236,9 @@ jobs:
         if: steps.creds.outputs.ok == 'true'
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
+          # Preview deployments sit behind Vercel Deployment Protection; the suite
+          # needs the project's "Protection Bypass for Automation" secret to reach them.
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           # The suite logs in as a named user of a Pro workspace (tests/api.js).
           # The email is a secret, not a variable: Actions logs of a public
           # repository are public, and secrets are masked in them.

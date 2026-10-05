@@ -109,7 +109,8 @@ async function setPassword({ body }) {
           delete_token_hash = NULL, delete_token_expires = NULL
       WHERE email = ${addr} RETURNING 1
     ), forget AS (
-      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(addr)})
+      DELETE FROM rate_limits
+      WHERE key >= ${loginOkPrefix(addr)} AND key < ${loginOkPrefix(addr)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(addr)})
     )
     SELECT count(*) FROM u`;
 

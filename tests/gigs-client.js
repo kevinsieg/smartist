@@ -54,7 +54,57 @@ function loadIsUpcoming() {
   return context.fn;
 }
 
+// generatePosterBlob with a stub image and canvas: returns the canvas sizes it drew.
+function loadPosterBlob(width, height, bytesPerPixel) {
+  const drawn = [];
+  const context = {
+    console,
+    document: {
+      createElement() {
+        const c = { width: 0, height: 0,
+          getContext: () => ({ drawImage() {} }),
+          toBlob(cb, type, quality) { drawn.push({ w: c.width, h: c.height, type, quality }); cb({ size: c.width * c.height * bytesPerPixel }); } };
+        return c;
+      },
+    },
+    _loadImage: async () => ({ naturalWidth: width, naturalHeight: height }),
+  };
+  vm.createContext(context);
+  const src = GIGS_SRC.match(/var POSTER_MAX_EDGE = \d+;/)[0] +
+    ['_canvasToJpegBlob', '_posterCanvas'].map(n => extractFunction(GIGS_SRC, n)).join('\n') +
+    '\nasync ' + extractFunction(GIGS_SRC, 'generatePosterBlob');
+  vm.runInContext(`${src}; this.fn = generatePosterBlob;`, context);
+  return { generate: () => context.fn({}), drawn };
+}
+
 (async () => {
+  console.log(B('\ngigs: poster downscaling'));
+
+  {
+    const { generate, drawn } = loadPosterBlob(4000, 3000, 0.1);
+    await generate();
+    test('a 12-MP photo is cut to 2000 px on the long edge', () => {
+      assert(drawn.length === 1, `expected one encode, got ${drawn.length}`);
+      assert(drawn[0].w === 2000 && drawn[0].h === 1500, `got ${drawn[0].w}x${drawn[0].h}`);
+      assert(drawn[0].type === 'image/jpeg' && drawn[0].quality === 0.85, 'JPEG at 0.85');
+    });
+  }
+  {
+    const { generate, drawn } = loadPosterBlob(800, 1200, 0.1);
+    await generate();
+    test('a small image is never upscaled', () => {
+      assert(drawn[0].w === 800 && drawn[0].h === 1200, `got ${drawn[0].w}x${drawn[0].h}`);
+    });
+  }
+  {
+    const { generate, drawn } = loadPosterBlob(4000, 3000, 5);
+    await generate();
+    test('a poster still over 5 MB steps down, then lowers quality', () => {
+      assert(drawn.map(d => d.w).join(',') === '2000,1600,1200,1200', drawn.map(d => d.w).join(','));
+      assert(drawn[3].quality === 0.6, 'last resort at quality 0.6');
+    });
+  }
+
   console.log(B('\ngigs: add-to-calendar only for upcoming gigs'));
 
   const isUpcoming = loadIsUpcoming();

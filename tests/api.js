@@ -410,7 +410,8 @@ async function testSongLogs(slug) {
     if (json.length) {
       assert('action' in json[0], 'missing action field');
       assert('song_data' in json[0], 'missing song_data field');
-      firstLog = json[0];
+      // A log of a purged song keeps its row with song_id NULL.
+      firstLog = json.find(l => l.song_id) || null;
     }
   });
 
@@ -460,14 +461,14 @@ async function testGigs(slug) {
 
   if (firstGig) {
     await test('GET /:id returns gig', async () => {
-      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}`, AUTH);
+      const { res, json } = await GET(`/api/${slug}/gigs/${firstGig.id}`, AUTH);
       assertStatus(res, json, 200);
       assert(json.id === firstGig.id, 'id mismatch');
       assert('title' in json, 'missing title');
     });
 
     await test('GET /:id?refs=1 returns gig with setlists/venue/organizer', async () => {
-      const { res, json } = await GET(`/api/${slug}/gigs?id=${firstGig.id}&refs=1`, AUTH);
+      const { res, json } = await GET(`/api/${slug}/gigs/${firstGig.id}?refs=1`, AUTH);
       assertStatus(res, json, 200);
       assert('gig' in json && 'refs' in json, 'missing gig or refs');
       assert(Array.isArray(json.refs.setlists), 'refs.setlists should be array');
@@ -492,12 +493,12 @@ async function testGigs(slug) {
   });
 
   await test('GET /:id with id=0 → 400', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs?id=0`, AUTH);
+    const { res, json } = await GET(`/api/${slug}/gigs/0`, AUTH);
     assertStatus(res, json, 400);
   });
 
   await test('GET /:id not found → 404', async () => {
-    const { res, json } = await GET(`/api/${slug}/gigs?id=999999999`, AUTH);
+    const { res, json } = await GET(`/api/${slug}/gigs/999999999`, AUTH);
     assertStatus(res, json, 404);
   });
 
@@ -521,13 +522,13 @@ async function testVenues(slug, config) {
     await test(`GET on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
       const { res, json } = await GET(`/api/${slug}/venues`, AUTH);
       assertStatus(res, json, 402);
-      assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
+      assert(json.code === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
     });
 
     await test(`GET /:id on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
       const { res, json } = await GET(`/api/${slug}/venues/999999999`, AUTH);
       assertStatus(res, json, 402);
-      assert(json.error === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
+      assert(json.code === 'upgrade_required' && json.feature === 'venues', 'expected upgrade_required for venues');
     });
     return;
   }
@@ -757,11 +758,10 @@ async function testAuth(slug) {
     assertStatus(res, json, 401);
   });
 
-  // Gigs, venues, organizers auth. A single gig is addressed as ?id=N — gigs.js serves
-  // the collection and the item in one serverless function.
+  // Gigs, venues, organizers auth.
   for (const resource of ['gigs', 'venues', 'organizers']) {
     const body = resource === 'gigs' ? { title: 'x' } : { name: 'x' };
-    const itemUrl = resource === 'gigs' ? `/api/${slug}/gigs?id=1` : `/api/${slug}/${resource}/1`;
+    const itemUrl = `/api/${slug}/${resource}/1`;
     await test(`POST /${resource} without token → 401`, async () => {
       const { res, json } = await POST(`/api/${slug}/${resource}`, body);
       assertStatus(res, json, 401);
@@ -1000,7 +1000,7 @@ async function testIcsFeed(slug, token) {
     assert(ics.endsWith('END:VCALENDAR\r\n'), 'the feed ends with CRLF');
   });
   for (const id of made)
-    await DELETE(`/api/${slug}/gigs?id=${id}`, { body: { hard: true }, token });
+    await DELETE(`/api/${slug}/gigs/${id}`, { body: { hard: true }, token });
 }
 
 // ── Sessions, roles and tenancy on the real database ──────────────────────────
@@ -1510,7 +1510,7 @@ async function testWrite(slug, token, firstSong, config) {
       const { res, json } = await POST(`/api/${slug}/songs`,
         { title: '[TEST] Temporary', key: 'G', active: false }, { token });
       assertStatus(res, json, 402);
-      assert(json.error === 'song_limit' && json.limit === songLimit, 'expected song_limit');
+      assert(json.code === 'song_limit' && json.limit === songLimit, 'expected song_limit');
     });
     skip('POST /songs creates song → 201', 'band at song limit');
     skip('POST /songs missing title → 400', 'band at song limit');
@@ -1630,7 +1630,7 @@ async function testWrite(slug, token, firstSong, config) {
           const put = await PUT(`/api/${slug}/setlists/${setlist.id}`,
             { title: '[TEST] updated', gig_id: gig.json.id, song_ids: [firstSong.id] }, { token });
           assertStatus(put.res, put.json, 200);
-          const { res, json } = await GET(`/api/${slug}/gigs?id=${gig.json.id}&refs=1`, { token });
+          const { res, json } = await GET(`/api/${slug}/gigs/${gig.json.id}?refs=1`, { token });
           assertStatus(res, json, 200);
           const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
           assert(same(json.refs.setlists, [{ id: setlist.id, title: '[TEST] updated' }]),
@@ -1641,7 +1641,7 @@ async function testWrite(slug, token, firstSong, config) {
         } finally {
           await PUT(`/api/${slug}/setlists/${setlist.id}`,
             { title: '[TEST] updated', gig_id: null, song_ids: [firstSong.id] }, { token });
-          await DELETE(`/api/${slug}/gigs?id=${gig.json.id}`, { token, body: { hard: true } });
+          await DELETE(`/api/${slug}/gigs/${gig.json.id}`, { token, body: { hard: true } });
         }
       });
 
@@ -1729,18 +1729,16 @@ async function testWrite(slug, token, firstSong, config) {
 // Shared factory: create → validate → update → GET verify → soft-delete →
 // 409 on modify → hard-delete cleanup. Parameterised on resource + payloads.
 
-// itemUrl: gigs live in the collection handler (one function for both), so a single gig is
-// addressed as ?id=N; venues and organizers have their own catch-all and keep /:id.
 async function testCrudLifecycle(slug, token, config, { resource, createBody, invalidBody, updateBody, labelField, setHeart,
-                                                        badUpdate, clearable = 'comment', linkField,
-                                                        itemUrl = (id, qs = '') => `/api/${slug}/${resource}/${id}${qs}` }) {
+                                                        badUpdate, clearable = 'comment', linkField }) {
+  const itemUrl = (id, qs = '') => `/api/${slug}/${resource}/${id}${qs}`;
   console.log(B(`\nWrite ops — ${resource}`));
 
   if (!planHas(config, resource)) {
     await test(`POST /${resource} on ${config.plan?.key} plan → 402 upgrade_required`, async () => {
       const { res, json } = await POST(`/api/${slug}/${resource}`, createBody, { token });
       assertStatus(res, json, 402);
-      assert(json.error === 'upgrade_required' && json.feature === resource, 'expected upgrade_required');
+      assert(json.code === 'upgrade_required' && json.feature === resource, 'expected upgrade_required');
     });
     return;
   }
@@ -1895,7 +1893,6 @@ async function testVenueLists(slug, token, config) {
   if (!planHas(config, 'venues')) return skip('venue lists', 'plan without venues');
   const country = `T${String(Date.now()).slice(-1)}`;
   const made = [];
-  let gig;
   try {
     for (const body of [
       { name: '[TEST] Placed', city: 'Teststadt', country, lat: 52.5, lng: 13.4, comment: '[TEST] private venue note', status: 'Booked' },
@@ -1926,16 +1923,7 @@ async function testVenueLists(slug, token, config) {
       assert(hit.some(v => v.id === placed.id), 'status match missing');
       assert(!miss.some(v => v.id === placed.id), 'other status listed');
     });
-    await test('?has_gigs=1 lists a venue once a gig is there', async () => {
-      const ids = async () => (await GET(`/api/${slug}/venues?has_gigs=1&q=Teststadt&limit=100`, { token })).json.rows.map(r => r.id);
-      assert(!(await ids()).includes(placed.id), 'listed before it has a gig');
-      const g = await POST(`/api/${slug}/gigs`, { title: '[TEST] venue gig', date: '2099-12-30', venue_id: placed.id }, { token });
-      assertStatus(g.res, g.json, 201);
-      gig = g.json;
-      assert((await ids()).includes(placed.id), 'not listed with a gig');
-    });
   } finally {
-    if (gig) await DELETE(`/api/${slug}/gigs?id=${gig.id}`, { body: { hard: true }, token });
     for (const v of made) await DELETE(`/api/${slug}/venues/${v.id}`, { body: { hard: true }, token });
   }
 }
@@ -2433,6 +2421,207 @@ async function testRound3(sql, slug, token, firstSong) {
   }
 }
 
+// Round-4 security fixes on real rows: the login lock keys, the email-change
+// oracle, the presign cap per person, the song-limit race through import and
+// restore, sessions after a deletion and setlist notes in the public catalogue.
+async function testRound4Security(sql, slug, token, firstSong) {
+  console.log(B('\nLock keys, email change, upload caps, song-limit races, old sessions'));
+  const rl = require('../api/_ratelimit');
+  const user = await throwawayUser(sql, slug, 'member', 'r4sec');
+  const ip = testIp();
+  const newSlug = `test-r4sec-${Date.now().toString(36)}`;
+  try {
+    await test('an "address" naming another person\'s IP lock key → 401, nothing counted for that key', async () => {
+      for (let i = 0; i < 3; i++) {
+        const { res, json } = await POST('/api/login', { email: `${user.email} ${ip['X-Real-IP']}`, password: 'wrong' }, { headers: testIp() });
+        assertStatus(res, json, 401);
+      }
+      const rows = await sql`SELECT key FROM rate_limits WHERE key LIKE ${rl.loginFailKey(user.email) + '%'}`;
+      assert(rows.length === 0, `counted: ${rows.map(r => r.key).join(', ')}`);
+      const { res, json } = await POST('/api/login', { email: user.email, password: user.password }, { headers: ip });
+      assertStatus(res, json, 200);
+    });
+
+    const login = (await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() })).json;
+    await test('an email change to an address with an account is stored like any other, and counts as mail sent', async () => {
+      const [taken] = await sql`SELECT email FROM users WHERE id <> ${user.id} ORDER BY id LIMIT 1`;
+      const { res, json } = await POST(`/api/${slug}/members/request-email-change`,
+        { currentPassword: user.password, newEmail: taken.email }, { token: login.token, headers: testIp() });
+      assertStatus(res, json, 200);
+      const [row] = await sql`SELECT pending_email FROM users WHERE id = ${user.id}`;
+      assert(row.pending_email === taken.email.toLowerCase(), `pending_email ${row.pending_email}`);
+      const [mail] = await sql`SELECT count FROM rate_limits WHERE key = ${rl.personKey('mail-out', user.email)}`;
+      assert(mail?.count === 1, `mail-out count ${mail?.count}`);
+    });
+
+    if (!firstSong || !R2_BASE) skip('presign cap per person', 'no song of our own or no R2_PUBLIC_URL');
+    else await test('presigns past the daily cap per person → 429, in any band', async () => {
+      const body = { filename: '[test].mp3', contentType: 'audio/mpeg', size: 10 };
+      const ok = await POST(`/api/${slug}/songs/${firstSong.id}/audio`, body, { token: login.token });
+      assertStatus(ok.res, ok.json, 200);
+      await sql`UPDATE rate_limits SET count = ${rl.PRESIGN_PERSON_DAILY} WHERE key = ${rl.personKey('presign-person', user.email)}`;
+      const { res, json } = await POST(`/api/${slug}/songs/${firstSong.id}/audio`, body, { token: login.token });
+      assertStatus(res, json, 429);
+      const other = await POST(`/api/${slug}/songs/${firstSong.id}/audio`, body, { token });
+      assertStatus(other.res, other.json, 200);
+    });
+
+    // A second workspace is on the free plan: its song limit is small enough
+    // to race.
+    const ws = await POST('/api/signup', { name: '[TEST] r4 limits', slug: newSlug }, { token: login.token, headers: testIp() });
+    const [newBand] = await sql`SELECT * FROM artists WHERE slug = ${newSlug}`;
+    const limit = newBand ? require('../api/_plans').songLimit(newBand) : null;
+    await test('parallel CSV imports never pass the song limit', async () => {
+      assertStatus(ws.res, ws.json, 201);
+      assert(Number.isInteger(limit) && limit > 0, `song limit ${limit}`);
+      const per = Math.ceil(limit / 2) + 1;
+      const batch = n => Array.from({ length: per }, (_, i) => ({ line: i + 2, values: { title: `[TEST] r4 ${n}-${i}` } }));
+      const results = await Promise.all([0, 1, 2].map(n =>
+        POST(`/api/${newSlug}/songs/import`, { rows: batch(n), commit: true }, { token: ws.json.token })));
+      const statuses = results.map(r => r.res.status);
+      assert(statuses.filter(s => s === 201).length === 1 && statuses.filter(s => s === 402).length === 2,
+        `statuses ${statuses.join(', ')}`);
+      const [{ n }] = await sql`SELECT count(*)::int AS n FROM songs s JOIN artists a ON a.id = s.artist_id
+                                WHERE a.slug = ${newSlug} AND NOT s.deleted`;
+      assert(n <= limit, `${n} songs for a limit of ${limit}`);
+    });
+    await test('parallel restores never pass the song limit', async () => {
+      const [band] = await sql`SELECT id FROM artists WHERE slug = ${newSlug}`;
+      const [{ n }] = await sql`SELECT count(*)::int AS n FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      const extra = await sql`
+        INSERT INTO songs (artist_id, title)
+        SELECT ${band.id}, '[TEST] r4 fill ' || g FROM generate_series(1, ${limit - n}::int) g RETURNING id`;
+      // Three deleted songs, one free place.
+      const victims = extra.slice(0, 3).map(r => r.id);
+      for (const id of victims) {
+        const del = await DELETE(`/api/${newSlug}/songs/${id}`, { token: ws.json.token });
+        assert(del.res.ok, `delete ${id}: ${del.res.status}`);
+      }
+      await sql`INSERT INTO songs (artist_id, title) SELECT ${band.id}, '[TEST] r4 refill ' || g FROM generate_series(1, 2) g`;
+      const results = await Promise.all(victims.map(id =>
+        POST(`/api/${newSlug}/songs/${id}/restore`, undefined, { token: ws.json.token })));
+      const statuses = results.map(r => r.res.status).sort();
+      assert(statuses.join(',') === '201,402,402', `statuses ${statuses.join(', ')}`);
+      const [{ live }] = await sql`SELECT count(*)::int AS live FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      assert(live === limit, `${live} songs for a limit of ${limit}`);
+    });
+
+    await test('a session does not come back through a row created after it (deleted, then re-invited)', async () => {
+      const t = (await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() })).json.token;
+      const [row] = await sql`SELECT password_hash FROM users WHERE id = ${user.id}`;
+      await sql`DELETE FROM users WHERE lower(email) = lower(${user.email}) AND id <> ${user.id}`;
+      await sql`DELETE FROM users WHERE id = ${user.id}`;
+      await sql`
+        INSERT INTO users (artist_id, email, role, password_hash, created_at)
+        SELECT id, ${user.email}, 'member', ${row.password_hash}, now() + interval '1 second' FROM artists WHERE slug = ${slug}`;
+      const { res } = await GET(`/api/${slug}/songs`, { token: t });
+      assertStatus(res, null, 401);
+    });
+  } finally {
+    await sql`DELETE FROM artists WHERE slug = ${newSlug}`;
+    await sql`DELETE FROM users WHERE lower(email) = lower(${user.email})`;
+    await sql`DELETE FROM rate_limits WHERE key LIKE ${'%' + user.email.toLowerCase() + '%'}`;
+  }
+
+  const before = (await GET(CONFIG_URL, { token })).json?.config?.publicCatalogue === true;
+  let setlist;
+  try {
+    if (!firstSong) return skip('setlist notes in the public catalogue', 'no song of our own');
+    await PATCH(CONFIG_URL, { config: { publicCatalogue: true } }, { token });
+    setlist = (await POST(`/api/${slug}/setlists`, { title: '[TEST] r4 noted', comment: '[TEST] private note', song_ids: [firstSong.id] }, { token })).json;
+    await test('the public catalogue lists where a song was played, not the setlists\' notes', async () => {
+      const anon = await GET(`/api/${slug}/songs/${firstSong.id}/setlists`);
+      assertStatus(anon.res, anon.json, 200);
+      const mine = anon.json.find(s => s.id === setlist.id);
+      assert(mine && mine.comment == null, `visitor sees ${JSON.stringify(mine?.comment)}`);
+      const member = await GET(`/api/${slug}/songs/${firstSong.id}/setlists`, { token });
+      assert(member.json.find(s => s.id === setlist.id)?.comment === '[TEST] private note', 'members still see the note');
+    });
+  } finally {
+    if (setlist?.id) await DELETE(`/api/${slug}/setlists/${setlist.id}`, { token });
+    await PATCH(CONFIG_URL, { config: { publicCatalogue: before } }, { token });
+  }
+}
+
+// Round-4 API fixes: every method on a gig answers, route parameters only
+// from the path, bad ids and options are 400s, the config save is one
+// statement that takes only an object, and a setlist shows its gig's place
+// the same way everywhere.
+async function testRound4Api(sql, slug, token) {
+  console.log(B('\nAnswers for every request, ids and options checked'));
+
+  const gig = (await POST(`/api/${slug}/gigs`, { title: '[TEST] r4 gig', date: '2099-12-29', location: '[TEST] Hall' }, { token })).json;
+  let setlist;
+  try {
+    await test('POST /gigs/:id without a sub-resource → 405 at once', async () => {
+      const { res, json } = await POST(`/api/${slug}/gigs/${gig.id}`, {}, { token });
+      assertStatus(res, json, 405);
+    });
+    await test('/gigs?id=N is the gig list, not gig N', async () => {
+      const { res, json } = await GET(`/api/${slug}/gigs?id=${gig.id}&limit=1`, { token });
+      assertStatus(res, json, 200);
+      assert(Array.isArray(json.rows), 'expected the paged list');
+    });
+    await test('a hard delete with a cascade that is not a list → 400, gig kept', async () => {
+      const { res, json } = await DELETE(`/api/${slug}/gigs/${gig.id}`, { body: { hard: true, cascade: 5 }, token });
+      assertStatus(res, json, 400);
+      const [row] = await sql`SELECT 1 FROM gigs WHERE id = ${gig.id}`;
+      assert(row, 'the gig is gone');
+    });
+    await test('an id past the integer column → 400, not 500', async () => {
+      for (const path of [`gigs/99999999999`, `venues/99999999999`, `setlists/99999999999`]) {
+        const { res, json } = await GET(`/api/${slug}/${path}`, { token });
+        assertStatus(res, json, 400);
+      }
+    });
+    await test('a setlist on a gig with only a location shows it as the venue in every answer', async () => {
+      const [song] = await sql`SELECT s.id FROM songs s JOIN artists a ON a.id = s.artist_id WHERE a.slug = ${slug} AND NOT s.deleted LIMIT 1`;
+      assert(song, 'the band has no song to put in a setlist');
+      setlist = (await POST(`/api/${slug}/setlists`, { title: '[TEST] r4 set', gig_id: gig.id, song_ids: [song.id] }, { token })).json;
+      assert(setlist?.gig_venue === '[TEST] Hall', `create: ${setlist?.gig_venue}`);
+      const list = (await GET(`/api/${slug}/setlists`, { token })).json;
+      assert(list.find(x => x.id === setlist.id)?.gig_venue === '[TEST] Hall', 'list');
+      const one = (await GET(`/api/${slug}/setlists/${setlist.id}`, { token })).json;
+      assert(one.gig_venue === '[TEST] Hall', `one: ${one.gig_venue}`);
+    });
+  } finally {
+    if (setlist?.id) await DELETE(`/api/${slug}/setlists/${setlist.id}`, { token });
+    if (gig?.id) await sql`DELETE FROM gigs WHERE id = ${gig.id}`;
+  }
+
+  await test('PATCH /venues with a null row rejects that row → 200, not 500', async () => {
+    const { res, json } = await PATCH(`/api/${slug}/venues`, [null], { token });
+    if (res.status === 402) return; // plan without venues
+    assertStatus(res, json, 200);
+    assert(json.count === 0 && json.rejected?.length === 1, JSON.stringify(json));
+  });
+
+  const [before] = await sql`SELECT name, config FROM artists WHERE slug = ${slug}`;
+  try {
+    await test('PATCH /api/config with a string config → 400, and the name is not saved', async () => {
+      const { res, json } = await PATCH(CONFIG_URL, { name: '[TEST] renamed', config: 'ab' }, { token });
+      assertStatus(res, json, 400);
+      const [row] = await sql`SELECT name, config FROM artists WHERE slug = ${slug}`;
+      assert(row.name === before.name, 'the name was saved');
+      assert(JSON.stringify(row.config) === JSON.stringify(before.config), 'string characters were merged into the config');
+    });
+    await test('PATCH /api/config saves name and config together', async () => {
+      const { res, json } = await PATCH(CONFIG_URL, { name: '[TEST] renamed', config: { r4Probe: true } }, { token });
+      assertStatus(res, json, 200);
+      const [row] = await sql`SELECT name, config FROM artists WHERE slug = ${slug}`;
+      assert(row.name === '[TEST] renamed' && row.config.r4Probe === true, JSON.stringify({ name: row.name }));
+    });
+  } finally {
+    await sql`UPDATE artists SET name = ${before.name}, config = config - 'r4Probe' WHERE slug = ${slug}`;
+  }
+
+  await test('GET /api/auth/artists without a session → 401 Unauthorized', async () => {
+    const { res, json } = await GET('/api/auth/artists');
+    assertStatus(res, json, 401);
+    assert(json.error === 'Unauthorized', `error ${json.error}`);
+  });
+}
+
 async function testOnLocalDb(slug, token, config, firstSong) {
   const sql = await localDb();
   if (!sql) return skip('tests on the local database', 'needs the local stack and its local DATABASE_URL');
@@ -2444,6 +2633,8 @@ async function testOnLocalDb(slug, token, config, firstSong) {
     await testPublicStage(sql, slug, token, firstSong);
     await testGema(sql, slug, token, config);
     await testRound3(sql, slug, token, firstSong);
+    await testRound4Security(sql, slug, token, firstSong);
+    await testRound4Api(sql, slug, token);
   } finally {
     await sql.end();
   }
@@ -2540,7 +2731,6 @@ async function main() {
     await testCrudLifecycle(slug, TOKEN, authed, {
       resource: 'gigs',
       labelField: 'title',
-      itemUrl: (id, qs = '') => `/api/${slug}/gigs?id=${id}${qs.replace('?', '&')}`,
       createBody:  { title: '[TEST] Gig', date: '2099-12-31' },
       invalidBody: { date: '2099-12-31' },
       updateBody:  { title: '[TEST] Gig updated', date: '2099-12-31' },

@@ -22,7 +22,6 @@
       .then(function (r) { return Promise.all([r.json(), ready]).then(function (a) { return { ok: r.ok, status: r.status, data: a[0] }; }); })
       .then(function (r) {
         if (r.ok || r.status === 409) {
-          sessionStorage.setItem('demo_email', email);
           sessionStorage.setItem('demo_name', email.split('@')[0]);
           var slug = (r.data && r.data.slug) || 'demo';
           var tok  = r.data && r.data.token;

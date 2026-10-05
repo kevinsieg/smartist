@@ -2,7 +2,7 @@
 
 // Writable fields of the CRM records, for parseFields (api/_validate.js).
 // Create and update use the same table, so they cannot drift apart again.
-// Lengths match the bulk-edit limits in venues.js.
+// Lengths match the bulk-edit limits in api/_band/venues.js.
 
 const { F, jsonBytes } = require('../_validate');
 
@@ -100,4 +100,4 @@ function mergedTooLarge(value, stored, keys, maxBytes = JSON_MAX) {
   return null;
 }
 
-module.exports = { VENUE_FIELDS, ORGANIZER_FIELDS, GIG_FIELDS, JSON_MAX, updateSet, mergedTooLarge };
+module.exports = { VENUE_FIELDS, ORGANIZER_FIELDS, GIG_FIELDS, updateSet, mergedTooLarge };

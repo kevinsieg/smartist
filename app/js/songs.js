@@ -639,7 +639,7 @@ function renderLogs(logs) {
 async function _songCreateError(r) {
   const d = await r.json().catch(() => ({}));
   const err = new Error(d.error || 'create failed');
-  if (d.error === 'song_limit') err.limit = d.limit;
+  if ((d.code || d.error) === 'song_limit') err.limit = d.limit;
   return err;
 }
 
@@ -653,7 +653,7 @@ async function restoreSong(songId) {
     await loadAndRender();
   } else {
     const d = await r.json().catch(() => ({}));
-    _setBulkStatus('error', d.error === 'song_limit' ? t('songs.limitReached', { limit: d.limit }) : t('songs.couldNotRestore'));
+    _setBulkStatus('error', (d.code || d.error) === 'song_limit' ? t('songs.limitReached', { limit: d.limit }) : t('songs.couldNotRestore'));
   }
 }
 
@@ -680,7 +680,7 @@ async function openAppearances(songId) {
       const label = parts.length ? parts.join(' — ') : (sl.title || `Setlist #${sl.id}`);
       const date  = formatDate(sl.created_at);
       return `<div class="appearance-row">
-        <a class="appearance-gig" href="/setlist-history#set-${sl.id}" target="_blank">${escHtml(label)}</a>
+        <a class="appearance-gig" href="/${encodeURIComponent(artistSlug)}/setlist?view=history&amp;set=${Number(sl.id)}" target="_blank" rel="noopener">${escHtml(label)}</a>
         <span class="appearance-date">${date}</span>
       </div>`;
     }).join('');

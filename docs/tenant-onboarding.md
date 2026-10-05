@@ -1,13 +1,14 @@
-# Tenant Onboarding Guide
+# Tenant onboarding guide
 
-Smartist supports two deployment models. Choose based on your use case.
+smartist supports three deployment models. Choose based on your use case.
 
-| Model | DB | Vercel project | When to use |
-|---|---|---|---|
-| **A — Shared DB** | One Neon DB, multiple `artists` rows | One project per artist | Internal tenants, free/low-cost |
-| **B — Dedicated DB** | One Neon DB per artist | One project per artist | Paying clients, full data isolation |
+| Model | DB | Vercel project | `ARTIST_SLUG` | When to use |
+|---|---|---|---|---|
+| **0 — Public multi-tenant** | One Neon project, every band a row | One project for all bands | unset | Bands sign up at `/signup` themselves |
+| **A — Pinned band on a shared database** | An existing Neon project, one more `artists` row | One project per band | set | Internal tenants, free/low-cost |
+| **B — Dedicated database** | One Neon project per band | One project per band | set | Paying clients, full data isolation |
 
-Both models use one Vercel project per artist, one GitHub repo (same code), and the same branch model.
+All models use one GitHub repo (same code) and the same branch model: every Neon project has a `main` branch (Production) and a `dev` branch (Preview + Development). [`deployment.md`](deployment.md) explains what `ARTIST_SLUG` changes.
 
 ---
 
@@ -17,7 +18,7 @@ Both models use one Vercel project per artist, one GitHub repo (same code), and 
 
 `dash.neon.tech` → create a project → copy the **pooled connection string** (`?sslmode=require` URL).
 
-For dev/prod isolation, Neon projects have a built-in `main` branch. Create a `dev` branch under the same project for the preview environment. Each branch has its own connection string.
+For dev/prod isolation, Neon projects have a built-in `main` branch (Production). Create a `dev` branch under the same project for Preview + Development. Each branch has its own connection string. (Two separate Neon projects instead of two branches work too; the docs assume branches.)
 
 | Env var | Value |
 |---|---|
@@ -69,7 +70,7 @@ To connect: Cloudflare → R2 → your bucket → Settings → **Custom Domains 
 
 After connecting, update `R2_PUBLIC_URL` in Vercel (Production environment) to `https://media.band.example.com` (or whichever subdomain you chose), then redeploy.
 
-**CORS policy (required for photo uploads):** R2 blocks browser presigned PUT requests unless a CORS policy is set. In Cloudflare → R2 → your bucket → Settings → CORS Policy, add:
+**CORS policy (required for every browser upload — song media, posters, logos):** R2 blocks browser presigned PUT requests unless a CORS policy is set. In Cloudflare → R2 → your bucket → Settings → CORS Policy, add:
 
 ```json
 [
@@ -92,7 +93,7 @@ R2 ignores `"*"` in `AllowedHeaders`, so list the header names. List only the or
 |---|---|
 | `RESEND_API_KEY` | `re_...` |
 | `RESEND_FROM` | Verified sender address, e.g. `noreply@band.example.com` |
-| `CONTACT_EMAIL` | Where contact form submissions go (defaults to `hi@smartist.studio`) |
+| `CONTACT_EMAIL` | Where contact form submissions go. Defaults to the hosted product's address (`hi@smartist.studio`), so set it on a self-hosted deployment |
 
 Set as "All Environments" in Vercel.
 
@@ -130,12 +131,36 @@ Only needed if you want Google or Facebook login buttons on the login page.
 | `GOOGLE_CLIENT_SECRET` | From Google Cloud console |
 | `FACEBOOK_APP_ID` | From Facebook developer console |
 | `FACEBOOK_APP_SECRET` | From Facebook developer console |
+| `FACEBOOK_TRUST_EMAIL` | Optional. Without `true`, Facebook signs no one in and a new address is sent to the emailed sign-up link — see [`oauth-setup.md`](oauth-setup.md) |
 
 ---
 
-## Model A — Shared database (multi-tenant)
+## Model 0 — Public multi-tenant (signup)
 
-One Neon project, one R2 bucket (or two for dev/prod). Each artist gets a row in the `artists` table. All data is scoped by `artist_id` in every query.
+One Vercel project and one Neon project for every band. Bands sign up at
+`/signup` and create their workspace at `/onboarding`; each lives at
+`/<slug>/…`.
+
+1. Create the Neon project with its `dev` branch (above). Nothing to run
+   against it: the first build applies the schema (`scripts/deploy_migrate.js`),
+   so `setup.js` is not needed.
+2. Create the Vercel project ([Model A step 2](#step-2--create-the-vercel-project)).
+3. Set the variables as in [Model A step 3](#step-3--set-environment-variables),
+   but leave **`ARTIST_SLUG` unset** in every environment: with it set, every
+   visitor lands in that one band instead of signup. Set `SUPER_ADMIN_EMAILS`
+   for `/admin`.
+4. Follow Model A steps 4–6 (domain, redeploy, verify).
+5. Sign up at `/signup` with an address from `SUPER_ADMIN_EMAILS`; that login
+   then also opens `/admin`.
+
+---
+
+## Model A — Pinned band on a shared database
+
+An existing Neon project (another deployment's, or one shared by several
+pinned bands) gets one more `artists` row; this band gets its own Vercel project
+with `ARTIST_SLUG` set. One R2 bucket (or two for dev/prod). All data is scoped
+by `artist_id` in every query.
 
 **Use this for:** internal projects, personal deployments, low-cost multi-artist setups.
 
@@ -176,7 +201,7 @@ DATABASE_URL=<neon-dev-url> node scripts/setup.js
 
 ### Step 2 — Create the Vercel project
 
-1. Vercel dashboard → **New Project** → import `kevinsieg/smartist`
+1. Vercel dashboard → **New Project** → import this repository (or your fork)
 2. Name it, e.g. `smartist-myband`
 3. Framework: **Other** (no build step), production branch: **main**
 4. Deploy (will fail — env vars not set yet, that is fine)
@@ -188,7 +213,7 @@ Vercel project → Settings → Environment Variables:
 | Variable | Production | Preview + Development |
 |---|---|---|
 | `DATABASE_URL` | Neon `main` branch URL | Neon `dev` branch URL |
-| `APP_ORIGIN` | `https://smartist.band.example.com` | leave blank (uses auto preview URL) |
+| `APP_ORIGIN` | `https://smartist.band.example.com` | the stable preview URL (`<project>-git-dev-*.vercel.app`), so emailed links and the OAuth redirect point at it |
 | `R2_BUCKET_NAME` | `smartist-myband` | `smartist-myband-dev` |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | prod R2 token | dev R2 token |
 | `R2_PUBLIC_URL` | prod bucket public URL | dev bucket public URL |
@@ -272,11 +297,11 @@ DATABASE_URL=<neon-main-url> node scripts/demo_reset.js
 
 ### Steps 4–6
 
-Follow Model A steps 2–5 exactly, using the new Neon project's connection strings for `DATABASE_URL`.
+Follow Model A steps 2–6 exactly, using the new Neon project's connection strings for `DATABASE_URL`.
 
 ---
 
-## Branch / environment model (both models)
+## Branch / environment model (all models)
 
 ```
 GitHub branch    →    Vercel environment    →    Neon branch    →    Domain
@@ -300,7 +325,7 @@ Push to `dev` freely. Merge to `main` via PR only.
 npm run dev:up   # own Postgres, seeded band, the app on :3000
 ```
 
-To run against the Neon `dev` branch instead, see *Local development* in
+To run against the Neon `dev` branch instead, see *6. Run locally* in
 `README.md`. Do not set `BETTERSTACK_TOKEN` locally.
 
 ---
@@ -399,9 +424,9 @@ change) need the tenant's sending domain verified in Resend first.
 ## Checklist
 
 **Database**
-- [ ] Neon DB exists — `main` and `dev` branches — schema applied to both
-- [ ] Artist row created in both DBs — slug matches `ARTIST_SLUG` exactly — password 6+ chars
-- [ ] First account created with `scripts/create_user.js` (admin)
+- [ ] Neon project exists — `main` and `dev` branches — schema applied to both (the first build does it; `setup.js` too)
+- [ ] Pinned band (models A and B): artist row and admin login created in both databases (`setup.js`) — slug matches `ARTIST_SLUG` exactly — password 8+ chars
+- [ ] Public deployment (model 0): `ARTIST_SLUG` unset in every environment, `SUPER_ADMIN_EMAILS` set
 
 **File storage (R2)**
 - [ ] R2 bucket created, public access enabled, API token generated
@@ -432,7 +457,7 @@ change) need the tenant's sending domain verified in Resend first.
 - [ ] At least one successful production deploy — Vercel shows green
 - [ ] `curl https://<domain>/api/config?action=health` answers 200 with `"ok": true` — a 503 lists the missing variables (names only) or says the database is unreachable or behind
 - [ ] Better Stack uptime monitor on the health URL and a "no logs in 30 minutes" alert on the log source ([Monitoring](deployment.md#monitoring))
-- [ ] Login works at the custom domain with the account from `create_user.js`
+- [ ] Login works at the custom domain with the admin account from `setup.js` (model 0: sign up at `/signup`)
 - [ ] `curl …/api/config` returns 200 (see Step 6)
 - [ ] Settings → public catalogue / public stage links set as the band wants (both off by default)
 - [ ] File uploads work and files are served from `R2_PUBLIC_URL`

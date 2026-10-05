@@ -21,7 +21,6 @@ node tests/unit/ratelimit.js
 node tests/unit/gema.js
 node tests/unit/ai.js
 node tests/unit/handler.js
-node tests/history-client.js
 ```
 
 **What is covered:**
@@ -37,7 +36,6 @@ node tests/history-client.js
 | `tests/unit/gema.js` | `api/_domain/gema.js` | CSV parsers, GEMA normalizers |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
-| `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
 | `tests/unit/tenant_isolation.js` | handlers, `api/_ownership.js`, `api/_token.js` | cross-band ids refused, script links refused, demo token is a member session, token purposes, sessions end on password change |
 | `tests/unit/*_handlers.js`, `auth.js`, `oauth_callback.js`, … | API handlers with a stubbed database | auth, roles, reset, signup, deletion, OAuth callback (incl. the `oauth_nonce` cookie), storage accounting |
 | `tests/*-client.js` | page scripts in `app/js/` | run in a stubbed DOM (songs, gigs, map, workspaces, logout, …) |
@@ -122,7 +120,7 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | Lyrics lifecycle | PUT, GET verify, DELETE, idempotent DELETE |
 | `GET /api/:artist/export` | 200, a `.zip` attachment holding `artist.csv`, `songs.csv`, … |
 | Setlist share | the mailed attachment is a PDF (local stack only) |
-| Setlist search, venue lists, song restore | `?song_q=` (literal `%`/`_`), venue country facet / map payload (no notes) / `has_gigs`, restore → 201 / 409 / 404 |
+| Setlist search, venue lists, song restore | `?song_q=` (literal `%`/`_`), venue country facet / map payload (no notes), restore → 201 / 409 / 404 |
 | Local database (local stack only) | sign-up from a planted link (taken address, spent link, new band only); another band's song/gig/venue/organizer ids → 400; sign-in lockout per address+IP and per address, and its window; export by role (no member list or hashes for a member); `publicStage`; GEMA works and rightholders import |
 | Sessions, roles, tenancy | local stack only: an invited `[TEST]` member signs in from the mailed link; admin endpoints → 403; a role change applies to a live session; neither session opens another band; a password change and "log out everywhere" end the old sessions; removal ends access |
 

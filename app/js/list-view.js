@@ -6,7 +6,7 @@
 //   field: the item property the filter reads (documentation only; getData handles the actual logic).
 // Async filters omit `field` because the resolved value drives filtering indirectly.
 var FILTER_TYPES = {
-  // Plain text search. Re-renders immediately on each keystroke.
+  // Plain text search. Re-renders once typing pauses (LV_TEXT_DEBOUNCE_MS).
   // state value: lowercase string ('' = inactive)
   // field: item property matched with .toLowerCase().includes() — e.g. 'title'
   TEXT: 'text',
@@ -32,8 +32,15 @@ var FILTER_TYPES = {
   ASYNC_TEXT: 'async-text',
 };
 
+// A text filter re-runs the list once typing pauses this long, not on every key.
+var LV_TEXT_DEBOUNCE_MS = 120;
+// A flat list renders this many rows at first and this many more per "Show more".
+// Filtering and the count still cover every item.
+var LV_RENDER_STEP = 200;
+
 function createListView(opts) {
   opts.filters = opts.filters || [];
+  var _step = opts.renderStep || LV_RENDER_STEP;
 
   // Private state — all internal, nothing exposed
   var _state    = {};   // { filterId: rawValue }
@@ -43,6 +50,7 @@ function createListView(opts) {
   var _selectedId = null;
   var _collapsed  = null; // Set<groupKey> | null — null until first render
   var _items      = [];   // last getData() result
+  var _limit      = _step; // rows rendered in a flat list; reset when a filter changes
 
   // Initialise _state from filter defaults
   opts.filters.forEach(function(f) {
@@ -108,6 +116,12 @@ function createListView(opts) {
       '<div class="lv-body" id="lv-body"></div>';
   }
 
+  // A filter changed: start again from the first page of rows.
+  function _filterChanged() {
+    _limit = _step;
+    _runPipeline();
+  }
+
   function _runPipeline() {
     var merged = Object.assign({}, _state, _resolved);
     _items = opts.getData(merged);
@@ -142,13 +156,71 @@ function createListView(opts) {
       _renderGroupedList(_items);
       _focusableRows(body);
     } else {
-      body.innerHTML = _items.map(opts.renderRow).join('');
+      body.innerHTML = _items.slice(0, _limit).map(opts.renderRow).join('') + _moreHtml();
       if (_selectedId) {
         var el = body.querySelector('[data-id="' + _selectedId + '"]');
         if (el) el.classList.add('lv-row--selected');
       }
       _focusableRows(body);
     }
+  }
+
+  // The "Show more" row under a capped flat list, or nothing when every row shows.
+  function _moreHtml() {
+    var rest = _items.length - _limit;
+    if (rest <= 0) return '';
+    return '<div class="lv-more"><button type="button" class="btn" data-lv-more>' +
+      escHtml(t('list.showMore', { count: Math.min(rest, _step), total: rest })) + '</button></div>';
+  }
+
+  // Append the next rows in place (no re-render of the ones already shown) and
+  // move focus to the first new row, so a keyboard user carries on from there.
+  function _showMore() {
+    var body = document.getElementById('lv-body');
+    if (!body) return;
+    var from = _limit;
+    _limit += _step;
+    var more = body.querySelector('.lv-more');
+    if (more) more.remove();
+    body.insertAdjacentHTML('beforeend', _items.slice(from, _limit).map(opts.renderRow).join('') + _moreHtml());
+    _focusableRows(body);
+    var first = body.querySelectorAll(':scope > [data-id]')[from];
+    if (first) first.focus();
+  }
+
+  // Make sure the row for `id` is rendered (a capped list may not show it yet).
+  function _ensureRendered(id) {
+    if (opts.groupBy) return;
+    var idx = _items.findIndex(function(x) { return String(opts.getItemId(x)) === id; });
+    if (idx >= _limit) {
+      _limit = Math.ceil((idx + 1) / _step) * _step;
+      _renderBody();
+    }
+  }
+
+  // Re-render one item's row after its data changed. When the change moves the
+  // item in or out of the filtered list, the whole list runs again instead.
+  function _refreshItem(id) {
+    id = String(id);
+    var before = _items;
+    var after = opts.getData(Object.assign({}, _state, _resolved));
+    var same = !opts.groupBy && before.length === after.length && before.every(function(x, i) {
+      return opts.getItemId(x) === opts.getItemId(after[i]);
+    });
+    var body = document.getElementById('lv-body');
+    var row = same && body && body.querySelector('[data-id="' + id + '"]');
+    if (!row) { _runPipeline(); return; }
+    _items = after;
+    var item = after.find(function(x) { return String(opts.getItemId(x)) === id; });
+    var tmp = document.createElement('div');
+    tmp.innerHTML = opts.renderRow(item);
+    var fresh = tmp.firstElementChild;
+    if (!fresh) { _runPipeline(); return; }
+    if (id === _selectedId) fresh.classList.add('lv-row--selected');
+    row.replaceWith(fresh);
+    _focusableRows(body);
+    _renderChips();
+    _updateCount();
   }
 
   // Rows open the side panel on click; Enter / Space do the same (ui.js).
@@ -285,15 +357,21 @@ function createListView(opts) {
 
       if (f.type === FILTER_TYPES.TEXT) {
         el.addEventListener('input', function(e) {
-          _state[f.id] = e.target.value.toLowerCase();
-          _runPipeline();
+          var value = e.target.value.toLowerCase();
+          clearTimeout(_pending[f.id]);
+          _pending[f.id] = setTimeout(function() {
+            delete _pending[f.id];
+            if (_state[f.id] === value) return;
+            _state[f.id] = value;
+            _filterChanged();
+          }, LV_TEXT_DEBOUNCE_MS);
         });
       }
 
       if (f.type === FILTER_TYPES.CHECKBOX) {
         el.addEventListener('change', function(e) {
           _state[f.id] = e.target.checked;
-          _runPipeline();
+          _filterChanged();
         });
       }
 
@@ -321,7 +399,7 @@ function createListView(opts) {
         } else {
           _state[filterId] = (_state[filterId] === value) ? '' : value;
         }
-        _runPipeline();
+        _filterChanged();
       });
     }
 
@@ -344,7 +422,7 @@ function createListView(opts) {
 
     if (!value.trim()) {
       delete _resolved[f.id];
-      _runPipeline();
+      _filterChanged();
       return;
     }
 
@@ -354,11 +432,11 @@ function createListView(opts) {
       Promise.resolve(f.resolve(capturedValue)).then(function(result) {
         if (_asyncRaw[f.id] !== capturedValue) return; // superseded
         _resolved[f.id] = result;
-        _runPipeline();
+        _filterChanged();
       }).catch(function() {
         if (_asyncRaw[f.id] !== capturedValue) return;
         delete _resolved[f.id];
-        _runPipeline();
+        _filterChanged();
       });
     }, debounce);
   }
@@ -368,6 +446,11 @@ function createListView(opts) {
     if (!body) return;
 
     body.addEventListener('click', function(e) {
+      if (e.target.closest('[data-lv-more]')) {
+        _showMore();
+        return;
+      }
+
       // Group heading toggle
       var heading = e.target.closest('[data-lv-group]');
       if (heading) {
@@ -415,6 +498,8 @@ function createListView(opts) {
         if (_collapsed.has(key)) _toggleGroup(key);
       }
     }
+
+    _ensureRendered(id);
 
     // Clear previous selection
     var prev = document.querySelector('.lv-row--selected');
@@ -481,16 +566,18 @@ function createListView(opts) {
     var el = document.getElementById('lv-f-' + id);
 
     if (f.type === FILTER_TYPES.TEXT) {
+      clearTimeout(_pending[id]);
+      delete _pending[id];
       _state[id] = String(v).toLowerCase();
       if (el) el.value = v;
-      _runPipeline();
+      _filterChanged();
     } else if (f.type === FILTER_TYPES.CHECKBOX) {
       _state[id] = !!v;
       if (el) el.checked = !!v;
-      _runPipeline();
+      _filterChanged();
     } else if (f.type === FILTER_TYPES.CHIPS) {
       _state[id] = f.multi ? [].concat(v || []).map(String) : String(v);
-      _runPipeline();
+      _filterChanged();
     } else if (f.type === FILTER_TYPES.ASYNC_TEXT) {
       if (el) el.value = v;
       _onAsyncInput(f, v);
@@ -499,6 +586,7 @@ function createListView(opts) {
 
   var _public = Object.freeze({
     refresh:        function() { _runPipeline(); },
+    refreshItem:    function(id) { _refreshItem(id); },
     select:         function(id) { _openPanel(String(id)); },
     deselect:       function() { _closePanel(); },
     setFilterValue: function(id, v) { _setFilterValue(id, v); },

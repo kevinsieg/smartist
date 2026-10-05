@@ -6,7 +6,7 @@ const { getArtistsForUser } = require('./artist');
 const { sendEmail } = require('../_email');
 const { escHtml } = require('../_html');
 const { checkRateLimit, outboundMailLimited, loginOkPrefix } = require('../_ratelimit');
-const { validateStr, validateEmail } = require('../_validate');
+const { validateStr, validateEmail, positiveId } = require('../_validate');
 const logger = require('../_logger');
 const { ok, reply, fail } = require('./http');
 
@@ -237,13 +237,15 @@ async function invite({ band, user, body, ip, origin, slug }) {
 
 // POST /members/resend-invite — a fresh link for an invite not yet accepted.
 async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
-  const { userId } = body ?? {};
-  if (!userId) return fail(400, 'userId required');
+  const { userId: rawUserId } = body ?? {};
+  const userId = positiveId(rawUserId);
+  if (userId === null) return fail(400, 'userId required');
+  if (userId === false) return fail(400, 'Invalid userId');
 
   const sql = getDb();
   const [user] = await sql`
     SELECT * FROM users
-    WHERE id = ${Number(userId)} AND artist_id = ${band.id} AND password_hash IS NULL
+    WHERE id = ${userId} AND artist_id = ${band.id} AND password_hash IS NULL
       AND invite_token_hash IS NOT NULL
   `;
   if (!user) return fail(404, 'Pending invite not found');
@@ -273,15 +275,17 @@ async function resendInvite({ band, user: sender, body, ip, origin, slug }) {
 // cross-workspace identity (resolveUser joins users on email), so rewriting it
 // would hand this user another account's memberships.
 async function setRole({ band, user, body }) {
-  const { userId, role, email } = body ?? {};
-  if (!userId) return fail(400, 'userId required');
+  const { userId: rawUserId, role, email } = body ?? {};
+  const userId = positiveId(rawUserId);
+  if (userId === null) return fail(400, 'userId required');
+  if (userId === false) return fail(400, 'Invalid userId');
   if (email !== undefined) return fail(400, 'Email cannot be changed');
   if (!ROLES.includes(role)) return fail(400, 'Invalid role');
-  if (user.id !== null && user.id === Number(userId)) return fail(400, 'Cannot change your own role');
+  if (user.id !== null && user.id === userId) return fail(400, 'Cannot change your own role');
 
   const [updated] = await getDb()`
     UPDATE users SET role = ${role}
-    WHERE id = ${Number(userId)} AND artist_id = ${band.id}
+    WHERE id = ${userId} AND artist_id = ${band.id}
     RETURNING id, email, role
   `;
   if (!updated) return fail(404, 'User not found');
@@ -290,12 +294,14 @@ async function setRole({ band, user, body }) {
 
 // DELETE — remove a member from the band.
 async function removeMember({ band, user, body }) {
-  const { userId } = body ?? {};
-  if (!userId) return fail(400, 'userId required');
-  if (user.id !== null && user.id === Number(userId)) return fail(400, 'Cannot remove yourself');
+  const { userId: rawUserId } = body ?? {};
+  const userId = positiveId(rawUserId);
+  if (userId === null) return fail(400, 'userId required');
+  if (userId === false) return fail(400, 'Invalid userId');
+  if (user.id !== null && user.id === userId) return fail(400, 'Cannot remove yourself');
 
   const [deleted] = await getDb()`
-    DELETE FROM users WHERE id = ${Number(userId)} AND artist_id = ${band.id} RETURNING id
+    DELETE FROM users WHERE id = ${userId} AND artist_id = ${band.id} RETURNING id
   `;
   if (!deleted) return fail(404, 'User not found');
   return ok({ ok: true });
@@ -330,7 +336,8 @@ async function changePassword({ user, body, ip }) {
           delete_token_hash = NULL, delete_token_expires = NULL
       WHERE email = ${row.email} RETURNING 1
     ), forget AS (
-      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(row.email)})
+      DELETE FROM rate_limits
+      WHERE key >= ${loginOkPrefix(row.email)} AND key < ${loginOkPrefix(row.email)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(row.email)})
     )
     SELECT count(*) FROM u`;
   // The new hash invalidates every session issued before it, this one
@@ -348,9 +355,8 @@ async function requestEmailChange({ user, body, ip, origin, slug }) {
   if (String(currentPassword).length > 1000) return fail(400, 'Password too long');
   if (user.id === null) return fail(400, 'Email change is not available for this account');
 
-  const clean = validateStr(newEmail, 200);
-  if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean)) return fail(400, 'Invalid email address');
-  const lower = clean.toLowerCase();
+  const lower = String(newEmail).length <= 200 ? validateEmail(newEmail) : false;
+  if (!lower) return fail(400, 'Invalid email address');
 
   if (await checkRateLimit(`emailchg:${ip}`, 5, 600)) return fail(429, 'Too many attempts — try again later');
 
@@ -361,35 +367,33 @@ async function requestEmailChange({ user, body, ip, origin, slug }) {
   // An address that already has an account belongs to someone: moving these
   // rows onto it would merge the two accounts, so this password would open
   // that person's bands (passwordLogin tries every hash of an address).
-  // The answer is the same either way, or this would tell anyone with an
-  // account which addresses have one: the inbox learns why nothing happened.
-  if (await addressTaken(sql, lower)) {
-    try {
-      await sendEmail({
-        to: lower,
-        subject: 'Your smartist address',
-        html: `<p>Someone asked to move another smartist login to this address. It already has an
-               account, so nothing was changed.</p>
-               <p>If that was you, sign in with this address instead.</p>`,
-      });
-    } catch (err) {
-      await logger.error('email_change_request_failed', { band: slug, error: err.message });
-    }
-    return ok({ ok: true });
-  }
-
+  // confirmEmailChange refuses it. Until then a taken address is treated
+  // exactly like a free one — the request is stored, so the export shows the
+  // same pending_email, and the reply and the mail count are the same — or
+  // this would tell anyone with an account which addresses have one. Only the
+  // inbox learns why nothing will happen.
+  // The mail goes to an address of the caller's choosing: it counts against
+  // their daily mail cap, like an invite.
+  if (await outboundMailLimited(row.email)) return fail(429, 'Too many attempts — try again later');
   const token   = linkToken();
   const expires = new Date(Date.now() + EMAIL_CHANGE_TTL_MS).toISOString();
-  await sql`
+  const [{ taken }] = await sql`
     UPDATE users
     SET pending_email = ${lower}, email_change_token_hash = ${token.hash}, email_change_expires_at = ${expires}
     WHERE id = ${row.id}
+    RETURNING EXISTS (SELECT 1 FROM users WHERE email = ${lower}) AS taken
   `;
 
   // Fragment, not query — tokens must not land in server/CDN logs.
   const link = `${origin}/confirm-email#token=${encodeURIComponent(token.raw)}&slug=${encodeURIComponent(slug)}`;
   try {
-    await sendEmail({
+    await sendEmail(taken ? {
+      to: lower,
+      subject: 'Your smartist address',
+      html: `<p>Someone asked to move another smartist login to this address. It already has an
+             account, so nothing will be changed.</p>
+             <p>If that was you, sign in with this address instead.</p>`,
+    } : {
       to: lower,
       subject: 'Confirm your new email address',
       html: `<p>Confirm this address to finish changing your smartist login email:</p>

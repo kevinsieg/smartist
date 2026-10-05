@@ -52,10 +52,15 @@ async function loadArtistAndMember(token, slug) {
 // was deleted), another row of the same address. Tokens name a row by id, and
 // one band's removal used to sign the person out of every band. Tokens from
 // before the address was carried in them match by id only.
+// The fallback takes only a row that existed when the token was issued: after
+// an account deletion, a new row for the address (an invite, a fresh
+// sign-up) must not bring the old sessions back — a password-less session's
+// fingerprint matches any password-less row.
 function sessionRowId(sql, claim) {
   return sql`(
     SELECT id FROM users
-    WHERE id = ${claim.userId} OR email = ${claim.email ?? null}
+    WHERE id = ${claim.userId}
+       OR (email = ${claim.email ?? null} AND created_at <= ${new Date(Number(claim.iat) || 0)})
     ORDER BY (id = ${claim.userId}) DESC, id
     LIMIT 1)`;
 }

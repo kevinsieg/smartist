@@ -14,7 +14,10 @@ Hosted at [app.smartist.studio](https://app.smartist.studio); this repository is
 | [`docs/tenant-onboarding.md`](docs/tenant-onboarding.md) | Setting up a new deployment's services |
 | [`docs/oauth-setup.md`](docs/oauth-setup.md) | Google and Facebook sign-in |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | CI pipeline |
+| [`docs/backup-restore.md`](docs/backup-restore.md) | Backups and restore |
+| [`docs/agents.md`](docs/agents.md) | Working with coding agents |
 | [`tests/README.md`](tests/README.md) | Test suites and the local stack |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) / [`SECURITY.md`](SECURITY.md) | Contributing; reporting a vulnerability |
 
 ---
 
@@ -26,7 +29,7 @@ Workspace pages live at `/<slug>/…`.
 
 **Song catalogue** (`/songs`) — in-cell and bulk editing, play count, song appearances, file attachments (audio, sheet music, playback track), versioned arrangements, lyrics suggest (lyrics.ovh, lrclib, then AI), change log with one-click restore.
 
-**Setlists** (`/setlist`) — generator: filter songs by any field, energy slider, random set to a target duration, optimised performance arc, drag-and-drop reorder, save to a gig. History tab: saved setlists by year, share as PDF by email, duplicate, open in stage view. `/setlist-history` opens that tab.
+**Setlists** (`/setlist`) — generator: filter songs by any field, energy slider, random set to a target duration, optimised performance arc, drag-and-drop reorder, save to a gig. History tab: saved setlists by year, share as PDF by email, duplicate, open in stage view. `/setlist-history` redirects to that tab.
 
 **Gigs** (`/gigs`) — performances linked to venues, organizers and setlists, with posters and an ICS calendar feed.
 
@@ -48,10 +51,7 @@ Workspace pages live at `/<slug>/…`.
 
 ---
 
-
-
 ## Architecture
-
 
 | Layer        | Tech                                                               |
 | ------------ | ------------------------------------------------------------------ |
@@ -63,48 +63,34 @@ Workspace pages live at `/<slug>/…`.
 | PDF          | PDFKit                                                             |
 | AI lyrics    | Google Gemini with web search grounding                            |
 
-
 ---
-
-
 
 ## Project setup
 
-
-
 ### Infrastructure overview
 
+| Service       | Project / resource                                                     | Purpose                                     |
+| ------------- | ---------------------------------------------------------------------- | ------------------------------------------- |
+| Vercel        | one project per deployment                                             | Hosts this app — linked to this GitHub repo |
+| Neon          | one project, with a `main` branch (Production) and a `dev` branch (Preview + Development) | The database; each branch has its own connection string |
+| Cloudflare R2 | one bucket (production)                                                | Production file storage                     |
+| Cloudflare R2 | one bucket (development)                                               | Development file storage                    |
 
-| Service       | Project / resource                | Purpose                                     |
-| ------------- | --------------------------------- | ------------------------------------------- |
-| Vercel        | one project                       | Hosts this app — linked to this GitHub repo |
-| Neon          | one project (dev database)        | Development database                        |
-| Neon          | one project (production database) | Production database                         |
-| Cloudflare R2 | one bucket (production)           | Production file storage                     |
-| Cloudflare R2 | one bucket (development)          | Development file storage                    |
-
+This is the setup the docs assume everywhere ([`docs/deployment.md`](docs/deployment.md), [`docs/tenant-onboarding.md`](docs/tenant-onboarding.md)). Several deployments can each have their own Neon project, or share one (each band is its own row); two separate Neon projects instead of two branches work just as well.
 
 ---
 
-
-
 ## Environments
-
-
 
 ### Branch model
 
-
 | Git branch        | Vercel environment | Domain                           | Database                |
 | ----------------- | ------------------ | -------------------------------- | ----------------------- |
-| `dev` *(default)* | Preview            | `<project>-git-dev-*.vercel.app` | Neon dev project        |
-| `main`            | Production         | your custom domain               | Neon production project |
-
+| `dev` *(default)* | Preview            | `<project>-git-dev-*.vercel.app` | Neon `dev` branch       |
+| `main`            | Production         | your custom domain               | Neon `main` branch      |
 
 - Push to `dev` → Vercel auto-deploys to the Preview URL
 - Push to `main` is blocked — only PR merges from `dev` trigger a production deployment
-
-
 
 ### Promotion workflow
 
@@ -121,8 +107,6 @@ curl https://<deployment>/api/config?action=health              # "schema":"curr
 
 The migration runs a minute or two before the new code is live, so drop a column only a release after the code stopped using it (CI runs `main`'s API suite on the new schema to catch this). To apply by hand, e.g. a database no deployment builds against: `DATABASE_URL=<url> node scripts/apply_schema.js` (asks before it connects), then `--check`.
 
-
-
 ### Environment variables
 
 Set these in the Vercel dashboard (Settings → Environment Variables). `.env.example` documents every one of them.
@@ -131,10 +115,9 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 
 **Shared across all environments** — check "All Environments":
 
-
 | Variable         | Value                                                                                |
 | ---------------- | ------------------------------------------------------------------------------------ |
-| `APP_SECRET`     | **Required.** HMAC key for session tokens — `openssl rand -hex 32`, a different value per deployment. Without it every API route returns 500. |
+| `APP_SECRET`     | **Required.** HMAC key for session tokens — `openssl rand -hex 32`, a different value per deployment. Without it nobody can sign in (500 on sign-in, 401 on every session); the health check reports it. |
 | `ARTIST_SLUG`    | Your artist's slug (e.g. `myband`) — omit for a multi-tenant deployment              |
 | `R2_ACCOUNT_ID`  | Cloudflare account ID (found on R2 overview page, right sidebar — not the API token) |
 | `RESEND_API_KEY` | Resend API key                                                                       |
@@ -145,20 +128,19 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 
 | Variable                                     | Effect |
 | -------------------------------------------- | ------ |
-| `CONTACT_EMAIL`                              | Where contact-form messages go (default `hi@smartist.studio`) |
+| `CONTACT_EMAIL`                              | Where contact-form messages go. The default is the hosted product's address (`hi@smartist.studio`), so set this on a self-hosted deployment |
 | `SUPER_ADMIN_EMAILS`                         | Comma-separated logins allowed into `/admin` (each needs a `users` row) |
 | `DEMO_ARTIST_SLUG`                           | Band the public `/demo` gate opens (default `demo`); demo visitors get a **member** session |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`  | Enables "Sign in with Google" — see `docs/oauth-setup.md` |
-| `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`    | Enables Facebook sign-in (new accounts only) |
+| `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`    | Enables the Facebook button. Without `FACEBOOK_TRUST_EMAIL=true` it signs no one in: a new address is sent to `/signup` to confirm by emailed link — see `docs/oauth-setup.md` |
 | `FACEBOOK_TRUST_EMAIL=true`                  | Let Facebook sign into existing accounts and set up new ones by email. Facebook does not say whether an address is verified — read `docs/oauth-setup.md` first |
-
+| `SKIP_PREVIEW_BUILDS=1`                      | Build only `dev` and `main` on this Vercel project (read by `ignoreCommand` in `vercel.json`); see `docs/deployment.md` |
 
 **Per-environment** — add two entries for each (one scoped to Production, one to Preview + Development):
 
-
 | Variable               | Production                                                   | Preview + Development                          |
 | ---------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
-| `DATABASE_URL`         | Production Neon connection string                            | Dev Neon connection string                     |
+| `DATABASE_URL`         | Neon `main` branch connection string (pooled)                | Neon `dev` branch connection string (pooled)   |
 | `APP_ORIGIN`           | `https://yourdomain.com`                                     | Preview URL (`<project>-git-dev-*.vercel.app`) |
 |                        | *Set it:* links in password-reset, invite and sign-up emails are built from it (fallback: the request's `Host`) | |
 | `R2_BUCKET_NAME`       | Production bucket name                                       | Dev bucket name                                |
@@ -166,24 +148,17 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 | `R2_SECRET_ACCESS_KEY` | Prod R2 Secret Access Key                                    | Dev R2 Secret Access Key                       |
 | `R2_PUBLIC_URL`        | Prod bucket public URL (e.g. `https://media.yourdomain.com`) | Dev bucket public URL                          |
 
-
 `GET /api/config?action=health` on a deployment lists any required or recommended variable that is missing, and whether the database schema is current.
 
 **Production only** — leave unset in Preview/Development:
-
 
 | Variable            | Notes                                                |
 | ------------------- | ---------------------------------------------------- |
 | `BETTERSTACK_TOKEN` | Preview logs go to Vercel function dashboard instead |
 
-
 ---
 
-
-
 ## Quick start (new deployment)
-
-
 
 ### 1. Create a Vercel project
 
@@ -191,16 +166,14 @@ Link it to this GitHub repo. Framework: **Other** (no build step). Set the produ
 
 ### 2. Create databases
 
-- **Production:** use an existing Neon project or create one
-- **Development:** create a second Neon project; copy the pooler connection string
+Create a Neon project (its `main` branch is production) and add a `dev` branch for Preview + Development. Copy each branch's pooled connection string.
 
-Run the setup wizard once per database to create the schema, a first band and its admin login (email + password). On a multi-tenant deployment you can instead apply the schema alone (`scripts/apply_schema.js`) and let bands sign up at `/signup`:
+- **Public multi-tenant deployment** (`ARTIST_SLUG` unset, bands sign up at `/signup`): nothing to run — the first build applies the schema (`scripts/deploy_migrate.js`). Set `SUPER_ADMIN_EMAILS` and sign up like any band to get a login.
+- **Single-band deployment** (`ARTIST_SLUG` set): run the setup wizard once per branch to create the schema, the band and its admin login (email + password):
 
 ```bash
 DATABASE_URL=<connection-string> node scripts/setup.js
 ```
-
-
 
 ### 3. Create R2 buckets
 
@@ -224,8 +197,6 @@ Create two Cloudflare R2 buckets (production + dev). For each:
 
 > **Note:** `R2_ACCOUNT_ID` is the Cloudflare Account ID (visible on the R2 overview page), not any API token value. `cfat_…` tokens from Profile → API Tokens are for the Cloudflare REST API and will not work for S3-compatible R2 access.
 
-
-
 ### 4. Set environment variables
 
 Add all variables from the table above in the Vercel dashboard. See `.env.example` for format and free-tier links.
@@ -240,7 +211,7 @@ Vercel will deploy the Preview environment. Copy the stable preview URL (`smarti
 
 ### 6. Run locally
 
-Needs Node 24 and the Vercel CLI (`npm i -g vercel`).
+Needs Node 24 and the PostgreSQL server binaries (`initdb`, `pg_ctl` — on `PATH` or under `/usr/lib/postgresql/<version>/bin`). The browser tests (`test:smoke`, part of `test:all`) also need Playwright with Chromium: `npm i -g playwright && npx playwright install chromium`. The Vercel CLI (`npm i -g vercel`) is only needed to run against the Neon dev database (below).
 
 ```bash
 npm ci                       # API dependencies (the only install; tests/ has none of its own)
@@ -274,8 +245,6 @@ Set `ARTIST_SLUG` in `.env` or `.env.local` to match the artist you created with
 
 ---
 
-
-
 ## Artist config
 
 The `config` column on `artists` (JSONB) controls which fields appear in the UI. The setup wizard builds it interactively. To update it directly:
@@ -298,26 +267,27 @@ UPDATE artists SET config = config || '{
 }'::jsonb WHERE slug = 'yourband';
 ```
 
+| Key                 | Description                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `logoUrl`           | URL to the band logo shown in the nav and print header                                                   |
+| `faviconUrl`        | URL to the band's browser-tab icon (Settings)                                                            |
+| `displayFields`     | Ordered columns in the songs table. `field` can be a standard column or `extra.<name>` for custom fields |
+| `filterFields`      | Filter buttons in the setlist generator. Add `"type": "integer"` for numeric range inputs                |
+| `hiddenSongFields`  | Instrument fields hidden from the song pages (Settings)                                                  |
+| `arrangementConfig` | Members and instruments for arrangement charts (Settings)                                                |
+| `platforms`         | Streaming and social links shown on `/hub`                                                               |
+| `gemaIpNameNumber`  | Your GEMA IP-Name-Nr — PRO import uses it to classify your own compositions when its form field is empty |
+| `publicCatalogue`   | `true` opens the song list, song details and gigs without a session (Settings; off by default)           |
+| `publicStage`       | `true` lets shared `/stage?id=N` links open without a session (Settings; off by default)                 |
+| `plan`              | `free` or `pro` — set only through `/api/config/upgrade` and `/downgrade`, `/admin` or `scripts/plans.js` |
 
-| Key                | Description                                                                                              |
-| ------------------ | -------------------------------------------------------------------------------------------------------- |
-| `logoUrl`          | URL to the band logo shown in the nav and print header                                                   |
-| `displayFields`    | Ordered columns in the songs table. `field` can be a standard column or `extra.<name>` for custom fields |
-| `filterFields`     | Filter buttons in the setlist generator. Add `"type": "integer"` for numeric range inputs                |
-| `gemaIpNameNumber` | Your GEMA IP-Name-Nr — pre-fills the GEMA import and classifies your own compositions                    |
-| `publicCatalogue`  | `true` opens the song list, song details and gigs without a session (Settings; off by default)           |
-| `publicStage`      | `true` lets shared `/stage?id=N` links open without a session (Settings; off by default)                 |
-| `plan`             | `free` or `pro` — set only through `/api/config/upgrade` and `/downgrade`, `/admin` or `scripts/plans.js`         |
-
+The full shape, with `upgradedAt`, is in [DATABASE.md](DATABASE.md#artist-config).
 
 ---
-
-
 
 ## Database schema
 
 See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query patterns.
-
 
 | Table               | Purpose                                                                     |
 | ------------------- | --------------------------------------------------------------------------- |
@@ -338,14 +308,11 @@ See [DATABASE.md](DATABASE.md) for the full model, design decisions, and query p
 | `song_lyrics`       | Lyrics text per song, kept out of song lists                                 |
 | `schema_migrations` | Applied schema blocks; the health check compares it with `SCHEMA_VERSION`    |
 
-
 ---
-
-
 
 ## API
 
-All endpoints live under `/api/:artist/`. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json` (`tests/unit/openapi.js` checks it against the route table); interactive docs at `/api/docs`.
+Band endpoints live under `/api/:artist/` (the OpenAPI spec calls it `{band}`); account and config routes sit at the root. Auth uses `Authorization: Bearer <token>` — a session token from login (email + password, or Google/Facebook). Full OpenAPI 3.0 spec at `/openapi.json` (`tests/unit/openapi.js` checks it against the route table); interactive docs at `/api/docs`.
 
 A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *stage* = also open without a session when the band turned on *public catalogue* / *public stage links* in Settings (both off by default); — = no session needed.
 
@@ -353,6 +320,7 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | ------ | --------------------------------- | ---- | -------------------------------------------------------------------------------------------- |
 | GET    | `/api/config`                     | —    | Band name and branding; songs and counts only with a session or a public catalogue           |
 | GET    | `/api/config?action=health`       | —    | Missing env vars and schema state of the deployment                                          |
+| PATCH  | `/api/config`                     | ✓    | Admins rename the band or merge keys into its config; `?slug=` names the band                |
 | POST   | `/api/login`                      | —    | Log in with email + password across workspaces                                               |
 | GET    | `/api/auth/google-url`            | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |
 | POST   | `/api/auth/request-reset`         | —    | Email a link to set a new password (`set-password` redeems it, `magic-login` a sign-in link) |
@@ -404,15 +372,11 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 
 IDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.
 
-
 ---
-
-
 
 ## Scripts
 
 See [scripts/README.md](scripts/README.md) for usage details.
-
 
 | Script                        | Purpose                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------ |

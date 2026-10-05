@@ -98,4 +98,10 @@ async function verifyUpload(key) {
   }
 }
 
-module.exports = { keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload };
+// The bucket's public base URL without a trailing slash, or null when unset:
+// what the pages prefix media keys with (mediaBase in /api/config).
+function publicBaseUrl() {
+  return (STORAGE.publicUrl() || '').replace(/\/+$/, '') || null;
+}
+
+module.exports = { keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload, publicBaseUrl };

@@ -1,8 +1,10 @@
 const { getDb, getSlug } = require('../_db');
 const { requireAuth, getAccess } = require('../_auth');
-const { validateSongIds, validateStr } = require('../_validate');
+const { validateSongIds, validateStr, positiveId, likePattern } = require('../_validate');
 const { ownsRefs } = require('../_ownership');
 const { wrap } = require('../_handler');
+const { gigColumns, gigJoins } = require('../_domain/setlists');
+const { MSG } = require('../_domain/http');
 
 module.exports = wrap(async function handler(req, res) {
   const slug = getSlug(req);
@@ -10,18 +12,17 @@ module.exports = wrap(async function handler(req, res) {
 
   if (req.method === 'GET') {
     const { artist, user } = await getAccess(req, slug);
-    if (!artist) return res.status(404).json({ error: 'Band not found' });
+    if (!artist) return res.status(404).json({ error: MSG.artistNotFound });
     // The list of setlists is never public — only an individual one, reached
     // from a stage link (see setlists/item.js).
-    if (!user) return res.status(401).json({ error: 'Sign in to view this' });
+    if (!user) return res.status(401).json({ error: MSG.signIn });
 
     // ?song_q=<text>: the setlists (and their gigs) that contain a song whose
     // title contains <text>. The gig and history filters asked
     // /songs/:id/setlists once per matching song — one request per song.
     if (req.query.song_q != null) {
-      const q = String(req.query.song_q).trim().slice(0, 100);
-      if (!q) return res.json([]);
-      const pattern = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
+      const pattern = likePattern(String(req.query.song_q).trim().slice(0, 100));
+      if (!pattern) return res.json([]);
       const rows = await sql`
         SELECT DISTINCT sl.id, sl.gig_id
         FROM setlists sl
@@ -33,18 +34,11 @@ module.exports = wrap(async function handler(req, res) {
     }
 
     const setlists = await sql`
-      SELECT
-        s.*,
-        g.title AS gig_name,
-        g.date  AS gig_date,
-        v.name  AS gig_venue,
-        COUNT(ss.song_id)::int AS song_count
+      SELECT s.*, ${gigColumns(sql)},
+        (SELECT count(*)::int FROM setlist_songs ss WHERE ss.setlist_id = s.id) AS song_count
       FROM setlists s
-      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      LEFT JOIN setlist_songs ss ON s.id = ss.setlist_id
+      ${gigJoins(sql)}
       WHERE s.artist_id = ${artist.id}
-      GROUP BY s.id, g.title, g.date, v.name
       ORDER BY s.created_at DESC
     `;
     return res.json(setlists);
@@ -61,12 +55,11 @@ module.exports = wrap(async function handler(req, res) {
     if (!validIds) return res.status(400).json({ error: 'Invalid song_ids' });
 
     const title = validateStr(rawTitle, 200);
-    if (title === false) return res.status(400).json({ error: 'title too long' });
+    if (title === false) return res.status(400).json({ error: 'title too long (max 200)' });
     const comment = validateStr(rawComment, 2000);
-    if (comment === false) return res.status(400).json({ error: 'comment too long' });
-    const gigId = rawGigId != null ? Number(rawGigId) : null;
-    if (gigId !== null && (!Number.isInteger(gigId) || gigId <= 0))
-      return res.status(400).json({ error: 'Invalid gig_id' });
+    if (comment === false) return res.status(400).json({ error: 'comment too long (max 2000)' });
+    const gigId = positiveId(rawGigId);
+    if (gigId === false) return res.status(400).json({ error: 'Invalid gig_id' });
     const owned = await ownsRefs(sql, band.id, { songIds: validIds, gigId });
     if (!owned.songs) return res.status(400).json({ error: 'Invalid song_ids' });
     if (!owned.gig)   return res.status(400).json({ error: 'Invalid gig_id' });
@@ -83,14 +76,12 @@ module.exports = wrap(async function handler(req, res) {
         SELECT s.id, u.song_id, u.ord - 1
         FROM s, unnest(${validIds}::int[]) WITH ORDINALITY AS u(song_id, ord)
       )
-      SELECT s.*, g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue,
-             ${validIds.length}::int AS song_count
+      SELECT s.*, ${gigColumns(sql)}, ${validIds.length}::int AS song_count
       FROM s
-      LEFT JOIN gigs g ON s.gig_id = g.id AND g.artist_id = s.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
+      ${gigJoins(sql)}
     `;
     return res.status(201).json(created);
   }
 
-  res.status(405).json({ error: 'Method not allowed' });
+  res.status(405).json({ error: MSG.methodNotAllowed });
 });

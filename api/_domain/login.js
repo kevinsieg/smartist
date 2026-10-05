@@ -2,10 +2,11 @@ const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
 const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, loginOkKey, loginOkPrefix, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
 const { ok, fail } = require('./http');
-const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
+const { validateEmail } = require('../_validate');
+const { generateUserToken, verifyMagicToken, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const logger = require('../_logger');
-const { sessionRowId } = require('../_auth');
+const { sessionAccount } = require('../_session');
 
 // Log in without naming a band.
 //
@@ -50,6 +51,10 @@ async function passwordLogin({ body, ip }) {
   const clean = String(email ?? '').trim().toLowerCase();
   if (!clean || !password) return fail(400, 'Email and password required');
   if (String(password).length > 1000) return fail(400, 'Invalid');
+  // No account has such an address, and nothing is counted for it: the lock
+  // keys join address and IP with a space (api/_ratelimit.js), so an
+  // "address" carrying one could name another person's key.
+  if (!validateEmail(clean) || clean.length > 320) return fail(401, 'Invalid email or password');
 
   const sql = getDb();
   const [gate] = await sql`
@@ -158,12 +163,9 @@ async function magicLogin({ body, ip }) {
 // device, in every workspace (the address is the identity), this one included.
 // Sessions issued before the stored time no longer verify (sessionValid).
 async function logoutEverywhere({ headers }) {
-  const claim = verifyUserToken((headers.authorization || '').replace(/^Bearer /, ''));
-  if (!claim) return fail(401, 'Unauthorized');
   const sql = getDb();
-  const [me] = await sql`
-    SELECT email, password_hash, sessions_valid_after FROM users WHERE id = ${sessionRowId(sql, claim)} LIMIT 1`;
-  if (!me || !sessionValid(claim, me)) return fail(401, 'Unauthorized');
+  const me = await sessionAccount(sql, headers);
+  if (!me) return fail(401, 'Unauthorized');
   // The function's own clock, which is what iat was taken from.
   // So does the known-IP exemption from the address-wide login lock.
   const [{ count }] = await sql`
@@ -173,10 +175,11 @@ async function logoutEverywhere({ headers }) {
           delete_token_hash = NULL, delete_token_expires = NULL
       WHERE email = ${me.email} RETURNING 1
     ), forget AS (
-      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(me.email)})
+      DELETE FROM rate_limits
+      WHERE key >= ${loginOkPrefix(me.email)} AND key < ${loginOkPrefix(me.email)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(me.email)})
     )
     SELECT count(*)::int AS count FROM u`;
-  await logger.info('logout_everywhere', { userId: claim.userId, rows: count });
+  await logger.info('logout_everywhere', { email: me.email, rows: count });
   return ok({ ok: true });
 }
 

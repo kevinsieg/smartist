@@ -2,7 +2,7 @@
 
 // GEMA CSV import: parsers for the three export files and the two imports
 // (works from Identifikatoren / Werkinformationen, rightholders from
-// Beteiligte). Used by the pro-import page (songs catch-all, gema-import) and
+// Beteiligte). Used by the pro-import page (POST /api/:artist/gema/import) and
 // by scripts/import_gema.js, so both read the files the same way.
 //
 // The imports take a postgres.js `sql` and return { status, body }.
@@ -157,6 +157,10 @@ function upsertWorks(sql, artistId, type, recs) {
   `;
 }
 
+// What a row that failed to save says in the preview. The database's own
+// message (constraint and column names, values) goes to the log only.
+const ROW_SAVE_ERROR = 'This row could not be saved';
+
 async function importWorks(sql, band, type, csv, { dryRun = false, ownerIpNameNumber = null } = {}) {
   let csvRows;
   try { csvRows = parseCsv(csv); }
@@ -265,7 +269,7 @@ async function importWorks(sql, band, type, csv, { dryRun = false, ownerIpNameNu
         try { await upsertWorks(sql, band.id, type, [rec]); }
         catch (err) {
           await logger.error('gema_import_row_error', { artistId: band.id, type, workNumber: rec.gema_work_number, error: err.message });
-          row.error = err.message;
+          row.error = ROW_SAVE_ERROR;
           errors++;
         }
       }
@@ -373,7 +377,7 @@ async function importRightholders(sql, band, csv, { dryRun = false } = {}) {
         try { await replaceRightholders(sql, [id], recsOf(id, w.rightholders)); }
         catch (err) {
           await logger.error('gema_import_row_error', { artistId: band.id, type, workNumber: w.preview[0].gema_work_number, error: err.message });
-          for (const row of w.preview) row.error = err.message;
+          for (const row of w.preview) row.error = ROW_SAVE_ERROR;
           errors++;
         }
       }

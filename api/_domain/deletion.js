@@ -92,7 +92,7 @@ async function collectR2Urls(artistIds, sql) {
     add(e.listenUrl); add(e.sheetUrl); add(e.playbackUrl);
   }
   for (const g of gigs) { add(g.poster_url); add(g.thumb_url); }
-  // config.js uploads two band images (photo → logoUrl, favicon → faviconUrl);
+  // api/_config.js uploads two band images (photo → logoUrl, favicon → faviconUrl);
   // faviconUrl's key is slug-derived, not a UUID, so it's the one guessable
   // R2 object this account owns — leaving it behind would still be reachable.
   for (const b of bands) { add((b.config || {}).logoUrl); add((b.config || {}).faviconUrl); }
@@ -194,11 +194,15 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
     // bare email address outlives the account it belonged to. Every other key
     // is keyed on an IP, an artist id or a song. lower(key) because the key
     // was built from whatever casing the request carried. Failed sign-ins are
-    // also counted per address and IP, as `login-fail:<address>|<ip>`, and the
-    // IPs it signed in from are kept as `login-ok:<address>|<ip>`.
+    // also counted per address and IP, as `login-fail:<address> <ip>`, and the
+    // IPs it signed in from are kept as `login-ok:<address> <ip>` (before
+    // 2026-10, `|` joined them; those rows last LOGIN_OK_DAYS).
     await tx`DELETE FROM rate_limits WHERE lower(key) IN (
       'delete-req:' || ${addr}, 'signup-link:' || ${addr},
-      'reset:' || ${addr}, 'login-fail:' || ${addr})
+      'reset:' || ${addr}, 'login-fail:' || ${addr}, 'workspace-create:' || ${addr},
+      'mail-out:' || ${addr}, 'presign-person:' || ${addr}, 'lyrics-ai-person:' || ${addr})
+      OR starts_with(lower(key), 'login-fail:' || ${addr} || ' ')
+      OR starts_with(lower(key), 'login-ok:' || ${addr} || ' ')
       OR starts_with(lower(key), 'login-fail:' || ${addr} || '|')
       OR starts_with(lower(key), 'login-ok:' || ${addr} || '|')`;
   });

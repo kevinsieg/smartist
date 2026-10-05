@@ -4,7 +4,7 @@ const { makeRunner, stubLogger } = require('./_runner');
 
 stubLogger();
 
-// Re-require config.js backed by a given sql tagged-template stub.
+// Re-require api/_config.js backed by a given sql tagged-template stub.
 // Always overrides _ratelimit so the real DB-backed rate limiter is never called,
 // regardless of what's in require.cache from earlier suites.
 function makeHandler(sqlFn) {
@@ -14,7 +14,7 @@ function makeHandler(sqlFn) {
 
   delete require.cache[dbPath];
   delete require.cache[configPath];
-  // config.js delegates to api/_domain/* — bust them so the re-require rebuilds
+  // api/_config.js delegates to api/_domain/* — bust them so the re-require rebuilds
   // the chain against the stubs below (the subscribe handler lives in _domain/subscribe).
   const domainDir = path.join(__dirname, '../../api/_domain');
   require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {

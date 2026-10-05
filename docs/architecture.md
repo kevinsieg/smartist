@@ -47,8 +47,9 @@ that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
   - Changing your own email sends a link to the *new* address, and nothing
     changes until it is confirmed.
   - Google sign-in requires `verified_email === true`. Facebook reports no
-    such flag, so it may only sign into an existing account when the
-    deployment sets `FACEBOOK_TRUST_EMAIL=true`.
+    such flag, so it may only sign in or set up an account when the
+    deployment sets `FACEBOOK_TRUST_EMAIL=true`; otherwise a new address is
+    sent to the emailed sign-up link.
   - OAuth `state` is bound to an `oauth_nonce` cookie set when the flow
     starts, so a callback URL cannot be replayed in someone else's browser.
   - Emails are stored lowercased, enforced by a database CHECK.
@@ -78,7 +79,9 @@ that table, and Vercel's function limit (12 on Hobby) never shapes the URLs.
   the other. Rotating database credentials keeps sessions; moving the database
   signs everyone out.
 - **Guessing is limited per address as well as per IP.** Ten failed sign-ins
-  within fifteen minutes lock that address, from whatever IPs they come.
+  in fifteen minutes lock that address on that IP; a hundred in the same window
+  from all IPs together lock the address everywhere except the IPs it signed in from in the
+  last 30 days, so a stranger cannot lock the owner out.
 - **Email links are single-purpose.** Magic tokens are signed for `login`,
   `reset` or `demo`, and one cannot be redeemed as another. The public demo
   gate hands out a `demo` token, which is a *member* session: no settings,
@@ -171,8 +174,9 @@ the browser before upload.
 
 - **No build step.** Pages are plain HTML with plain scripts. Four shared
   scripts load first on every page — `core.js` (pure helpers, also on the stage
-  view), `session.js`, `ui.js`, `shell.js` — and `shell.js` builds the header, `footer.js` builds the footer (the same one on every
-  page), and in-app navigation swaps page content without a full reload
+  view), `session.js`, `ui.js`, `shell.js`. `shell.js` builds the header and
+  `footer.js` the footer (the same one on every page); in-app navigation swaps
+  page content without a full reload
   (`navigate()`). Page scripts therefore share one global scope: use `var` and
   private names (enforced by `tests/unit/page_scripts.js`).
 - **No inline script.** The Content-Security-Policy allows scripts only from

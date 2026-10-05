@@ -7,6 +7,9 @@ const { songLimit } = require('../../_plans');
 const { clientIp } = require('../../_ratelimit');
 const { suggestLyrics } = require('../../_lyrics');
 const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_domain/songs');
+const { lockSongLimit } = require('../../_domain/song_import');
+const { MSG } = require('../../_domain/http');
+const { gigColumns, gigJoins } = require('../../_domain/setlists');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
 
@@ -54,7 +57,7 @@ module.exports = wrap(async function handler(req, res) {
     const sql = getDb();
     if (sub) {
       // The demo session (no user row) gets the free sources only.
-      const result = await suggestLyrics(sql, band, songId, clientIp(req), { allowAI: req.user.id !== null });
+      const result = await suggestLyrics(sql, band, songId, clientIp(req), { allowAI: req.user.id !== null, who: req.user.email || `user:${req.user.id}` });
       return res.status(result.status).json(result.body);
     }
     let text = null;
@@ -75,7 +78,7 @@ module.exports = wrap(async function handler(req, res) {
   // Public — no auth required; arrangements are read-only display data (used by stage view)
   if (action === 'arrangements' && !arrId && req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // Stage reads this for the active chart, and a public catalogue shows it.
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
@@ -103,38 +106,36 @@ module.exports = wrap(async function handler(req, res) {
     if (tooBig) return res.status(400).json({ error: tooBig });
     if (copy_from != null && !(Number.isInteger(Number(copy_from)) && Number(copy_from) > 0))
       return res.status(400).json({ error: 'Invalid copy_from' });
-    const [[song], [src]] = await Promise.all([
-      sql`SELECT id FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
-      copy_from
-        ? sql`SELECT rows, hidden_instruments FROM song_arrangements WHERE id = ${Number(copy_from)} AND song_id = ${songId} AND artist_id = ${band.id}`
-        : [],
-    ]);
-    if (!song) return res.status(404).json({ error: 'Song not found' });
     const rawName = req.body?.name;
     const name = rawName === undefined ? 'Default' : (validateStr(rawName, 200) || 'Default');
-    let sourceRows = rows;
-    let sourceHidden = hidden_instruments;
-    if (copy_from) {
-      if (!src) return res.status(400).json({ error: 'copy_from arrangement not found' });
-      sourceRows = src.rows;
-      sourceHidden = src.hidden_instruments;
-    }
     // The song row is locked first: a count inside the INSERT alone reads the
-    // statement's snapshot, so two requests at once could both see 19.
+    // statement's snapshot, so two requests at once could both see 19. The
+    // lock also says whether the song exists, and brings the version to copy:
+    // with auth, BEGIN and COMMIT, five statements.
     const created = await sql.begin(async tx => {
-      await tx`SELECT 1 FROM songs WHERE id = ${songId} AND artist_id = ${band.id} FOR UPDATE`;
+      const [song] = await tx`
+        SELECT s.id, src.rows AS src_rows, src.hidden_instruments AS src_hidden, (src.id IS NOT NULL) AS has_src
+        FROM songs s
+        LEFT JOIN song_arrangements src
+          ON src.id = ${copy_from ? Number(copy_from) : null}::int AND src.song_id = s.id AND src.artist_id = s.artist_id
+        WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND s.deleted = false
+        FOR UPDATE OF s`;
+      if (!song) return { status: 404, body: { error: 'Song not found' } };
+      if (copy_from && !song.has_src) return { status: 400, body: { error: 'copy_from arrangement not found' } };
       const [row] = await tx`
         INSERT INTO song_arrangements (song_id, artist_id, name, rows, hidden_instruments)
-        SELECT ${songId}, ${band.id}, ${name}, ${tx.json(sourceRows)}::jsonb, ${tx.json(sourceHidden)}::jsonb
+        SELECT ${songId}, ${band.id}, ${name},
+               ${tx.json(copy_from ? song.src_rows : rows)}::jsonb,
+               ${tx.json(copy_from ? song.src_hidden : hidden_instruments)}::jsonb
         WHERE (SELECT count(*) FROM song_arrangements
                WHERE song_id = ${songId} AND artist_id = ${band.id}) < ${ARRANGEMENTS_PER_SONG}
         RETURNING *
       `;
-      return row;
+      return row
+        ? { status: 201, body: row }
+        : { status: 409, body: { error: `At most ${ARRANGEMENTS_PER_SONG} versions per song`, code: 'arrangement_limit' } };
     });
-    if (!created)
-      return res.status(409).json({ error: `At most ${ARRANGEMENTS_PER_SONG} versions per song`, code: 'arrangement_limit' });
-    return res.status(201).json(created);
+    return res.status(created.status).json(created.body);
   }
 
   // ── PUT /api/:artist/songs/:id/arrangements/:arrId — update ───────────────
@@ -213,7 +214,7 @@ module.exports = wrap(async function handler(req, res) {
   // ── GET single song (song details, stage view); includes lyrics and arrangements
   if (!action && req.method === 'GET') {
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // One song by id: what a stage link opens, and what a public catalogue
     // lists. The song list itself is gated separately in songs.js.
     if (!user && !canOpenStage(band) && !canBrowseCatalogue(band))
@@ -260,29 +261,35 @@ module.exports = wrap(async function handler(req, res) {
 
     const sql = getDb();
     // A restored song counts towards the plan's song limit like a new one:
-    // delete, add, restore otherwise went past it.
-    const max = songLimit(band);
-    if (max != null) {
-      const [{ count }] = await sql`
-        SELECT count(*)::int AS count FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
-      if (count >= max) return res.status(402).json({ error: 'song_limit', limit: max });
-    }
+    // delete, add, restore otherwise went past it. Counted under the band's
+    // song-limit lock, like a create or an import, or parallel restores all
+    // pass the same count.
     // The common case — the row is still there, flagged — is one statement:
-    // clear the flag and log it, if a delete record exists.
-    const [restored] = await sql`
-      WITH s AS (
-        UPDATE songs SET deleted = false
-        WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = true
-          AND EXISTS (SELECT 1 FROM song_logs
-                      WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete')
-        RETURNING *
-      ), logged AS (
-        INSERT INTO song_logs (artist_id, song_id, action, song_data)
-        SELECT artist_id, id, 'create', to_jsonb(s) FROM s
-      )
-      SELECT * FROM s
-    `;
-    if (restored) return res.status(201).json(restored);
+    // clear the flag and log it, if a delete record exists and the band has
+    // room. Whether it is full comes back either way.
+    const max = songLimit(band);
+    const [{ _limit_full: full, ...restored }] = await sql.begin(async tx => {
+      await lockSongLimit(tx, band.id);
+      return tx`
+        WITH room AS (
+          SELECT ${max}::int IS NOT NULL
+             AND (SELECT count(*) FROM songs WHERE artist_id = ${band.id} AND NOT deleted) >= ${max}::int AS is_full
+        ), s AS (
+          UPDATE songs SET deleted = false
+          WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = true
+            AND NOT (SELECT is_full FROM room)
+            AND EXISTS (SELECT 1 FROM song_logs
+                        WHERE song_id = ${songId} AND artist_id = ${band.id} AND action = 'delete')
+          RETURNING *
+        ), logged AS (
+          INSERT INTO song_logs (artist_id, song_id, action, song_data)
+          SELECT artist_id, id, 'create', to_jsonb(s) FROM s
+        )
+        SELECT room.is_full AS _limit_full, s.* FROM room LEFT JOIN s ON true
+      `;
+    });
+    if (restored.id != null) return res.status(201).json(restored);
+    if (full) return res.status(402).json({ error: 'Song limit reached', code: 'song_limit', limit: max });
 
     // Nothing came back: the song is live, or there is no deleted row. A
     // hard-deleted song cannot be restored by id: song_logs.song_id is
@@ -298,23 +305,23 @@ module.exports = wrap(async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // Which setlists a song appears in — gig history for that song.
     if (!user && !canBrowseCatalogue(band))
       return res.status(401).json({ error: 'Sign in to view this' });
 
     const sql = getDb();
+    // A visitor of the public catalogue sees where the song was played, not
+    // the band's notes on its setlists: the setlists list is never public.
     const setlists = await sql`
-      SELECT sl.id, sl.title, sl.comment, sl.created_at,
-             g.title AS gig_name, g.date AS gig_date, v.name AS gig_venue
-      FROM setlists sl
-      JOIN setlist_songs ss ON ss.setlist_id = sl.id
-      LEFT JOIN gigs g ON sl.gig_id = g.id AND g.artist_id = sl.artist_id
-      LEFT JOIN venues v ON v.id = g.venue_id AND v.artist_id = g.artist_id
-      WHERE ss.song_id = ${songId} AND sl.artist_id = ${band.id}
-      ORDER BY sl.created_at DESC
+      SELECT s.id, s.title, s.comment, s.created_at, ${gigColumns(sql)}
+      FROM setlists s
+      JOIN setlist_songs ss ON ss.setlist_id = s.id
+      ${gigJoins(sql)}
+      WHERE ss.song_id = ${songId} AND s.artist_id = ${band.id}
+      ORDER BY s.created_at DESC
     `;
-    return res.json(setlists);
+    return res.json(user ? setlists : setlists.map(sl => ({ ...sl, comment: null })));
   }
 
   // ── GET GEMA data ─────────────────────────────────────────────────────────
@@ -322,7 +329,7 @@ module.exports = wrap(async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const { artist: band, user } = await getAccess(req, slug);
-    if (!band) return res.status(404).json({ error: 'Band not found' });
+    if (!band) return res.status(404).json({ error: MSG.artistNotFound });
     // GEMA registration data is rights administration, never public.
     if (!user)
       return res.status(401).json({ error: 'Sign in to view this' });

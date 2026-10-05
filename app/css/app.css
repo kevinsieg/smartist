@@ -657,17 +657,6 @@ input[type="date"], input[type="number"] {
 .tempo-label { color: var(--third-color); font-size: 0.78rem; white-space: nowrap; flex-shrink: 0; }
 .tempo-slider { flex: 1; accent-color: var(--secondary-color); cursor: pointer; height: 4px; }
 
-.duration-input { display: flex; align-items: center; gap: 0.5rem; }
-.duration-input label {
-    color: var(--third-color); font-size: 0.78rem;
-    text-transform: uppercase; letter-spacing: 0.06em;
-}
-.duration-input input {
-    width: 65px; padding: 0.38rem 0.55rem;
-    border: 1px solid var(--field-border); border-radius: 3px;
-    background: var(--surface-color); color: var(--black);
-    font-family: var(--font-ui); font-size: 0.9rem;
-}
 .active-toggle {
     display: flex; align-items: center; gap: 0.4rem; cursor: pointer;
     color: var(--third-color); font-size: 0.78rem;
@@ -785,27 +774,6 @@ input[type="date"], input[type="number"] {
     .result-actions          { flex-direction: row; }
     .result-actions .btn     { width: auto; }
 }
-
-/* ── History year grouping ───────────────────────────────────────────────────── */
-
-/* ── Setlist history page ────────────────────────────────────────────────────── */
-.history-item {
-    border: 1px solid rgba(249,191,143,0.35); border-radius: 3px;
-    margin-bottom: 0.75rem; overflow: hidden;
-}
-.gig-name      { display: block; font-size: 1rem; color: var(--black); margin-bottom: 0.2rem; }
-.song-row  { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(221,213,200,0.15); font-size: 0.88rem; }
-.song-pos  { color: var(--third-color); font-size: 0.75rem; min-width: 24px; flex-shrink: 0; }
-.song-name { flex: 1; }
-.song-key  { font-size: 0.75rem; color: var(--third-color); background: rgba(249,191,143,0.12); padding: 0.1rem 0.3rem; border-radius: 3px; }
-.song-len  { font-size: 0.75rem; color: var(--third-color); white-space: nowrap; }
-.songs-total    { margin-top: 0.6rem; font-size: 0.8rem; color: var(--third-color); text-align: right; }
-
-/* ── History subnav ─────────────────────────────────────────────────────── */
-
-/* ── History filter bar ─────────────────────────────────────────────────── */
-
-/* ── Gig view — setlists nested inside a gig ────────────────────────────── */
 
 /* ── Songs management table ──────────────────────────────────────────────────── */
 .toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -1833,6 +1801,9 @@ body.brand-page .landing-main { flex: 1 0 auto; }
   cursor: pointer; transition: background 120ms; user-select: none;
 }
 .songs-list-row--inactive { opacity: 0.68; }
+/* Off-screen rows skip layout and paint, so a filter on a long list stays quick. */
+#lv-body .songs-list-row { content-visibility: auto; contain-intrinsic-size: auto 44px; }
+.lv-more { text-align: center; padding: 1rem 0; }
 .songs-list-row:hover { background: rgba(176,106,42,0.06); }
 .songs-list-row.lv-row--selected { background: var(--secondary-color); color: var(--secondary-ink); }
 .songs-list-row.lv-row--selected:hover { background: var(--secondary-color); }

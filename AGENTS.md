@@ -117,7 +117,8 @@ and cleaned up.
 
 ## Scripts and data
 
-Every script asks before it connects and shows the database host. Scripts that
+Every script asks before it connects and shows the database host (except
+`scripts/deploy_migrate.js`, which runs only inside a Vercel build). Scripts that
 change data (`seed`, `import_*`, `create_user`, `plans --plan`, `demo_reset`,
 `delete_artist`) are run by a person, never against production on an agent's
 own initiative.

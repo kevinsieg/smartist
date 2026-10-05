@@ -631,9 +631,6 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
   if (!demoName) return;
   var ready = (window.i18n && window.i18n.ready) ? window.i18n.ready : Promise.resolve();
   ready.then(function() {
-    var genres = [];
-    try { genres = JSON.parse(sessionStorage.getItem('demo_genres') || '[]'); } catch {}
-    var sub = genres.length ? genres.slice(0, 3).join(', ') : t('demo.bannerLiveWorkspace');
     var initials = demoName.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
     var bar = document.createElement('div');
     bar.id = 'demo-banner';
@@ -643,7 +640,6 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
       '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#b06a2a;color:#f5f0ea;font-weight:700;font-size:0.7rem;letter-spacing:0.05em;border-radius:2px;flex-shrink:0;">' + escHtml(initials) + '</span>' +
       '<span><strong style="color:#f9bf8f">' + escHtml(demoName) + '</strong>' +
       ' &mdash; ' + t('demo.bannerLiveWorkspace') +
-      (genres.length ? ' · <span style="color:#666">' + escHtml(sub) + '</span>' : '') +
       '</span></span>' +
       '<button data-onclick="removeParent(this)" style="background:none;border:none;color:#555;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0;" aria-label="' + t('demo.bannerDismiss') + '">&times;</button>';
     var header = document.querySelector('.app-header');

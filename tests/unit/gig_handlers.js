@@ -27,7 +27,8 @@ function mockRes() {
 function loadHandler(route, r2 = {}, { user = { id: 1, role: 'member' } } = {}) {
   const dbPath = mp('api/_db'), authPath = mp('api/_auth'), r2Path = mp('api/_r2');
   const handlerPath = mp('api/_band/gigs.js');
-  for (const p of [dbPath, authPath, handlerPath]) delete require.cache[p];
+  // api/_domain/gigs.js deletes the poster files through _r2: rebuilt too.
+  for (const p of [dbPath, authPath, handlerPath, mp('api/_domain/gigs')]) delete require.cache[p];
   const calls = [];
   const sql = (strings, ...values) => {
     // sql({ col: value }) — the insert/update helper: keep the object.
@@ -251,6 +252,49 @@ async function run(r) {
     assertEq(seen.deleted.sort(), [OWN, OWN_THUMB].sort());
     assert(calls.some(c => /SET poster_url = NULL, thumb_url = NULL/.test(c.text)), 'columns not cleared');
     assert(!calls.some(c => /SET deleted/.test(c.text)), 'deleted the gig');
+  });
+
+  // ── Every method on /gigs/:id gets an answer ──────────────────────────────────
+  await testAsync('POST /gigs/:id (no sub-resource) → 405, not a request left hanging', async () => {
+    const { handler, calls } = loadHandler(() => [GIG]);
+    const res = await call(handler, 'POST', '/api/test/gigs/7', { body: {} });
+    assertEq(res.statusCode, 405);
+    assertEq(calls.length, 0, 'answered before any query');
+  });
+
+  await testAsync('every method of /gigs/:id and its sub-resources answers', async () => {
+    const cases = [
+      ['PATCH', '/api/test/gigs/7', 405], ['POST', '/api/test/gigs/7/poster', 405],
+      ['GET', '/api/test/gigs/7/poster-url', 405], ['GET', '/api/test/gigs/7/nothing', 404],
+    ];
+    for (const [method, url, status] of cases) {
+      const { handler } = loadHandler(() => [GIG]);
+      const res = await call(handler, method, url, { body: {} });
+      assertEq(res.statusCode, status, `${method} ${url}`);
+      assert(res.headersSent, `${method} ${url} sent nothing`);
+    }
+  });
+
+  await testAsync('?id= in the query string is not a gig id: /gigs?id=7 is the list', async () => {
+    const { handler } = loadHandler(() => [{ ...GIG, total: 1 }]);
+    const res = await call(handler, 'GET', '/api/test/gigs?id=7');
+    assertEq(res.statusCode, 200);
+    assert(Array.isArray(res.body?.rows), 'expected the list');
+  });
+
+  await testAsync('poster-url needs no contentType: both files are always JPEG', async () => {
+    const { handler } = loadHandler(text => (text.includes('FROM gigs') ? [GIG] : []));
+    const res = await call(handler, 'POST', '/api/test/gigs/7/poster-url', { body: { posterSize: 1000, thumbSize: 100 } });
+    assertEq(res.statusCode, 200);
+  });
+
+  await testAsync('a hard delete with a cascade that is not a list → 400, nothing deleted', async () => {
+    for (const cascade of [5, 'setlists', ['gigs']]) {
+      const { handler, calls } = loadHandler(text => (text.includes('FROM gigs') ? [GIG] : []));
+      const res = await call(handler, 'DELETE', '/api/test/gigs/7', { body: { hard: true, cascade } });
+      assertEq(res.statusCode, 400, `cascade ${JSON.stringify(cascade)}`);
+      assert(!calls.some(c => /^DELETE/.test(c.text)), 'nothing may be deleted');
+    }
   });
 
   // ── Calendar feed ───────────────────────────────────────────────────────────

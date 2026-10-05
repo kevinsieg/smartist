@@ -14,8 +14,8 @@ function run(r) {
 
   test('_arrHarmDisplay: empty → empty string', () => assertEq(_arrHarmDisplay([], []), ''));
   test('_arrHarmDisplay: maps names to abbrs', () => {
-    const members = [{ name: 'Kevin', abbr: 'K' }, { name: 'Cerise', abbr: 'C' }];
-    assertEq(_arrHarmDisplay(['Kevin', 'Cerise'], members), 'K+C');
+    const members = [{ name: 'Sam', abbr: 'S' }, { name: 'Robin', abbr: 'R' }];
+    assertEq(_arrHarmDisplay(['Sam', 'Robin'], members), 'S+R');
   });
   test('_arrHarmDisplay: falls back to name if no abbr', () => {
     assertEq(_arrHarmDisplay(['Unknown'], []), 'Unknown');
