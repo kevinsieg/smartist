@@ -233,6 +233,8 @@
   "home.emailPlaceholder": "you@band.com",
   "home.enterPassword": "Enter a password.",
   "home.failedCreateAccount": "Failed to create account.",
+  "home.joinBand": "Join {name}",
+  "home.joinIntro": "You've been invited to join {name}. Your account and password stay as they are.",
   "home.forgotPassword": "Forgot password?",
   "home.hidePw": "hide",
   "home.invalidLink": "Invalid or expired login link.",

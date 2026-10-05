@@ -356,18 +356,18 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | POST   | `/api/:artist/gigs`               | ✓    | Create gig                                                                                   |
 | GET    | `/api/:artist/gigs/:id`           | ✓ / catalogue | Single gig; add `?refs` for linked setlists, venue, organizer                       |
 | PUT    | `/api/:artist/gigs/:id`           | ✓    | Update gig                                                                                   |
-| DELETE | `/api/:artist/gigs/:id`           | ✓    | Soft-delete or hard-delete gig                                                               |
+| DELETE | `/api/:artist/gigs/:id`           | ✓    | Soft-delete, or `?hard=1` (`&cascade=…`) to delete for good                                   |
 | GET    | `/api/:artist/venues`             | ✓    | List venues (paginated, filterable) — Pro plan                                               |
 | POST   | `/api/:artist/venues`             | ✓    | Create venue                                                                                 |
 | PATCH  | `/api/:artist/venues`             | ✓    | Batch update CRM fields (max 200 rows)                                                       |
 | GET    | `/api/:artist/venues/:id`         | ✓    | Single venue; add `?refs` for linked gigs                                                    |
 | PUT    | `/api/:artist/venues/:id`         | ✓    | Update venue                                                                                 |
-| DELETE | `/api/:artist/venues/:id`         | ✓    | Soft-delete or hard-delete venue                                                             |
+| DELETE | `/api/:artist/venues/:id`         | ✓    | Soft-delete, or `?hard=1` (`&cascade=…`) to delete for good                                   |
 | GET    | `/api/:artist/organizers`         | ✓    | List organizers (paginated, filterable) — Pro plan                                           |
 | POST   | `/api/:artist/organizers`         | ✓    | Create organizer                                                                             |
 | GET    | `/api/:artist/organizers/:id`     | ✓    | Single organizer; add `?refs` for linked gigs                                                |
 | PUT    | `/api/:artist/organizers/:id`     | ✓    | Update organizer                                                                             |
-| DELETE | `/api/:artist/organizers/:id`     | ✓    | Soft-delete or hard-delete organizer                                                         |
+| DELETE | `/api/:artist/organizers/:id`     | ✓    | Soft-delete, or `?hard=1` (`&cascade=…`) to delete for good                                   |
 | GET    | `/api/:artist/export`             | ✓    | Full data export: ZIP of one CSV per table (empty/internal columns dropped)                  |
 
 IDs in request bodies (`song_ids`, `gig_id`, `venue_id`, `organizer_id`) must belong to the same band; anything else is refused with 400.

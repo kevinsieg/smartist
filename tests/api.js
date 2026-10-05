@@ -1000,7 +1000,7 @@ async function testIcsFeed(slug, token) {
     assert(ics.endsWith('END:VCALENDAR\r\n'), 'the feed ends with CRLF');
   });
   for (const id of made)
-    await DELETE(`/api/${slug}/gigs/${id}`, { body: { hard: true }, token });
+    await DELETE(`/api/${slug}/gigs/${id}?hard=1`, { token });
 }
 
 // ── Sessions, roles and tenancy on the real database ──────────────────────────
@@ -1648,7 +1648,7 @@ async function testWrite(slug, token, firstSong, config) {
         } finally {
           await PUT(`/api/${slug}/setlists/${setlist.id}`,
             { title: '[TEST] updated', gig_id: null, song_ids: [firstSong.id] }, { token });
-          await DELETE(`/api/${slug}/gigs/${gig.json.id}`, { token, body: { hard: true } });
+          await DELETE(`/api/${slug}/gigs/${gig.json.id}?hard=1`, { token });
         }
       });
 
@@ -1845,7 +1845,7 @@ async function testCrudLifecycle(slug, token, config, { resource, createBody, in
   });
 
   await test(`DELETE /${resource}/:id hard cleanup → 200`, async () => {
-    const { res, json } = await DELETE(itemUrl(item.id), { body: { hard: true }, token });
+    const { res, json } = await DELETE(`${itemUrl(item.id)}?hard=1`, { token });
     assertStatus(res, json, 200);
     assert(json.deleted === true && json.hard === true, 'expected deleted+hard:true');
   });
@@ -1931,7 +1931,7 @@ async function testVenueLists(slug, token, config) {
       assert(!miss.some(v => v.id === placed.id), 'other status listed');
     });
   } finally {
-    for (const v of made) await DELETE(`/api/${slug}/venues/${v.id}`, { body: { hard: true }, token });
+    for (const v of made) await DELETE(`/api/${slug}/venues/${v.id}?hard=1`, { token });
   }
 }
 
@@ -2513,6 +2513,37 @@ async function testRound4Security(sql, slug, token, firstSong) {
       assert(live === limit, `${live} songs for a limit of ${limit}`);
     });
 
+    // Invite consent: an address that has an account is not a member of the
+    // band that invites it until it accepts, and accepting keeps its password.
+    const guest = await throwawayUser(sql, slug, 'member', 'r4join');
+    try {
+      if (!ws.json?.token || !await outbox(guest.email)) skip('an invited account joins only by accepting', 'needs the second workspace and the mail outbox');
+      else await test('an invited account joins only by accepting, and keeps its password', async () => {
+        const inv = await POST(`/api/${newSlug}/members/invite`, { email: guest.email, role: 'viewer' }, { token: ws.json.token, headers: testIp() });
+        assertStatus(inv.res, inv.json, 201);
+        const signIn = () => POST('/api/login', { email: guest.email, password: guest.password }, { headers: testIp() });
+        const before = (await signIn()).json;
+        assert(!before.artists.some(a => a.slug === newSlug), 'listed before accepting');
+        assertStatus((await GET(`/api/${newSlug}/songs`, { token: before.token })).res, null, 401);
+        const [mail] = await outbox(guest.email);
+        const link = /#join=([\w-]+)/.exec(mail?.html || '');
+        assert(link, 'no join link in the mail');
+        assert(!/#invite=/.test(mail.html), 'a set-password link for an existing account');
+        const { res, json } = await POST(`/api/${newSlug}/members/accept-invite`, { token: link[1] });
+        assertStatus(res, json, 200);
+        assert(json.artists.some(a => a.slug === newSlug && a.role === 'viewer'), 'not a member after accepting');
+        assertStatus((await GET(`/api/${newSlug}/songs`, { token: json.token })).res, null, 200);
+        const after = await signIn();
+        assertStatus(after.res, after.json, 200);
+        assertStatus((await GET(`/api/${slug}/songs`, { token: before.token })).res, null, 200);
+        const again = await POST(`/api/${newSlug}/members/accept-invite`, { token: link[1] });
+        assertStatus(again.res, again.json, 400);
+      });
+    } finally {
+      await sql`DELETE FROM users WHERE lower(email) = lower(${guest.email})`;
+      await sql`DELETE FROM rate_limits WHERE key LIKE ${'%' + guest.email.toLowerCase() + '%'}`;
+    }
+
     await test('a session does not come back through a row created after it (deleted, then re-invited)', async () => {
       const t = (await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() })).json.token;
       const [row] = await sql`SELECT password_hash FROM users WHERE id = ${user.id}`;
@@ -2569,6 +2600,13 @@ async function testRound4Api(sql, slug, token) {
       assertStatus(res, json, 200);
       assert(Array.isArray(json.rows), 'expected the paged list');
     });
+    await test('?hard=1 with an unknown cascade → 400, gig kept', async () => {
+      const { res, json } = await DELETE(`/api/${slug}/gigs/${gig.id}?hard=1&cascade=everything`, { token });
+      assertStatus(res, json, 400);
+      const [row] = await sql`SELECT 1 FROM gigs WHERE id = ${gig.id}`;
+      assert(row, 'the gig is gone');
+    });
+    // The body form, read until the next release for pages loaded before it.
     await test('a hard delete with a cascade that is not a list → 400, gig kept', async () => {
       const { res, json } = await DELETE(`/api/${slug}/gigs/${gig.id}`, { body: { hard: true, cascade: 5 }, token });
       assertStatus(res, json, 400);

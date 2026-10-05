@@ -1,5 +1,5 @@
 const path = require('path');
-const { validateSongIds, positiveId, validateOptions, likePattern, validateStr, validateNum, validateEmail, F, parseFields, unsafeKey } =
+const { validateSongIds, positiveId, validateOptions, deleteMode, likePattern, validateStr, validateNum, validateEmail, F, parseFields, unsafeKey } =
   require(path.join(__dirname, '../../api/_validate'));
 
 function run(r) {
@@ -76,6 +76,24 @@ function run(r) {
   test('anything else → false, never a value the database rejects', () => {
     for (const v of ['abc', '1.5', 1.5, 0, -3, '0x10', '1e3', true, {}, [], 2147483648, '99999999999'])
       assertEq(positiveId(v), false, `${JSON.stringify(v)} passed`);
+  });
+
+  console.log(B('\ndeleteMode'));
+  test('the URL decides: ?hard=1&cascade=gigs,setlists', () => {
+    assertEq(deleteMode({ hard: '1', cascade: 'gigs,setlists' }, { hard: false }, ['gigs', 'setlists']),
+      { hard: true, cascade: ['gigs', 'setlists'] });
+  });
+  test('no query, no body → a soft delete', () => {
+    assertEq(deleteMode({}, undefined, ['gigs']), { hard: false, cascade: [] });
+  });
+  test('an unknown cascade in the URL → false', () => {
+    assertEq(deleteMode({ hard: '1', cascade: 'gigs,users' }, null, ['gigs']), false);
+  });
+  test('the old body form still works', () => {
+    assertEq(deleteMode({}, { hard: true, cascade: ['gigs'] }, ['gigs']), { hard: true, cascade: ['gigs'] });
+  });
+  test('a body hard that is not true is a soft delete', () => {
+    assertEq(deleteMode({}, { hard: 'yes' }, ['gigs']).hard, false);
   });
 
   console.log(B('\nvalidateOptions'));

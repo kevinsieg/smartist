@@ -31,6 +31,22 @@ function validateOptions(val, allowed) {
   return val;
 }
 
+// How a DELETE goes, from its URL: `?hard=1` removes the row for good (soft
+// otherwise), `&cascade=gigs,setlists` takes those along. Returns
+// { hard, cascade } or false for an unknown cascade. A page loaded before the
+// URL form shipped still sends { hard, cascade } as the body; that is read
+// too, until the next release.
+function deleteMode(query, body, allowed) {
+  const q = query ?? {};
+  if (q.hard !== undefined || q.cascade !== undefined) {
+    const list = q.cascade === undefined || q.cascade === '' ? null : String(q.cascade).split(',');
+    const cascade = validateOptions(list, allowed);
+    return cascade === false ? false : { hard: q.hard === '1' || q.hard === 'true', cascade };
+  }
+  const cascade = validateOptions(body?.cascade, allowed);
+  return cascade === false ? false : { hard: body?.hard === true, cascade };
+}
+
 // A substring search pattern for ILIKE, or null for an empty query. The
 // user's own % and _ match themselves, not "anything".
 function likePattern(q) {
@@ -183,4 +199,4 @@ function unsafeKey(key) {
   return !path || /(^|\/)\.{1,2}(\/|$)|\/\/|\\|%2e|%2f|%5c/i.test(path);
 }
 
-module.exports = { unsafeKey, positiveId, validateSongIds, validateOptions, likePattern, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };
+module.exports = { unsafeKey, positiveId, validateSongIds, validateOptions, deleteMode, likePattern, validateStr, validateNum, validateEmail, F, parseFields, jsonBytes };

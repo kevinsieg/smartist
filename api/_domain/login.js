@@ -102,7 +102,7 @@ async function passwordLogin({ body, ip }) {
       COALESCE((
         SELECT json_agg(json_build_object('slug', a.slug, 'name', a.name, 'role', u.role) ORDER BY a.name)
         FROM users u JOIN artists a ON a.id = u.artist_id
-        WHERE u.email = ${clean}
+        WHERE u.email = ${clean} AND (u.password_hash IS NOT NULL OR u.invite_token_hash IS NULL)
       ), '[]') AS artists
   `;
   if (gate.ip_limited || gate.locked) return fail(429, 'Too many attempts — try again later');

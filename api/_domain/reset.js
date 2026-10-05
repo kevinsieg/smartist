@@ -23,15 +23,16 @@ const logger = require('../_logger');
 // is the bug this fixes, moved somewhere less obvious.
 const MAX_ROWS = 10;
 
-// Every row for this address, lowest id first. The first is the *anchor*: its
-// hash is the token's signing key, so setting a password changes the seed and
-// the link that set it stops verifying, along with any other outstanding link.
+// Every row for this address, accepted memberships first, then lowest id. The
+// first is the *anchor*: its hash is the token's signing key, so setting a
+// password changes the seed and the link that set it stops verifying, along
+// with any other outstanding link.
 async function _rowsFor(addr, sql) {
   return await sql`
     SELECT id, email, role, password_hash
     FROM users
     WHERE email = ${addr}
-    ORDER BY id
+    ORDER BY (password_hash IS NOT NULL OR invite_token_hash IS NULL) DESC, id
     LIMIT ${MAX_ROWS}
   `;
 }
@@ -107,7 +108,15 @@ async function setPassword({ body }) {
       UPDATE users SET password_hash = ${hash},
           pending_email = NULL, email_change_token_hash = NULL, email_change_expires_at = NULL,
           delete_token_hash = NULL, delete_token_expires = NULL
-      WHERE email = ${addr} RETURNING 1
+      -- A password accepts an open invite, so an account's invites to other
+      -- bands stay open (each is joined on its own). An address that has only
+      -- invites sets its first password here, which accepts them, as the
+      -- invite link would.
+      WHERE email = ${addr}
+        AND (password_hash IS NOT NULL OR invite_token_hash IS NULL
+             OR NOT EXISTS (SELECT 1 FROM users WHERE email = ${addr}
+                            AND (password_hash IS NOT NULL OR invite_token_hash IS NULL)))
+      RETURNING 1
     ), forget AS (
       DELETE FROM rate_limits
       WHERE key >= ${loginOkPrefix(addr)} AND key < ${loginOkPrefix(addr)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(addr)})
