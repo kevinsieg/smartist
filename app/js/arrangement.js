@@ -291,7 +291,6 @@ function _arrRenderGrid() {
   var members     = (_arrEditorConfig && _arrEditorConfig.members)     || [];
   var visible     = _arrVisibleInstruments(instruments, cur.hidden_instruments || [], cur.rows || []);
   var rows        = cur.rows || [];
-  var colCount    = 1 + 2 + 4 + visible.length + 1; // drag + fixed(struct,part,lead,harm,licks) + inst + actions
 
   var thFixed =
     '<th class="arr-th"><span class="sr-only">' + _arrT('arr.dragToReorder', 'Drag to reorder') + '</span></th>' + // drag handle
@@ -330,8 +329,7 @@ function _arrCellLabel(col, ri) {
 }
 
 function _arrEditorRowHtml(row, ri, visible, members, instruments) {
-  // LEAD grouped select: value encodes "type:name" e.g. "person:Ludo"
-  var leadVal = row.lead ? (row.lead_type + ':' + row.lead) : '';
+  // LEAD grouped select: value encodes "type:name" e.g. "person:Alex"
   var leadColor = row.lead_type === 'person'     ? 'style="color:var(--arr-lead-person,#3d6bce);font-weight:600"'
                 : row.lead_type === 'instrument' ? 'style="color:var(--arr-lead-inst,#b06a2a);font-weight:600"'
                 : '';

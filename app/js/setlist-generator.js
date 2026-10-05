@@ -41,24 +41,6 @@ var FEEL_LABELS = [
   { max: 1.01, icon: '🔥', get label() { return t('setlist.feelTriathlon'); }      },
 ];
 
-// --- Demo personalisation ---
-
-function applyDemoFilters() {
-  var raw = sessionStorage.getItem('demo_genres');
-  if (!raw) return;
-  var genres;
-  try { genres = JSON.parse(raw); } catch { return; }
-  if (!Array.isArray(genres) || !genres.length) return;
-  var normalized = genres.map(function (g) { return g.toLowerCase(); });
-  document.querySelectorAll('.filter-btn').forEach(function (btn) {
-    var val = (btn.dataset.value || '').toLowerCase();
-    var matches = normalized.some(function (g) {
-      return val === g || val.includes(g) || g.includes(val);
-    });
-    if (matches && !btn.classList.contains('active')) btn.click();
-  });
-}
-
 // --- Helpers ---
 
 function getFieldValue(song, field) {

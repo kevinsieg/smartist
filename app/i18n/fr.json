@@ -295,6 +295,7 @@
   "list.groupCount_other": "{count} éléments",
   "list.noResults": "Aucun résultat.",
   "list.searchPlaceholder": "Rechercher…",
+  "list.showMore": "Afficher {count} de plus ({total} masqués)",
   "map.filterCategory": "Catégorie",
   "map.filterSize": "Taille",
   "map.filterStatus": "Statut",

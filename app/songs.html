@@ -10,89 +10,13 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
-    <link rel="stylesheet" href="/app/css/app.css?v=51">
-    <script src="/app/js/i18n.js?v=58"></script>
+    <link rel="stylesheet" href="/app/css/app.css?v=52">
+    <script src="/app/js/i18n.js?v=59"></script>
     <style>
         /* Songs page needs full-width layout, not max-width 960px */
         .songs-page .app-wrap { max-width: 100%; }
 
-        /* --- Shared card styles (mobile + desktop view mode) --- */
-        .toolbar--cards {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1rem;
-            background: var(--primary-color);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .cards-filter-input {
-            flex: 1;
-            min-width: 120px;
-            padding: 0.45rem 0.7rem;
-            border: 1px solid var(--field-border);
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.9rem;
-            background: #fff;
-        }
-        .filter-active-label {
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-            font-size: 0.85rem;
-            color: var(--third-color);
-            white-space: nowrap;
-            cursor: pointer;
-        }
-        .song-cards {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            padding: 0.75rem 1rem 4rem;
-        }
-        .song-cards--desktop {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 0.75rem;
-            padding: 1rem 1rem 4rem;
-        }
-        .song-card {
-            background: #fff;
-            border-radius: 6px;
-            border-left: 3px solid var(--border-color);
-            cursor: pointer;
-            min-height: 44px;
-            transition: box-shadow 100ms;
-        }
-        .song-card:active { box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-        .song-card--active  { border-left-color: var(--secondary-color); }
-        .song-card--inactive { opacity: 0.72; }
-        .song-card-body {
-            padding: 0.55rem 0.75rem;
-        }
-        .song-card-primary {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.4rem;
-        }
-        .song-card-title {
-            font-weight: 600;
-            font-size: 0.92rem;
-        }
-        .song-card-title--inactive {
-            font-weight: normal;
-            color: var(--third-color);
-        }
-        .song-card-icons {
-            display: flex;
-            gap: 0.15rem;
-            flex-shrink: 0;
-        }
+        /* Icon buttons on a song row (listen, lyrics, arrangement) */
         .song-card-icon-btn {
             background: none;
             border: none;
@@ -106,14 +30,6 @@
             line-height: 1;
         }
         .song-card-icon-btn:hover { background: var(--border-color); }
-        .song-card-secondary {
-            font-size: 0.76rem;
-            color: var(--third-color);
-            margin-top: 0.18rem;
-        }
-
-        /* View mode button — hidden on mobile, shown on desktop */
-        .btn-view-mode { margin-left: auto; }
 
         /* --- Toggle switch (iOS-style pill) --- */
         .toggle-switch {
@@ -153,12 +69,6 @@
         }
         .toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); }
 
-        /* --- Mobile-only styles (≤ 1024px) --- */
-        @media (max-width: 1024px) {
-            .btn-view-mode { display: none !important; }
-
-        }
-
         /* In-panel song edit form */
         .edit-section { margin-bottom: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); }
         .edit-section-summary { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.84rem; font-weight: 600; }
@@ -166,7 +76,6 @@
         .edit-field { margin-bottom: 0.55rem; display: flex; flex-direction: column; gap: 0.2rem; }
         .edit-field-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--third-color); }
         .edit-input, .edit-select { width: 100%; font-size: 1rem; padding: 0.35rem 0.5rem; border: 1px solid var(--field-border); border-radius: 4px; background: #fff; font-family: inherit; box-sizing: border-box; }
-        .edit-textarea { min-height: 80px; resize: vertical; font-family: inherit; }
         .edit-readonly { font-size: 0.84rem; color: var(--third-color); padding: 0.2rem 0; }
         .edit-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; }
         .edit-check-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
@@ -176,8 +85,6 @@
 
         /* --- Desktop view mode panel (side panel) --- */
         @media (min-width: 1025px) {
-            .song-card--selected { box-shadow: 0 0 0 2px var(--secondary-color); }
-
             /* Soften muted text in list/filter/panel — same tone as .sl-cell--muted */
             .filter-bar, .lv-body, #view-side-panel { --third-color: var(--muted-ink); }
 
@@ -378,14 +285,14 @@
 <script src="/app/js/core.js?v=14"></script>
 <script src="/app/js/session.js?v=14"></script>
 <script src="/app/js/ui.js?v=12"></script>
-<script src="/app/js/shell.js?v=13"></script>
-<script src="/app/js/list-view.js?v=8"></script>
-<script src="/app/js/arrangement.js?v=7"></script>
+<script src="/app/js/shell.js?v=14"></script>
+<script src="/app/js/list-view.js?v=9"></script>
+<script src="/app/js/arrangement.js?v=8"></script>
 <!-- songs.js runs init() at the end, so it loads last; the others only define. -->
 <script src="/app/js/songs-media.js?v=7"></script>
-<script src="/app/js/songs-lyrics.js?v=6"></script>
+<script src="/app/js/songs-lyrics.js?v=7"></script>
 <script src="/app/js/songs-table.js?v=10"></script>
-<script src="/app/js/songs-panel.js?v=14"></script>
-<script src="/app/js/songs.js?v=33"></script>
+<script src="/app/js/songs-panel.js?v=15"></script>
+<script src="/app/js/songs.js?v=34"></script>
 </body>
 </html>

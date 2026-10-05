@@ -140,11 +140,15 @@ function _openSongPanelContent(item, panelEl) {
   // Async: setlist count + arrangement table — both use _panelSid for stale-panel check
   var _panelSid = sid;
 
-  // Async: lyrics come with the song's details, fetched the first time.
-  if (hasLyrics && song.lyrics === undefined) {
-    loadSongLyrics(artistSlug, song).then(function(text) {
+  // Async: lyrics and the active arrangement both come with the song's details
+  // (GET /songs/:id), so one request covers them. Lyrics stay cached on the song.
+  var needLyrics = hasLyrics && song.lyrics === undefined;
+  var needArr    = !_viewMode && song.has_arrangement;
+  var detail = (needLyrics || needArr) ? _fetchSongDetail(song) : null;
+  if (needLyrics) {
+    detail.then(function() {
       var el = document.getElementById('vsp-lyrics-' + sid);
-      if (el) el.textContent = text;
+      if (el) el.textContent = song.lyrics || '';
     }).catch(function() {
       var el = document.getElementById('vsp-lyrics-' + sid);
       if (el) el.textContent = t('songs.lyricsCouldNotFetch');
@@ -152,11 +156,10 @@ function _openSongPanelContent(item, panelEl) {
   }
 
   // Async: arrangement table (auth-only, active version only)
-  if (!_viewMode && song.has_arrangement) {
-    apiFetch('/api/' + artistSlug + '/songs/' + sid + '/arrangements')
-      .then(function(r) { return r.json(); })
-      .then(function(versions) {
-        var active = versions.find(function(v) { return v.is_active; });
+  if (needArr) {
+    detail
+      .then(function(d) {
+        var active = d.active_arrangement;
         if (!active) return;
         var panel = document.getElementById('view-side-panel-inner');
         if (!panel || !panel.querySelector('[data-sid="' + _panelSid + '"]')) return;
@@ -183,13 +186,25 @@ function _openSongPanelContent(item, panelEl) {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (!linkEl) return;
       if (!ids || !ids.length) { linkEl.textContent = t('songs.notInAnySetlist'); return; }
-      var songTitle = song.title || '';
       linkEl.innerHTML = '<a href="#" data-onclick="event.preventDefault();openAppearances(' + Number(sid) + ')" style="color:var(--secondary-ink)">&#8594; ' + t('songs.setlistCount', { count: ids.length }) + '</a>';
     })
     .catch(function() {
       var linkEl = document.getElementById('vsp-setlist-link');
       if (linkEl) linkEl.textContent = '';
     });
+}
+
+// One song's details (GET /songs/:id): lyrics, arrangement names and the active
+// arrangement in full. Caches the lyrics on the song like loadSongLyrics does.
+async function _fetchSongDetail(song) {
+  var r = await apiFetch('/api/' + artistSlug + '/songs/' + Number(song.id));
+  if (!r.ok) throw new Error('song fetch failed');
+  var d = await r.json();
+  if (song.lyrics === undefined) {
+    song.lyrics = d.lyrics || null;
+    song.has_lyrics = !!song.lyrics;
+  }
+  return d;
 }
 
 function _songPanelEl() { return document.getElementById('view-side-panel-inner'); }
@@ -354,10 +369,9 @@ function _openSongEditForm(sid, panelEl) {
   if (!isNew && song.has_arrangement) {
     var _editArrSid = String(sid);
     var arrCfg = _songsCfg && _songsCfg.config && _songsCfg.config.arrangementConfig;
-    apiFetch('/api/' + artistSlug + '/songs/' + _editArrSid + '/arrangements')
-      .then(function(r) { return r.json(); })
-      .then(function(versions) {
-        var active = versions.find(function(v) { return v.is_active; });
+    _fetchSongDetail(song)
+      .then(function(d) {
+        var active = d.active_arrangement;
         if (!active) return;
         var preview = document.getElementById('edit-arr-preview');
         if (!preview || !panelEl.querySelector('[data-sid="' + _editArrSid + '"]')) return;
@@ -444,15 +458,27 @@ async function _savePanelSong(formId, isNew, realSid) {
     } else {
       var r = await apiFetch('/api/' + artistSlug + '/songs', 'PATCH',
         [Object.assign({ id: parseInt(realSid, 10) }, collectRow(formId))]);
-      if (!r.ok) throw new Error('save failed');
+      var res = r.ok ? await r.json().catch(function() { return {}; }) : null;
+      if (!res || (res.rejected && res.rejected.length)) throw new Error('save failed');
       targetId = String(realSid);
     }
 
     // Songs ride along in the cached /api/config payload (the setlist page reads
     // cfg.songs), so drop that cache or other pages keep serving the old list.
     invalidateConfigCache();
-    await fetchSongsList(true);
-    if (_songsView) { _songsView.refresh(); _songsView.select(targetId); }
+    if (isNew) {
+      // A new song needs its computed columns (play_count, has_*) and its place
+      // in the title order: reload the list.
+      await fetchSongsList(true);
+      if (_songsView) { _songsView.refresh(); _songsView.select(targetId); }
+    } else {
+      // An edit changes one song: reload that one and redraw its row only.
+      var reloadedAll = await _reloadOneSong(targetId, res);
+      if (_songsView) {
+        if (reloadedAll) _songsView.refresh(); else _songsView.refreshItem(targetId);
+        _songsView.select(targetId);
+      }
+    }
     loadLogs();
   } catch (err) {
     var errEl = document.getElementById('song-panel-edit-error');
@@ -462,6 +488,35 @@ async function _savePanelSong(formId, isNew, realSid) {
     }
     if (btn) { btn.disabled = false; btn.textContent = isNew ? t('songs.add') : t('songs.save'); }
   }
+}
+
+// Refresh one song in songs[] after a PATCH: from the rows the PATCH answer
+// carries when the API sends them, otherwise from GET /songs/:id. The list-only
+// columns (play_count, last_played_at) are kept; a field edit does not change them.
+// Returns true when it had to reload the whole list instead.
+async function _reloadOneSong(sid, patchRes) {
+  var song = songs.find(function(s) { return String(s.id) === String(sid); });
+  if (!song) { await fetchSongsList(true); return true; }
+  var fresh = patchRes && Array.isArray(patchRes.rows)
+    ? patchRes.rows.find(function(x) { return String(x.id) === String(sid); })
+    : null;
+  if (!fresh) {
+    try {
+      var r = await apiFetch('/api/' + artistSlug + '/songs/' + Number(sid));
+      if (!r.ok) throw new Error('song fetch failed');
+      fresh = await r.json();
+    } catch (e) {
+      await fetchSongsList(true);
+      return true;
+    }
+  }
+  if (Array.isArray(fresh.arrangements)) song.has_arrangement = fresh.arrangements.length > 0;
+  var copy = Object.assign({}, fresh);
+  delete copy.arrangements;
+  delete copy.active_arrangement;
+  if (!('lyrics' in fresh)) delete copy.lyrics;
+  Object.assign(song, copy);
+  return false;
 }
 
 function _isNewPanelSid(sid) { return String(sid).indexOf('_new_panel_') === 0; }
