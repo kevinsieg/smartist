@@ -58,14 +58,12 @@ CREATE TABLE IF NOT EXISTS venues (
   last_communication      DATE,
   booking_channel         TEXT,
   number_of_cold_contacts INTEGER NOT NULL DEFAULT 0,
-  turnus                  TEXT,
   remuneration            TEXT,
   overnight               BOOLEAN NOT NULL DEFAULT false,
   season                  TEXT,
   preferred_period        TEXT,
   comment                 TEXT,
   deadline                DATE,
-  main_genre              TEXT,
   size                    INTEGER,
   language                TEXT,
   last_updated            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -446,3 +444,9 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-06') ON CONFLICT DO NOTHING;
 -- table once per removed user. CONCURRENTLY: no write lock on a live table.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS users_invited_by_idx ON users(invited_by);
 INSERT INTO schema_migrations (id) VALUES ('2026-10-07') ON CONFLICT DO NOTHING;
+
+-- 2026-10-08: drop venues.turnus and venues.main_genre. Nothing reads or
+-- writes them since release v1.5.0, which is the code still live while this runs.
+ALTER TABLE venues DROP COLUMN IF EXISTS turnus;
+ALTER TABLE venues DROP COLUMN IF EXISTS main_genre;
+INSERT INTO schema_migrations (id) VALUES ('2026-10-08') ON CONFLICT DO NOTHING;

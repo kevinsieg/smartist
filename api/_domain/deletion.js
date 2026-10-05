@@ -167,16 +167,9 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
       // gigs.venue_id / organizer_id are ON DELETE RESTRICT — nullify first, and
       // only for these artists. Same ordering as scripts/delete_artist.js.
       await tx`UPDATE gigs SET venue_id = NULL, organizer_id = NULL WHERE artist_id = ANY(${destroyIds})`;
-      // References from OTHER artists into these rows would block the delete
-      // (setlist_songs.song_id has no cascade; venue/organizer are RESTRICT).
-      // The API refuses such cross-tenant ids now, but rows written before that
-      // check must not be able to hold someone's deletion hostage.
-      await tx`DELETE FROM setlist_songs WHERE song_id IN (SELECT id FROM songs WHERE artist_id = ANY(${destroyIds}))`;
-      await tx`UPDATE gigs SET venue_id = NULL WHERE venue_id IN (SELECT id FROM venues WHERE artist_id = ANY(${destroyIds}))`;
-      await tx`UPDATE gigs SET organizer_id = NULL WHERE organizer_id IN (SELECT id FROM organizers WHERE artist_id = ANY(${destroyIds}))`;
-      // setlist_songs.song_id has no cascade, so setlists go before songs.
-      await tx`DELETE FROM setlists WHERE artist_id = ANY(${destroyIds})`;
-      // artists cascades songs, gigs, venues, organizers, users, logs.
+      // Another band's rows cannot point here: gigs reach venues and organizers
+      // through same-band keys, and setlist_songs.song_id cascades.
+      // artists cascades songs, gigs, venues, organizers, setlists, users, logs.
       await tx`DELETE FROM artists WHERE id = ANY(${destroyIds})`;
     }
     // users.invited_by is ON DELETE SET NULL since schema 2026-09-29; cleared

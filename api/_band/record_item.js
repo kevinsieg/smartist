@@ -54,7 +54,7 @@ function recordItemHandler(spec) {
   // A hard delete is one transaction: a refused delete (409, a gig still points
   // at the record) leaves the cascaded gigs and setlists in place.
   async function del(req, res, { sql, artist, id }) {
-    const mode = deleteMode(req.query, req.body, ['gigs', 'setlists']);
+    const mode = deleteMode(req.query, ['gigs', 'setlists']);
     if (mode === false) return res.status(400).json({ error: 'cascade must be a list of: gigs, setlists' });
     const { hard, cascade } = mode;
     if (!hard) {

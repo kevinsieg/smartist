@@ -96,12 +96,6 @@ async function main() {
     await sql.begin(async tx => {
       // RESTRICT FKs on gigs block the venue/organizer cascade.
       await tx`UPDATE gigs SET venue_id = NULL, organizer_id = NULL WHERE artist_id = ${artist.id}`;
-      // Other artists' references into this one (see api/_domain/deletion.js).
-      await tx`DELETE FROM setlist_songs WHERE song_id IN (SELECT id FROM songs WHERE artist_id = ${artist.id})`;
-      await tx`UPDATE gigs SET venue_id = NULL WHERE venue_id IN (SELECT id FROM venues WHERE artist_id = ${artist.id})`;
-      await tx`UPDATE gigs SET organizer_id = NULL WHERE organizer_id IN (SELECT id FROM organizers WHERE artist_id = ${artist.id})`;
-      // setlist_songs.song_id has no cascade — remove setlists (and their songs) first.
-      await tx`DELETE FROM setlists WHERE artist_id = ${artist.id}`;
       await tx`DELETE FROM artists WHERE id = ${artist.id}`;
     });
 
