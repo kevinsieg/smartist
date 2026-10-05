@@ -37,7 +37,7 @@ node tests/history-client.js
 | `tests/unit/gema.js` | `api/_domain/gema.js` | CSV parsers, GEMA normalizers |
 | `tests/unit/ai.js` | `api/_ai.js` | `suggestLyricsWithAI` skip/error handling and Gemini response cleanup |
 | `tests/unit/handler.js` | `api/_handler.js` | `wrap` logging and error sanitization |
-| `tests/history-client.js` | `app/js/setlist-history.js` | response parsing helpers |
+| `tests/history-client.js` | `app/js/setlist-history.js` | the redirect stub: `/setlist-history` → the setlist page's history tab |
 | `tests/unit/tenant_isolation.js` | handlers, `api/_ownership.js`, `api/_token.js` | cross-band ids refused, script links refused, demo token is a member session, token purposes, sessions end on password change |
 | `tests/unit/*_handlers.js`, `auth.js`, `oauth_callback.js`, … | API handlers with a stubbed database | auth, roles, reset, signup, deletion, OAuth callback (incl. the `oauth_nonce` cookie), storage accounting |
 | `tests/*-client.js` | page scripts in `app/js/` | run in a stubbed DOM (songs, gigs, map, workspaces, logout, …) |
@@ -99,7 +99,7 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 |------|--------|
 | `GET /api/config` | slug and name; songs only for a public catalogue; `gemaIpNameNumber`/`upgradedAt` hidden |
 | Privacy | songs, song logs, gigs (+ .ics), setlists, venues and GEMA answer 401 without a token — except what the band opted into (`publicCatalogue`, `publicStage`) |
-| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; a password without an email → 400 `band_password_retired`; PUT /setlists/:id → 401 |
+| Auth rejections | every write endpoint returns 401 without a token; wrong password returns 401; a password without an email → 400 (the band password is retired); PUT /setlists/:id → 401 |
 
 **Signed in (requires `ARTIST_EMAIL` and `ARTIST_PASSWORD`)**
 
@@ -113,7 +113,7 @@ BASE_URL=https://your-preview.vercel.app node tests/api.js
 | `GET /api/:artist/setlists` | array with song_count; single setlist with ordered songs |
 | Validation | id=0 → 400, non-integer id → 400, missing required fields → 400, unknown id → 404 |
 | `POST /api/login` | email + correct password → 200 |
-| Song lifecycle | create → patch → delete → restore → delete (DB left clean) |
+| Song lifecycle | create → patch → delete → restore → delete (the song stays soft-deleted until the 90-day purge) |
 | `POST /api/:artist/songs` | missing title → 400 |
 | Lyrics suggest | rejects songs without an artist before calling external providers |
 | Setlist lifecycle | `POST` (create) → 201, `POST` (share) validates email + unknown id, `PUT` updates title, `POST` (duplicate) → 201 with new id + matching song count |

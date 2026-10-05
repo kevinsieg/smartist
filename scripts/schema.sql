@@ -15,14 +15,16 @@
 --   rate_limits, subscribers, users, schema_migrations
 
 -- ── artists ──────────────────────────────────────────────────────────────────
--- One row per band. Multi-tenant: all other tables are scoped to artist_id.
+-- One row per band. Multi-tenant: every band's rows are scoped to artist_id
+-- (setlist_songs and gema_rightholders through their parent); rate_limits,
+-- subscribers and schema_migrations are global.
 -- The API is keyed by `slug` (URL-safe short name, e.g. "myband").
 -- `config` is a JSONB object that drives the UI without schema changes:
 --   displayFields: which song columns appear in the songs table
 --   filterFields:  which fields produce filter buttons in the setlist generator
 --   logoUrl:       path or URL to the band logo
 -- `platforms` in config: streaming and social URLs managed via /hub.
--- See DATABASE.md §Band config for the full shape.
+-- See DATABASE.md §Artist config for the full shape.
 
 CREATE TABLE IF NOT EXISTS artists (
   id            SERIAL PRIMARY KEY,
@@ -270,8 +272,9 @@ CREATE INDEX IF NOT EXISTS song_logs_song_id_idx ON song_logs(song_id);
 --
 -- Soft-deleting a song keeps the historical setlists that included it: the
 -- song row stays (deleted = true), so joins from setlist_songs still resolve.
--- Songs are only hard-deleted together with their band, so the cascade loses
--- nothing. setlist_songs has no artist_id; _ownership.js keeps it in one band.
+-- Songs are hard-deleted only with their band or by the 90-day purge
+-- (purgeDeletedSongs in api/_db.js), which skips songs a setlist lists, so the
+-- cascade loses nothing. setlist_songs has no artist_id; _ownership.js keeps it in one band.
 
 CREATE TABLE IF NOT EXISTS setlist_songs (
   setlist_id INTEGER NOT NULL REFERENCES setlists(id) ON DELETE CASCADE,
@@ -287,14 +290,14 @@ CREATE INDEX IF NOT EXISTS setlist_songs_song_id_idx ON setlist_songs(song_id);
 -- ── gema_works ─────────────────────────────────────────────────────────────
 -- Works registered with a performing-rights organisation (GEMA, SACEM, etc.).
 -- Not every song needs a matching row; linking is via song_id FK.
--- Populated from GEMA CSV exports via scripts/import_gema.js or the /gema-import UI.
+-- Populated from GEMA CSV exports via scripts/import_gema.js or the /pro-import page.
 
 CREATE TABLE IF NOT EXISTS gema_works (
   id                     SERIAL PRIMARY KEY,
   artist_id              INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
-  gema_work_number       TEXT NOT NULL,           -- Werknummer, e.g. "15299392-001"
+  gema_work_number       TEXT NOT NULL,           -- Werknummer, e.g. "12345678-001"
   title                  TEXT NOT NULL,           -- Titel (uppercase as exported)
-  iswc                   TEXT,                    -- e.g. "T8034602217"
+  iswc                   TEXT,                    -- e.g. "T0000000000"
   isrc                   TEXT,
   publisher_work_numbers TEXT,                    -- Verlagswerknummern
   language               TEXT,                    -- normalised: DE, EN, FR, …
@@ -315,7 +318,7 @@ CREATE INDEX IF NOT EXISTS gema_works_song_id_idx   ON gema_works(song_id);
 -- ── gema_rightholders ──────────────────────────────────────────────────────
 -- One row per rightholder per work. Populated from GEMA's Beteiligte export.
 -- Import is replace-all: existing rightholders for each work are deleted before
--- re-inserting. Roles stored in English (see ROLE_MAP in import_gema.js).
+-- re-inserting. Roles stored in English (see ROLE_MAP in api/_domain/gema.js).
 
 CREATE TABLE IF NOT EXISTS gema_rightholders (
   id                   SERIAL PRIMARY KEY,
@@ -339,13 +342,14 @@ CREATE TABLE IF NOT EXISTS gema_rightholders (
 CREATE INDEX IF NOT EXISTS gema_rightholders_work_id_idx ON gema_rightholders(gema_work_id);
 
 -- ── rate_limits ─────────────────────────────────────────────────────────────
--- Sliding-window rate limiting for auth, request-reset, and share endpoints.
--- One row per (endpoint, IP) key; the window resets on the next request after
+-- Sliding-window rate limiting for sign-in, reset, sign-up, invites, shares,
+-- uploads and other endpoints. One row per key, `<purpose>:<IP, address or
+-- band id>`; the window resets on the next request after
 -- it expires. checkRateLimit (api/_ratelimit.js) now and then sweeps rows idle
 -- for over a day.
 
 CREATE TABLE IF NOT EXISTS rate_limits (
-  key          TEXT PRIMARY KEY,        -- e.g. "auth:1.2.3.4", "reset:1.2.3.4"
+  key          TEXT PRIMARY KEY,        -- e.g. "auth:1.2.3.4", "reset:you@example.com", "invite:12"
   window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   count        INTEGER NOT NULL DEFAULT 1
 );
@@ -353,9 +357,10 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 CREATE INDEX IF NOT EXISTS rate_limits_window_start_idx ON rate_limits(window_start);
 
 -- ── subscribers ──────────────────────────────────────────────────────────────
--- Landing page email sign-ups and demo access leads.
--- source: 'landing' | 'demo'
--- meta (demo only): { country, region, city, ua, ref }
+-- Landing page email sign-ups, demo access leads and pending sign-up links.
+-- source: 'landing' | 'demo' | 'signup'
+-- meta: demo { name, genres, perform_country, geo_country };
+--       signup { signup_token_hash, signup_token_expires } while a link is pending
 
 CREATE TABLE IF NOT EXISTS subscribers (
   id         SERIAL PRIMARY KEY,
@@ -432,7 +437,8 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-06') ON CONFLICT DO NOTHING;
 --
 -- Example:
 --   -- 2026-10-08: add public share token to setlists
---   ALTER TABLE setlists ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE;
+--   ALTER TABLE setlists ADD COLUMN IF NOT EXISTS share_token TEXT;
+--   CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS setlists_share_token_idx ON setlists(share_token);
 --   INSERT INTO schema_migrations (id) VALUES ('2026-10-08') ON CONFLICT DO NOTHING;
 
 -- 2026-10-07: index users.invited_by. Removing a user sets invited_by to NULL

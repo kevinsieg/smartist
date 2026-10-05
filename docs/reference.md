@@ -6,6 +6,10 @@ agent or contributor must not break are in [AGENTS.md](../AGENTS.md); the reason
 behind the design are in [architecture.md](architecture.md); tables and columns
 in [DATABASE.md](../DATABASE.md).
 
+Other docs: [deployment.md](deployment.md), [tenant-onboarding.md](tenant-onboarding.md),
+[oauth-setup.md](oauth-setup.md), [ci-cd.md](ci-cd.md),
+[backup-restore.md](backup-restore.md), [agents.md](agents.md).
+
 ## Pages
 
 | URL | JS |
@@ -74,14 +78,14 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
 | `_pdf.js` | `buildSetlistPdf(setlist, songs, artistName)` → Buffer; `setlistTitle(setlist)` |
 | `_r2.js` | `createPresignedUrl`, `deleteFromR2` — swap storage via `STORAGE` block at top |
-| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia` ; `makeMediaFn(config)` serves them as POST / PUT / DELETE on `/songs/:id/:type` (`member`) |
+| `_media.js` | `MEDIA_CONFIGS` + `presignMedia` / `confirmMedia` / `deleteMedia`; `makeMediaFn(config)` serves them as POST / PUT / DELETE on `/songs/:id/:type` (`member`) |
 | `_env.js` | Every env var the API reads (required / recommended / pairs), `envReport()`, and `SCHEMA_VERSION` — the newest migration id in `schema.sql` |
 | `_domain/song_import.js` | CSV song import: `parseSongCsv` (`,` `;` or tab, quoted line breaks, header aliases in EN/FR/DE), `checkRows` (same rules as a song created by hand; duplicate = same title ignoring case and spacing, in the band's live songs or an earlier row), `songImport` — `{csv}` or `{rows}` is checked only; `{rows, commit: true}` writes every row not skipped in one statement, or answers 422 while any row has an error or an unresolved duplicate, and 402 past the plan's song limit |
 | `_domain/gema.js` | GEMA CSV parsers and `importWorks` / `importRightholders` — used by the pro-import route and `scripts/import_gema.js` |
 | `_lyrics.js` | `suggestLyrics(sql, band, songId, ip)` — lyrics.ovh → lrclib → AI, shared by both lyrics-suggest routes |
 | `_ai.js` | `suggestLyricsWithAI(title, artist, opts)` — swap provider via `AI` block at top; `format:'gemini'` default |
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack, one send per request after the response (`waitUntil` in `_handler.js`), lines buffered per request; swap via `TRANSPORT` block |
-| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint and the issue time: changing a password, or `users.sessions_valid_after` ("log out everywhere", `_domain/login.js` `logoutEverywhere`), revokes older sessions (`sessionValid`). |
+| `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash, email)` embeds a password fingerprint, the address (so a session outlives the removal of one band's `users` row) and the issue time: changing a password, or `users.sessions_valid_after` ("log out everywhere", `_domain/login.js` `logoutEverywhere`), revokes older sessions (`sessionValid`). |
 | `_ownership.js` | `ownsRefs` — **every foreign id from a request body must pass it** (ids are one sequence across tenants); songs, gig, venue and organizer in one statement; `isOwnMediaUrl` gates R2 deletes |
 
 ---
@@ -136,7 +140,7 @@ await sql`INSERT INTO setlist_songs (setlist_id, song_id, position)
 
 ## Database
 
-Tables: `artists`, `songs`, `song_lyrics`, `gigs`, `schema_migrations`, `setlists`, `setlist_songs`, `song_logs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `rate_limits`, `subscribers`. Full schema (idempotent) in `scripts/schema.sql`. See `DATABASE.md` for entity diagram and column reference.
+Tables: `artists`, `venues`, `organizers`, `gigs`, `songs`, `setlists`, `song_arrangements`, `song_lyrics`, `song_logs`, `setlist_songs`, `gema_works`, `gema_rightholders`, `rate_limits`, `subscribers`, `users`, `schema_migrations`. Full schema (idempotent) in `scripts/schema.sql`. See `DATABASE.md` for entity diagram and column reference.
 
 Songs use a `deleted` flag (soft-delete; lyrics and arrangements stay, so a restore brings them back). `songs.language` is a column. `songs.extra` JSONB holds arbitrary per-song data (`isrc`, `listenUrl`, `sheetUrl`, `playbackUrl`, `capo`, …).
 
@@ -161,7 +165,7 @@ Both compare by identity (`=== true`) because `config` is JSONB and a string `"t
 
 A stage link carries no token and ids are sequential, so with `publicStage` on anyone can walk that band's songs and setlists by id — that is why it is off by default. Every anonymous song read (catalogue list, `/api/config`, one song, a stage setlist) goes through `publicSong()` (`api/_domain/songs.js`), which drops `comment`. The `share_token` sketched in `scripts/schema.sql` would replace this with per-link access.
 
-**Abuse limits** (`api/_ratelimit.js`): failed password sign-ins lock an address for 15 minutes after 10 from one IP, or 100 from all IPs together (`countLoginFailure`, read in `passwordLogin`'s first statement); the address-wide lock skips IPs the address signed in from in the last 30 days (`loginOkKey`), so a stranger cannot lock the owner out from their own network. mail to an address the caller chooses (invites, setlist shares) is capped per band and IP at the call site, and by `outboundMailLimited` per sender address and overall per day. Presigned uploads are capped per band per hour and for all bands together per day (`presignLimited`) — storage is only counted on confirm. AI lyrics suggestions are capped per band and overall per day (`api/_lyrics.js`).
+**Abuse limits** (`api/_ratelimit.js`): failed password sign-ins lock an address for 15 minutes after 10 from one IP, or 100 from all IPs together (`countLoginFailure`, read in `passwordLogin`'s first statement); the address-wide lock skips IPs the address signed in from in the last 30 days (`loginOkKey`), so a stranger cannot lock the owner out from their own network. Mail to an address the caller chooses (invites, setlist shares) is capped per band and IP at the call site, and by `outboundMailLimited` per sender address and overall per day. Presigned uploads are capped per band per hour and for all bands together per day (`presignLimited`) — storage is only counted on confirm. AI lyrics suggestions are capped per band and overall per day (`api/_lyrics.js`).
 
 **Free-form JSON** is capped by serialized size: song `extra` 32 KB per request, venue/organizer `social_links` and `extra` 16 KB (`F.object({ maxBytes })`), arrangement `rows` 128 KB. Anonymous `GET /api/config` carries only `plan.features` (the nav needs them), no limits or `usage`. A malformed `%` escape in an `/api` path answers 400.
 
@@ -188,7 +192,6 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 - **Super-admin:** `/admin` page + `/api/admin/overview` / `/api/admin/set-plan`, gated by `SUPER_ADMIN_EMAILS` (allowlist via global user token, email from DB). Manual grants also via `scripts/plans.js`.
 - **Support/donations (live now):** `SUPPORT_LINKS` constant in `footer.js` (provider-agnostic; empty-url entries skipped; plain text links, never the providers' hosted button images, which would send every visitor's IP to them; an optional `img` must be self-hosted; third-party `button.js` is **not** used, CSP blocks it). `renderSupportLinks(el)` renders them in the footer + the Settings donation panel shown after a self-serve upgrade. i18n: `settings.plan.donatePrompt`.
 - **One footer everywhere:** `app/js/footer.js` + `app/css/footer.css` (languages left, donations centred, right: smartist.studio · Contact · Privacy · Impressum; two compact rows under 480px). `/impressum` redirects to smartist.studio/impressum (one legal notice). `/privacy` is `app/privacy.html`: the privacy policy, one `<section lang>` per locale shown by CSS on `<html lang>`; update it whenever data collection, a processor or a retention period changes. Leaflet and markercluster are self-hosted under `app/vendor/` for the same reason as the donate links. Pages without a workspace slug (login, root contact) and signup/onboarding show a "smartist studio" wordmark linking to the marketing site. Every page loads `footer.js` before the shared scripts; `injectShell()` calls `renderAppFooter()`, standalone pages carry `<footer data-app-footer></footer>`. `footer.css` has variable fallbacks because `demo.html` does not load `app.css`.
-- **Docs:** `docs/architecture.md` (why things are built this way), `docs/deployment.md`, `docs/tenant-onboarding.md`, `docs/oauth-setup.md`, `docs/ci-cd.md`.
 
 ---
 
@@ -197,8 +200,7 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 - **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A workspace is private (see the two gates under Database) and answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/page_scripts.js` enforces this; `stage.js`/`arrangement.js` run without `session.js` and add the header themselves.
 - Venues list is **paged** (`limit`/`offset` + A–Z `letter`), not append-on-scroll; sorting is server-side so it covers all rows. Bulk edit (`venues_bulk_edit` in localStorage, desktop only) reloads the table on every sort, page, filter or letter change, so it asks before discarding unsaved rows (`_confirmDiscardBulk`). `PATCH` writes the whole batch in one `unnest` statement inside `sql.begin` and returns `{count, rejected:[{id,error}]}`; rejected rows are marked in the table.
 
-- `loadConfig()` in `session.js` — stale-while-revalidate via `sessionStorage` key `artist_config_cache`. First call blocks on network; subsequent calls in the same tab return immediately.
-- After any `PATCH /api/config` that changes `artists.config`, call `invalidateConfigCache()` so the next `loadConfig()` fetches fresh data.
+- `loadConfig()` / `invalidateConfigCache()`: see *Key shared-script exports* above (the cache lives in `sessionStorage` under `artist_config_cache_<slug>…`).
 - Auth token: `smartist_token` (`AUTH_TOKEN_KEY` in `session.js`) — in `sessionStorage`, or `localStorage` with "remember me"; `apiFetch()` sends it as `Authorization: Bearer <token>`. `clearToken()` removes both copies. Change-password returns a replacement token (the old one stops verifying) — store it where the old one was.
 - **Do not call `loadLogs()` inside `renderTable()`** — `renderTable()` is also called by `discardAll()`. Logs only need refreshing after a real data change.
 - Songs table: toolbar is `position:sticky`; `table-wrap` has JS-computed `maxHeight` for independent scroll. `thead th` uses `box-shadow` instead of `border-bottom` to avoid the sticky/border-collapse disappearing-border bug.
@@ -232,7 +234,7 @@ The app ships in **English (default), French, German**. `stage.html` and `api-do
 - **Shared modules loaded by `stage.html`** (`share-utils.js`, `arrangement.js`) must NOT call bare `t()` — stage has no `i18n.js`. They use a guarded helper (`_shareT`/`_arrT`) that returns an English fallback when `window.t` is absent.
 - **Detection/persistence:** `getLocale()` precedence is `localStorage['smartist_lang']` → `navigator.language` → `'en'`. The flag switcher (footer via the shell, plus `/profile`) calls `setLocale()`, which stores the choice and reloads.
 - **Performance:** only one locale dictionary is ever loaded; it's primed synchronously from localStorage on repeat visits. **Bump `I18N_VERSION` in `i18n.js` (and the `i18n.js?v=` query on pages) whenever locale strings change**, to bust the localStorage dict cache.
-- **Adding a string:** add the key to all three locale files, reference it via `data-i18n`/`t()`, run `node tests/unit.js`. FR/DE were machine-translated as a first pass — flag for native-speaker review before production.
+- **Adding a string:** add the key to all three locale files, reference it via `data-i18n`/`t()`, run `node tests/unit.js`. FR/DE started as a machine-translated first pass; corrections from native speakers are welcome.
 
 ---
 
@@ -267,4 +269,4 @@ node scripts/db_restore.js --dump <file> [--identity <key>] # into an EMPTY data
 
 **Backups** (`docs/backup-restore.md`): Neon point-in-time restore first; `.github/workflows/backup.yml` dumps every production database nightly (restored into a scratch Postgres and compared before it is kept, then age-encrypted to R2) and mirrors every upload bucket, keeping deleted objects 30 days. `scripts/_backup.js` holds the shared pieces; the libpq password travels in the environment, never argv.
 
-`ARTIST_SLUG` env var targets the artist; falls back to the first artist in the DB.
+`seed.js` targets the artist in `ARTIST_SLUG`, falling back to the first artist in the DB; `import_gema.js` takes `--artist` or `ARTIST_SLUG`; `demo_reset.js` takes `--artist` or `DEMO_ARTIST_SLUG` (default `demo`); the others take `--artist <slug>` where they need one.
