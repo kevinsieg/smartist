@@ -37,22 +37,13 @@ async function contact({ body, ip }) {
 }
 
 // Retention promised in /privacy: demo, landing and sign-up rows go after 24
-// months, and keys the demo form no longer collects are stripped from rows
-// written before it stopped. About one call in SWEEP_EVERY runs it, like the
-// rate_limits sweep; a failed sweep never fails the request.
+// months. About one call in SWEEP_EVERY runs it, like the rate_limits sweep; a
+// failed sweep never fails the request.
 const SWEEP_EVERY = 20;
-const DROPPED_META = '{ua,ref,geo_city,geo_region}';
 async function sweepSubscribers(sql) {
   if (Math.random() >= 1 / SWEEP_EVERY) return;
   try {
-    await sql`
-      WITH gone AS (
-        DELETE FROM subscribers WHERE created_at < now() - interval '24 months'
-      )
-      UPDATE subscribers SET meta = meta - ${DROPPED_META}::text[]
-      WHERE created_at >= now() - interval '24 months'
-        AND meta ?| ${DROPPED_META}::text[]
-    `;
+    await sql`DELETE FROM subscribers WHERE created_at < now() - interval '24 months'`;
   } catch (err) {
     await logger.warn('subscribers_sweep_failed', { error: err.message });
   }
@@ -89,7 +80,7 @@ async function subscribe({ body, headers, ip }) {
     await sql`
       INSERT INTO subscribers (email, source, meta)
       VALUES (${email}, 'demo', ${meta})
-      ON CONFLICT (email) DO UPDATE SET source = 'demo', meta = (subscribers.meta - ${DROPPED_META}::text[]) || ${meta}
+      ON CONFLICT (email) DO UPDATE SET source = 'demo', meta = subscribers.meta || ${meta}
     `;
     const demoSlug   = process.env.DEMO_ARTIST_SLUG || 'demo';
     const demoArtist = await getArtist(demoSlug);

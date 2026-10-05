@@ -1392,11 +1392,12 @@ async function testLyricsLifecycle(slug, token, songId) {
     assert(!song.extra?.language, 'language must not be stored in extra');
   });
 
-  await test('PATCH /songs accepts language inside extra from older clients', async () => {
+  await test('PATCH /songs with language inside extra → row rejected, nothing stored', async () => {
     const { res, json } = await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { language: 'DE' } }], { token });
     assertStatus(res, json, 200);
+    assert(json.count === 0 && json.rejected?.length === 1, JSON.stringify(json));
     const { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
-    assert(song.language === 'DE', `language — got: ${JSON.stringify(song.language)}`);
+    assert(song.language === 'FR', `language — got: ${JSON.stringify(song.language)}`);
     assert(!song.extra?.language, 'language must not be stored in extra');
   });
 
@@ -1566,9 +1567,15 @@ async function testWrite(slug, token, firstSong, config) {
       assert(json.id, 'missing id on restored song');
     });
 
+    await test('POST /songs with lyrics inside extra → 400 (a field of its own)', async () => {
+      const { res, json } = await POST(`/api/${slug}/songs`,
+        { title: '[TEST] Lyrics in extra', active: false, extra: { lyrics: 'x' } }, { token });
+      assertStatus(res, json, 400);
+    });
+
     await test('POST /songs with lyrics and language → stored as columns', async () => {
       const { res, json } = await POST(`/api/${slug}/songs`,
-        { title: '[TEST] With lyrics', active: false, language: 'en', extra: { lyrics: 'Line one\nLine two' } }, { token });
+        { title: '[TEST] With lyrics', active: false, language: 'en', lyrics: 'Line one\nLine two' }, { token });
       assertStatus(res, json, 201);
       assert(json.has_lyrics === true, 'has_lyrics should be true');
       assert(json.language === 'EN', `language — got ${JSON.stringify(json.language)}`);

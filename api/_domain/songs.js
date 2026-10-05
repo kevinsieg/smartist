@@ -12,9 +12,9 @@ const { SONG_LOG_KEEP } = require('../_constants');
 const LYRICS_MAX = 20000;
 const LANGUAGE_MAX = 10;
 
-// Keys that used to live in songs.extra and are real columns now. An older
-// client (or a cached page) may still send them inside extra.
-const MOVED_EXTRA_KEYS = ['lyrics', 'language'];
+// Keys that are columns of their own and never go into songs.extra (a list
+// carries extra; lyrics never travel in a list).
+const COLUMN_KEYS = ['lyrics', 'language'];
 
 // One GEMA work per song for the list columns — the lowest work number wins.
 function gemaJoin(sql) {
@@ -126,19 +126,6 @@ function cleanLanguage(value) {
   return s.toUpperCase();
 }
 
-// Splits the keys that are columns now out of an incoming extra object, so
-// they never land in songs.extra again. Returns { extra, lyrics, language },
-// where lyrics / language are undefined when extra did not carry them.
-function splitMovedKeys(extra) {
-  if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return { extra, lyrics: undefined, language: undefined };
-  const rest = { ...extra };
-  const moved = {};
-  for (const k of MOVED_EXTRA_KEYS) {
-    if (k in rest) { moved[k] = rest[k]; delete rest[k]; }
-  }
-  return { extra: rest, lyrics: moved.lyrics, language: moved.language };
-}
-
 // The statement that trims the history of some songs to their newest
 // SONG_LOG_KEEP entries (api/_constants.js), as a fragment: run on its own
 // (trimSongLogs in api/_db.js) or as a `trimmed AS (…)` step of the write that
@@ -214,5 +201,5 @@ function publicSong(row) {
 
 module.exports = {
   LYRICS_MAX, publicSong, listSongs, configSongs, songDetail, cleanLyrics, cleanLanguage,
-  splitMovedKeys, writeLyrics, lyricsSearchInfo, trimHistory,
+  COLUMN_KEYS, writeLyrics, lyricsSearchInfo, trimHistory,
 };

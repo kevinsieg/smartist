@@ -8,7 +8,7 @@ const { keyFromUrl } = require('../_r2');
 const { songLimit } = require('../_plans');
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
-  listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong, trimHistory,
+  listSongs, cleanLyrics, cleanLanguage, COLUMN_KEYS, publicSong, trimHistory,
 } = require('../_domain/songs');
 const { songImport, SONG_LIMIT_LOCK } = require('../_domain/song_import');
 const { MSG } = require('../_domain/http');
@@ -43,6 +43,8 @@ const EXTRA_MAX_BYTES = 32 * 1024;
 function extraError(extra, current = {}) {
   if (extra == null) return null;
   if (typeof extra !== 'object' || Array.isArray(extra)) return 'extra must be an object';
+  const column = COLUMN_KEYS.find(k => k in extra);
+  if (column) return `${column} is a field of its own, not part of extra`;
   if (jsonBytes({ ...(current || {}), ...extra }) > EXTRA_MAX_BYTES) return 'extra is too large';
   for (const [k, v] of Object.entries(extra)) {
     if (!/Url$/.test(k) || v == null || v === '') continue;
@@ -145,9 +147,7 @@ module.exports = wrap(async function handler(req, res) {
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
             comment: rawComment } = req.body ?? {};
-    // Lyrics and language are columns now; an older client still sends them in extra.
-    const moved = splitMovedKeys(req.body?.extra);
-    const extra = moved.extra;
+    const extra = req.body?.extra;
 
     const title = validateStr(rawTitle, 200);
     if (title === false) return res.status(400).json({ error: 'title too long' });
@@ -170,12 +170,12 @@ module.exports = wrap(async function handler(req, res) {
     if (reference_interpret === false) return res.status(400).json({ error: 'reference_interpret too long' });
     const comment = validateStr(rawComment, 2000);
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
-    const language = cleanLanguage(req.body?.language !== undefined ? req.body.language : moved.language);
+    const language = cleanLanguage(req.body?.language);
     if (language === false) return res.status(400).json({ error: 'language too long' });
     // The spelling of known tags comes later, under the lock; checked here.
     const typedTags = cleanTags(req.body?.tags, []);
     if (typedTags && 'error' in typedTags) return res.status(400).json({ error: typedTags.error });
-    const lyrics = cleanLyrics(req.body?.lyrics !== undefined ? req.body.lyrics : moved.lyrics);
+    const lyrics = cleanLyrics(req.body?.lyrics);
     if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
     if (extraErr) return res.status(400).json({ error: extraErr });
@@ -260,7 +260,6 @@ module.exports = wrap(async function handler(req, res) {
       const current = stored.get(songId);
       if (!current) { rejected.push({ id: songId, error: 'song not found' }); continue; }
 
-      const moved = splitMovedKeys(update.extra);
       const value = { id: songId };
       let error = null;
       for (const [field, maxLen] of Object.entries(TEXT_LIMITS)) {
@@ -284,7 +283,7 @@ module.exports = wrap(async function handler(req, res) {
         }
       }
       if (!error) {
-        const rawLang = 'language' in update ? update.language : moved.language;
+        const rawLang = 'language' in update ? update.language : undefined;
         if (rawLang === undefined) value.language = current.language ?? null;
         else {
           value.language = cleanLanguage(rawLang);
@@ -296,12 +295,12 @@ module.exports = wrap(async function handler(req, res) {
         if (tags && 'error' in tags) error = tags.error;
         else value.tags = tags ?? current.tags ?? [];
       }
-      if (!error) error = extraError(moved.extra, current.extra);
+      if (!error) error = extraError(update.extra, current.extra);
       if (error) { rejected.push({ id: songId, error }); continue; }
 
       value.active = toBool(update.active, current.active);
       value.heart  = toBool(update.heart,  current.heart);
-      value.extra  = moved.extra ?? {};
+      value.extra  = update.extra ?? {};
       accepted.set(songId, value);
     }
 

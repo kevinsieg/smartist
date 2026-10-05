@@ -166,13 +166,17 @@ async function run(r) {
     assertEq(calls.filter(c => c.text.includes('UPDATE songs')).length, 1, 'one UPDATE for all rows');
   });
 
-  await testAsync('language is a column; an older client may still send it in extra', async () => {
+  await testAsync('language is a column of its own: inside extra the row is rejected', async () => {
     const stored = { id: 5, artist_id: 1, title: 'Song', active: true, heart: false, language: null, extra: { gitCapo: 1 } };
     const { handler, calls } = loadHandler(routeFor(stored));
-    await patch(handler, [{ id: 5, extra: { language: 'fr', lyrics: 'stale copy', gitCapo: 3 } }]);
+    const res = await patch(handler, [{ id: 5, extra: { language: 'fr', gitCapo: 3 } }]);
+    assertEq(res.body?.count, 0);
+    assert(/language/.test(res.body?.rejected?.[0]?.error || ''), 'reason should name language');
+    assert(!calls.some(c => isBatch(c.text)), 'nothing written');
+    await patch(handler, [{ id: 5, language: 'fr', extra: { gitCapo: 3 } }]);
     const row = batchRows(calls)[0];
     assertEq(row.language, 'FR');
-    assertEq(row.extra, { gitCapo: 3 }, 'language and lyrics never land in extra');
+    assertEq(row.extra, { gitCapo: 3 });
   });
 
   await testAsync('an over-long language is reported', async () => {
