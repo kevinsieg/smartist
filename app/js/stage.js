@@ -165,7 +165,7 @@ async function init() {
   try {
     // Start network fetch immediately, but use cached config if available so
     // the slug is known synchronously and data fetches don't have to wait.
-    // Legacy single-tenant links use /stage without a slug — the empty slug
+    // A single-band deployment's link is /stage without a slug: the empty slug
     // lets /api/config fall back to the deployment's ARTIST_SLUG.
     const _stageSeg  = window.location.pathname.split('/').filter(Boolean)[0] || '';
     const _stageSlug = _stageSeg === 'stage' ? '' : _stageSeg;

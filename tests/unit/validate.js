@@ -80,20 +80,18 @@ function run(r) {
 
   console.log(B('\ndeleteMode'));
   test('the URL decides: ?hard=1&cascade=gigs,setlists', () => {
-    assertEq(deleteMode({ hard: '1', cascade: 'gigs,setlists' }, { hard: false }, ['gigs', 'setlists']),
+    assertEq(deleteMode({ hard: '1', cascade: 'gigs,setlists' }, ['gigs', 'setlists']),
       { hard: true, cascade: ['gigs', 'setlists'] });
   });
-  test('no query, no body → a soft delete', () => {
-    assertEq(deleteMode({}, undefined, ['gigs']), { hard: false, cascade: [] });
+  test('no query → a soft delete', () => {
+    assertEq(deleteMode({}, ['gigs']), { hard: false, cascade: [] });
+    assertEq(deleteMode(undefined, ['gigs']), { hard: false, cascade: [] });
   });
   test('an unknown cascade in the URL → false', () => {
-    assertEq(deleteMode({ hard: '1', cascade: 'gigs,users' }, null, ['gigs']), false);
+    assertEq(deleteMode({ hard: '1', cascade: 'gigs,users' }, ['gigs']), false);
   });
-  test('the old body form still works', () => {
-    assertEq(deleteMode({}, { hard: true, cascade: ['gigs'] }, ['gigs']), { hard: true, cascade: ['gigs'] });
-  });
-  test('a body hard that is not true is a soft delete', () => {
-    assertEq(deleteMode({}, { hard: 'yes' }, ['gigs']).hard, false);
+  test('a hard value other than 1 or true is a soft delete', () => {
+    assertEq(deleteMode({ hard: 'yes' }, ['gigs']).hard, false);
   });
 
   console.log(B('\nvalidateOptions'));

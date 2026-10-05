@@ -146,14 +146,12 @@ CRM-style venue database. Linked from gigs via `venue_id`.
 | `last_communication` | date | |
 | `booking_channel` | text | How to reach them: `Email`, `Agency`, … |
 | `number_of_cold_contacts` | integer DEFAULT 0 | |
-| `turnus` | text | Unused since 2026-10; dropped a release after the API stopped writing it |
 | `remuneration` | text | Pay notes |
 | `overnight` | boolean DEFAULT false | Accommodation available |
 | `season` | text | Active season |
 | `preferred_period` | text | |
 | `comment` | text | |
 | `deadline` | date | |
-| `main_genre` | text | Unused since 2026-10; dropped a release after the API stopped writing it |
 | `size` | integer | Capacity |
 | `language` | text | |
 | `lat`, `lng` | double precision | Map position, from the address search |
@@ -541,7 +539,7 @@ R2 file assets (audio, sheet PDFs, playback) are referenced by URL in `songs.ext
 
 ### Delete all data for one artist
 
-All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order. (`setlist_songs.song_id` cascades in every database on the current schema, so deleting the setlists first is no longer required; `scripts/delete_artist.js` still does it, and it is harmless.)
+All artist-scoped tables cascade from `artists.id`. A single `DELETE FROM artists` removes everything. Two FKs need care first: `gigs.venue_id` and `gigs.organizer_id` are `ON DELETE RESTRICT`, which can conflict with the venue/organizer cascade if the DB resolves cascades in the wrong order.
 
 **Safe deletion sequence — always use this pattern** (`scripts/delete_artist.js` runs the same steps):
 
@@ -551,20 +549,6 @@ BEGIN;
 -- Nullify the RESTRICT FKs on gigs first so venues/organizers can cascade freely.
 UPDATE gigs
 SET venue_id = NULL, organizer_id = NULL
-WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
-
--- Other artists' rows must not reference this one's (the API refuses that now,
--- but older rows may exist): drop or null those references too.
-DELETE FROM setlist_songs
-WHERE song_id IN (SELECT id FROM songs WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug'));
-UPDATE gigs SET venue_id = NULL
-WHERE venue_id IN (SELECT id FROM venues WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug'));
-UPDATE gigs SET organizer_id = NULL
-WHERE organizer_id IN (SELECT id FROM organizers WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug'));
-
--- Not required on the current schema (setlist_songs.song_id cascades); kept to
--- match scripts/delete_artist.js. Older databases had no cascade there.
-DELETE FROM setlists
 WHERE artist_id = (SELECT id FROM artists WHERE slug = 'yourslug');
 
 -- Single delete cascades to all artist-scoped tables automatically:

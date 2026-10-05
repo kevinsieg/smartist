@@ -2606,12 +2606,13 @@ async function testRound4Api(sql, slug, token) {
       const [row] = await sql`SELECT 1 FROM gigs WHERE id = ${gig.id}`;
       assert(row, 'the gig is gone');
     });
-    // The body form, read until the next release for pages loaded before it.
-    await test('a hard delete with a cascade that is not a list → 400, gig kept', async () => {
-      const { res, json } = await DELETE(`/api/${slug}/gigs/${gig.id}`, { body: { hard: true, cascade: 5 }, token });
-      assertStatus(res, json, 400);
-      const [row] = await sql`SELECT 1 FROM gigs WHERE id = ${gig.id}`;
-      assert(row, 'the gig is gone');
+    await test('the old body form is ignored: { hard: true } in the body is a soft delete', async () => {
+      const [g] = await sql`INSERT INTO gigs (artist_id, date, title) SELECT id, CURRENT_DATE, '[TEST] body-form' FROM artists WHERE slug = ${slug} RETURNING id`;
+      const { res, json } = await DELETE(`/api/${slug}/gigs/${g.id}`, { body: { hard: true }, token });
+      assertStatus(res, json, 200);
+      const [row] = await sql`SELECT deleted FROM gigs WHERE id = ${g.id}`;
+      assert(row && row.deleted === true, 'expected the gig kept and marked deleted');
+      await sql`DELETE FROM gigs WHERE id = ${g.id}`;
     });
     await test('an id past the integer column → 400, not 500', async () => {
       for (const path of [`gigs/99999999999`, `venues/99999999999`, `setlists/99999999999`]) {

@@ -309,10 +309,10 @@ async function run(r) {
     assert(!/has_gigs|EXISTS/.test(list.text), 'the has_gigs filter is gone');
   });
 
-  await testAsync('DELETE with a cascade that is not a list of known values → 400, nothing deleted', async () => {
-    for (const cascade of [5, 'gigs', ['venues']]) {
+  await testAsync('DELETE with an unknown cascade → 400, nothing deleted', async () => {
+    for (const cascade of ['5', 'venues', 'gigs,users']) {
       const { handler, calls } = loadHandler('api/_band/venues/item.js', () => [{ ...STORED }]);
-      const res = await call(handler, 'DELETE', '/api/test/venues/5', { hard: true, cascade });
+      const res = await call(handler, 'DELETE', `/api/test/venues/5?hard=1&cascade=${cascade}`);
       assertEq(res.statusCode, 400, `cascade ${JSON.stringify(cascade)}`);
       assert(!calls.some(c => c.text.startsWith('DELETE')), 'nothing may be deleted');
     }
