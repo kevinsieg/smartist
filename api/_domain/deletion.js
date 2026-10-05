@@ -194,11 +194,15 @@ async function executeDeletion(email, sql, { deleteFromR2, logger }) {
     // bare email address outlives the account it belonged to. Every other key
     // is keyed on an IP, an artist id or a song. lower(key) because the key
     // was built from whatever casing the request carried. Failed sign-ins are
-    // also counted per address and IP, as `login-fail:<address>|<ip>`, and the
-    // IPs it signed in from are kept as `login-ok:<address>|<ip>`.
+    // also counted per address and IP, as `login-fail:<address> <ip>`, and the
+    // IPs it signed in from are kept as `login-ok:<address> <ip>` (before
+    // 2026-10, `|` joined them; those rows last LOGIN_OK_DAYS).
     await tx`DELETE FROM rate_limits WHERE lower(key) IN (
       'delete-req:' || ${addr}, 'signup-link:' || ${addr},
-      'reset:' || ${addr}, 'login-fail:' || ${addr})
+      'reset:' || ${addr}, 'login-fail:' || ${addr}, 'workspace-create:' || ${addr},
+      'mail-out:' || ${addr}, 'presign-person:' || ${addr}, 'lyrics-ai-person:' || ${addr})
+      OR starts_with(lower(key), 'login-fail:' || ${addr} || ' ')
+      OR starts_with(lower(key), 'login-ok:' || ${addr} || ' ')
       OR starts_with(lower(key), 'login-fail:' || ${addr} || '|')
       OR starts_with(lower(key), 'login-ok:' || ${addr} || '|')`;
   });

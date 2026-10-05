@@ -330,7 +330,8 @@ async function changePassword({ user, body, ip }) {
           delete_token_hash = NULL, delete_token_expires = NULL
       WHERE email = ${row.email} RETURNING 1
     ), forget AS (
-      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(row.email)})
+      DELETE FROM rate_limits
+      WHERE key >= ${loginOkPrefix(row.email)} AND key < ${loginOkPrefix(row.email)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(row.email)})
     )
     SELECT count(*) FROM u`;
   // The new hash invalidates every session issued before it, this one
@@ -361,35 +362,33 @@ async function requestEmailChange({ user, body, ip, origin, slug }) {
   // An address that already has an account belongs to someone: moving these
   // rows onto it would merge the two accounts, so this password would open
   // that person's bands (passwordLogin tries every hash of an address).
-  // The answer is the same either way, or this would tell anyone with an
-  // account which addresses have one: the inbox learns why nothing happened.
-  if (await addressTaken(sql, lower)) {
-    try {
-      await sendEmail({
-        to: lower,
-        subject: 'Your smartist address',
-        html: `<p>Someone asked to move another smartist login to this address. It already has an
-               account, so nothing was changed.</p>
-               <p>If that was you, sign in with this address instead.</p>`,
-      });
-    } catch (err) {
-      await logger.error('email_change_request_failed', { band: slug, error: err.message });
-    }
-    return ok({ ok: true });
-  }
-
+  // confirmEmailChange refuses it. Until then a taken address is treated
+  // exactly like a free one — the request is stored, so the export shows the
+  // same pending_email, and the reply and the mail count are the same — or
+  // this would tell anyone with an account which addresses have one. Only the
+  // inbox learns why nothing will happen.
+  // The mail goes to an address of the caller's choosing: it counts against
+  // their daily mail cap, like an invite.
+  if (await outboundMailLimited(row.email)) return fail(429, 'Too many attempts — try again later');
   const token   = linkToken();
   const expires = new Date(Date.now() + EMAIL_CHANGE_TTL_MS).toISOString();
-  await sql`
+  const [{ taken }] = await sql`
     UPDATE users
     SET pending_email = ${lower}, email_change_token_hash = ${token.hash}, email_change_expires_at = ${expires}
     WHERE id = ${row.id}
+    RETURNING EXISTS (SELECT 1 FROM users WHERE email = ${lower}) AS taken
   `;
 
   // Fragment, not query — tokens must not land in server/CDN logs.
   const link = `${origin}/confirm-email#token=${encodeURIComponent(token.raw)}&slug=${encodeURIComponent(slug)}`;
   try {
-    await sendEmail({
+    await sendEmail(taken ? {
+      to: lower,
+      subject: 'Your smartist address',
+      html: `<p>Someone asked to move another smartist login to this address. It already has an
+             account, so nothing will be changed.</p>
+             <p>If that was you, sign in with this address instead.</p>`,
+    } : {
       to: lower,
       subject: 'Confirm your new email address',
       html: `<p>Confirm this address to finish changing your smartist login email:</p>

@@ -43,7 +43,7 @@ function makeDb(rows) {
   const sql = (strings, ...values) => {
     const text = strings.join('?').replace(/\s+/g, ' ').trim();
     // sessionRowId (api/_auth.js): the claim's row, or another of its address.
-    if (/^\( SELECT id FROM users WHERE id = \? OR email = \?/.test(text)) {
+    if (/^\( SELECT id FROM users WHERE id = \? OR \(email = \? AND created_at <= \?\)/.test(text)) {
       const [id, email] = values;
       const row = users.find(u => u.id === id) || users.find(u => email && u.email === email);
       return { sessionRowId: row ? row.id : null };

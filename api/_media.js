@@ -41,8 +41,9 @@ const out = (status, body) => ({ status, body });
  * @param {number} songId
  * @param {*} config
  * @param {{ filename?: string, contentType?: string, size?: number }} [file]
+ * @param {string|null} [who] the session's address, for the cap per person
  */
-async function presignMedia(sql, band, songId, config, { filename, contentType, size } = {}) {
+async function presignMedia(sql, band, songId, config, { filename, contentType, size } = {}, who = null) {
   const { keyPrefix, maxBytes, allowedExts, types } = config;
   if (!filename || typeof filename !== 'string') return out(400, { error: 'filename required' });
 
@@ -63,7 +64,7 @@ async function presignMedia(sql, band, songId, config, { filename, contentType, 
   if (!song) return out(404, { error: 'Song not found' });
   // Counted only for a request that would get a URL, so a rejected one costs
   // the band nothing.
-  if (await presignLimited(band.id)) return out(429, { error: 'Too many uploads — try again later' });
+  if (await presignLimited(band.id, who)) return out(429, { error: 'Too many uploads — try again later' });
 
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
   // The band id in the key is what confirmMedia checks.
@@ -192,7 +193,7 @@ function makeMediaFn(config) {
     const sql = getDb();
 
     let result;
-    if (req.method === 'POST')        result = await presignMedia(sql, band, songId, config, req.body ?? {});
+    if (req.method === 'POST')        result = await presignMedia(sql, band, songId, config, req.body ?? {}, req.user?.email ?? null);
     else if (req.method === 'PUT')    result = await confirmMedia(sql, band, songId, config, req.body?.publicUrl);
     else if (req.method === 'DELETE') result = await deleteMedia(sql, band, songId, config);
     else                              result = out(405, { error: 'Method not allowed' });

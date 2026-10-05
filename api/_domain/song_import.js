@@ -345,9 +345,21 @@ async function importContext(sql, artistId) {
   };
 }
 
+// pg_advisory_xact_lock namespace for "count, then add songs" per band. Every
+// write that adds live songs (create, import, restore) takes it first in its
+// transaction and counts in a later statement: under READ COMMITTED that
+// statement's snapshot sees every song a previous holder committed. A count
+// read before, or in the same statement as the lock, does not, and parallel
+// requests all passed it.
+const SONG_LIMIT_LOCK = 1;
+const lockSongLimit = (tx, artistId) =>
+  tx`SELECT pg_advisory_xact_lock(${SONG_LIMIT_LOCK}::int, ${artistId}::int)`;
+
 // Songs, lyrics and one audit entry each, in one statement. Ids are drawn up
-// front so the lyrics rows can refer to their song.
-async function insertSongs(sql, artistId, records) {
+// front so the lyrics rows can refer to their song. With maxSongs, nothing is
+// inserted unless all of them fit; call it under lockSongLimit.
+// → { imported, live } (live: the band's songs before this insert)
+async function insertSongs(sql, artistId, records, maxSongs = null) {
   const rows = records.map(r => ({
     title: r.title,
     active: r.active ?? true,
@@ -367,7 +379,9 @@ async function insertSongs(sql, artistId, records) {
     lyrics: r.lyrics || null,
   }));
   const [res] = await sql`
-    WITH v AS (
+    WITH live AS (
+      SELECT 1 FROM songs WHERE artist_id = ${artistId} AND NOT deleted
+    ), v AS (
       SELECT nextval(pg_get_serial_sequence('songs', 'id')) AS id, r.*
       FROM jsonb_to_recordset(${sql.json(rows)}) AS r(
         title text, active boolean, heart boolean, key text, genre text, energy numeric,
@@ -381,6 +395,8 @@ async function insertSongs(sql, artistId, records) {
              bpm, length_min, interpret, reference_interpret, comment, language,
              COALESCE(extra, '{}'::jsonb), COALESCE(tags, '{}')
       FROM v
+      WHERE ${maxSongs}::int IS NULL
+         OR (SELECT count(*) FROM live) + ${rows.length}::int <= ${maxSongs}::int
       RETURNING *
     ), saved_lyrics AS (
       INSERT INTO song_lyrics (song_id, artist_id, lyrics)
@@ -389,8 +405,8 @@ async function insertSongs(sql, artistId, records) {
       INSERT INTO song_logs (artist_id, song_id, action, song_data)
       SELECT artist_id, id, 'create', to_jsonb(s) FROM s
     )
-    SELECT count(*)::int AS count FROM s`;
-  return res?.count ?? 0;
+    SELECT (SELECT count(*)::int FROM s) AS count, (SELECT count(*)::int FROM live) AS live`;
+  return { imported: res?.count ?? 0, live: res?.live ?? 0 };
 }
 
 // The whole request body: { csv } (a new file) or
@@ -431,11 +447,19 @@ async function songImport(sql, artistId, input, { maxSongs = null } = {}) {
   if (!records.length) return { status: 400, body: { error: 'no_rows' } };
   if (room != null && records.length > room)
     return { status: 402, body: { error: 'song_limit', limit: maxSongs, room } };
-  const imported = await insertSongs(sql, artistId, records);
-  return { status: 201, body: { ok: true, imported } };
+  // The count above is an early answer only: parallel imports all read the
+  // same count. The insert re-counts under the band's lock.
+  const done = maxSongs == null ? await insertSongs(sql, artistId, records)
+    : await sql.begin(async tx => {
+      await lockSongLimit(tx, artistId);
+      return insertSongs(tx, artistId, records, maxSongs);
+    });
+  if (!done.imported)
+    return { status: 402, body: { error: 'song_limit', limit: maxSongs, room: Math.max(0, (maxSongs ?? 0) - done.live) } };
+  return { status: 201, body: { ok: true, imported: done.imported } };
 }
 
 module.exports = {
   COLUMNS, cleanCell, MAX_ROWS, MAX_CSV, parseCsvText, parseSongCsv, checkRows,
-  normKey, normLength, songImport,
+  normKey, normLength, songImport, SONG_LIMIT_LOCK, lockSongLimit,
 };

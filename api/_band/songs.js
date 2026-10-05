@@ -10,24 +10,24 @@ const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const {
   listSongs, cleanLyrics, cleanLanguage, splitMovedKeys, publicSong,
 } = require('../_domain/songs');
-const { songImport } = require('../_domain/song_import');
+const { songImport, SONG_LIMIT_LOCK } = require('../_domain/song_import');
 
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
-// What a new song is checked against: the band's live song count (plan
-// limit), genres (spelling) and tags (casing), in one statement.
-// pg_advisory_xact_lock namespace for "count, then add songs" per band.
-const SONG_LIMIT_LOCK = 1;
-
-async function songValues(sql, artistId) {
-  const [row] = await sql`
+// What a new song is checked against: the band's genres (spelling) and tags
+// (casing), read in the statement that takes the band's song-limit lock
+// (SONG_LIMIT_LOCK, api/_domain/song_import.js). The limit itself is counted
+// by the insert, a statement later, so it sees every song a previous holder
+// of the lock committed.
+async function lockAndSongValues(tx, artistId) {
+  const [row] = await tx`
     SELECT
-      (SELECT count(*)::int FROM songs WHERE artist_id = ${artistId} AND NOT deleted) AS count,
+      pg_advisory_xact_lock(${SONG_LIMIT_LOCK}::int, ${artistId}::int) AS locked,
       ARRAY(SELECT DISTINCT genre FROM songs
             WHERE artist_id = ${artistId} AND NOT deleted AND genre IS NOT NULL AND genre <> '') AS genres,
       ARRAY(SELECT DISTINCT unnest(tags) FROM songs
             WHERE artist_id = ${artistId} AND NOT deleted) AS tags`;
-  return { count: row?.count ?? 0, genres: row?.genres ?? [], tags: row?.tags ?? [] };
+  return { genres: row?.genres ?? [], tags: row?.tags ?? [] };
 }
 
 // `extra` is free-form, but its *Url keys end up in href/src attributes on the
@@ -140,9 +140,6 @@ module.exports = wrap(async function handler(req, res) {
     const band = await requireAuth(req, res, slug, 'member');
     if (!band) return;
     const _max = songLimit(band);
-    const { count, genres: knownGenres, tags: knownTags } = await songValues(sql, band.id);
-    if (_max != null && count >= _max)
-      return res.status(402).json({ error: 'song_limit', limit: _max });
     const { title: rawTitle, active, heart, key: rawKey, genre: rawCat, energy: rawEnergy,
             time_signature: rawTimeSig, bpm: rawBpm, length_min: rawLen,
             interpret: rawInterp, reference_interpret: rawRef,
@@ -158,7 +155,6 @@ module.exports = wrap(async function handler(req, res) {
     if (key === false) return res.status(400).json({ error: 'key too long' });
     const typedGenre = validateStr(rawCat, 100);
     if (typedGenre === false) return res.status(400).json({ error: 'genre too long' });
-    const genre = matchGenre(typedGenre, knownGenres);
     const energy = energyToScale(rawEnergy);
     if (energy === undefined) return res.status(400).json({ error: ENERGY_ERROR });
     const time_signature = validateStr(rawTimeSig, 20);
@@ -175,23 +171,28 @@ module.exports = wrap(async function handler(req, res) {
     if (comment === false) return res.status(400).json({ error: 'comment too long' });
     const language = cleanLanguage(req.body?.language !== undefined ? req.body.language : moved.language);
     if (language === false) return res.status(400).json({ error: 'language too long' });
-    const tags = cleanTags(req.body?.tags, knownTags);
-    if (tags && 'error' in tags) return res.status(400).json({ error: tags.error });
+    // The spelling of known tags comes later, under the lock; checked here.
+    const typedTags = cleanTags(req.body?.tags, []);
+    if (typedTags && 'error' in typedTags) return res.status(400).json({ error: typedTags.error });
     const lyrics = cleanLyrics(req.body?.lyrics !== undefined ? req.body.lyrics : moved.lyrics);
     if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
     if (extraErr) return res.status(400).json({ error: extraErr });
 
-    // Song, lyrics and audit entry in one statement.
-    const insertSong = q => q`
+    // BEGIN, the lock with the band's genres and tags, the insert, COMMIT:
+    // with auth, five statements. Song, lyrics and audit entry are one
+    // statement, which adds nothing once the band is at its limit.
+    const insertSong = (q, genre, tags) => q`
       WITH s AS (
         INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                            bpm, length_min, interpret, reference_interpret, comment, language, extra, tags)
-        VALUES (${band.id}, ${title}, ${toBool(active, true)}, ${toBool(heart, false)}, ${key},
-                ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
-                ${interpret}, ${reference_interpret},
-                ${comment}, ${language}, ${extra ?? {}},
-                ARRAY(SELECT jsonb_array_elements_text(${sql.json(tags ?? [])})))
+        SELECT ${band.id}, ${title}, ${toBool(active, true)}, ${toBool(heart, false)}, ${key},
+               ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
+               ${interpret}, ${reference_interpret},
+               ${comment}, ${language}, ${extra ?? {}},
+               ARRAY(SELECT jsonb_array_elements_text(${sql.json(tags ?? [])}))
+        WHERE ${_max}::int IS NULL
+           OR (SELECT count(*) FROM songs WHERE artist_id = ${band.id} AND NOT deleted) < ${_max}::int
         RETURNING *
       ), saved_lyrics AS (
         INSERT INTO song_lyrics (song_id, artist_id, lyrics)
@@ -202,12 +203,10 @@ module.exports = wrap(async function handler(req, res) {
       )
       SELECT s.*, (${lyrics.value}::text IS NOT NULL) AS has_lyrics FROM s
     `;
-    // With a plan limit, the count and the insert run under the band's lock:
-    // the count read above was taken before any parallel create committed.
-    const song = _max == null ? (await insertSong(sql))[0] : await sql.begin(async tx => {
-      await tx`SELECT pg_advisory_xact_lock(${SONG_LIMIT_LOCK}::int, ${band.id}::int)`;
-      const [{ n }] = await tx`SELECT count(*)::int AS n FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
-      return n >= _max ? null : (await insertSong(tx))[0];
+    const song = await sql.begin(async tx => {
+      const known = await lockAndSongValues(tx, band.id);
+      const tags = typedTags && cleanTags(typedTags, known.tags);
+      return (await insertSong(tx, matchGenre(typedGenre, known.genres), tags))[0] ?? null;
     });
     if (!song) return res.status(402).json({ error: 'song_limit', limit: _max });
     return res.status(201).json(song);

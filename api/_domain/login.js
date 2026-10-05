@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
 const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, loginOkKey, loginOkPrefix, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
 const { ok, fail } = require('./http');
+const { validateEmail } = require('../_validate');
 const { generateUserToken, verifyMagicToken, verifyUserToken, sessionValid, TTL_8H, TTL_30D } = require('../_token');
 const { getArtistsForUser } = require('./artist');
 const logger = require('../_logger');
@@ -50,6 +51,10 @@ async function passwordLogin({ body, ip }) {
   const clean = String(email ?? '').trim().toLowerCase();
   if (!clean || !password) return fail(400, 'Email and password required');
   if (String(password).length > 1000) return fail(400, 'Invalid');
+  // No account has such an address, and nothing is counted for it: the lock
+  // keys join address and IP with a space (api/_ratelimit.js), so an
+  // "address" carrying one could name another person's key.
+  if (!validateEmail(clean) || clean.length > 320) return fail(401, 'Invalid email or password');
 
   const sql = getDb();
   const [gate] = await sql`
@@ -173,7 +178,8 @@ async function logoutEverywhere({ headers }) {
           delete_token_hash = NULL, delete_token_expires = NULL
       WHERE email = ${me.email} RETURNING 1
     ), forget AS (
-      DELETE FROM rate_limits WHERE starts_with(key, ${loginOkPrefix(me.email)})
+      DELETE FROM rate_limits
+      WHERE key >= ${loginOkPrefix(me.email)} AND key < ${loginOkPrefix(me.email)} || chr(1114111) AND starts_with(key, ${loginOkPrefix(me.email)})
     )
     SELECT count(*)::int AS count FROM u`;
   await logger.info('logout_everywhere', { userId: claim.userId, rows: count });

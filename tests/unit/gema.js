@@ -84,13 +84,35 @@ function run(r) {
     assertEq(gemaImport.parseGermanDate('05.11.2026'), '2026-11-05');
     assertEq(gemaImport.parseGermanDate('2026-11-05'), null);
   });
+  return runSaveErrors(r);
+}
+
+// A row the database refuses says so in the preview without the database's
+// own message: that names constraints, columns and values.
+async function runSaveErrors(r) {
+  const { testAsync, assert, assertEq } = r;
+  await testAsync('a row that fails to save gets a generic error, not the database message', async () => {
+    const dbMessage = 'duplicate key value violates unique constraint "gema_works_artist_id_gema_work_number_key"';
+    const sql = (strings) => {
+      const text = strings.join('?');
+      if (/INSERT INTO gema_works/.test(text)) return Promise.reject(new Error(dbMessage));
+      return Promise.resolve([]);
+    };
+    sql.json = v => v;
+    const csv = 'Werknummer,Titel,Sprache,Dauer,Erstmals geladen\n15299392-001,Song,DEUTSCH,03:42,05.11.2026';
+    const res = await gemaImport.importWorks(sql, { id: 1, config: {} }, 'own', csv, { dryRun: false });
+    assertEq(res.status, 200);
+    const failed = res.body.rows.filter(x => x.error);
+    assert(failed.length === 1, `rows with an error: ${failed.length}`);
+    assert(!failed[0].error.includes('constraint'), `leaked: ${failed[0].error}`);
+    assertEq(res.body.summary.errors, 1);
+  });
 }
 
 if (require.main === module) {
   const { makeRunner } = require('./_runner');
   const r = makeRunner();
-  run(r);
-  process.exit(r.summary() > 0 ? 1 : 0);
+  run(r).then(() => process.exit(r.summary() > 0 ? 1 : 0));
 }
 
 module.exports = run;

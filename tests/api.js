@@ -2433,6 +2433,128 @@ async function testRound3(sql, slug, token, firstSong) {
   }
 }
 
+// Round-4 security fixes on real rows: the login lock keys, the email-change
+// oracle, the presign cap per person, the song-limit race through import and
+// restore, sessions after a deletion and setlist notes in the public catalogue.
+async function testRound4Security(sql, slug, token, firstSong) {
+  console.log(B('\nLock keys, email change, upload caps, song-limit races, old sessions'));
+  const rl = require('../api/_ratelimit');
+  const user = await throwawayUser(sql, slug, 'member', 'r4sec');
+  const ip = testIp();
+  const newSlug = `test-r4sec-${Date.now().toString(36)}`;
+  try {
+    await test('an "address" naming another person\'s IP lock key → 401, nothing counted for that key', async () => {
+      for (let i = 0; i < 3; i++) {
+        const { res, json } = await POST('/api/login', { email: `${user.email} ${ip['X-Real-IP']}`, password: 'wrong' }, { headers: testIp() });
+        assertStatus(res, json, 401);
+      }
+      const rows = await sql`SELECT key FROM rate_limits WHERE key LIKE ${rl.loginFailKey(user.email) + '%'}`;
+      assert(rows.length === 0, `counted: ${rows.map(r => r.key).join(', ')}`);
+      const { res, json } = await POST('/api/login', { email: user.email, password: user.password }, { headers: ip });
+      assertStatus(res, json, 200);
+    });
+
+    const login = (await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() })).json;
+    await test('an email change to an address with an account is stored like any other, and counts as mail sent', async () => {
+      const [taken] = await sql`SELECT email FROM users WHERE id <> ${user.id} ORDER BY id LIMIT 1`;
+      const { res, json } = await POST(`/api/${slug}/members/request-email-change`,
+        { currentPassword: user.password, newEmail: taken.email }, { token: login.token, headers: testIp() });
+      assertStatus(res, json, 200);
+      const [row] = await sql`SELECT pending_email FROM users WHERE id = ${user.id}`;
+      assert(row.pending_email === taken.email.toLowerCase(), `pending_email ${row.pending_email}`);
+      const [mail] = await sql`SELECT count FROM rate_limits WHERE key = ${rl.personKey('mail-out', user.email)}`;
+      assert(mail?.count === 1, `mail-out count ${mail?.count}`);
+    });
+
+    if (!firstSong || !R2_BASE) skip('presign cap per person', 'no song of our own or no R2_PUBLIC_URL');
+    else await test('presigns past the daily cap per person → 429, in any band', async () => {
+      const body = { filename: '[test].mp3', contentType: 'audio/mpeg', size: 10 };
+      const ok = await POST(`/api/${slug}/songs/${firstSong.id}/audio`, body, { token: login.token });
+      assertStatus(ok.res, ok.json, 200);
+      await sql`UPDATE rate_limits SET count = ${rl.PRESIGN_PERSON_DAILY} WHERE key = ${rl.personKey('presign-person', user.email)}`;
+      const { res, json } = await POST(`/api/${slug}/songs/${firstSong.id}/audio`, body, { token: login.token });
+      assertStatus(res, json, 429);
+      const other = await POST(`/api/${slug}/songs/${firstSong.id}/audio`, body, { token });
+      assertStatus(other.res, other.json, 200);
+    });
+
+    // A second workspace is on the free plan: its song limit is small enough
+    // to race.
+    const ws = await POST('/api/signup', { name: '[TEST] r4 limits', slug: newSlug }, { token: login.token, headers: testIp() });
+    const [newBand] = await sql`SELECT * FROM artists WHERE slug = ${newSlug}`;
+    const limit = newBand ? require('../api/_plans').songLimit(newBand) : null;
+    await test('parallel CSV imports never pass the song limit', async () => {
+      assertStatus(ws.res, ws.json, 201);
+      assert(Number.isInteger(limit) && limit > 0, `song limit ${limit}`);
+      const per = Math.ceil(limit / 2) + 1;
+      const batch = n => Array.from({ length: per }, (_, i) => ({ line: i + 2, values: { title: `[TEST] r4 ${n}-${i}` } }));
+      const results = await Promise.all([0, 1, 2].map(n =>
+        POST(`/api/${newSlug}/songs/import`, { rows: batch(n), commit: true }, { token: ws.json.token })));
+      const statuses = results.map(r => r.res.status);
+      assert(statuses.filter(s => s === 201).length === 1 && statuses.filter(s => s === 402).length === 2,
+        `statuses ${statuses.join(', ')}`);
+      const [{ n }] = await sql`SELECT count(*)::int AS n FROM songs s JOIN artists a ON a.id = s.artist_id
+                                WHERE a.slug = ${newSlug} AND NOT s.deleted`;
+      assert(n <= limit, `${n} songs for a limit of ${limit}`);
+    });
+    await test('parallel restores never pass the song limit', async () => {
+      const [band] = await sql`SELECT id FROM artists WHERE slug = ${newSlug}`;
+      const [{ n }] = await sql`SELECT count(*)::int AS n FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      const extra = await sql`
+        INSERT INTO songs (artist_id, title)
+        SELECT ${band.id}, '[TEST] r4 fill ' || g FROM generate_series(1, ${limit - n}::int) g RETURNING id`;
+      // Three deleted songs, one free place.
+      const victims = extra.slice(0, 3).map(r => r.id);
+      for (const id of victims) {
+        const del = await DELETE(`/api/${newSlug}/songs/${id}`, { token: ws.json.token });
+        assert(del.res.ok, `delete ${id}: ${del.res.status}`);
+      }
+      await sql`INSERT INTO songs (artist_id, title) SELECT ${band.id}, '[TEST] r4 refill ' || g FROM generate_series(1, 2) g`;
+      const results = await Promise.all(victims.map(id =>
+        POST(`/api/${newSlug}/songs/${id}/restore`, undefined, { token: ws.json.token })));
+      const statuses = results.map(r => r.res.status).sort();
+      assert(statuses.join(',') === '201,402,402', `statuses ${statuses.join(', ')}`);
+      const [{ live }] = await sql`SELECT count(*)::int AS live FROM songs WHERE artist_id = ${band.id} AND NOT deleted`;
+      assert(live === limit, `${live} songs for a limit of ${limit}`);
+    });
+
+    await test('a session does not come back through a row created after it (deleted, then re-invited)', async () => {
+      const t = (await POST('/api/login', { email: user.email, password: user.password }, { headers: testIp() })).json.token;
+      const [row] = await sql`SELECT password_hash FROM users WHERE id = ${user.id}`;
+      await sql`DELETE FROM users WHERE lower(email) = lower(${user.email}) AND id <> ${user.id}`;
+      await sql`DELETE FROM users WHERE id = ${user.id}`;
+      await sql`
+        INSERT INTO users (artist_id, email, role, password_hash, created_at)
+        SELECT id, ${user.email}, 'member', ${row.password_hash}, now() + interval '1 second' FROM artists WHERE slug = ${slug}`;
+      const { res } = await GET(`/api/${slug}/songs`, { token: t });
+      assertStatus(res, null, 401);
+    });
+  } finally {
+    await sql`DELETE FROM artists WHERE slug = ${newSlug}`;
+    await sql`DELETE FROM users WHERE lower(email) = lower(${user.email})`;
+    await sql`DELETE FROM rate_limits WHERE key LIKE ${'%' + user.email.toLowerCase() + '%'}`;
+  }
+
+  const before = (await GET(CONFIG_URL, { token })).json?.config?.publicCatalogue === true;
+  let setlist;
+  try {
+    if (!firstSong) return skip('setlist notes in the public catalogue', 'no song of our own');
+    await PATCH(CONFIG_URL, { config: { publicCatalogue: true } }, { token });
+    setlist = (await POST(`/api/${slug}/setlists`, { title: '[TEST] r4 noted', comment: '[TEST] private note', song_ids: [firstSong.id] }, { token })).json;
+    await test('the public catalogue lists where a song was played, not the setlists\' notes', async () => {
+      const anon = await GET(`/api/${slug}/songs/${firstSong.id}/setlists`);
+      assertStatus(anon.res, anon.json, 200);
+      const mine = anon.json.find(s => s.id === setlist.id);
+      assert(mine && mine.comment == null, `visitor sees ${JSON.stringify(mine?.comment)}`);
+      const member = await GET(`/api/${slug}/songs/${firstSong.id}/setlists`, { token });
+      assert(member.json.find(s => s.id === setlist.id)?.comment === '[TEST] private note', 'members still see the note');
+    });
+  } finally {
+    if (setlist?.id) await DELETE(`/api/${slug}/setlists/${setlist.id}`, { token });
+    await PATCH(CONFIG_URL, { config: { publicCatalogue: before } }, { token });
+  }
+}
+
 async function testOnLocalDb(slug, token, config, firstSong) {
   const sql = await localDb();
   if (!sql) return skip('tests on the local database', 'needs the local stack and its local DATABASE_URL');
@@ -2444,6 +2566,7 @@ async function testOnLocalDb(slug, token, config, firstSong) {
     await testPublicStage(sql, slug, token, firstSong);
     await testGema(sql, slug, token, config);
     await testRound3(sql, slug, token, firstSong);
+    await testRound4Security(sql, slug, token, firstSong);
   } finally {
     await sql.end();
   }

@@ -11,17 +11,23 @@ function plainFromSynced(synced) {
 // Returns { status, body }. Required lazily so the pure helpers above stay
 // loadable without the database or logger.
 // The AI step is the only one that costs money. The public demo hands anyone a
-// member session, so it gets the free sources only, and every band together
-// shares a daily cap: the per-IP limit alone let many addresses spend without end.
-// A per-band cap under the global one keeps a single band (any free sign-up)
-// from spending the whole day's budget for everyone else.
-const AI_DAILY_MAX = 500;
+// member session, so it gets the free sources only. The stops are per band
+// (AI_BAND_DAILY_MAX) and per person across all their bands
+// (AI_PERSON_DAILY_MAX): a workspace costs one click, so a cap per band alone
+// let one account multiply it. Everyone together past AI_DAILY_ALARM raises an
+// alarm, not a refusal — as a hard stop, a few free accounts could switch AI
+// lyrics off for every band for the day. AI_DAILY_MAX is the hard cost
+// ceiling, far above normal use.
+const AI_DAILY_ALARM = 500;
+const AI_DAILY_MAX = 5000;
 const AI_BAND_DAILY_MAX = 50;
+const AI_PERSON_DAILY_MAX = 100;
 
-// opts.allowAI: false skips the AI step (the demo session).
-async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
+// opts.allowAI: false skips the AI step (the demo session). opts.who: the
+// session's address, for the cap per person.
+async function suggestLyrics(sql, band, songId, ip, { allowAI = true, who = null } = {}) {
   const { lyricsSearchInfo } = require('./_domain/songs');
-  const { checkRateLimit } = require('./_ratelimit');
+  const { checkRateLimit, countInWindows, alarmAt, personKey } = require('./_ratelimit');
   const { suggestLyricsWithAI } = require('./_ai');
   const logger = require('./_logger');
 
@@ -78,9 +84,18 @@ async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
     await logger.warn('lyrics_suggest_error', { ...ctx, source: 'lrclib', error: e.message });
   }
 
-  const aiAllowed = allowAI
-    && !(await checkRateLimit(`lyrics-ai-day:${band.id}`, AI_BAND_DAILY_MAX, 86400))
-    && !(await checkRateLimit('lyrics-ai-day', AI_DAILY_MAX, 86400));
+  let aiAllowed = false;
+  if (allowAI && who) {
+    const bandKey = `lyrics-ai-day:${band.id}`, personK = personKey('lyrics-ai-person', who);
+    const n = await countInWindows([
+      { key: bandKey, windowSecs: 86400 },
+      { key: personK, windowSecs: 86400 },
+      { key: 'lyrics-ai-day', windowSecs: 86400 },
+    ]);
+    await alarmAt(n.get('lyrics-ai-day'), 'lyrics-ai-day', AI_DAILY_ALARM);
+    aiAllowed = n.get(bandKey) <= AI_BAND_DAILY_MAX && n.get(personK) <= AI_PERSON_DAILY_MAX
+      && n.get('lyrics-ai-day') <= AI_DAILY_MAX;
+  }
   const { lyrics, skipped } = aiAllowed
     ? await suggestLyricsWithAI(title, artist, { language, genre })
     : { lyrics: null, skipped: true };
@@ -92,4 +107,7 @@ async function suggestLyrics(sql, band, songId, ip, { allowAI = true } = {}) {
   return { status: 200, body: { lyrics: null, sources: LYRICS_SOURCES, aiSkipped: skipped ?? false } };
 }
 
-module.exports = { LYRICS_SOURCES, plainFromSynced, suggestLyrics };
+module.exports = {
+  LYRICS_SOURCES, plainFromSynced, suggestLyrics,
+  AI_DAILY_ALARM, AI_DAILY_MAX, AI_BAND_DAILY_MAX, AI_PERSON_DAILY_MAX,
+};

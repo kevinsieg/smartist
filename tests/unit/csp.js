@@ -11,12 +11,28 @@ const { makeRunner } = require('./_runner');
 
 const ROOT = path.join(__dirname, '../..');
 
-// The policy for every path, and the one /api/docs replaces it with (the
-// later header rule wins): only the API reference page may load its bundle.
-function csp(source = '/(.*)') {
-  const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
-  for (const h of vercel.headers) for (const kv of h.headers)
-    if (kv.key === 'Content-Security-Policy' && h.source === source) {
+const VERCEL = () => JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+const DOCS = '/api/docs';
+
+// A header rule's source as Vercel matches it against the request path
+// (path-to-regexp: the whole path, a parenthesised group is a regex). Only
+// the forms vercel.json uses.
+function sourceMatches(source, p) {
+  return new RegExp('^' + source + '$').test(p);
+}
+
+// The CSP rules that apply to a path. Vercel does not promise that a later
+// rule replaces an earlier one's header: when two match, both headers may be
+// sent, and a browser enforces every policy it gets.
+function cspRulesFor(p) {
+  return VERCEL().headers.filter(h => h.headers.some(kv => kv.key === 'Content-Security-Policy') && sourceMatches(h.source, p));
+}
+
+// The policy for every path but the API reference page, and that page's own:
+// only it may load its bundle.
+function csp(which = 'app') {
+  for (const h of VERCEL().headers) for (const kv of h.headers)
+    if (kv.key === 'Content-Security-Policy' && (h.source === DOCS) === (which === DOCS)) {
       const out = {};
       for (const part of kv.value.split(';')) {
         const [name, ...sources] = part.trim().split(/\s+/);
@@ -50,11 +66,18 @@ function run(r) {
   const { test, assert, B } = r;
   console.log(B('\ncontent security policy'));
   const policy = csp();
-  const docs = csp('/api/docs');
+  const docs = csp(DOCS);
   const { scripts, styles, tags } = externalAssets();
   const docsAssets = externalAssets('docs');
 
   test('vercel.json sets a Content-Security-Policy', () => assert(policy, 'no CSP header'));
+  test('every path gets exactly one CSP rule, /api/docs its own', () => {
+    for (const p of ['/', '/login', '/api/docs', '/api/docs/', '/api/docs-x', '/api/docsx', '/api/config', '/band/songs', '/app/api-docs.html']) {
+      const rules = cspRulesFor(p);
+      assert(rules.length === 1, `${p}: ${rules.length} CSP rules (${rules.map(h => h.source).join(', ')})`);
+      assert((rules[0].source === DOCS) === (p === DOCS), `${p} gets the ${rules[0].source} policy`);
+    }
+  });
   test("script-src allows no inline script and no eval", () => {
     const bad = policy['script-src'].filter(s => /^'unsafe-/.test(s));
     assert(bad.length === 0, `script-src has ${bad.join(', ')}`);
@@ -94,8 +117,7 @@ function run(r) {
 
 if (require.main === module) {
   const r = makeRunner();
-  run(r);
-  process.exit(r.summary() > 0 ? 1 : 0);
+  Promise.resolve(run(r)).then(() => process.exit(r.summary() > 0 ? 1 : 0));
 }
 
 module.exports = run;

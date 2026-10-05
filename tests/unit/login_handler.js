@@ -46,8 +46,8 @@ function makeHandler(rows, { rateLimited = false, locked = false, ipKnown = true
   require.cache[rlPath] = {
     id: rlPath, filename: rlPath, loaded: true,
     exports: {
-      loginFailKey: email => `login-fail:${email}`, loginFailPairKey: (email, ip) => `login-fail:${email}|${ip}`,
-      loginOkKey: (email, ip) => `login-ok:${email}|${ip}`, loginOkPrefix: email => `login-ok:${email}|`, LOGIN_OK_DAYS: 30,
+      loginFailKey: email => `login-fail:${email}`, loginFailPairKey: (email, ip) => `login-fail:${email} ${ip}`,
+      loginOkKey: (email, ip) => `login-ok:${email} ${ip}`, loginOkPrefix: email => `login-ok:${email} `, LOGIN_OK_DAYS: 30,
       LOGIN_FAIL_MAX: 10, LOGIN_FAIL_ADDRESS_MAX: 100, LOGIN_FAIL_WINDOW: 900,
       countLoginFailure: async (email, ip) => { failures.push(email); failureIps.push(ip); },
       checkRateLimit: async () => rateLimited, clientIp: () => '127.0.0.1',
@@ -171,7 +171,19 @@ async function run(r) {
     await call(handler, { email: 'A@B.co', password: 'correct horse battery' });
     assert(queries[0].values.includes('auth:127.0.0.1'), 'the per-IP key');
     assert(queries[0].values.includes('login-fail:a@b.co'), 'the per-address lock key, normalised');
-    assert(queries[0].values.includes('login-fail:a@b.co|127.0.0.1'), 'the per-address-and-IP lock key');
+    assert(queries[0].values.includes('login-fail:a@b.co 127.0.0.1'), 'the per-address-and-IP lock key');
+  });
+
+  // An "address" carrying the separator named another person's pair key, so
+  // strangers could trip the lock meant for the owner's own network.
+  await testAsync('an address that is not one → 401, nothing read or counted', async () => {
+    for (const email of ['a@b.co 10.0.0.1', 'a@b.co\t10.0.0.1', 'not-an-address']) {
+      const { handler, queries, failures } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
+      const res = await call(handler, { email, password: 'correct horse battery' });
+      assertEq(res._status, 401, email);
+      assertEq(queries.length, 0, email);
+      assertEq(failures.length, 0, email);
+    }
   });
 
   await testAsync('a successful sign-in is one statement', async () => {
@@ -185,7 +197,7 @@ async function run(r) {
   await testAsync('the address-wide lock spares an IP the address signed in from', async () => {
     const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }]);
     await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
-    assert(queries[0].values.includes('login-ok:a@b.co|127.0.0.1'), 'the known-IP key is read in the gate');
+    assert(queries[0].values.includes('login-ok:a@b.co 127.0.0.1'), 'the known-IP key is read in the gate');
     assert(/NOT EXISTS \( SELECT 1 FROM rate_limits WHERE key =/.test(queries[0].text), 'the address lock is waived for a known IP');
   });
 
@@ -194,13 +206,13 @@ async function run(r) {
     const res = await call(handler, { email: 'a@b.co', password: 'correct horse battery' });
     assertEq(res._status, 200);
     assertEq(queries.length, 2);
-    assert(queries[1].values.includes('login-ok:a@b.co|127.0.0.1'), 'the IP is stored for the address');
+    assert(queries[1].values.includes('login-ok:a@b.co 127.0.0.1'), 'the IP is stored for the address');
   });
 
   await testAsync('a wrong password never marks the IP as known', async () => {
     const { handler, queries } = makeHandler([{ id: 1, role: 'admin', password_hash: HASH }], { ipKnown: false });
     await call(handler, { email: 'a@b.co', password: 'not it' });
-    assert(!queries.some(q => q.values.includes('login-ok:a@b.co|127.0.0.1') && /^INSERT/.test(q.text)));
+    assert(!queries.some(q => q.values.includes('login-ok:a@b.co 127.0.0.1') && /^INSERT/.test(q.text)));
   });
 
   await testAsync('a wrong password is counted against the address and IP', async () => {
