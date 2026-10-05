@@ -31,6 +31,7 @@ function makeHandler(rows, { rateLimited = false, locked = false, ipKnown = true
   });
 
   const queries = [];
+  const spent = new Set();
   const failures = [];
   const failureIps = [];
   const sql = (strings, ...values) => {
@@ -39,6 +40,12 @@ function makeHandler(rows, { rateLimited = false, locked = false, ipKnown = true
     // passwordLogin's one statement: IP count, lock, candidates and bands.
     if (/WITH ip_hit AS \( INSERT INTO rate_limits/.test(text))
       return Promise.resolve([{ ip_limited: rateLimited, locked, ip_known_today: ipKnown, candidates: rows, artists }]);
+    // magicLogin's claim of a sign-in link: taken once, then refused.
+    if (/INSERT INTO rate_limits \(key, window_start, count\) VALUES/.test(text)) {
+      if (spent.has(values[0])) return Promise.resolve([]);
+      spent.add(values[0]);
+      return Promise.resolve([{ ok: 1 }]);
+    }
     if (/FROM users/.test(text)) return Promise.resolve(rows);
     return Promise.resolve(artists);
   };
@@ -275,6 +282,21 @@ async function run(r) {
     const res = await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
     assertEq(res._status, 200);
     assertEq(res._body.role, 'admin');
+  });
+
+  await testAsync('a link signs in once; the second use is refused', async () => {
+    const { handler } = makeHandler([{ id: 7, role: 'member', password_hash: HASH }]);
+    const body = { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') };
+    assertEq((await magic(handler, body))._status, 200);
+    const again = await magic(handler, body);
+    assertEq(again._status, 401);
+    assert(!again._body.token, 'no session from a spent link');
+  });
+
+  await testAsync('a refused link claims nothing', async () => {
+    const { handler, queries } = makeHandler([{ id: 9, role: 'admin', password_hash: OTHER }]);
+    await magic(handler, { magic: generateMagicToken(HASH, 'login'), hint: hint('a@b.co') });
+    assertEq(queries.filter(q => /magic-used/.test(String(q.values[0]))).length, 0);
   });
 
   await testAsync('a reset link does not log anyone in', async () => {

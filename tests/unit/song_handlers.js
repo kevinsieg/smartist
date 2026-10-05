@@ -56,7 +56,7 @@ function loadHandler(route) {
   require.cache[r2Path] = {
     id: r2Path, filename: r2Path, loaded: true,
     exports: { createPresignedUrl: async () => ({}), deleteFromR2: async () => {},
-      verifyUpload: async () => ({}), keyFromUrl: () => 'k', filenameFromUrl: () => 'f' },
+      verifyUpload: async () => ({}), promoteUpload: async () => ({}), keyFromUrl: () => 'k', filenameFromUrl: () => 'f' },
   };
   return { handler: viaRouter(path.join(__dirname, '../..', 'api/_band/songs.js')), calls };
 }

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../_db');
 const { checkRateLimit, countLoginFailure, loginFailKey, loginFailPairKey, loginOkKey, loginOkPrefix, LOGIN_OK_DAYS, LOGIN_FAIL_MAX, LOGIN_FAIL_ADDRESS_MAX, LOGIN_FAIL_WINDOW } = require('../_ratelimit');
@@ -135,7 +136,9 @@ async function passwordLogin({ body, ip }) {
 // form to an address that already has an account). `hint` names the address;
 // the token was signed with one of its rows' password hashes, so it is checked
 // against each, as passwordLogin checks the password. A password-less account
-// gets no such link (api/_domain/signup.js).
+// gets no such link (api/_domain/signup.js). Each link signs in once.
+const spentKey = magic => `magic-used:${crypto.createHash('sha256').update(String(magic)).digest('hex')}`;
+
 async function magicLogin({ body, ip }) {
   const { magic, hint } = body ?? {};
   if (!magic || !hint) return fail(400, 'magic and hint required');
@@ -152,6 +155,14 @@ async function magicLogin({ body, ip }) {
   `;
   const user = rows.find(r => verifyMagicToken(String(magic), r.password_hash, 'login'));
   if (!user) return fail(401, 'Invalid or expired login link');
+  // One use per link: the first redemption claims the link's key, a second
+  // one finds it taken. The key outlives the link's 30 minutes and goes with
+  // the daily sweep of rate_limits. Mail scanners only fetch the page; the
+  // link is redeemed by this POST.
+  const [claimed] = await sql`
+    INSERT INTO rate_limits (key, window_start, count) VALUES (${spentKey(magic)}, now(), 1)
+    ON CONFLICT (key) DO NOTHING RETURNING 1 AS ok`;
+  if (!claimed) return fail(401, 'Invalid or expired login link');
 
   const token   = generateUserToken(user.id, user.role, TTL_8H, user.password_hash, addr);
   const artists = await getArtistsForUser(user.id, sql);

@@ -67,6 +67,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
     exports: {
       createPresignedUrl: async () => ({}), deleteFromR2: async () => true,
       verifyUpload: async () => ({ size: 1, contentType: 'audio/mpeg' }),
+      promoteUpload: async () => ({ size: 1, contentType: 'audio/mpeg' }),
       filenameFromUrl: u => u,
       keyFromUrl: u => (String(u).startsWith('https://media.example.test/') ? String(u).slice(27) : null),
     },

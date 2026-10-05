@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { getDb, insertAuditLog, getSlug } = require('./_db');
 const { requireAuth, refuseDemo } = require('./_auth');
-const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload } = require('./_r2');
+const { createPresignedUrl, deleteFromR2, filenameFromUrl, keyFromUrl, verifyUpload, promoteUpload } = require('./_r2');
 const { unsafeKey } = require('./_validate');
 const { isOwnMediaUrl } = require('./_ownership');
 const { storageLimitBytes } = require('./_plans');
@@ -69,7 +69,7 @@ async function presignMedia(sql, band, songId, config, { filename, contentType, 
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
   // The band id in the key is what confirmMedia checks.
   const key = `${keyPrefix}${band.id}/${crypto.randomUUID()}-${safeName}`;
-  return out(200, await createPresignedUrl(key, allowedExts ? String(contentType).toLowerCase() : 'application/pdf', Number(size)));
+  return out(200, await createPresignedUrl(key, allowedExts ? String(contentType).toLowerCase() : 'application/pdf', Number(size), { pending: true }));
 }
 
 // Confirm an upload: store its URL on the song, drop the file it replaces, and
@@ -84,9 +84,9 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
   if (!base || !publicUrl.startsWith(`${base}/${keyPrefix}${band.id}/`) || unsafeKey(keyFromUrl(publicUrl)))
     return out(400, { error: 'Invalid publicUrl' });
 
-  // Independent: the storage HEAD and the song lookup overlap.
+  // Independent: moving the upload out of pending/ and the song lookup overlap.
   const [head, [song]] = await Promise.all([
-    verifyUpload(keyFromUrl(publicUrl)),
+    promoteUpload(keyFromUrl(publicUrl)),
     sql`SELECT extra->>${extraKey} AS url FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND deleted = false`,
   ]);
   if (!head) return out(400, { error: 'Uploaded file not found in storage' });

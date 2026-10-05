@@ -69,7 +69,7 @@ function loadHandler(rel, route, user = { id: 1, role: 'member' }) {
     id: r2Path, filename: r2Path, loaded: true,
     exports: {
       createPresignedUrl: async () => ({}), deleteFromR2: async () => {},
-      verifyUpload: async () => ({}), keyFromUrl: () => 'k',
+      verifyUpload: async () => ({}), promoteUpload: async () => ({}), keyFromUrl: () => 'k',
     },
   };
   return { handler: viaRouter(path.join(__dirname, '../..', rel)), sql };

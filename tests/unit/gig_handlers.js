@@ -66,6 +66,8 @@ function loadHandler(route, r2 = {}, { user = { id: 1, role: 'member' } } = {}) 
       deleteFromR2: async () => {}, verifyUpload: async () => ({ size: 1, contentType: 'image/jpeg' }),
       keyFromUrl: () => 'k', filenameFromUrl: () => 'f',
       ...r2,
+      // Confirms move the upload out of pending/; here that is the same HEAD.
+      promoteUpload: r2?.promoteUpload || r2?.verifyUpload || (async () => ({ size: 1, contentType: 'image/jpeg' })),
     },
   };
   const rlPath = mp('api/_ratelimit');

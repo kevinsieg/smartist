@@ -83,6 +83,7 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
       filenameFromUrl: url => String(url).split('/').pop(),
       keyFromUrl: url => (String(url).startsWith(BASE) ? String(url).slice(BASE.length + 1) : null),
       verifyUpload: async key => (SIZES[key] == null ? null : { size: SIZES[key], contentType: 'audio/mpeg' }),
+      promoteUpload: async key => (SIZES[key] == null ? null : { size: SIZES[key], contentType: 'audio/mpeg' }),
     } };
   require.cache[dbPath]    = { id: dbPath, filename: dbPath, loaded: true,
     exports: {

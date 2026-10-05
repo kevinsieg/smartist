@@ -6,7 +6,7 @@ const { parseFields, unsafeKey, positiveId, validateOptions } = require('../_val
 const { GIG_FIELDS } = require('../_domain/records');
 const { removeGigFiles } = require('../_domain/gigs');
 const { MSG } = require('../_domain/http');
-const { createPresignedUrl, verifyUpload, keyFromUrl } = require('../_r2');
+const { createPresignedUrl, promoteUpload, keyFromUrl } = require('../_r2');
 const { ownsRefs } = require('../_ownership');
 const { presignLimited } = require('../_ratelimit');
 
@@ -142,8 +142,8 @@ async function posterUrl(req, res, { artist, gigId }) {
   const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
   const thumbKey  = `gigs/${artist.slug}/${gigId}-${uuid}-thumb.jpg`;
   const [poster, thumb] = await Promise.all([
-    createPresignedUrl(posterKey, 'image/jpeg', posterSize),
-    createPresignedUrl(thumbKey,  'image/jpeg', thumbSize),
+    createPresignedUrl(posterKey, 'image/jpeg', posterSize, { pending: true }),
+    createPresignedUrl(thumbKey,  'image/jpeg', thumbSize, { pending: true }),
   ]);
   return res.json({
     posterUploadUrl: poster.uploadUrl,
@@ -166,7 +166,7 @@ async function confirmPoster(req, res, { sql, artist, gigId, gig }) {
   const posterKey = ownKey(poster), thumbKey = ownKey(thumb);
   if (!posterKey) return res.status(400).json({ error: 'Invalid poster URL' });
   if (!thumbKey)  return res.status(400).json({ error: 'Invalid thumb URL' });
-  const [posterOk, thumbOk] = await Promise.all([verifyUpload(posterKey), verifyUpload(thumbKey)]);
+  const [posterOk, thumbOk] = await Promise.all([promoteUpload(posterKey), promoteUpload(thumbKey)]);
   if (!posterOk) return res.status(400).json({ error: 'Poster file not found in storage' });
   if (!thumbOk)  return res.status(400).json({ error: 'Thumbnail file not found in storage' });
   if (posterOk.contentType !== 'image/jpeg')

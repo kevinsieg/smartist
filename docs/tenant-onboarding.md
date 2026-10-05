@@ -85,6 +85,10 @@ After connecting, update `R2_PUBLIC_URL` in Vercel (Production environment) to `
 
 R2 ignores `"*"` in `AllowedHeaders`, so list the header names. List only the origins that use this bucket. Each bucket gets its own CORS policy — do not include domains from other artists' buckets.
 
+**Lifecycle rule (required):** song media and gig posters are uploaded under `pending/` and moved to their real key when the app confirms them. An upload that is never confirmed is counted nowhere, so the bucket has to remove it. Cloudflare → R2 → your bucket → Settings → **Object lifecycle rules** → Add rule: prefix `pending/`, delete objects 1 day after upload. Never add a rule for any other prefix: confirmed files live there.
+
+**`nosniff` header (custom domain only):** uploads carry a signed content type, and browsers should not guess another one. Cloudflare → your zone → Rules → **Transform Rules → Modify Response Header** → when the hostname equals the media subdomain, set `X-Content-Type-Options: nosniff`. A `pub-xxxx.r2.dev` URL cannot take response-header rules; another reason to use a custom domain.
+
 ### Resend (transactional email) — required
 
 `resend.com` → API Keys → Create key. Verify your sending domain first (DNS records).
