@@ -290,10 +290,10 @@ async function run(r) {
     assertEq(res.statusCode, 200);
   });
 
-  await testAsync('a hard delete with a cascade that is not a list → 400, nothing deleted', async () => {
-    for (const cascade of [5, 'setlists', ['gigs']]) {
+  await testAsync('a hard delete with an unknown cascade → 400, nothing deleted', async () => {
+    for (const cascade of ['5', 'gigs', 'setlists,venues']) {
       const { handler, calls } = loadHandler(text => (text.includes('FROM gigs') ? [GIG] : []));
-      const res = await call(handler, 'DELETE', '/api/test/gigs/7', { body: { hard: true, cascade } });
+      const res = await call(handler, 'DELETE', `/api/test/gigs/7?hard=1&cascade=${cascade}`);
       assertEq(res.statusCode, 400, `cascade ${JSON.stringify(cascade)}`);
       assert(!calls.some(c => /^DELETE/.test(c.text)), 'nothing may be deleted');
     }

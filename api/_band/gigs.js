@@ -201,7 +201,7 @@ async function deletePoster(req, res, { sql, artist, gigId, gig }) {
 
 // ── DELETE /gigs/:id — soft by default; ?hard=1&cascade=setlists ─────────────
 async function deleteGig(req, res, { sql, artist, gigId, gig }) {
-  const mode = deleteMode(req.query, req.body, ['setlists']);
+  const mode = deleteMode(req.query, ['setlists']);
   if (mode === false) return res.status(400).json({ error: 'cascade must be a list of: setlists' });
   const { hard, cascade } = mode;
   if (!hard) {

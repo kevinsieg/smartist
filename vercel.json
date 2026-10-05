@@ -23,6 +23,7 @@
     { "source": "/confirm-email",  "destination": "/app/confirm-email.html" },
     { "source": "/admin",           "destination": "/app/admin.html" },
     { "source": "/api/docs",        "destination": "/app/api-docs.html" },
+    { "source": "/api/contact",     "destination": "/api?__path=/api/contact" },
     { "source": "/contact",         "destination": "/app/contact.html" },
     { "source": "/privacy",         "destination": "/app/privacy.html" },
     { "source": "/demo",            "destination": "/app/demo.html" },

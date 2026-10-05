@@ -80,6 +80,23 @@ async function run(r) {
     assertEq(cb.destination, '/api?__path=/auth/callback');
   });
 
+  // Vercel applies the first matching rewrite: a page rule such as
+  // /:slug/contact would serve HTML for /api/contact.
+  test('no page rewrite catches an /api route before the function', () => {
+    const { rewrites } = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+    const { TABLE } = require(path.join(ROOT, 'api', 'index.js'));
+    const toRegex = src => new RegExp('^' + src.replace(/:\w+\*/g, '.*').replace(/:\w+/g, '[^/]+') + '$');
+    const sample = p => p.replace(/:\w+/g, 'x1');
+    const shadowed = [];
+    for (const [pattern] of TABLE) {
+      if (!pattern.startsWith('/api/')) continue;
+      const url = sample(pattern);
+      const first = rewrites.find(r => toRegex(r.source).test(url));
+      if (first && !first.destination.startsWith('/api?__path=')) shadowed.push(`${url} → ${first.destination}`);
+    }
+    assertEq(shadowed, []);
+  });
+
   await (async () => {
     const route = require(path.join(ROOT, 'api', 'index.js'));
     for (const [label, req] of [

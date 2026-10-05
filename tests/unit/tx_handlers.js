@@ -84,8 +84,8 @@ async function run(r) {
     const { handler } = loadHandler('api/_band/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5, artist_id: 1 }] : []));
     const res = mockRes();
-    await handler({ method: 'DELETE', url: '/api/test/gigs/5',
-      body: { hard: true }, headers: { authorization: 'Bearer t' } }, res);
+    await handler({ method: 'DELETE', url: '/api/test/gigs/5?hard=1',
+      headers: { authorization: 'Bearer t' } }, res);
     assertEq(res.statusCode, 200);
     assertEq(res.body, { deleted: true, hard: true });
   });
@@ -94,8 +94,8 @@ async function run(r) {
     const { handler, sql } = loadHandler('api/_band/gigs.js',
       text => (text.startsWith('SELECT * FROM gigs') ? [{ id: 5 }] : []));
     const res = mockRes();
-    await handler({ method: 'DELETE', url: '/api/test/gigs/5',
-      body: { hard: true, cascade: ['setlists'] }, headers: { authorization: 'Bearer t' } }, res);
+    await handler({ method: 'DELETE', url: '/api/test/gigs/5?hard=1&cascade=setlists',
+      headers: { authorization: 'Bearer t' } }, res);
     assertEq(res.statusCode, 200);
     assert(sql.calls.some(t => t.startsWith('DELETE FROM setlists')), 'expected setlists delete');
     assert(sql.calls.some(t => t.startsWith('DELETE FROM gigs')), 'expected gig delete');

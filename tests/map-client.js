@@ -105,6 +105,14 @@ function loadMakeLayer(withCluster) {
       'the ?all= payload should skip venues without coordinates');
   });
 
+  // CARTO's basemaps started answering keyless requests with an
+  // "API KEY REQUIRED" image; the map stays on OSM's free tiles.
+  test('tiles come from OpenStreetMap, not a provider that needs a key', () => {
+    const urls = SRC.match(/L\.tileLayer\('([^']+)'/g) || [];
+    assert(urls.length > 0, 'no tile layer found');
+    for (const u of urls) assert(u.includes('https://tile.openstreetmap.org/'), `unexpected tile source: ${u}`);
+  });
+
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);
