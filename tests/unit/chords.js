@@ -97,9 +97,16 @@ function run(r) {
   });
 
   test('render: section labels get their own class, plain lines stay plain', () => {
-    const html = C.chordsRender('Refrain\nPlain line', {});
+    const html = C.chordsRender('Refrain\n[G]Plain line', {});
     assertEq(html.includes('class="chord-label"'), true);
     assertEq(html.includes('Plain line'), true);
+  });
+
+  test('render: label-like lines stay plain rows in songs without chords', () => {
+    const plain = C.chordsRender('Chorus\nla', {});
+    assertEq(plain.includes('chord-label'), false);
+    assertEq(plain.includes('Chorus'), true);
+    assertEq(C.chordsRender('Chorus\n[G]la', {}).includes('chord-label'), true);
   });
 
   test('plain lines come out byte-for-byte; only merged lines are normalised', () => {
