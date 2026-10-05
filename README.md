@@ -29,7 +29,7 @@ Workspace pages live at `/<slug>/…`.
 
 **Song catalogue** (`/songs`) — in-cell and bulk editing, play count, song appearances, file attachments (audio, sheet music, playback track), versioned arrangements, lyrics suggest (lyrics.ovh, lrclib, then AI), change log with one-click restore.
 
-**Setlists** (`/setlist`) — generator: filter songs by any field, energy slider, random set to a target duration, optimised performance arc, drag-and-drop reorder, save to a gig. History tab: saved setlists by year, share as PDF by email, duplicate, open in stage view. `/setlist-history` opens that tab.
+**Setlists** (`/setlist`) — generator: filter songs by any field, energy slider, random set to a target duration, optimised performance arc, drag-and-drop reorder, save to a gig. History tab: saved setlists by year, share as PDF by email, duplicate, open in stage view. `/setlist-history` redirects to that tab.
 
 **Gigs** (`/gigs`) — performances linked to venues, organizers and setlists, with posters and an ICS calendar feed.
 

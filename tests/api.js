@@ -410,7 +410,8 @@ async function testSongLogs(slug) {
     if (json.length) {
       assert('action' in json[0], 'missing action field');
       assert('song_data' in json[0], 'missing song_data field');
-      firstLog = json[0];
+      // A log of a purged song keeps its row with song_id NULL.
+      firstLog = json.find(l => l.song_id) || null;
     }
   });
 
@@ -2602,7 +2603,7 @@ async function testRound4Api(sql, slug, token) {
       assertStatus(res, json, 400);
       const [row] = await sql`SELECT name, config FROM artists WHERE slug = ${slug}`;
       assert(row.name === before.name, 'the name was saved');
-      assert(!('0' in row.config), 'string characters were merged into the config');
+      assert(JSON.stringify(row.config) === JSON.stringify(before.config), 'string characters were merged into the config');
     });
     await test('PATCH /api/config saves name and config together', async () => {
       const { res, json } = await PATCH(CONFIG_URL, { name: '[TEST] renamed', config: { r4Probe: true } }, { token });

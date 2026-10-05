@@ -3,12 +3,10 @@ name: Reset demo band
 # The public demo is a band inside the production database that anyone can
 # edit. This puts it back to scripts/demo_seed.json every night.
 #
-# A GitHub Action rather than a Vercel cron: a cron costs one of the 12
-# serverless functions the Hobby plan allows, and 11 are in use with the
-# twelfth reserved for the billing webhook.
+# A GitHub Action rather than a Vercel cron: it keeps the production connection
+# string out of the app and needs no extra route.
 #
-# Needs one repository secret: DEMO_DATABASE_URL — the Neon `smartist`
-# production connection string.
+# Needs one repository secret: DEMO_DATABASE_URL — the production connection string.
 
 on:
   schedule:
@@ -24,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     # Without the secret the script would fall back to whatever DATABASE_URL is
     # in the environment — skip instead of touching the wrong database.
+    # Upstream only; on a fork, change this to your own owner/name.
     if: ${{ github.repository == 'kevinsieg/smartist' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

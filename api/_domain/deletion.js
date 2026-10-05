@@ -92,7 +92,7 @@ async function collectR2Urls(artistIds, sql) {
     add(e.listenUrl); add(e.sheetUrl); add(e.playbackUrl);
   }
   for (const g of gigs) { add(g.poster_url); add(g.thumb_url); }
-  // config.js uploads two band images (photo → logoUrl, favicon → faviconUrl);
+  // api/_config.js uploads two band images (photo → logoUrl, favicon → faviconUrl);
   // faviconUrl's key is slug-derived, not a UUID, so it's the one guessable
   // R2 object this account owns — leaving it behind would still be reachable.
   for (const b of bands) { add((b.config || {}).logoUrl); add((b.config || {}).faviconUrl); }

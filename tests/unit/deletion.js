@@ -125,7 +125,7 @@ async function run(r) {
     assertEq([...urls].sort().join(','), 'u1,u2,u3,u4,u5,u6');
   });
 
-  // config.js also uploads a band favicon (config.faviconUrl) alongside the
+  // api/_config.js also uploads a band favicon (config.faviconUrl) alongside the
   // logo. Unlike the UUID-keyed song files, its R2 key is slug-derived and
   // therefore guessable — leaving it behind after deletion is a real gap.
   await testAsync('the band favicon is collected alongside the logo', async () => {

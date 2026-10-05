@@ -1,7 +1,7 @@
 const logger = require('./_logger');
 
 // ── AI provider ───────────────────────────────────────────────────────────────
-// Uses the OpenAI chat completions standard (/v1/chat/completions).
+// Two formats: native Gemini (default, with search grounding) or OpenAI chat completions.
 // To switch provider, update the 4 lines in the AI object below.
 //
 //   Google Gemini with Google Search grounding — default (finds obscure/non-English songs):

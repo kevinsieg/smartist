@@ -32,6 +32,7 @@ jobs:
     name: Back up databases and uploads
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Upstream only; on a fork, change this to your own owner/name.
     if: ${{ github.repository == 'kevinsieg/smartist' }}
     # Scratch Postgres for the restore check. Same major version as the client
     # below (PG_MAJOR), and at least the production servers' version.

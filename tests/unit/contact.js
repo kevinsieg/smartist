@@ -12,7 +12,7 @@ function makeHandler({ emailFn } = {}) {
 
   delete require.cache[dbPath];
   delete require.cache[configPath];
-  // config.js delegates to api/_domain/* — bust them so the re-require rebuilds
+  // api/_config.js delegates to api/_domain/* — bust them so the re-require rebuilds
   // the chain against the stubs below (the contact handler lives in _domain/subscribe).
   const domainDir = path.join(__dirname, '../../api/_domain');
   require('fs').readdirSync(domainDir).filter(f => f.endsWith('.js')).forEach(function(f) {

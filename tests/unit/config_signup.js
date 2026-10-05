@@ -68,8 +68,8 @@ async function run(r) {
     return res;
   }
 
-  // ── POST ?action=signup-link ────────────────────────────────────────────────
-  console.log(B('\nPOST ?action=signup-link'));
+  // ── POST /api/signup/link ───────────────────────────────────────────────────
+  console.log(B('\nPOST /api/signup/link'));
 
   await testAsync('missing email → 400', async () => {
     const handler = makeHandler(async () => []);
@@ -155,8 +155,8 @@ async function run(r) {
     assert(!emailSent, 'expected NO email when honeypot is filled');
   });
 
-  // ── POST ?action=verify-signup-token ────────────────────────────────────────
-  console.log(B('\nPOST ?action=verify-signup-token'));
+  // ── POST /api/signup/verify ─────────────────────────────────────────────────
+  console.log(B('\nPOST /api/signup/verify'));
 
   await testAsync('missing token → 400', async () => {
     const handler = makeHandler(async () => []);
@@ -190,8 +190,8 @@ async function run(r) {
     assertEq(res._body && res._body.email, 'user@test.com');
   });
 
-  // ── POST ?action=signup ─────────────────────────────────────────────────────
-  console.log(B('\nPOST ?action=signup'));
+  // ── POST /api/signup ────────────────────────────────────────────────────────
+  console.log(B('\nPOST /api/signup'));
 
   await testAsync('missing token → 400', async () => {
     const handler = makeHandler(async () => []);
@@ -276,8 +276,8 @@ async function run(r) {
     assert(!inserted, 'no workspace may be created from a spent link');
   });
 
-  // ── GET ?action=check-slug ──────────────────────────────────────────────────
-  console.log(B('\nGET ?action=check-slug'));
+  // ── GET /api/signup/check-slug ──────────────────────────────────────────────
+  console.log(B('\nGET /api/signup/check-slug'));
 
   await testAsync('available slug → { available: true }', async () => {
     const sql = async () => [{ exists: false }];
@@ -468,7 +468,7 @@ async function run(r) {
     assertEq(res._body.config, { logoUrl: 'https://x.test/l.png', publicStage: true });
   });
 
-  await testAsync('POST action=downgrade sets plan free and leaves upgradedAt alone', async () => {
+  await testAsync('POST /api/config/downgrade sets plan free and leaves upgradedAt alone', async () => {
     let merged = null;
     const handler = makeHandler(memberSql('admin', (q, values) => {
       if (q.includes('UPDATE artists SET config')) merged = values[0];
@@ -482,7 +482,7 @@ async function run(r) {
     assertEq(merged, { plan: 'free' });
   });
 
-  await testAsync('POST action=downgrade by a member → 403, plan untouched', async () => {
+  await testAsync('POST /api/config/downgrade by a member → 403, plan untouched', async () => {
     let updated = false;
     const handler = makeHandler(memberSql('member', (q) => {
       if (q.includes('UPDATE artists')) updated = true;
@@ -496,7 +496,7 @@ async function run(r) {
     assert(!updated, 'member must not change the plan');
   });
 
-  await testAsync('POST action=upgrade sets plan pro with an ISO upgradedAt', async () => {
+  await testAsync('POST /api/config/upgrade sets plan pro with an ISO upgradedAt', async () => {
     let merged = null;
     const handler = makeHandler(memberSql('admin', (q, values) => {
       if (q.includes('UPDATE artists SET config')) merged = values[0];

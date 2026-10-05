@@ -56,8 +56,9 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`) |
 | `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `lyrics` (PUT/DELETE, `/lyrics/suggest` POST) |
 | `api/_band/gema.js` | `POST /api/:artist/gema/import` — one GEMA CSV (`_domain/gema.js`), Pro |
-| `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country/has_gigs`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
+| `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
 | `api/_band/venues/item.js` | `GET/PUT/DELETE /api/:artist/venues/:id` |
+| `api/_band/record_item.js` | the shared GET/PUT/DELETE item handler behind `organizers/item.js` and `venues/item.js` (one table spec each) |
 
 `/api/docs` is a static rewrite to `app/api-docs.html` in `vercel.json`. It renders `openapi.json`, which is written by hand: a new route or method goes into it too, or `tests/unit/openapi.js` fails.
 
@@ -69,6 +70,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 |--------|---------------------|
 | `_db.js` | `getDb()` singleton, `getArtist(slug)` → null if not found, `insertAuditLog` silently swallows errors by design; `trimSongLogs` keeps each song's newest 20 history entries |
 | `_auth.js` | `requireAuth(req, res, slug)` → artist object or writes 401/404 and returns null |
+| `_session.js` | `bearerToken(headers)`, `sessionAccount(sql, headers, columns)` — the account behind a session, for routes about a person rather than a band (workspace list, account deletion, log out everywhere, a second workspace) |
 | `_handler.js` | `wrap(handler)` — **required on every handler**; catches unhandled errors → 500; logs the body size, `large_response` warning over 2 MB |
 | `_validate.js` | returns `null` (missing/empty), validated value, or `false` (invalid) |
 | `_email.js` | `sendEmail({to,subject,text?,html?,attachments?})` — swap provider via `PROVIDER` block at top |
@@ -83,6 +85,8 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `_logger.js` | `info/warn/error(event, data)` — dev→file, preview→stdout, prod→BetterStack, one send per request after the response (`waitUntil` in `_handler.js`), lines buffered per request; swap via `TRANSPORT` block |
 | `_token.js` | `generateMagicToken(seed, purpose)`, `verifyMagicToken(token, seed, purpose)` — 30-min HMAC, purpose `login`/`reset`/`demo` (a `demo` token is a **member** session, signed with `demoSeed(artistId)`). There is no band password: every session is a named user (or the demo gate). `generateUserToken(id, role, ttl, passwordHash)` embeds a password fingerprint and the issue time: changing a password, or `users.sessions_valid_after` ("log out everywhere", `_domain/login.js` `logoutEverywhere`), revokes older sessions (`sessionValid`). |
 | `_ownership.js` | `ownsRefs` — **every foreign id from a request body must pass it** (ids are one sequence across tenants); songs, gig, venue and organizer in one statement; `isOwnMediaUrl` gates R2 deletes |
+| `_domain/gigs.js` | `removeGigFiles` — a band's gig posters out of the bucket, shared by the gig delete and the venue/organizer deletes that take gigs with them |
+| `_domain/http.js` | the only req/res adapter (`handle`, `reply`, `ok`, `fail`) and `MSG`, the shared error texts |
 
 ---
 
@@ -105,6 +109,8 @@ if (name === false) return res.status(400).json({ error: 'name too long' });
 if (!name)          return res.status(400).json({ error: 'name required' });
 ```
 
+**Errors** answer `{ error }`, a readable sentence; when the client needs to branch on it, also `code`, a stable machine string (`upgrade_required`, `song_limit`, `storage_limit`, the CSV import codes). Clients read `code || error`. Shared texts live in `MSG` (`api/_domain/http.js`).
+
 **Mixed GET (public) / PUT (authed) on the same resource — auth-gate first to avoid double `getArtist`:**
 ```js
 let artist;
@@ -113,7 +119,7 @@ if (req.method === 'PUT') {
   if (!artist) return;
 } else {
   artist = await getArtist(slug);
-  if (!artist) return res.status(404).json({ error: 'Artist not found' });
+  if (!artist) return res.status(404).json({ error: MSG.artistNotFound });
 }
 ```
 
@@ -194,8 +200,9 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 ## Client-side rules
 
-- **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A workspace is private (see the two gates under Database) and answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/page_scripts.js` enforces this; `stage.js`/`arrangement.js` run without `session.js` and add the header themselves.
-- Venues list is **paged** (`limit`/`offset` + A–Z `letter`), not append-on-scroll; sorting is server-side so it covers all rows. Bulk edit (`venues_bulk_edit` in localStorage, desktop only) reloads the table on every sort, page, filter or letter change, so it asks before discarding unsaved rows (`_confirmDiscardBulk`). `PATCH` writes the whole batch in one `unnest` statement inside `sql.begin` and returns `{count, rejected:[{id,error}]}`; rejected rows are marked in the table.
+- **Every workspace endpoint goes through `apiFetch()`**, never bare `fetch()`. A workspace is private (see the two gates under Database) and answers 401 without a token, and a bare fetch then renders empty state instead of data. Only login, password reset, invite acceptance, OAuth start, `/api/config` and the contact form may use plain `fetch`. `tests/unit/api_fetch.js` enforces this; `stage.js`/`arrangement.js` run without `session.js` and add the header themselves.
+- ESLint flags unused top-level functions and variables inside page scripts only when they are local (`vars: 'local'` on `app/**`): page functions are called from `data-on…` markup. Dead classes in a page's `<style>` block fail `tests/unit/page_styles.js`.
+- Venues list is **paged** (`limit`/`offset` + A–Z `letter`), not append-on-scroll; sorting is server-side so it covers all rows. Bulk edit (`venues_bulk_edit` in localStorage, desktop only) reloads the table on every sort, page, filter or letter change, so it asks before discarding unsaved rows (`_confirmDiscardBulk`). `PATCH` writes the whole batch in one `unnest` statement and returns `{count, rejected:[{id,error}]}`; rejected rows are marked in the table.
 
 - `loadConfig()` in `session.js` — stale-while-revalidate via `sessionStorage` key `artist_config_cache`. First call blocks on network; subsequent calls in the same tab return immediately.
 - After any `PATCH /api/config` that changes `artists.config`, call `invalidateConfigCache()` so the next `loadConfig()` fetches fresh data.

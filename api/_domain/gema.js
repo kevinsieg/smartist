@@ -2,7 +2,7 @@
 
 // GEMA CSV import: parsers for the three export files and the two imports
 // (works from Identifikatoren / Werkinformationen, rightholders from
-// Beteiligte). Used by the pro-import page (songs catch-all, gema-import) and
+// Beteiligte). Used by the pro-import page (POST /api/:artist/gema/import) and
 // by scripts/import_gema.js, so both read the files the same way.
 //
 // The imports take a postgres.js `sql` and return { status, body }.

@@ -13,19 +13,19 @@ function run(r) {
 
   test('parseCsvLine keeps quoted commas inside a field', () => {
     assertEq(
-      gemaImport.parseCsvLine('15299392-001,"Song, With Comma",DEUTSCH'),
-      ['15299392-001', 'Song, With Comma', 'DEUTSCH']
+      gemaImport.parseCsvLine('12345678-001,"Song, With Comma",DEUTSCH'),
+      ['12345678-001', 'Song, With Comma', 'DEUTSCH']
     );
   });
   test('parseCsv skips preamble and ignores rows without Werknummer', () => {
     const csv = [
       'Downloaded from GEMA',
       'Werknummer,Titel,Sprache,Dauer,Erstmals geladen',
-      '15299392-001,Über den Wolken,DEUTSCH,03:42,05.11.2026',
+      '12345678-001,Über den Wolken,DEUTSCH,03:42,05.11.2026',
       ',Missing Work Number,DEUTSCH,01:00,05.11.2026',
     ].join('\n');
     assertEq(gemaImport.parseCsv(csv), [{
-      Werknummer: '15299392-001',
+      Werknummer: '12345678-001',
       Titel: 'Über den Wolken',
       Sprache: 'DEUTSCH',
       Dauer: '03:42',
@@ -44,12 +44,12 @@ function run(r) {
   });
   test('parseBeteiligte maps duplicate-index columns and normalises shares/roles', () => {
     const row = [
-      '15299392-001', '', 'Jane Writer', 'IP-123', 'KOMPONIST/-IN', '1', '',
+      '12345678-001', '', 'Jane Writer', 'IP-123', 'KOMPONIST/-IN', '1', '',
       '"12,5"', '-', '25', '"50,25"', 'GEMA', 'ASCAP', '', '', 'Rep Publisher',
       'IP-999', 'TEXTDICHTER/-IN',
     ].join(',');
     assertEq(gemaImport.parseBeteiligte(`Preamble\nWerknummer,unused\n${row}`), [{
-      gema_work_number: '15299392-001',
+      gema_work_number: '12345678-001',
       name: 'Jane Writer',
       ip_name_number: 'IP-123',
       role: 'composer',
@@ -99,7 +99,7 @@ async function runSaveErrors(r) {
       return Promise.resolve([]);
     };
     sql.json = v => v;
-    const csv = 'Werknummer,Titel,Sprache,Dauer,Erstmals geladen\n15299392-001,Song,DEUTSCH,03:42,05.11.2026';
+    const csv = 'Werknummer,Titel,Sprache,Dauer,Erstmals geladen\n12345678-001,Song,DEUTSCH,03:42,05.11.2026';
     const res = await gemaImport.importWorks(sql, { id: 1, config: {} }, 'own', csv, { dryRun: false });
     assertEq(res.status, 200);
     const failed = res.body.rows.filter(x => x.error);

@@ -52,6 +52,6 @@ All write tests clean up after themselves (songs only as far as the API allows):
 | Users | `DELETE /api/:artist/members` at end of multi-user auth tests |
 
 If a test run is interrupted mid-way, any `[TEST]` records left in the dev DB can be removed manually:
-- Setlists → `/setlist-history`
+- Setlists → `/setlist?view=history`
 - Users → `/<slug>/settings` (Members)
 - Venues/organizers/gigs → their respective management pages

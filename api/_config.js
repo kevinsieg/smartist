@@ -241,7 +241,7 @@ async function presignedUpload(req, res, slugParam, kind, defaultType, allowed) 
   const size = Number(req.query.size);
   if (!Number.isInteger(size) || size <= 0 || size > IMAGE_MAX_BYTES)
     return res.status(400).json({ error: `size required, max ${IMAGE_MAX_BYTES / 1024 / 1024} MB` });
-  if (await presignLimited(band.id)) return res.status(429).json({ error: 'Too many uploads — try again later' });
+  if (await presignLimited(band.id, req.user?.email ?? null)) return res.status(429).json({ error: 'Too many uploads — try again later' });
   const key = `bands/${band.slug}/${kind}`;
   const { uploadUrl, publicUrl } = await createPresignedUrl(key, contentType, size);
   return res.json({ uploadUrl, publicUrl });

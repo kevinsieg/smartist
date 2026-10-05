@@ -136,7 +136,7 @@ async function posterUrl(req, res, { artist, gigId }) {
   const okSize = n => Number.isInteger(n) && n > 0 && n <= POSTER_MAX_BYTES;
   if (!okSize(posterSize) || !okSize(thumbSize))
     return res.status(400).json({ error: `posterSize and thumbSize required, max ${POSTER_MAX_BYTES / 1024 / 1024} MB` });
-  if (await presignLimited(artist.id))
+  if (await presignLimited(artist.id, req.user?.email ?? null))
     return res.status(429).json({ error: 'Too many uploads — try again later' });
   const uuid      = crypto.randomUUID();
   const posterKey = `gigs/${artist.slug}/${gigId}-${uuid}-poster.jpg`;
