@@ -93,6 +93,37 @@ function stageFitLyrics() {
   el.style.fontSize = _stageLyricsPx + 'px';
 }
 
+// ── Chords: on/off and transpose ─────────────────────────────────────────────
+function _stageStoreChords(on) {
+  try { localStorage.setItem('stage_chords', on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+}
+var _stageChordsOn = (function() {
+  try { return localStorage.getItem('stage_chords') !== '0'; } catch (e) { return true; }
+})();
+var _stageSteps = 0;
+var _stageLyricsText = '';
+
+function _stageRenderLyrics() {
+  var el = document.getElementById('_stage_lyrics');
+  if (!el) return;
+  el.innerHTML = chordsRender(_stageLyricsText, { chords: _stageChordsOn, steps: _stageSteps });
+  var v = document.getElementById('_stage_transpose_val');
+  if (v) v.textContent = (_stageSteps > 0 ? '+' : '') + _stageSteps;
+  var b = document.getElementById('_stage_chords_btn');
+  if (b) b.setAttribute('aria-pressed', String(_stageChordsOn));
+}
+
+function stageToggleChords() {
+  _stageChordsOn = !_stageChordsOn;
+  _stageStoreChords(_stageChordsOn);
+  _stageRenderLyrics();
+}
+
+function stageTranspose(d) {
+  _stageSteps = Math.max(-11, Math.min(11, _stageSteps + d));
+  _stageRenderLyrics();
+}
+
 var _SUN_ICON  = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
 var _MOON_ICON = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 
@@ -344,6 +375,11 @@ async function initSong(params, el, cfg) {
          <button class="stage-share-btn" data-onclick="stageFontDown()" aria-label="Smaller text" title="Smaller text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
          <button class="stage-share-btn" data-onclick="stageFitLyrics()" aria-label="Fit lyrics to screen" title="Fit to screen">${_FIT_ICON}</button>
          <button class="stage-share-btn" data-onclick="stageFontUp()" aria-label="Larger text" title="Larger text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
+         ${chordsHas(lyrics) ? `
+         <button class="stage-share-btn" id="_stage_chords_btn" data-onclick="stageToggleChords()" aria-pressed="${_stageChordsOn}" aria-label="Show chords" title="Chords"><span aria-hidden="true" style="font-size:11px">Am</span></button>
+         <button class="stage-share-btn" data-onclick="stageTranspose(-1)" aria-label="Transpose down" title="Transpose down"><span aria-hidden="true" style="font-size:11px">♭</span></button>
+         <span id="_stage_transpose_val" class="stage-transpose-val">0</span>
+         <button class="stage-share-btn" data-onclick="stageTranspose(1)" aria-label="Transpose up" title="Transpose up"><span aria-hidden="true" style="font-size:11px">♯</span></button>` : ''}
        </div>`
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
@@ -360,7 +396,9 @@ async function initSong(params, el, cfg) {
     ${lyricsHtml}`;
 
   if (lyrics) {
-    document.getElementById('_stage_lyrics').textContent = lyrics;
+    _stageLyricsText = lyrics;
+    _stageSteps = 0;
+    _stageRenderLyrics();
     _applyLyricsSize();
   }
 

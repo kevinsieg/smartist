@@ -377,6 +377,13 @@
             white-space: pre-wrap;
             color: var(--s-text);
         }
+        .chord-row { white-space: pre-wrap; word-break: break-word; min-height: 1.75em; }
+        .chord-row--chords { line-height: 1.25; margin-top: 0.15rem; }
+        .ch-seg { display: inline-block; vertical-align: bottom; white-space: pre-wrap; }
+        .ch { display: block; min-height: 1.2em; font-size: 0.85em; font-weight: 700; color: var(--s-accent); }
+        .ch-tx { display: block; }
+        .chord-label { font-weight: 700; margin-top: 0.6rem; }
+        .stage-transpose-val { min-width: 2ch; text-align: center; font-size: 11px; align-self: center; }
 
         /* Email share modal */
         .stage-modal-overlay {
@@ -495,6 +502,7 @@
     <script src="/app/js/core.js?v=14"></script>
     <script src="/app/js/share-utils.js?v=5"></script>
     <script src="/app/js/arrangement.js?v=8"></script>
-    <script src="/app/js/stage.js?v=10"></script>
+    <script src="/app/js/chords.js?v=2"></script>
+    <script src="/app/js/stage.js?v=11"></script>
 </body>
 </html>
