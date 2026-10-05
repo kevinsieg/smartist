@@ -188,16 +188,18 @@ function _lyricsSaveStatus(msg, isError) {
 async function saveLyrics() {
   const sid = currentLyricsSid;
   if (!sid) return;
-  const text = chordsToPro(document.getElementById('lyrics-edit').value);
+  const edited = document.getElementById('lyrics-edit').value;
 
   // New, unsaved song: stash lyrics in the panel; they persist when it's created.
   if (_isNewPanelSid(sid)) {
     const hidden = document.querySelector(`input[data-key="lyrics"][data-id="${sid}"]`);
+    const text = chordsForSave(edited, hidden && hidden.value);
     if (hidden) { hidden.value = text; markPanelEditDirty(); }
     closeLyrics();
     return;
   }
 
+  const text = chordsForSave(edited, songs.find(s => String(s.id) === String(sid))?.lyrics);
   const saveBtn = document.getElementById('lyrics-save-btn');
   if (saveBtn) { saveBtn.textContent = t('songs.savingDot'); saveBtn.disabled = true; }
   _lyricsSaveStatus('', false);

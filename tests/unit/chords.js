@@ -122,6 +122,17 @@ function run(r) {
       assertEq(C.chordsToPro(C.chordsToAbove(l)), l, l);
     }
   });
+
+  test('chordsForSave: untouched lyrics are saved byte-for-byte', () => {
+    for (const x of ['Do Re Mi\nA B C\nEasy as', 'A\nboy named Sue', 'Bb\nis a note', 'E\nverybody', '[G]la [C]la\nplain'])
+      assertEq(C.chordsForSave(C.chordsToAbove(x), x), x, x);
+  });
+
+  test('chordsForSave: edited text still converts', () => {
+    assertEq(C.chordsForSave('G\nla', ''), '[G]la');
+    assertEq(C.chordsForSave('G\nla', undefined), '[G]la');
+    assertEq(C.chordsForSave('G\nla!', 'G\nla'), '[G]la!');
+  });
 }
 
 if (require.main === module) {

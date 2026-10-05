@@ -129,6 +129,11 @@ function chordsRender(text, opts) {
   }).join('');
 }
 
+// Text the user did not change is saved as stored: chord-looking plain lines must not be rewritten.
+function chordsForSave(edited, original) {
+  return edited === chordsToAbove(original || '') ? (original || '') : chordsToPro(edited);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { chordsIsLine: chordsIsLine, chordsToPro: chordsToPro, chordsToAbove: chordsToAbove, chordsTranspose: chordsTranspose, chordsRender: chordsRender, chordsHas: chordsHas };
+  module.exports = { chordsIsLine: chordsIsLine, chordsToPro: chordsToPro, chordsToAbove: chordsToAbove, chordsForSave: chordsForSave, chordsTranspose: chordsTranspose, chordsRender: chordsRender, chordsHas: chordsHas };
 }
