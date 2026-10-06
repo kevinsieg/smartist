@@ -11,6 +11,7 @@ try {
   _lyricsStructOn  = localStorage.getItem('lyrics_structure') === '1';
   _lyricsNumbersOn = localStorage.getItem('lyrics_numbers') === '1';
 } catch (_) {}
+var _lyricsMode     = 'view';
 var _lyricsSteps    = 0;
 var _lyricsText     = '';
 // Show the shapes for one instrument's capo ('git' or 'bj'), or '' for sounding chords.
@@ -35,10 +36,11 @@ function _lyricsShow(text) {
     `<button class="btn" data-onclick="lyricsCapo('${k}')" aria-pressed="${_lyricsCapoInst === k}">` +
     escHtml(t(k === 'git' ? 'songs.capoShapesGit' : 'songs.capoShapesBanjo', { n: capos[k] })) + '</button>').join('');
   var hasChords = chordsHas(_lyricsText);
-  document.getElementById('lyrics-chord-bar').style.display = hasChords ? '' : 'none';
+  var editing = _lyricsMode === 'edit';
+  document.getElementById('lyrics-chord-bar').style.display = hasChords && !editing ? '' : 'none';
   var struct = document.getElementById('lyrics-structure');
   var html = '';
-  if (hasChords && _lyricsStructOn) {
+  if (hasChords && _lyricsStructOn && !editing) {
     var song = songs.find(s => String(s.id) === String(currentLyricsSid));
     html = chordsStructure(_lyricsText, {
       numbers: _lyricsNumbersOn, key: song && song.key, steps: _lyricsSteps, capo: capos[_lyricsCapoInst] || 0,
@@ -85,9 +87,13 @@ function lyricsTranspose(d) {
 }
 
 function _lyricsSetMode(mode) { // 'view' or 'edit'
+  _lyricsMode = mode;
   document.getElementById('lyrics-suggest-preview').style.display = 'none';
   document.getElementById('lyrics-view').style.display        = mode === 'view' ? '' : 'none';
-  if (mode === 'edit') document.getElementById('lyrics-structure').style.display = 'none';
+  if (mode === 'edit') {
+    document.getElementById('lyrics-structure').style.display = 'none';
+    document.getElementById('lyrics-chord-bar').style.display = 'none';
+  }
   document.getElementById('lyrics-edit').style.display        = mode === 'edit' ? '' : 'none';
   document.getElementById('lyrics-actions-view').style.display = mode === 'view' ? '' : 'none';
   document.getElementById('lyrics-actions-edit').style.display = mode === 'edit' ? '' : 'none';
@@ -118,6 +124,7 @@ async function openLyrics(sid) {
   currentLyricsSid = sid;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
   _lyricsSteps = 0;
+  _lyricsMode = 'view';
   if (song?.lyrics === undefined) {
     document.getElementById('lyrics-view').textContent = t('songs.loading');
     document.getElementById('lyrics-chord-bar').style.display = 'none';
@@ -228,8 +235,8 @@ function startEditLyrics() {
 function cancelEditLyrics() {
   const song = songs.find(s => String(s.id) === String(currentLyricsSid));
   if (song?.lyrics) {
-    _lyricsShow(song.lyrics);
     _lyricsSetMode('view');
+    _lyricsShow(song.lyrics);
   } else {
     closeLyrics();
   }
@@ -306,8 +313,8 @@ async function saveLyrics() {
     }
 
     if (trimmed) {
-      _lyricsShow(trimmed);
       _lyricsSetMode('view');
+      _lyricsShow(trimmed);
     } else {
       closeLyrics();
     }
