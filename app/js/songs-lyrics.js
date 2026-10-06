@@ -167,6 +167,14 @@ async function saveLyrics() {
     return;
   }
 
+  // Edit opened before the stored text arrived, or its fetch failed: the editor
+  // is empty, and saving would replace the lyrics with nothing.
+  const song = songs.find(s => String(s.id) === String(sid));
+  if (song && song.lyrics === undefined && song.has_lyrics !== false) {
+    _lyricsSaveStatus(t('songs.lyricsCouldNotFetch'), true);
+    return;
+  }
+
   const saveBtn = document.getElementById('lyrics-save-btn');
   if (saveBtn) { saveBtn.textContent = t('songs.savingDot'); saveBtn.disabled = true; }
   _lyricsSaveStatus('', false);

@@ -119,6 +119,47 @@ function makeContext() {
     });
   });
 
+  // Edit opened before the stored text arrived (or its fetch failed) leaves the
+  // editor empty; saving then would replace the lyrics with nothing.
+  async function saveWith(song) {
+    const calls = [];
+    ctx.apiFetch = async (...a) => { calls.push(a); return { ok: true, json: async () => ({}) }; };
+    ctx.songs = [song];
+    ctx.currentLyricsSid = song.id;
+    let error = null;
+    try { await ctx.saveLyrics(); } catch (e) { error = e; }
+    return { calls, error };
+  }
+
+  const notLoaded = await saveWith({ id: 5, title: 'x', has_lyrics: true });
+  test('saveLyrics sends nothing while the stored lyrics have not loaded', () => {
+    assert(!notLoaded.error, notLoaded.error && notLoaded.error.message);
+    assert(notLoaded.calls.length === 0, `PUT sent before the lyrics loaded: ${JSON.stringify(notLoaded.calls[0])}`);
+  });
+
+  const none = await saveWith({ id: 6, title: 'y', has_lyrics: false });
+  test('saveLyrics still saves a song known to have no lyrics', () => {
+    assert(none.calls.length === 1, `expected one PUT, got ${none.calls.length}`);
+  });
+
+  const loaded = await saveWith({ id: 7, title: 'z', has_lyrics: true, lyrics: 'la' });
+  test('saveLyrics still saves once the lyrics have loaded', () => {
+    assert(loaded.calls.length === 1, `expected one PUT, got ${loaded.calls.length}`);
+  });
+
+  // A normal sign-in keeps the token in sessionStorage, which a new tab only
+  // inherits from its opener — target="_blank" alone implies noopener.
+  test('links that open the stage view in a new tab keep their opener', () => {
+    const bad = [];
+    for (const f of fs.readdirSync(path.join(REPO_ROOT, 'app/js'))) {
+      if (!f.endsWith('.js')) continue;
+      fs.readFileSync(path.join(REPO_ROOT, 'app/js', f), 'utf8').split('\n').forEach((line, i) => {
+        if (/\/stage\?/.test(line) && /target="_blank"/.test(line) && !/rel="opener"/.test(line)) bad.push(`${f}:${i + 1}`);
+      });
+    }
+    assert(bad.length === 0, `stage links without rel="opener": ${bad.join(', ')}`);
+  });
+
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);
