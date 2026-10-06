@@ -270,6 +270,37 @@ function run(r) {
     assertEq(C.chordsNashville('F', 'H'), '#4');
     assertEq(C.chordsNashville('Em', 'C major'), '3-');
   });
+
+  test('structure: one row per part, lines joined by |, form compressed', () => {
+    const html = C.chordsStructure(SONG, {});
+    assertEq((html.match(/class="cs-row"/g) || []).length, 4);
+    assertEq(html.includes('Dm7 Dm7 Gm7 Fmaj7 | Dm7 Dm7 Gm7 Fmaj7'), true, html);
+    assertEq(html.includes('A B C B C D'), true, html);
+    assertEq(C.chordsStructure('[G]a\n\n[G]a\n\n[C]b', {}).includes('A ×2 B'), true);
+    assertEq(C.chordsStructure('plain lyrics only', {}), '');
+  });
+
+  test('structure: numbers from the key field or a guessed key, transpose on chords only', () => {
+    const num = C.chordsStructure(SONG, { numbers: true, key: 'Dm' });
+    assertEq(num.includes('1-7 1-7 4-7 b3maj7'), true, num);
+    assertEq(num.includes('guessed'), false);
+    assertEq(C.chordsStructure(SONG, { numbers: true }).includes('guessed'), true);
+    assertEq(C.chordsStructure(SONG, { steps: 2 }).includes('Em7 Em7 Am7 Gmaj7'), true);
+    assertEq(C.chordsStructure(SONG, { numbers: true, key: 'Dm', steps: 2 }).includes('1-7 1-7'), true);
+  });
+
+  test('structure: names are escaped; marks-only lines leave no empty segment', () => {
+    const html = C.chordsStructure('[G]a\n\n[C]b', { names: { form: '<x>' } });
+    assertEq(html.includes('<x>'), false);
+    assertEq(html.includes('&lt;x&gt;'), true);
+    assertEq(C.chordsStructure('[G]a\n[||]   [x3]', {}).includes('|  |'), false);
+  });
+
+  test('render: chorus rows bold only in songs with chords', () => {
+    const html = C.chordsRender(SONG, {});
+    assertEq((html.match(/chord-row--chorus/g) || []).length, 2);
+    assertEq(C.chordsRender('Chorus\nla\n\nla', {}).includes('chord-row--chorus'), false);
+  });
 }
 
 if (require.main === module) {

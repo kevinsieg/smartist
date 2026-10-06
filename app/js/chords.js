@@ -151,16 +151,21 @@ function chordsRender(text, opts) {
   var labels = chordsHas(text);
   var lines = String(text).split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop(); // a trailing line break is no row
-  return lines.map(function (line) {
-    var segs = _chSegments(line);
+  var chorusLines = {};
+  if (labels) {
+    var cp = chordsParts(text);
+    if (cp.chorus) cp.blocks.forEach(function (b) { if (b.letter === cp.chorus) for (var i = b.start; i <= b.end; i++) chorusLines[i] = true; });
+  }
+  return lines.map(function (line, idx) {
+    var segs = _chSegments(line), bold = chorusLines[idx] ? ' chord-row--chorus' : '';
     if (segs.length === 1) {
       return labels && _CH_LABEL.test(line)
         ? '<div class="chord-label">' + _chEsc(line.trim()) + '</div>'
-        : '<div class="chord-row">' + (_chEsc(line) || '&nbsp;') + '</div>';
+        : '<div class="chord-row' + bold + '">' + (_chEsc(line) || '&nbsp;') + '</div>';
     }
     var words = segs.map(function (s) { return s.text; }).join('');
-    if (!show) return words.trim() ? '<div class="chord-row">' + _chEsc(words) + '</div>' : '';
-    return '<div class="chord-row chord-row--chords">' + segs.filter(function (s) { return s.chord || s.text; }).map(function (s) {
+    if (!show) return words.trim() ? '<div class="chord-row' + bold + '">' + _chEsc(words) + '</div>' : '';
+    return '<div class="chord-row chord-row--chords' + bold + '">' + segs.filter(function (s) { return s.chord || s.text; }).map(function (s) {
       return '<span class="ch-seg"><span class="ch">' + _chEsc(s.chord ? chordsTranspose(s.chord, steps) : '') +
         '</span><span class="ch-tx">' + (_chEsc(s.text) || '&nbsp;') + '</span></span>';
     }).join('') + '</div>';
@@ -306,6 +311,37 @@ function chordsNashville(tok, key) {
   return tok.slice(0, at) + num + tok.slice(at + core.length);
 }
 
+function chordsStructure(text, opts) {
+  opts = opts || {};
+  var p = chordsParts(text);
+  var withChords = p.parts.filter(function (x) { return x.chords.length; });
+  if (!withChords.length) return '';
+  var names = Object.assign({ verse: 'Verse', chorus: 'Chorus', pre: 'Pre-chorus', bridge: 'Bridge', other: '', form: 'Form', key: 'Key', guessed: 'guessed' }, opts.names || {});
+  var key = opts.key && _chParseKey(opts.key) ? opts.key : '', guessed = false;
+  if (opts.numbers && !key) { key = chordsGuessKey(text); guessed = true; }
+  var shift = (opts.steps || 0) - (Math.round(Number(opts.capo)) || 0);
+  var show = function (c) { return opts.numbers ? chordsNashville(c, key) : chordsTranspose(c, shift); };
+  var row = function (letter, label, body) {
+    return '<div class="cs-row"><span class="cs-letter">' + _chEsc(letter) + '</span><span class="cs-label">' + _chEsc(label) +
+      '</span><span class="cs-chords">' + _chEsc(body) + '</span></div>';
+  };
+  var rows = withChords.map(function (x) {
+    var body = x.chords.map(function (line) { return line.map(show).join(' '); }).filter(Boolean).join(' | ');
+    return row(x.letter, x.label || names[x.kind] || '', body);
+  });
+  var form = [];
+  p.blocks.forEach(function (b) {
+    if (!b.letter) return;
+    var last = form[form.length - 1];
+    if (last && last.letter === b.letter) last.n++; else form.push({ letter: b.letter, n: 1 });
+  });
+  var formText = form.map(function (f) { return f.letter + (f.n > 1 ? ' ×' + f.n : ''); }).join(' ');
+  var head = opts.numbers && key ? '<div class="cs-key">' + _chEsc(names.key + ' ' + key + (guessed ? ' (' + names.guessed + ')' : '')) + '</div>' : '';
+  return '<div class="chord-structure">' + head + rows.join('') +
+    '<div class="cs-row cs-form"><span class="cs-letter"></span><span class="cs-label">' + _chEsc(names.form) +
+    '</span><span class="cs-chords">' + _chEsc(formText) + '</span></div></div>';
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { chordsIsLine: chordsIsLine, chordsToPro: chordsToPro, chordsToAbove: chordsToAbove, chordsForSave: chordsForSave, chordsTranspose: chordsTranspose, chordsRender: chordsRender, chordsHas: chordsHas, chordsParts: chordsParts, chordsGuessKey: chordsGuessKey, chordsNashville: chordsNashville };
+  module.exports = { chordsIsLine: chordsIsLine, chordsToPro: chordsToPro, chordsToAbove: chordsToAbove, chordsForSave: chordsForSave, chordsTranspose: chordsTranspose, chordsRender: chordsRender, chordsHas: chordsHas, chordsParts: chordsParts, chordsGuessKey: chordsGuessKey, chordsNashville: chordsNashville, chordsStructure: chordsStructure };
 }
