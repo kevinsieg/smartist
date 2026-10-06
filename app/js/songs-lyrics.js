@@ -4,6 +4,53 @@
 
 // --- Lyrics column ---
 
+var _lyricsChordsOn = true;
+try { _lyricsChordsOn = localStorage.getItem('lyrics_chords') !== '0'; } catch (_) {}
+var _lyricsSteps    = 0;
+var _lyricsText     = '';
+// Show the shapes for one instrument's capo ('git' or 'bj'), or '' for sounding chords.
+var _lyricsCapoInst = '';
+try { _lyricsCapoInst = localStorage.getItem('lyrics_capo') || ''; } catch (_) {}
+
+function _lyricsCapos() {
+  var song = songs.find(s => String(s.id) === String(currentLyricsSid));
+  var extra = (song && song.extra) || {};
+  return {
+    git: _isSongFieldHidden('extra.gitCapo')   ? 0 : Number(extra.gitCapo)   || 0,
+    bj:  _isSongFieldHidden('extra.banjoCapo') ? 0 : Number(extra.banjoCapo) || 0,
+  };
+}
+
+function _lyricsShow(text) {
+  _lyricsText = text || '';
+  var view = document.getElementById('lyrics-view');
+  var capos = _lyricsCapos();
+  view.innerHTML = chordsRender(_lyricsText, { chords: _lyricsChordsOn, steps: _lyricsSteps, capo: capos[_lyricsCapoInst] || 0 });
+  document.getElementById('lyrics-capo-btns').innerHTML = ['git', 'bj'].filter(k => capos[k] > 0).map(k =>
+    `<button class="btn" data-onclick="lyricsCapo('${k}')" aria-pressed="${_lyricsCapoInst === k}">` +
+    escHtml(t(k === 'git' ? 'songs.capoShapesGit' : 'songs.capoShapesBanjo', { n: capos[k] })) + '</button>').join('');
+  document.getElementById('lyrics-chord-bar').style.display = chordsHas(_lyricsText) ? '' : 'none';
+  document.getElementById('lyrics-chords-toggle').setAttribute('aria-pressed', String(_lyricsChordsOn));
+  document.getElementById('lyrics-transpose-val').textContent = (_lyricsSteps > 0 ? '+' : '') + _lyricsSteps;
+}
+
+function lyricsToggleChords() {
+  _lyricsChordsOn = !_lyricsChordsOn;
+  try { localStorage.setItem('lyrics_chords', _lyricsChordsOn ? '1' : '0'); } catch (_) {}
+  _lyricsShow(_lyricsText);
+}
+
+function lyricsCapo(inst) {
+  _lyricsCapoInst = _lyricsCapoInst === inst ? '' : inst;
+  try { localStorage.setItem('lyrics_capo', _lyricsCapoInst); } catch (_) {}
+  _lyricsShow(_lyricsText);
+}
+
+function lyricsTranspose(d) {
+  _lyricsSteps = Math.max(-11, Math.min(11, _lyricsSteps + d));
+  _lyricsShow(_lyricsText);
+}
+
 function _lyricsSetMode(mode) { // 'view' or 'edit'
   document.getElementById('lyrics-suggest-preview').style.display = 'none';
   document.getElementById('lyrics-view').style.display        = mode === 'view' ? '' : 'none';
@@ -36,8 +83,14 @@ async function openLyrics(sid) {
 
   currentLyricsSid = sid;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
-  document.getElementById('lyrics-view').textContent  = song?.lyrics === undefined ? t('songs.loading') : (song.lyrics ?? '');
-  document.getElementById('lyrics-edit').value        = song?.lyrics ?? '';
+  _lyricsSteps = 0;
+  if (song?.lyrics === undefined) {
+    document.getElementById('lyrics-view').textContent = t('songs.loading');
+    document.getElementById('lyrics-chord-bar').style.display = 'none';
+  } else {
+    _lyricsShow(song.lyrics);
+  }
+  document.getElementById('lyrics-edit').value        = chordsToAbove(song?.lyrics ?? '');
   document.getElementById('lyrics-delete-confirm').style.display = 'none';
   document.getElementById('lyrics-delete-btn').style.display     = _viewMode ? 'none' : '';
   _lyricsSetMode('view');
@@ -45,8 +98,8 @@ async function openLyrics(sid) {
 
   const text = await _lyricsLoad(sid, song);
   if (text === null) return;
-  document.getElementById('lyrics-view').textContent = text;
-  document.getElementById('lyrics-edit').value       = text;
+  _lyricsShow(text);
+  document.getElementById('lyrics-edit').value       = chordsToAbove(text);
 }
 
 async function openLyricsEdit(sid) {
@@ -54,8 +107,9 @@ async function openLyricsEdit(sid) {
   const title = song?.title ?? 'Lyrics';
 
   currentLyricsSid = sid;
+  _lyricsSteps = 0;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
-  document.getElementById('lyrics-edit').value        = song?.lyrics ?? '';
+  document.getElementById('lyrics-edit').value        = chordsToAbove(song?.lyrics ?? '');
   _lyricsSetMode('edit');
   document.getElementById('lyrics-modal').classList.add('open');
   document.getElementById('lyrics-edit').focus();
@@ -67,7 +121,7 @@ async function openLyricsEdit(sid) {
   edit.disabled = false;
   if (text === null) return;
   // Only fill it if nothing was typed while the text was loading.
-  if (!edit.value) edit.value = text;
+  if (!edit.value) edit.value = chordsToAbove(text);
   edit.focus();
 }
 
@@ -132,7 +186,7 @@ function _lyricsDiscardSuggestion() {
 
 function startEditLyrics() {
   const song = songs.find(s => String(s.id) === String(currentLyricsSid));
-  document.getElementById('lyrics-edit').value = song?.lyrics ?? '';
+  document.getElementById('lyrics-edit').value = chordsToAbove(song?.lyrics ?? '');
   _lyricsSetMode('edit');
   document.getElementById('lyrics-edit').focus();
 }
@@ -157,16 +211,26 @@ function _lyricsSaveStatus(msg, isError) {
 async function saveLyrics() {
   const sid = currentLyricsSid;
   if (!sid) return;
-  const text = document.getElementById('lyrics-edit').value;
+  const edited = document.getElementById('lyrics-edit').value;
 
   // New, unsaved song: stash lyrics in the panel; they persist when it's created.
   if (_isNewPanelSid(sid)) {
     const hidden = document.querySelector(`input[data-key="lyrics"][data-id="${sid}"]`);
+    const text = chordsForSave(edited, hidden && hidden.value);
     if (hidden) { hidden.value = text; markPanelEditDirty(); }
     closeLyrics();
     return;
   }
 
+  // Edit opened before the stored text arrived, or its fetch failed: the editor
+  // is empty, and saving would replace the lyrics with nothing.
+  const song = songs.find(s => String(s.id) === String(sid));
+  if (song && song.lyrics === undefined && song.has_lyrics !== false) {
+    _lyricsSaveStatus(t('songs.lyricsCouldNotFetch'), true);
+    return;
+  }
+
+  const text = chordsForSave(edited, song?.lyrics);
   const saveBtn = document.getElementById('lyrics-save-btn');
   if (saveBtn) { saveBtn.textContent = t('songs.savingDot'); saveBtn.disabled = true; }
   _lyricsSaveStatus('', false);
@@ -207,7 +271,7 @@ async function saveLyrics() {
     }
 
     if (trimmed) {
-      document.getElementById('lyrics-view').textContent = trimmed;
+      _lyricsShow(trimmed);
       _lyricsSetMode('view');
     } else {
       closeLyrics();

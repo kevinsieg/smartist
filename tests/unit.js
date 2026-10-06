@@ -48,6 +48,8 @@ const suites = [
   require('./unit/storage_accounting'),
   require('./unit/export'),
   require('./unit/client_escape'),
+  require('./unit/chords'),
+  require('./unit/stage_fit'),
   require('./unit/song_tags_client'),
   require('./unit/tenant_isolation'),
   require('./unit/with_busy'),

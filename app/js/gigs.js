@@ -861,7 +861,7 @@ async function renderGigRelated(gigId) {
     : '';
 
   const setlistPart = refs.setlists.length
-    ? `<div class="related-row">${t('gigs.setlistsTitle')} &nbsp;${refs.setlists.map(s => `<a href="/${_artistSlug}/stage?id=${s.id}" target="_blank" style="font-size:0.82rem;margin-right:0.5rem;">${escHtml(s.title || t('gigs.untitledSetlist'))}</a>`).join(' · ')}</div>`
+    ? `<div class="related-row">${t('gigs.setlistsTitle')} &nbsp;${refs.setlists.map(s => `<a href="/${_artistSlug}/stage?id=${s.id}" target="_blank" rel="opener" style="font-size:0.82rem;margin-right:0.5rem;">${escHtml(s.title || t('gigs.untitledSetlist'))}</a>`).join(' · ')}</div>`
     : '';
 
   content.innerHTML = venuePart + orgPart + setlistPart

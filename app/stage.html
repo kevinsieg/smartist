@@ -377,6 +377,19 @@
             white-space: pre-wrap;
             color: var(--s-text);
         }
+        .chord-row { white-space: pre-wrap; word-break: break-word; min-height: 1.75em; }
+        .chord-row--chords { line-height: 1.25; margin-top: 0.15rem; }
+        .ch-seg { display: inline-block; vertical-align: bottom; white-space: pre-wrap; }
+        .ch { display: block; min-height: 1.2em; font-size: 0.85em; font-weight: 700; color: var(--s-accent); }
+        .ch-tx { display: block; }
+        .chord-label { font-weight: 700; margin-top: 0.6rem; }
+        .stage-transpose-val { min-width: 2ch; text-align: center; font-size: 11px; align-self: center; }
+        /* Columns: full width, fixed height, text flows into the next column */
+        body.stage-cols .stage-wrap { max-width: none; }
+        body.stage-cols .song-stage-lyrics { column-width: 18em; column-gap: 2.5em; column-fill: auto; overflow-x: auto; overflow-y: hidden; }
+        body.stage-cols .chord-row { break-inside: avoid; }
+        body.stage-cols .chord-label { break-after: avoid; }
+        @media print { body.stage-cols .song-stage-lyrics { height: auto !important; overflow: visible !important; columns: auto; font-size: inherit !important; } }
 
         /* Email share modal */
         .stage-modal-overlay {
@@ -495,6 +508,7 @@
     <script src="/app/js/core.js?v=14"></script>
     <script src="/app/js/share-utils.js?v=5"></script>
     <script src="/app/js/arrangement.js?v=8"></script>
-    <script src="/app/js/stage.js?v=10"></script>
+    <script src="/app/js/chords.js?v=8"></script>
+    <script src="/app/js/stage.js?v=13"></script>
 </body>
 </html>

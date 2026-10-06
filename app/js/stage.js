@@ -77,20 +77,111 @@ function stageFontDown() {
   _applyLyricsSize();
 }
 
+// Largest whole size in [lo, hi] for which fits(size) holds; lo when none does.
+// fits() applies the size it tests, so callers set the result afterwards.
+function _stageFitSearch(fits, lo, hi) {
+  var best = lo;
+  while (lo <= hi) {
+    var mid = (lo + hi) >> 1;
+    if (fits(mid)) { best = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return best;
+}
+
 function stageFitLyrics() {
   var el = document.getElementById('_stage_lyrics');
   if (!el) return;
+  if (_stageColsOn) { _stageFitColumns(); return; }
   var availH = window.innerHeight - el.getBoundingClientRect().top - 24;
   if (availH < 40) return;
-  var lo = 7, hi = 96, best = lo;
-  for (var i = 0; i < 16; i++) {
-    var mid = (lo + hi) / 2;
-    el.style.fontSize = mid + 'px';
-    if (el.scrollHeight <= availH) { best = mid; lo = mid; } else hi = mid;
-  }
-  _stageLyricsPx = Math.floor(best);
+  _stageLyricsPx = _stageFitSearch(function (px) {
+    el.style.fontSize = px + 'px';
+    return el.scrollHeight <= availH;
+  }, 7, 96);
   localStorage.setItem('stage_lyrics_px', _stageLyricsPx);
   el.style.fontSize = _stageLyricsPx + 'px';
+}
+
+// ── Columns: the lyrics fill the screen below the header, in as many columns
+// as the width allows, at the largest size that needs no scrolling ───────────
+var _stageColsOn = (function() {
+  try { return localStorage.getItem('stage_cols') === '1'; } catch (e) { return false; }
+})();
+
+function _stageFitColumns() {
+  var el = document.getElementById('_stage_lyrics');
+  if (!el) return;
+  document.body.classList.toggle('stage-cols', _stageColsOn);
+  var b = document.getElementById('_stage_cols_btn');
+  if (b) b.setAttribute('aria-pressed', String(_stageColsOn));
+  if (!_stageColsOn) { el.style.height = ''; _applyLyricsSize(); return; }
+  // Room down to the floating size bar at the bottom.
+  el.style.height = Math.max(120, window.innerHeight - el.getBoundingClientRect().top - 72) + 'px';
+  var px = _stageFitSearch(function (size) {
+    el.style.fontSize = size + 'px';
+    return el.scrollWidth <= el.clientWidth + 1;
+  }, 8, 96);
+  el.style.fontSize = px + 'px';
+}
+
+function stageToggleColumns() {
+  _stageColsOn = !_stageColsOn;
+  try { localStorage.setItem('stage_cols', _stageColsOn ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+  _stageFitColumns();
+}
+
+var _stageColsTimer = null;
+window.addEventListener('resize', function () {
+  if (!_stageColsOn) return;
+  clearTimeout(_stageColsTimer);
+  _stageColsTimer = setTimeout(_stageFitColumns, 150);
+});
+
+// ── Chords: on/off and transpose ─────────────────────────────────────────────
+function _stageStoreChords(on) {
+  try { localStorage.setItem('stage_chords', on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+}
+var _stageChordsOn = (function() {
+  try { return localStorage.getItem('stage_chords') !== '0'; } catch (e) { return true; }
+})();
+var _stageSteps = 0;
+// Show the shapes for one instrument's capo ('git' or 'bj'), or '' for sounding chords.
+var _stageCapoInst = (function() {
+  try { return localStorage.getItem('stage_capo') || ''; } catch (e) { return ''; }
+})();
+var _stageCapos = { git: 0, bj: 0 };
+var _stageLyricsText = '';
+
+function _stageRenderLyrics() {
+  var el = document.getElementById('_stage_lyrics');
+  if (!el) return;
+  el.innerHTML = chordsRender(_stageLyricsText, { chords: _stageChordsOn, steps: _stageSteps, capo: _stageCapos[_stageCapoInst] || 0 });
+  ['git', 'bj'].forEach(function (k) {
+    var c = document.getElementById('_stage_capo_' + k);
+    if (c) c.setAttribute('aria-pressed', String(_stageCapoInst === k));
+  });
+  var v = document.getElementById('_stage_transpose_val');
+  if (v) v.textContent = (_stageSteps > 0 ? '+' : '') + _stageSteps;
+  var b = document.getElementById('_stage_chords_btn');
+  if (b) b.setAttribute('aria-pressed', String(_stageChordsOn));
+  if (_stageColsOn) _stageFitColumns();
+}
+
+function stageToggleChords() {
+  _stageChordsOn = !_stageChordsOn;
+  _stageStoreChords(_stageChordsOn);
+  _stageRenderLyrics();
+}
+
+function stageCapo(inst) {
+  _stageCapoInst = _stageCapoInst === inst ? '' : inst;
+  try { localStorage.setItem('stage_capo', _stageCapoInst); } catch (e) { /* storage unavailable */ }
+  _stageRenderLyrics();
+}
+
+function stageTranspose(d) {
+  _stageSteps = Math.max(-11, Math.min(11, _stageSteps + d));
+  _stageRenderLyrics();
 }
 
 var _SUN_ICON  = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
@@ -344,6 +435,14 @@ async function initSong(params, el, cfg) {
          <button class="stage-share-btn" data-onclick="stageFontDown()" aria-label="Smaller text" title="Smaller text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
          <button class="stage-share-btn" data-onclick="stageFitLyrics()" aria-label="Fit lyrics to screen" title="Fit to screen">${_FIT_ICON}</button>
          <button class="stage-share-btn" data-onclick="stageFontUp()" aria-label="Larger text" title="Larger text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
+         <button class="stage-share-btn" id="_stage_cols_btn" data-onclick="stageToggleColumns()" aria-pressed="${_stageColsOn}" aria-label="Lyrics in columns, fitted to the screen" title="Columns"><span aria-hidden="true" style="font-size:11px">▥</span></button>
+         ${chordsHas(lyrics) ? `
+         <button class="stage-share-btn" id="_stage_chords_btn" data-onclick="stageToggleChords()" aria-pressed="${_stageChordsOn}" aria-label="Show chords" title="Chords"><span aria-hidden="true" style="font-size:11px">Am</span></button>
+         <button class="stage-share-btn" data-onclick="stageTranspose(-1)" aria-label="Transpose down" title="Transpose down"><span aria-hidden="true" style="font-size:11px">♭</span></button>
+         <span id="_stage_transpose_val" class="stage-transpose-val">0</span>
+         <button class="stage-share-btn" data-onclick="stageTranspose(1)" aria-label="Transpose up" title="Transpose up"><span aria-hidden="true" style="font-size:11px">♯</span></button>${
+           [['git', 'Guitar', gitCapo], ['bj', 'Banjo', bjCapo]].filter(c => Number(c[2]) > 0).map(c =>
+             `<button class="stage-share-btn" id="_stage_capo_${c[0]}" data-onclick="stageCapo('${c[0]}')" aria-pressed="${_stageCapoInst === c[0]}" aria-label="${c[1]} capo ${Number(c[2])}: show shapes" title="${c[1]} capo ${Number(c[2])}"><span aria-hidden="true" style="font-size:11px">${c[0] === 'git' ? 'Git' : 'Bj'} ${Number(c[2])}</span></button>`).join('')}` : ''}
        </div>`
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
@@ -360,8 +459,11 @@ async function initSong(params, el, cfg) {
     ${lyricsHtml}`;
 
   if (lyrics) {
-    document.getElementById('_stage_lyrics').textContent = lyrics;
+    _stageLyricsText = lyrics;
+    _stageSteps = 0;
+    _stageCapos = { git: Number(gitCapo) || 0, bj: Number(bjCapo) || 0 };
     _applyLyricsSize();
+    _stageRenderLyrics();
   }
 
   if (params.get('print') === '1') setTimeout(function() { window.print(); }, 400);
