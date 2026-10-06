@@ -32,6 +32,16 @@ function run(r) {
     assertEq(C.chordsIsLine('Hello(World) G'), false);
   });
 
+  test('a bracketed chord pairs only with the chord one space before it', () => {
+    assertEq(C.chordsToPro('Am        (G)\nsome words here and more'), '[Am]some words[(G)] here and more');
+    assertEq(C.chordsToPro('C (G) F\n\nx'), '[G]      [F]\n\nx');
+  });
+
+  test('a fractional capo is rounded', () => {
+    assertEq(C.chordsRender('[Am]la', { capo: 2.4 }).includes('>Gm<'), true);
+    assertEq(C.chordsRender('[Am]la', { capo: '5' }).includes('>Em<'), true);
+  });
+
   test('capo shows the shapes: sounding chord minus the capo, plus transpose', () => {
     const pro = '[Am]la [Dm]le';
     const shapes = C.chordsRender(pro, { capo: 5 });

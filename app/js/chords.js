@@ -52,12 +52,12 @@ function _chMerge(chordLine, lyric) {
   var found = [], m, re = /\S+/g;
   while ((m = re.exec(chordLine))) {
     var pair = _chPair(m[0]);
-    found.push({ at: m.index, tok: pair ? _chSounding(pair.shape, pair.sound) : m[0] });
+    found.push({ at: m.index, end: m.index + m[0].length, tok: pair ? _chSounding(pair.shape, pair.sound) : m[0] });
   }
-  // "Em (Am)": a bracketed chord right after a chord is that chord's sound.
+  // "Em (Am)": a bracketed chord one space after a chord is that chord's sound.
   for (var k = found.length - 2; k >= 0; k--) {
     var alt = /^\(([^()]+)\)$/.exec(found[k + 1].tok);
-    if (alt && _CH_CHORD.test(alt[1]) && _chIsChord(found[k].tok) && found[k].tok.indexOf('(') === -1) {
+    if (alt && found[k + 1].at === found[k].end + 1 && _CH_CHORD.test(alt[1]) && _chIsChord(found[k].tok) && found[k].tok.indexOf('(') === -1) {
       found[k].tok = _chSounding(found[k].tok, alt[1]);
       found.splice(k + 1, 1);
     }
@@ -147,7 +147,7 @@ function _chEsc(s) {
 function chordsRender(text, opts) {
   var show = !opts || opts.chords !== false;
   // With a capo the player sees shapes: the sounding chord minus the capo.
-  var steps = ((opts && opts.steps) || 0) - ((opts && Number(opts.capo)) || 0);
+  var steps = ((opts && opts.steps) || 0) - ((opts && Math.round(Number(opts.capo))) || 0);
   var labels = chordsHas(text);
   var lines = String(text).split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop(); // a trailing line break is no row

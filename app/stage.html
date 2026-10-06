@@ -389,6 +389,7 @@
         body.stage-cols .song-stage-lyrics { column-width: 18em; column-gap: 2.5em; column-fill: auto; overflow-x: auto; overflow-y: hidden; }
         body.stage-cols .chord-row { break-inside: avoid; }
         body.stage-cols .chord-label { break-after: avoid; }
+        @media print { body.stage-cols .song-stage-lyrics { height: auto !important; overflow: visible !important; columns: auto; font-size: inherit !important; } }
 
         /* Email share modal */
         .stage-modal-overlay {
@@ -507,7 +508,7 @@
     <script src="/app/js/core.js?v=14"></script>
     <script src="/app/js/share-utils.js?v=5"></script>
     <script src="/app/js/arrangement.js?v=8"></script>
-    <script src="/app/js/chords.js?v=7"></script>
+    <script src="/app/js/chords.js?v=8"></script>
     <script src="/app/js/stage.js?v=13"></script>
 </body>
 </html>
