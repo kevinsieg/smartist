@@ -196,6 +196,74 @@ function run(r) {
     assertEq(C.chordsForSave('G\nla', undefined), '[G]la');
     assertEq(C.chordsForSave('G\nla!', 'G\nla'), '[G]la!');
   });
+
+  // Paraphrased in the owner's layout: intro, verse, chorus, chord-less verse,
+  // a lone "Refrain", a bridge.
+  const SONG = [
+    '[Dm7]      [Dm7]    [Gm7]    [Fmaj7]',
+    '',
+    '[Dm7]In my little [Dm7]house I am [Gm7]never [Fmaj7]alone',
+    '[Dm7]Walls are [Dm7]thin and the [Gm7]night is [Fmaj7]long',
+    '',
+    '[G]Life in the [G]suburbs is [Am]fine and [Am]good',
+    '[C]Everyone has a [C]place and a [D]garden [D7]too',
+    '',
+    'Second verse has other words',
+    'and no chords at all',
+    '',
+    'Refrain',
+    '',
+    '[Em]New [Dm]neighbours [F]plant [G]trees',
+  ].join('\n');
+
+  test('parts: letters by chord sequence, chord-less verse and lone Refrain repeat', () => {
+    const p = C.chordsParts(SONG);
+    assertEq(p.blocks.map(b => b.letter).join(''), 'ABCBCD');
+    assertEq(p.parts.map(x => x.letter).join(''), 'ABCD');
+    assertEq(p.chorus, 'C');
+    assertEq(p.parts[1].chords, [['Dm7', 'Dm7', 'Gm7', 'Fmaj7'], ['Dm7', 'Dm7', 'Gm7', 'Fmaj7']]);
+    assertEq(p.blocks[4].label, 'Refrain');
+    assertEq(p.blocks[4].kind, 'chorus');
+  });
+
+  test('parts: several verses share a letter; chorus guessed from repeated lyrics', () => {
+    const t = '[G]one [C]two\n[G]three [D]four\n\n[Em]sing it [C]loud\n[G]sing it [D]proud\n\n[G]five [C]six\n[G]seven [D]eight\n\n[Em]sing it [C]loud\n[G]sing it [D]proud';
+    const p = C.chordsParts(t);
+    assertEq(p.blocks.map(b => b.letter).join(''), 'ABAB');
+    assertEq(p.chorus, 'B');
+  });
+
+  test('parts: labels set kinds; a labelled chorus wins over the guess', () => {
+    const t = 'Verse 1:\n[G]a [C]b\n\n[Chorus]\n[D]c [G]d\n\nStrophe 2\nwords only\n\nBridge\n[Em]e [C]f';
+    const p = C.chordsParts(t);
+    assertEq(p.blocks.map(b => b.kind).join(','), 'verse,chorus,verse,bridge');
+    assertEq(p.blocks.map(b => b.letter).join(''), 'ABAC');
+    assertEq(p.chorus, 'B');
+  });
+
+  test('parts: no chorus guess on a tie; edge inputs do not throw', () => {
+    assertEq(C.chordsParts('[G]a\n\n[C]b').chorus, null);
+    assertEq(C.chordsParts('').parts.length, 0);
+    assertEq(C.chordsParts('[G]one block\n[C]no blank lines').blocks.length, 1);
+    assertEq(C.chordsParts('[||]   [x3]\n\n[G]a').parts.length, 2);
+  });
+
+  test('key: from the chords when the field is empty', () => {
+    assertEq(C.chordsGuessKey('[Dm]a [Gm]b [F]c [Dm]d'), 'Dm');
+    assertEq(C.chordsGuessKey('[G]a [C]b [G]c [D]d'), 'G');
+    assertEq(C.chordsGuessKey('no chords'), '');
+  });
+
+  test('Nashville numbers in major and minor keys', () => {
+    const g = t => C.chordsNashville(t, 'G');
+    assertEq([g('G'), g('C'), g('D7'), g('Em'), g('D/F#'), g('Bb'), g('F#dim'), g('Cmaj7')].join(' '), '1 4 57 6- 5/7 b3 7° 4maj7');
+    const d = t => C.chordsNashville(t, 'Dm');
+    assertEq([d('Dm'), d('Gm'), d('F'), d('C'), d('A7')].join(' '), '1- 4- b3 b7 57');
+    assertEq(C.chordsNashville('||Em', 'G'), '||6-');
+    assertEq(C.chordsNashville('n.C.', 'G'), 'n.C.');
+    assertEq(C.chordsNashville('Am', 'D minor'), '5-');
+    assertEq(C.chordsNashville('Am', 'nonsense'), 'Am');
+  });
 }
 
 if (require.main === module) {
