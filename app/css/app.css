@@ -1007,6 +1007,11 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .lyrics-modal > .lyrics-edit { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
 .lyrics-modal > .lyrics-edit { resize: none; }
 .lyrics-modal .lyrics-suggest-text { max-height: 30vh; }
+/* The view and editor are fixed-height boxes: keep their scrollbar visible
+   (macOS hides overlay scrollbars until you scroll). */
+.lyrics-modal > .lyrics-view, .lyrics-modal > .lyrics-edit { scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
+.lyrics-modal > .lyrics-view::-webkit-scrollbar, .lyrics-modal > .lyrics-edit::-webkit-scrollbar { width: 8px; }
+.lyrics-modal > .lyrics-view::-webkit-scrollbar-thumb, .lyrics-modal > .lyrics-edit::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
 /* A float does nothing in the flex column: pin the close button to the corner. */
 .lyrics-modal > .modal-x-btn { position: absolute; top: 0.5rem; right: 0.5rem; margin: 0; }
 .lyrics-modal > :not(.lyrics-view):not(.lyrics-edit) { flex: 0 0 auto; }
