@@ -1,12 +1,15 @@
 // Chords inside lyrics, stored as ChordPro ("[Am]Hello"). People edit them as a
 // chord line above a lyric line; these helpers convert both ways, transpose and
 // render. Shared by the song pages and stage.html: pure, no DOM, no t().
-var _CH_CHORD = /^([A-G][#b]?)((?:maj|min|dim|aug|sus|add|m|M|[0-9]|#|b|\+|-|°|ø)*)(?:\/([A-G][#b]?))?$/;
-var _CH_MARK  = /^(?:x[0-9]+|n\.?c\.?|%|-)$/i;
+// H is the German name for B; both mean B natural here.
+var _CH_CHORD = /^([A-H][#b]?)((?:maj|min|dim|aug|sus|add|m|M|[0-9]|#|b|\+|-|°|ø)*)(?:\/([A-H][#b]?))?$/;
+var _CH_MARK  = /^(?:x[0-9]+|[0-9]+x|n\.?c\.?|%|-|\.)$/i;
+// A section name leading a chord line ("Intro: G D Em C"); it stays text.
+var _CH_LEAD  = /^(?:verse|chorus|refrain|ref\.?|bridge|intro|outro|interlude|solo|pre-?chorus|instrumental|coda|strophe|couplet|pont|vers|zwischenspiel)[0-9]*:?$/i;
 var _CH_LABEL = /^\s*\[?\s*(?:verse|chorus|refrain|ref\.?|bridge|intro|outro|interlude|solo|pre-?chorus|instrumental|coda|strophe|couplet|pont|vers|zwischenspiel)\b[^\]\n]{0,20}\]?:?\s*$/i;
 var _CH_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 var _CH_FLAT  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-var _CH_PC    = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, 'E#': 5, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11, 'B#': 0 };
+var _CH_PC    = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, 'E#': 5, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11, 'B#': 0, H: 11 };
 
 // "||Em", "(Dm)", "Am||" -> the chord inside, "" for a pure bar mark.
 function _chCore(tok) { return tok.replace(/^[|:(]+/, '').replace(/[|:)]+$/, ''); }
@@ -20,8 +23,15 @@ function _chNorm1(l) {
   return out;
 }
 
+// Length of a leading section label on a chord line ("Intro: "), else 0.
+function _chLeadLen(line) {
+  var m = /^\s*(\S+)\s+\S/.exec(line);
+  return m && _CH_LEAD.test(m[1]) ? m[0].length - 1 : 0;
+}
+
 function chordsIsLine(line) {
-  var toks = String(line).trim().split(/\s+/).filter(Boolean);
+  line = String(line);
+  var toks = line.slice(_chLeadLen(line)).trim().split(/\s+/).filter(Boolean);
   return toks.length > 0 && toks.every(_chIsToken) && toks.some(_chIsChord);
 }
 
@@ -50,7 +60,9 @@ function chordsToPro(text) {
     if (!chordsIsLine(line)) { out.push(raw[i]); continue; }
     var next = i + 1 < raw.length ? _chNorm1(raw[i + 1]) : undefined;
     var lyricNext = _chIsLyric(next);
-    if (/^\s*[A-G]\s*$/.test(line) && !lyricNext) { out.push(raw[i]); continue; }
+    if (/^\s*[A-H]\s*$/.test(line) && !lyricNext) { out.push(raw[i]); continue; }
+    var lead = _chLeadLen(line);
+    if (lead) { out.push(_chMerge(' '.repeat(lead) + line.slice(lead), line.slice(0, lead).replace(/\s+$/, ''))); continue; }
     if (lyricNext) { out.push(_chMerge(line, next)); i++; }
     else out.push(_chMerge(line, ''));
   }
@@ -78,15 +90,19 @@ function chordsToAbove(text) {
   return String(text).split('\n').map(function (line) {
     var segs = _chSegments(line);
     if (segs.length === 1) return line;
-    var chords = '', lyric = '';
+    var chords = '', lyric = '', overlay = '';
     segs.forEach(function (s) {
       if (s.chord) {
         var at = Math.max(lyric.length, chords.length ? chords.length + 1 : 0);
         chords += ' '.repeat(at - chords.length) + s.chord;
-      }
+        var o = Math.max(lyric.length, overlay.length ? overlay.length + 1 : 0);
+        overlay += ' '.repeat(o - overlay.length) + s.chord;
+      } else overlay = s.text.replace(/\s+$/, '');
       lyric += s.text;
     });
-    var above = lyric.trim() ? chords + '\n' + lyric.replace(/\s+$/, '') : chords;
+    // "Intro: [G] [D]" goes back to one line: the label with its chords after it.
+    var above = _CH_LEAD.test(lyric.trim()) ? overlay
+      : lyric.trim() ? chords + '\n' + lyric.replace(/\s+$/, '') : chords;
     return chordsToPro(above).trimEnd() === line.trimEnd() ? above : line;
   }).join('\n');
 }

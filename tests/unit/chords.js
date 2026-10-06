@@ -14,6 +14,33 @@ function run(r) {
       assertEq(C.chordsIsLine(l), false, l);
   });
 
+  test('German songbooks: H chords, 2x repeats and beat dots', () => {
+    for (const l of ['G   H7   Em', 'H   Hm7   E', 'Am   .   .   G', 'Am  F  C  G  2x'])
+      assertEq(C.chordsIsLine(l), true, l);
+    assertEq(C.chordsToPro('H7     Em\nOne more line'), '[H7]One mor[Em]e line');
+  });
+
+  test('H and B are both B natural when transposing', () => {
+    assertEq(C.chordsTranspose('H', 1), 'C');
+    assertEq(C.chordsTranspose('H7', 2), 'Db7');
+    assertEq(C.chordsTranspose('B', 1), 'C');
+    assertEq(C.chordsTranspose('Hm', 0), 'Hm');
+  });
+
+  test('a section label may lead a chord line and stays text', () => {
+    for (const l of ['Intro: G  D  Em  C', 'Refrain  Am  F', 'Interlude: Em  Am'])
+      assertEq(C.chordsIsLine(l), true, l);
+    assertEq(C.chordsIsLine('Intro: is long'), false);
+    const intro = 'Intro: G   D   Em   C';
+    const pro = C.chordsToPro(intro + '\n\nFirst line');
+    assertEq(pro.includes('[Intro:]'), false, pro);
+    assertEq(pro.startsWith('Intro:'), true, pro);
+    assertEq(C.chordsToAbove(pro), intro + '\n\nFirst line');
+    const html = C.chordsRender(pro, {});
+    assertEq((html.match(/class="ch"/g) || []).length >= 4, true, html);
+    assertEq(html.includes('Intro:'), true);
+  });
+
   test('chord line above a lyric line becomes inline ChordPro at the same columns', () => {
     assertEq(C.chordsToPro('Dm7         Gm7\nIn the house by the road'), '[Dm7]In the house[Gm7] by the road');
   });
