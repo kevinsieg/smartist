@@ -874,6 +874,8 @@
   "songs.lyricsSuggestedVia": "Suggestion via {source}",
   "songs.lyricsAiNeedsSave": "Enregistrez d'abord le morceau pour chercher ses paroles avec l'IA ✦.",
   "songs.lyricsTitle": "Paroles",
+  "songs.capoShapesBanjo": "Banjo capo {n}",
+  "songs.capoShapesGit": "Guitare capo {n}",
   "songs.chords": "Accords",
   "songs.transposeDown": "Transposer vers le bas",
   "songs.transposeUp": "Transposer vers le haut",

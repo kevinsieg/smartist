@@ -20,13 +20,25 @@ function run(r) {
     assertEq(C.chordsToPro('H7     Em\nOne more line'), '[H7]One mor[Em]e line');
   });
 
-  test('a chord with a bracketed alternative keeps only the first chord', () => {
+  // "Em(Am)" / "Em (Am)": a capo shape, then the chord that sounds. The sounding
+  // chord is stored; the shape comes back from the song's capo.
+  test('a shape with its sounding chord in brackets stores the sounding chord', () => {
     assertEq(C.chordsIsLine('Em(Am)   C   G'), true);
     assertEq(C.chordsIsLine('Am(Em)'), true);
-    assertEq(C.chordsToPro('Em(Am)   G\nla la la la la'), '[Em]la la la [G]la la');
-    assertEq(C.chordsToPro('Em(Bm)  C\n\nNext'), '[Em]        [C]\n\nNext');
-    assertEq(C.chordsToPro('||Em (Dm)   F\n\nx'), '[||Em]     [(Dm)]       [F]\n\nx');
+    assertEq(C.chordsToPro('Em(Am)   G\nla la la la la'), '[Am]la la la [G]la la');
+    assertEq(C.chordsToPro('Em (Am)  G\nla la la la la'), '[Am]la la la [G]la la');
+    assertEq(C.chordsToPro('||Em (Dm)   F\n\nx'), '[||Dm]            [F]\n\nx');
+    assertEq(C.chordsToPro('(Dm)   F\n\nx'), '[(Dm)]       [F]\n\nx');
     assertEq(C.chordsIsLine('Hello(World) G'), false);
+  });
+
+  test('capo shows the shapes: sounding chord minus the capo, plus transpose', () => {
+    const pro = '[Am]la [Dm]le';
+    const shapes = C.chordsRender(pro, { capo: 5 });
+    assertEq(shapes.includes('>Em<'), true, shapes);
+    assertEq(shapes.includes('>Am<'), true, shapes);
+    assertEq(C.chordsRender(pro, { capo: 5, steps: 2 }).includes('>F#m<'), true);
+    assertEq(C.chordsRender(pro, {}).includes('>Am<'), true);
   });
 
   test('H and B are both B natural when transposing', () => {
@@ -88,7 +100,7 @@ function run(r) {
       'Refrain',
       'G            Am',
       'Life in the suburbs   is fine',
-      '||Em (Dm)    || x3     F     G     E   E7',
+      '||Em         || x3     F     G     E   E7',
       'D       A7      D      n.C.',
       'All comes to a good   end',
     ].join('\n');

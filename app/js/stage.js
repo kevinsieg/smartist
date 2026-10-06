@@ -101,12 +101,21 @@ var _stageChordsOn = (function() {
   try { return localStorage.getItem('stage_chords') !== '0'; } catch (e) { return true; }
 })();
 var _stageSteps = 0;
+// Show the shapes for one instrument's capo ('git' or 'bj'), or '' for sounding chords.
+var _stageCapoInst = (function() {
+  try { return localStorage.getItem('stage_capo') || ''; } catch (e) { return ''; }
+})();
+var _stageCapos = { git: 0, bj: 0 };
 var _stageLyricsText = '';
 
 function _stageRenderLyrics() {
   var el = document.getElementById('_stage_lyrics');
   if (!el) return;
-  el.innerHTML = chordsRender(_stageLyricsText, { chords: _stageChordsOn, steps: _stageSteps });
+  el.innerHTML = chordsRender(_stageLyricsText, { chords: _stageChordsOn, steps: _stageSteps, capo: _stageCapos[_stageCapoInst] || 0 });
+  ['git', 'bj'].forEach(function (k) {
+    var c = document.getElementById('_stage_capo_' + k);
+    if (c) c.setAttribute('aria-pressed', String(_stageCapoInst === k));
+  });
   var v = document.getElementById('_stage_transpose_val');
   if (v) v.textContent = (_stageSteps > 0 ? '+' : '') + _stageSteps;
   var b = document.getElementById('_stage_chords_btn');
@@ -116,6 +125,12 @@ function _stageRenderLyrics() {
 function stageToggleChords() {
   _stageChordsOn = !_stageChordsOn;
   _stageStoreChords(_stageChordsOn);
+  _stageRenderLyrics();
+}
+
+function stageCapo(inst) {
+  _stageCapoInst = _stageCapoInst === inst ? '' : inst;
+  try { localStorage.setItem('stage_capo', _stageCapoInst); } catch (e) { /* storage unavailable */ }
   _stageRenderLyrics();
 }
 
@@ -379,7 +394,9 @@ async function initSong(params, el, cfg) {
          <button class="stage-share-btn" id="_stage_chords_btn" data-onclick="stageToggleChords()" aria-pressed="${_stageChordsOn}" aria-label="Show chords" title="Chords"><span aria-hidden="true" style="font-size:11px">Am</span></button>
          <button class="stage-share-btn" data-onclick="stageTranspose(-1)" aria-label="Transpose down" title="Transpose down"><span aria-hidden="true" style="font-size:11px">♭</span></button>
          <span id="_stage_transpose_val" class="stage-transpose-val">0</span>
-         <button class="stage-share-btn" data-onclick="stageTranspose(1)" aria-label="Transpose up" title="Transpose up"><span aria-hidden="true" style="font-size:11px">♯</span></button>` : ''}
+         <button class="stage-share-btn" data-onclick="stageTranspose(1)" aria-label="Transpose up" title="Transpose up"><span aria-hidden="true" style="font-size:11px">♯</span></button>${
+           [['git', 'Guitar', gitCapo], ['bj', 'Banjo', bjCapo]].filter(c => Number(c[2]) > 0).map(c =>
+             `<button class="stage-share-btn" id="_stage_capo_${c[0]}" data-onclick="stageCapo('${c[0]}')" aria-pressed="${_stageCapoInst === c[0]}" aria-label="${c[1]} capo ${Number(c[2])}: show shapes" title="${c[1]} capo ${Number(c[2])}"><span aria-hidden="true" style="font-size:11px">${c[0] === 'git' ? 'Git' : 'Bj'} ${Number(c[2])}</span></button>`).join('')}` : ''}
        </div>`
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
@@ -398,6 +415,7 @@ async function initSong(params, el, cfg) {
   if (lyrics) {
     _stageLyricsText = lyrics;
     _stageSteps = 0;
+    _stageCapos = { git: Number(gitCapo) || 0, bj: Number(bjCapo) || 0 };
     _stageRenderLyrics();
     _applyLyricsSize();
   }

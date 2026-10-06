@@ -874,6 +874,8 @@
   "songs.lyricsSuggestedVia": "Vorschlag via {source}",
   "songs.lyricsAiNeedsSave": "Speichere den Song zuerst, um den Songtext mit KI ✦ zu suchen.",
   "songs.lyricsTitle": "Lyrics",
+  "songs.capoShapesBanjo": "Banjo Capo {n}",
+  "songs.capoShapesGit": "Gitarre Capo {n}",
   "songs.chords": "Akkorde",
   "songs.transposeDown": "Tiefer transponieren",
   "songs.transposeUp": "Höher transponieren",

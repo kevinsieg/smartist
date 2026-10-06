@@ -8,11 +8,27 @@ var _lyricsChordsOn = true;
 try { _lyricsChordsOn = localStorage.getItem('lyrics_chords') !== '0'; } catch (_) {}
 var _lyricsSteps    = 0;
 var _lyricsText     = '';
+// Show the shapes for one instrument's capo ('git' or 'bj'), or '' for sounding chords.
+var _lyricsCapoInst = '';
+try { _lyricsCapoInst = localStorage.getItem('lyrics_capo') || ''; } catch (_) {}
+
+function _lyricsCapos() {
+  var song = songs.find(s => String(s.id) === String(currentLyricsSid));
+  var extra = (song && song.extra) || {};
+  return {
+    git: _isSongFieldHidden('extra.gitCapo')   ? 0 : Number(extra.gitCapo)   || 0,
+    bj:  _isSongFieldHidden('extra.banjoCapo') ? 0 : Number(extra.banjoCapo) || 0,
+  };
+}
 
 function _lyricsShow(text) {
   _lyricsText = text || '';
   var view = document.getElementById('lyrics-view');
-  view.innerHTML = chordsRender(_lyricsText, { chords: _lyricsChordsOn, steps: _lyricsSteps });
+  var capos = _lyricsCapos();
+  view.innerHTML = chordsRender(_lyricsText, { chords: _lyricsChordsOn, steps: _lyricsSteps, capo: capos[_lyricsCapoInst] || 0 });
+  document.getElementById('lyrics-capo-btns').innerHTML = ['git', 'bj'].filter(k => capos[k] > 0).map(k =>
+    `<button class="btn" data-onclick="lyricsCapo('${k}')" aria-pressed="${_lyricsCapoInst === k}">` +
+    escHtml(t(k === 'git' ? 'songs.capoShapesGit' : 'songs.capoShapesBanjo', { n: capos[k] })) + '</button>').join('');
   document.getElementById('lyrics-chord-bar').style.display = chordsHas(_lyricsText) ? '' : 'none';
   document.getElementById('lyrics-chords-toggle').setAttribute('aria-pressed', String(_lyricsChordsOn));
   document.getElementById('lyrics-transpose-val').textContent = (_lyricsSteps > 0 ? '+' : '') + _lyricsSteps;
@@ -21,6 +37,12 @@ function _lyricsShow(text) {
 function lyricsToggleChords() {
   _lyricsChordsOn = !_lyricsChordsOn;
   try { localStorage.setItem('lyrics_chords', _lyricsChordsOn ? '1' : '0'); } catch (_) {}
+  _lyricsShow(_lyricsText);
+}
+
+function lyricsCapo(inst) {
+  _lyricsCapoInst = _lyricsCapoInst === inst ? '' : inst;
+  try { localStorage.setItem('lyrics_capo', _lyricsCapoInst); } catch (_) {}
   _lyricsShow(_lyricsText);
 }
 

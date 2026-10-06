@@ -13,13 +13,15 @@ var _CH_PC    = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, 'E#':
 
 // "||Em", "(Dm)", "Am||" -> the chord inside, "" for a pure bar mark.
 function _chCore(tok) { return tok.replace(/^[|:(]+/, '').replace(/[|:)]+$/, ''); }
-// "Em(Am)": a chord with its alternative; only the first chord is kept.
-function _chAltMain(tok) {
+// "Em(Am)": the capo shape, then the chord that sounds -> { shape, sound }.
+function _chPair(tok) {
   var m = /^([^(]+)\(([^)]+)\)$/.exec(tok);
-  return m && _CH_CHORD.test(_chCore(m[1])) && _CH_CHORD.test(m[2]) ? m[1] : null;
+  return m && _CH_CHORD.test(_chCore(m[1])) && _CH_CHORD.test(m[2]) ? { shape: m[1], sound: m[2] } : null;
 }
-function _chIsChord(tok) { return _CH_CHORD.test(_chCore(_chAltMain(tok) || tok)); }
-function _chIsToken(tok) { var c = _chCore(_chAltMain(tok) || tok); return c === '' || _CH_MARK.test(c) || _CH_CHORD.test(c); }
+// The sounding chord keeps the shape's bar marks: "||Em" + "Dm" -> "||Dm".
+function _chSounding(shape, sound) { return /^[|:]*/.exec(shape)[0] + sound; }
+function _chIsChord(tok) { var p = _chPair(tok); return _CH_CHORD.test(_chCore(p ? p.shape : tok)); }
+function _chIsToken(tok) { var p = _chPair(tok), c = _chCore(p ? p.shape : tok); return c === '' || _CH_MARK.test(c) || _CH_CHORD.test(c); }
 
 function _chNorm1(l) {
   l = l.replace(/\r$/, '');
@@ -48,7 +50,18 @@ function _chIsLyric(line) {
 // columns stay valid; a chord past the end pads the lyric with spaces.
 function _chMerge(chordLine, lyric) {
   var found = [], m, re = /\S+/g;
-  while ((m = re.exec(chordLine))) found.push({ at: m.index, tok: _chAltMain(m[0]) || m[0] });
+  while ((m = re.exec(chordLine))) {
+    var pair = _chPair(m[0]);
+    found.push({ at: m.index, tok: pair ? _chSounding(pair.shape, pair.sound) : m[0] });
+  }
+  // "Em (Am)": a bracketed chord right after a chord is that chord's sound.
+  for (var k = found.length - 2; k >= 0; k--) {
+    var alt = /^\(([^()]+)\)$/.exec(found[k + 1].tok);
+    if (alt && _CH_CHORD.test(alt[1]) && _chIsChord(found[k].tok) && found[k].tok.indexOf('(') === -1) {
+      found[k].tok = _chSounding(found[k].tok, alt[1]);
+      found.splice(k + 1, 1);
+    }
+  }
   var out = lyric;
   for (var i = found.length - 1; i >= 0; i--) {
     var at = found[i].at;
@@ -132,7 +145,9 @@ function _chEsc(s) {
 }
 
 function chordsRender(text, opts) {
-  var show = !opts || opts.chords !== false, steps = (opts && opts.steps) || 0;
+  var show = !opts || opts.chords !== false;
+  // With a capo the player sees shapes: the sounding chord minus the capo.
+  var steps = ((opts && opts.steps) || 0) - ((opts && Number(opts.capo)) || 0);
   var labels = chordsHas(text);
   return String(text).split('\n').map(function (line) {
     var segs = _chSegments(line);
