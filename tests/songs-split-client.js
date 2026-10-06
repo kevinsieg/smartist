@@ -162,6 +162,16 @@ function makeContext() {
     assert(bad.length === 0, `stage links without rel="opener": ${bad.join(', ')}`);
   });
 
+  // Opening the editor for another song starts that song untransposed.
+  ctx.songs = [{ id: 8, title: 'w', lyrics: 'la' }];
+  ctx._lyricsSteps = 3;
+  let openError = null;
+  try { await ctx.openLyricsEdit(8); } catch (e) { openError = e; }
+  test('openLyricsEdit resets transpose for the song it opens', () => {
+    assert(!openError, openError && openError.message);
+    assert(ctx._lyricsSteps === 0, `transpose still ${ctx._lyricsSteps}`);
+  });
+
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);

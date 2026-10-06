@@ -150,6 +150,11 @@ function run(r) {
     assertEq(html.includes('Plain line'), true);
   });
 
+  test('render: a trailing line break adds no empty row', () => {
+    assertEq((C.chordsRender('a\nb\n', {}).match(/class="chord-row"/g) || []).length, 2);
+    assertEq((C.chordsRender('a\n\nb', {}).match(/class="chord-row"/g) || []).length, 3);
+  });
+
   test('render: label-like lines stay plain rows in songs without chords', () => {
     const plain = C.chordsRender('Chorus\nla', {});
     assertEq(plain.includes('chord-label'), false);

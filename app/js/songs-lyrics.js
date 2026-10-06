@@ -107,6 +107,7 @@ async function openLyricsEdit(sid) {
   const title = song?.title ?? 'Lyrics';
 
   currentLyricsSid = sid;
+  _lyricsSteps = 0;
   document.getElementById('lyrics-title').textContent = `¶ ${title}`;
   document.getElementById('lyrics-edit').value        = chordsToAbove(song?.lyrics ?? '');
   _lyricsSetMode('edit');

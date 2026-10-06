@@ -149,7 +149,9 @@ function chordsRender(text, opts) {
   // With a capo the player sees shapes: the sounding chord minus the capo.
   var steps = ((opts && opts.steps) || 0) - ((opts && Number(opts.capo)) || 0);
   var labels = chordsHas(text);
-  return String(text).split('\n').map(function (line) {
+  var lines = String(text).split('\n');
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop(); // a trailing line break is no row
+  return lines.map(function (line) {
     var segs = _chSegments(line);
     if (segs.length === 1) {
       return labels && _CH_LABEL.test(line)
