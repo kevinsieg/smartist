@@ -998,6 +998,16 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .ch { display: block; min-height: 1.2em; font-size: 0.85em; font-weight: 700; color: var(--secondary-ink); }
 .ch-tx { display: block; }
 .chord-label { font-weight: 700; margin-top: 0.6rem; }
+/* Lyrics dialog: screen height; only the view or the editor scrolls. */
+.modal.lyrics-modal {
+    display: flex; flex-direction: column;
+    height: calc(100vh - 2rem); height: calc(100dvh - 2rem); max-height: none; overflow: hidden;
+}
+.lyrics-modal > .lyrics-view,
+.lyrics-modal > .lyrics-edit { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
+.lyrics-modal > .lyrics-edit { resize: none; }
+.lyrics-modal .lyrics-suggest-text { max-height: 30vh; }
+.lyrics-modal > :not(.lyrics-view):not(.lyrics-edit) { flex: 0 0 auto; }
 .lyrics-suggest-header { font-size: 0.78rem; color: var(--third-color); margin: 0.5rem 0 0.25rem; }
 .lyrics-suggest-text   { border: 1px solid rgba(221,213,200,0.3); border-radius: 4px; padding: 0.5rem; }
 
