@@ -172,6 +172,34 @@ function makeContext() {
     assert(ctx._lyricsSteps === 0, `transpose still ${ctx._lyricsSteps}`);
   });
 
+  // Tab in the lyrics editor moves text (a chord) to the next 4-column stop;
+  // Shift+Tab takes up to 4 spaces back.
+  function tabIn(value, at, shiftKey) {
+    const ta = { value, selectionStart: at, selectionEnd: at,
+      setRangeText(text, start, end) { this.value = this.value.slice(0, start) + text + this.value.slice(end); this.selectionStart = this.selectionEnd = start + text.length; } };
+    let prevented = false;
+    ctx.lyricsEditKey({ key: 'Tab', shiftKey: !!shiftKey, target: ta, preventDefault() { prevented = true; } });
+    return { value: ta.value, at: ta.selectionStart, prevented };
+  }
+  test('Tab in the lyrics editor inserts spaces to the next 4-column stop', () => {
+    const r = tabIn('G     C\nla', 6);
+    assert(r.prevented, 'Tab should not leave the editor');
+    assert(r.value === 'G       C\nla' && r.at === 8, JSON.stringify(r));
+    const r2 = tabIn('ab\nC', 3);
+    assert(r2.value === 'ab\n    C', JSON.stringify(r2));
+  });
+  test('Shift+Tab takes back up to 4 spaces before the cursor', () => {
+    const r = tabIn('G      C', 7, true);
+    assert(r.value === 'G   C' && r.at === 4, JSON.stringify(r));
+    const r2 = tabIn('G C', 2, true);
+    assert(r2.value === 'GC', JSON.stringify(r2));
+  });
+  test('other keys are left alone', () => {
+    let prevented = false;
+    ctx.lyricsEditKey({ key: 'a', target: {}, preventDefault() { prevented = true; } });
+    assert(!prevented, 'only Tab is handled');
+  });
+
   const total = passed + failed;
   console.log(`\n${B('─'.repeat(40))}`);
   console.log(`${G(`${passed} passed`)}  ${failed ? R(`${failed} failed`) : D('0 failed')}`);

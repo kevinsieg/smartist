@@ -81,6 +81,27 @@ function lyricsCapo(inst) {
   _lyricsShow(_lyricsText);
 }
 
+// Tab in the editor moves text (a chord) to the next 4-column stop, Shift+Tab
+// back to the previous one; the browser's undo still covers both.
+function _lyricsReplace(ta, from, to, text) {
+  if (ta.setSelectionRange) ta.setSelectionRange(from, to);
+  if (!(typeof document.execCommand === 'function' && document.execCommand('insertText', false, text))) ta.setRangeText(text, from, to, 'end');
+}
+
+function lyricsEditKey(e) {
+  if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+  e.preventDefault();
+  var ta = e.target, start = ta.selectionStart, v = ta.value;
+  var col = start - (v.lastIndexOf('\n', start - 1) + 1);
+  if (e.shiftKey) {
+    var n = 0, want = col % 4 || 4;
+    while (n < want && v[start - 1 - n] === ' ') n++;
+    if (n) _lyricsReplace(ta, start - n, start, '');
+  } else {
+    _lyricsReplace(ta, start, ta.selectionEnd, ' '.repeat(4 - col % 4));
+  }
+}
+
 function lyricsTranspose(d) {
   _lyricsSteps = Math.max(-11, Math.min(11, _lyricsSteps + d));
   _lyricsShow(_lyricsText);

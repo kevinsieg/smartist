@@ -223,7 +223,7 @@
     </div>
     <div id="lyrics-structure" class="chord-structure-wrap" style="display:none"></div>
     <div id="lyrics-view" class="lyrics-view"></div>
-    <textarea id="lyrics-edit" class="lyrics-edit" style="display:none" data-i18n-attr="placeholder:songs.lyricsPlaceholder" placeholder="Enter lyrics…" spellcheck="false"></textarea>
+    <textarea id="lyrics-edit" class="lyrics-edit" data-onkeydown="lyricsEditKey(event)" style="display:none" data-i18n-attr="placeholder:songs.lyricsPlaceholder" placeholder="Enter lyrics…" spellcheck="false"></textarea>
     <div id="lyrics-suggest-preview" style="display:none">
       <p id="lyrics-suggest-header" class="lyrics-suggest-header"></p>
       <pre id="lyrics-suggest-text" class="lyrics-view lyrics-suggest-text"></pre>
@@ -301,7 +301,7 @@
 <!-- songs.js runs init() at the end, so it loads last; the others only define. -->
 <script src="/app/js/songs-media.js?v=7"></script>
 <script src="/app/js/chords.js?v=11"></script>
-<script src="/app/js/songs-lyrics.js?v=15"></script>
+<script src="/app/js/songs-lyrics.js?v=16"></script>
 <script src="/app/js/songs-table.js?v=10"></script>
 <script src="/app/js/songs-panel.js?v=18"></script>
 <script src="/app/js/songs.js?v=34"></script>
