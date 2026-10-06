@@ -213,7 +213,10 @@ function chordsParts(text) {
       if (lineChords.some(function (c) { return _chIsChord(c); }) || lineChords.length) chords.push(lineChords);
       if (plain.trim()) words.push(plain.trim().toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' '));
     });
-    return { start: b.start, end: b.end, label: label, kind: kind, chords: chords, lyrics: words.join(' ') };
+    var marks = chords.length > 0 && !words.length && chords.every(function (l) {
+      return l.every(function (c) { var core = _chCore(c); return core === '' || _CH_MARK.test(core); });
+    });
+    return { start: b.start, end: b.end, label: label, kind: kind, chords: chords, lyrics: words.join(' '), marks: marks };
   });
 
   var parts = [], letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -229,6 +232,7 @@ function chordsParts(text) {
   }
   blocks.forEach(function (b, i) {
     var part = null;
+    if (b.marks) { b.letter = ''; return; }
     if (b.chords.length) {
       var key = JSON.stringify(b.chords);
       part = parts.filter(function (p) { return p.key === key; })[0] || newPart(b);
@@ -268,10 +272,10 @@ function chordsParts(text) {
 
 // ── Key and Nashville numbers ────────────────────────────────────────────────
 function _chParseKey(key) {
-  var m = /^\s*([A-H][#b]?)\s*(m(?!aj)|min|minor|moll|-)?/i.exec(String(key || ''));
+  var m = /^\s*([A-H][#b]?)\s*(m|min|minor|moll|-|maj|major|dur)?$/i.exec(String(key || ''));
   if (!m) return null;
   var root = m[1][0].toUpperCase() + m[1].slice(1);
-  return _CH_PC[root] === undefined ? null : { pc: _CH_PC[root], minor: !!m[2] };
+  return _CH_PC[root] === undefined ? null : { pc: _CH_PC[root], minor: /^(m|min|minor|moll|-)$/i.test(m[2] || '') };
 }
 
 function chordsGuessKey(text) {

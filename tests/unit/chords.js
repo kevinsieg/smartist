@@ -245,7 +245,8 @@ function run(r) {
     assertEq(C.chordsParts('[G]a\n\n[C]b').chorus, null);
     assertEq(C.chordsParts('').parts.length, 0);
     assertEq(C.chordsParts('[G]one block\n[C]no blank lines').blocks.length, 1);
-    assertEq(C.chordsParts('[||]   [x3]\n\n[G]a').parts.length, 2);
+    assertEq(C.chordsParts('[||]   [x3]\n\n[G]a').parts.length, 1);
+    assertEq(C.chordsParts('[||]   [x3]\n\n[G]a').blocks.map(b => b.letter).join(','), ',A');
   });
 
   test('key: from the chords when the field is empty', () => {
@@ -263,6 +264,11 @@ function run(r) {
     assertEq(C.chordsNashville('n.C.', 'G'), 'n.C.');
     assertEq(C.chordsNashville('Am', 'D minor'), '5-');
     assertEq(C.chordsNashville('Am', 'nonsense'), 'Am');
+    for (const bad of ['garbage', 'bla', 'dur']) assertEq(C.chordsNashville('A', bad), 'A', bad);
+    assertEq(C.chordsNashville('Am', 'F# m'), 'b3-');
+    assertEq(C.chordsNashville('Eb', 'Bb'), '4');
+    assertEq(C.chordsNashville('F', 'H'), '#4');
+    assertEq(C.chordsNashville('Em', 'C major'), '3-');
   });
 }
 
