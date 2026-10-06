@@ -1008,6 +1008,16 @@ thead th.col-heart  { font-size: 0.9rem; text-transform: none; letter-spacing: 0
 .lyrics-modal > .lyrics-edit { resize: none; }
 .lyrics-modal .lyrics-suggest-text { max-height: 30vh; }
 .lyrics-modal > :not(.lyrics-view):not(.lyrics-edit) { flex: 0 0 auto; }
+.chord-structure-wrap { flex: 0 0 auto; max-height: 35vh; overflow-y: auto; margin-top: 0.5rem; }
+.chord-structure { font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 3px; padding: 0.4rem 0.6rem; }
+.cs-key { color: var(--third-color); margin-bottom: 0.2rem; }
+.cs-row { display: grid; grid-template-columns: 1.5em 6.5em 1fr; gap: 0.5rem; padding: 0.1rem 0; }
+.cs-letter { font-weight: 700; color: var(--secondary-ink); }
+.cs-label { color: var(--third-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-chords { font-family: var(--font-mono); word-break: break-word; }
+.cs-form { border-top: 1px solid var(--border-color); margin-top: 0.2rem; padding-top: 0.3rem; }
+.chord-row--chorus { font-weight: 700; }
+.chord-row--chorus .ch { font-weight: 700; }
 .lyrics-suggest-header { font-size: 0.78rem; color: var(--third-color); margin: 0.5rem 0 0.25rem; }
 .lyrics-suggest-text   { border: 1px solid rgba(221,213,200,0.3); border-radius: 4px; padding: 0.5rem; }
 

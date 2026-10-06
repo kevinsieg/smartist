@@ -10,8 +10,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="/favicon_io/site.webmanifest">
-    <link rel="stylesheet" href="/app/css/app.css?v=54">
-    <script src="/app/js/i18n.js?v=62"></script>
+    <link rel="stylesheet" href="/app/css/app.css?v=55">
+    <script src="/app/js/i18n.js?v=63"></script>
     <style>
         /* Songs page needs full-width layout, not max-width 960px */
         .songs-page .app-wrap { max-width: 100%; }
@@ -218,7 +218,10 @@
       <span id="lyrics-transpose-val" class="lyrics-transpose-val">0</span>
       <button class="btn" data-onclick="lyricsTranspose(1)" data-i18n-attr="aria-label:songs.transposeUp" aria-label="Transpose up">+</button>
       <span id="lyrics-capo-btns"></span>
+      <button class="btn" id="lyrics-structure-toggle" data-onclick="lyricsToggleStructure()" data-i18n="songs.structure" aria-pressed="false">Structure</button>
+      <button class="btn" id="lyrics-numbers-toggle" data-onclick="lyricsToggleNumbers()" data-i18n="songs.numbers" aria-pressed="false" style="display:none">Numbers</button>
     </div>
+    <div id="lyrics-structure" class="chord-structure-wrap" style="display:none"></div>
     <div id="lyrics-view" class="lyrics-view"></div>
     <textarea id="lyrics-edit" class="lyrics-edit" style="display:none" data-i18n-attr="placeholder:songs.lyricsPlaceholder" placeholder="Enter lyrics…" spellcheck="false"></textarea>
     <div id="lyrics-suggest-preview" style="display:none">
@@ -298,7 +301,7 @@
 <!-- songs.js runs init() at the end, so it loads last; the others only define. -->
 <script src="/app/js/songs-media.js?v=7"></script>
 <script src="/app/js/chords.js?v=10"></script>
-<script src="/app/js/songs-lyrics.js?v=12"></script>
+<script src="/app/js/songs-lyrics.js?v=13"></script>
 <script src="/app/js/songs-table.js?v=10"></script>
 <script src="/app/js/songs-panel.js?v=18"></script>
 <script src="/app/js/songs.js?v=34"></script>
