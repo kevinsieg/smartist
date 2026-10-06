@@ -128,6 +128,7 @@ async function openLyrics(sid) {
   if (song?.lyrics === undefined) {
     document.getElementById('lyrics-view').textContent = t('songs.loading');
     document.getElementById('lyrics-chord-bar').style.display = 'none';
+    document.getElementById('lyrics-structure').style.display = 'none';
   } else {
     _lyricsShow(song.lyrics);
   }

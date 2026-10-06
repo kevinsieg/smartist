@@ -195,10 +195,18 @@ function _chLines(text) {
   return lines;
 }
 
+function _chLabelLine(line) {
+  var segs = _chSegments(line), hasChord = segs.some(function (s) { return s.chord; });
+  if (!hasChord) return _CH_LABEL.test(line);
+  var lead = /^\s*\[?\s*(\S+)/.exec(segs.map(function (s) { return s.text; }).join(''));
+  return !!lead && _CH_LEAD.test(lead[1].replace(/[[\]]/g, ''));
+}
+
 function chordsParts(text) {
   var lines = _chLines(text), raw = [], cur = null;
   lines.forEach(function (line, i) {
     if (!line.trim()) { cur = null; return; }
+    if (cur && cur.lines.length && _chLabelLine(line)) cur = null;
     if (!cur) { cur = { start: i, end: i, lines: [] }; raw.push(cur); }
     cur.end = i; cur.lines.push(line);
   });
@@ -277,7 +285,7 @@ function chordsParts(text) {
 
 // ── Key and Nashville numbers ────────────────────────────────────────────────
 function _chParseKey(key) {
-  var m = /^\s*([A-H][#b]?)\s*(m|min|minor|moll|-|maj|major|dur)?$/i.exec(String(key || ''));
+  var m = /^\s*([A-H][#b]?)\s*(m|min|minor|moll|-|maj|major|dur)?\s*$/i.exec(String(key || ''));
   if (!m) return null;
   var root = m[1][0].toUpperCase() + m[1].slice(1);
   return _CH_PC[root] === undefined ? null : { pc: _CH_PC[root], minor: /^(m|min|minor|moll|-)$/i.test(m[2] || '') };

@@ -296,6 +296,25 @@ function run(r) {
     assertEq(C.chordsStructure('[G]a\n[||]   [x3]', {}).includes('|  |'), false);
   });
 
+  test('key: surrounding spaces allowed', () => {
+    assertEq(C.chordsNashville('Am', ' Dm '), '5-');
+    assertEq(C.chordsNashville('Am', ' garbage '), 'Am');
+  });
+
+  test('parts: a label line starts a new block without a blank line', () => {
+    const a = C.chordsParts('Couplet 1:\n[D]Je [A]vais\nRefrain:\n[G]la [A]la');
+    assertEq(a.blocks.map(b => b.kind).join(), 'verse,chorus');
+    assertEq(a.blocks.map(b => b.letter).join(''), 'AB');
+    assertEq(a.chorus, 'B');
+    const t = 'Verse:\n[G]a [C]b\nChorus:\n[D]c [G]d\nVerse:\n[G]e [C]f';
+    const b = C.chordsParts(t);
+    assertEq(b.blocks.map(x => x.letter).join(''), 'ABA');
+    assertEq(b.chorus, 'B');
+    const rows = C.chordsRender(t, {}).split('\n').filter(r => r.includes('chord-row--chorus'));
+    assertEq(rows.length, 1);
+    assertEq(C.chordsParts('[G]a [C]b\nIntro: [G] [D]\n[C]c [G]d').blocks.length, 2);
+  });
+
   test('render: chorus rows bold only in songs with chords', () => {
     const html = C.chordsRender(SONG, {});
     assertEq((html.match(/chord-row--chorus/g) || []).length, 2);
