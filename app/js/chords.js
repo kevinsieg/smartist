@@ -151,16 +151,21 @@ function chordsRender(text, opts) {
   var labels = chordsHas(text);
   var lines = String(text).split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop(); // a trailing line break is no row
-  return lines.map(function (line) {
-    var segs = _chSegments(line);
+  var chorusLines = {};
+  if (labels) {
+    var cp = chordsParts(text);
+    if (cp.chorus) cp.blocks.forEach(function (b) { if (b.letter === cp.chorus) for (var i = b.start; i <= b.end; i++) chorusLines[i] = true; });
+  }
+  return lines.map(function (line, idx) {
+    var segs = _chSegments(line), bold = chorusLines[idx] ? ' chord-row--chorus' : '';
     if (segs.length === 1) {
       return labels && _CH_LABEL.test(line)
         ? '<div class="chord-label">' + _chEsc(line.trim()) + '</div>'
-        : '<div class="chord-row">' + (_chEsc(line) || '&nbsp;') + '</div>';
+        : '<div class="chord-row' + bold + '">' + (_chEsc(line) || '&nbsp;') + '</div>';
     }
     var words = segs.map(function (s) { return s.text; }).join('');
-    if (!show) return words.trim() ? '<div class="chord-row">' + _chEsc(words) + '</div>' : '';
-    return '<div class="chord-row chord-row--chords">' + segs.filter(function (s) { return s.chord || s.text; }).map(function (s) {
+    if (!show) return words.trim() ? '<div class="chord-row' + bold + '">' + _chEsc(words) + '</div>' : '';
+    return '<div class="chord-row chord-row--chords' + bold + '">' + segs.filter(function (s) { return s.chord || s.text; }).map(function (s) {
       return '<span class="ch-seg"><span class="ch">' + _chEsc(s.chord ? chordsTranspose(s.chord, steps) : '') +
         '</span><span class="ch-tx">' + (_chEsc(s.text) || '&nbsp;') + '</span></span>';
     }).join('') + '</div>';
@@ -172,6 +177,179 @@ function chordsForSave(edited, original) {
   return edited === chordsToAbove(original || '') ? (original || '') : chordsToPro(edited);
 }
 
+// ── Parts: blocks between blank lines, lettered by chord sequence ─────────────
+var _CH_DEG = ['1', 'b2', '2', 'b3', '3', '4', '#4', '5', 'b6', '6', 'b7', '7'];
+
+function _chKind(label) {
+  var w = label.replace(/^\s*\[?\s*/, '').toLowerCase();
+  if (/^pre-?chorus/.test(w)) return 'pre';
+  if (/^(chorus|refrain|ref\b)/.test(w)) return 'chorus';
+  if (/^(verse|strophe|couplet|vers)/.test(w)) return 'verse';
+  if (/^(bridge|pont)/.test(w)) return 'bridge';
+  return 'other';
+}
+
+function _chLines(text) {
+  var lines = String(text).split('\n');
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
+function _chLabelLine(line) {
+  var segs = _chSegments(line), hasChord = segs.some(function (s) { return s.chord; });
+  if (!hasChord) return _CH_LABEL.test(line);
+  var lead = /^\s*\[?\s*(\S+)/.exec(segs.map(function (s) { return s.text; }).join(''));
+  return !!lead && _CH_LEAD.test(lead[1].replace(/[[\]]/g, ''));
+}
+
+function chordsParts(text) {
+  var lines = _chLines(text), raw = [], cur = null;
+  lines.forEach(function (line, i) {
+    if (!line.trim()) { cur = null; return; }
+    if (cur && cur.lines.length && _chLabelLine(line)) cur = null;
+    if (!cur) { cur = { start: i, end: i, lines: [] }; raw.push(cur); }
+    cur.end = i; cur.lines.push(line);
+  });
+  var blocks = raw.map(function (b) {
+    var label = '', kind = '', chords = [], words = [];
+    b.lines.forEach(function (line, j) {
+      var segs = _chSegments(line), lineChords = [];
+      segs.forEach(function (s) { if (s.chord) lineChords.push(s.chord); });
+      var plain = segs.map(function (s) { return s.text; }).join('');
+      var lead = /^\s*\[?\s*(\S+)/.exec(plain);
+      if (j === 0 && !label && (lineChords.length ? lead && _CH_LEAD.test(lead[1].replace(/[[\]]/g, '')) : _CH_LABEL.test(line))) {
+        label = (lineChords.length ? lead[1] : line.trim()).replace(/^\[|\]$/g, '').replace(/:$/, '').trim();
+        kind = _chKind(label);
+        if (!lineChords.length) return;
+        plain = plain.slice(plain.indexOf(lead[1]) + lead[1].length);
+      }
+      if (lineChords.some(function (c) { return _chIsChord(c); }) || lineChords.length) chords.push(lineChords);
+      if (plain.trim()) words.push(plain.trim().toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' '));
+    });
+    var marks = chords.length > 0 && !words.length && chords.every(function (l) {
+      return l.every(function (c) { var core = _chCore(c); return core === '' || _CH_MARK.test(core); });
+    });
+    return { start: b.start, end: b.end, label: label, kind: kind, chords: chords, lyrics: words.join(' '), marks: marks };
+  });
+
+  var parts = [], letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  function newPart(b) {
+    var p = { letter: letters[parts.length] || '?', kind: b.kind, label: b.label, chords: b.chords, key: JSON.stringify(b.chords) };
+    parts.push(p);
+    return p;
+  }
+  function lyricParts() {
+    var seen = [];
+    blocks.forEach(function (b) { if (b.letter && b.lyrics && seen.indexOf(b.letter) === -1) seen.push(b.letter); });
+    return seen;
+  }
+  blocks.forEach(function (b, i) {
+    var part = null;
+    if (b.marks) { b.letter = ''; return; }
+    if (b.chords.length) {
+      var key = JSON.stringify(b.chords);
+      part = parts.filter(function (p) { return p.key === key; })[0] || newPart(b);
+    } else if (b.kind) {
+      for (var k = i - 1; k >= 0 && !part; k--) if (blocks[k].kind === b.kind) part = parts.filter(function (p) { return p.letter === blocks[k].letter; })[0];
+      if (!part && b.kind === 'chorus') {
+        var lp = lyricParts();
+        if (lp.length > 1) part = parts.filter(function (p) { return p.letter === lp[1]; })[0];
+      }
+      if (!part) part = newPart(b);
+    } else {
+      var first = lyricParts()[0];
+      part = first ? parts.filter(function (p) { return p.letter === first; })[0] : newPart(b);
+    }
+    if (b.kind && !part.kind) { part.kind = b.kind; part.label = b.label; }
+    b.letter = part.letter;
+  });
+
+  var chorus = null;
+  blocks.forEach(function (b) { if (b.kind === 'chorus' && !chorus) chorus = b.letter; });
+  if (!chorus) {
+    var count = {};
+    blocks.forEach(function (b) { if (b.lyrics) count[b.lyrics] = (count[b.lyrics] || 0) + 1; });
+    var best = 0, tie = false, bestText = '';
+    Object.keys(count).forEach(function (t) {
+      if (count[t] > best) { best = count[t]; bestText = t; tie = false; } else if (count[t] === best) tie = true;
+    });
+    if (best >= 2 && !tie) blocks.forEach(function (b) { if (b.lyrics === bestText) chorus = b.letter; });
+  }
+
+  return {
+    blocks: blocks.map(function (b) { return { letter: b.letter, kind: b.kind, label: b.label, start: b.start, end: b.end }; }),
+    parts: parts.map(function (p) { return { letter: p.letter, kind: p.kind, label: p.label, chords: p.chords }; }),
+    chorus: chorus,
+  };
+}
+
+// ── Key and Nashville numbers ────────────────────────────────────────────────
+function _chParseKey(key) {
+  var m = /^\s*([A-H][#b]?)\s*(m|min|minor|moll|-|maj|major|dur)?\s*$/i.exec(String(key || ''));
+  if (!m) return null;
+  var root = m[1][0].toUpperCase() + m[1].slice(1);
+  return _CH_PC[root] === undefined ? null : { pc: _CH_PC[root], minor: /^(m|min|minor|moll|-)$/i.test(m[2] || '') };
+}
+
+function chordsGuessKey(text) {
+  var all = [];
+  _chLines(text).forEach(function (line) {
+    _chSegments(line).forEach(function (s) {
+      var m = s.chord && _CH_CHORD.exec(_chCore(s.chord));
+      if (m) all.push({ root: m[1], minor: /^(m(?!aj)|min)/.test(m[2]) });
+    });
+  });
+  if (!all.length) return '';
+  var freq = {}, top = all[0];
+  all.forEach(function (c) { freq[c.root] = (freq[c.root] || 0) + 1; if (freq[c.root] > freq[top.root]) top = c; });
+  var last = all[all.length - 1], pick = last.root === all[0].root || last.root === top.root ? last : top;
+  return pick.root + (pick.minor ? 'm' : '');
+}
+
+function chordsNashville(tok, key) {
+  var k = _chParseKey(key);
+  if (!k) return tok;
+  var core = _chCore(tok), m = _CH_CHORD.exec(core);
+  if (!m) return tok;
+  var deg = function (root) { return _CH_DEG[(_CH_PC[root] - k.pc + 12) % 12]; };
+  var q = m[2];
+  var qual = /^(m(?!aj)|min)/.test(q) ? '-' + q.replace(/^(min|m)/, '') : /^dim/.test(q) ? '°' + q.slice(3) : q;
+  var num = deg(m[1]) + qual + (m[3] ? '/' + deg(m[3]) : '');
+  var at = tok.indexOf(core);
+  return tok.slice(0, at) + num + tok.slice(at + core.length);
+}
+
+function chordsStructure(text, opts) {
+  opts = opts || {};
+  var p = chordsParts(text);
+  var withChords = p.parts.filter(function (x) { return x.chords.length; });
+  if (!withChords.length) return '';
+  var names = Object.assign({ verse: 'Verse', chorus: 'Chorus', pre: 'Pre-chorus', bridge: 'Bridge', other: '', form: 'Form', key: 'Key', guessed: 'guessed' }, opts.names || {});
+  var key = opts.key && _chParseKey(opts.key) ? opts.key : '', guessed = false;
+  if (opts.numbers && !key) { key = chordsGuessKey(text); guessed = true; }
+  var shift = (opts.steps || 0) - (Math.round(Number(opts.capo)) || 0);
+  var show = function (c) { return opts.numbers ? chordsNashville(c, key) : chordsTranspose(c, shift); };
+  var row = function (letter, label, body) {
+    return '<div class="cs-row"><span class="cs-letter">' + _chEsc(letter) + '</span><span class="cs-label">' + _chEsc(label) +
+      '</span><span class="cs-chords">' + _chEsc(body) + '</span></div>';
+  };
+  var rows = withChords.map(function (x) {
+    var body = x.chords.map(function (line) { return line.map(show).join(' '); }).filter(Boolean).join(' | ');
+    return row(x.letter, x.label || names[x.kind] || '', body);
+  });
+  var form = [];
+  p.blocks.forEach(function (b) {
+    if (!b.letter) return;
+    var last = form[form.length - 1];
+    if (last && last.letter === b.letter) last.n++; else form.push({ letter: b.letter, n: 1 });
+  });
+  var formText = form.map(function (f) { return f.letter + (f.n > 1 ? ' ×' + f.n : ''); }).join(' ');
+  var head = opts.numbers && key ? '<div class="cs-key">' + _chEsc(names.key + ' ' + key + (guessed ? ' (' + names.guessed + ')' : '')) + '</div>' : '';
+  return '<div class="chord-structure">' + head + rows.join('') +
+    '<div class="cs-row cs-form"><span class="cs-letter"></span><span class="cs-label">' + _chEsc(names.form) +
+    '</span><span class="cs-chords">' + _chEsc(formText) + '</span></div></div>';
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { chordsIsLine: chordsIsLine, chordsToPro: chordsToPro, chordsToAbove: chordsToAbove, chordsForSave: chordsForSave, chordsTranspose: chordsTranspose, chordsRender: chordsRender, chordsHas: chordsHas };
+  module.exports = { chordsIsLine: chordsIsLine, chordsToPro: chordsToPro, chordsToAbove: chordsToAbove, chordsForSave: chordsForSave, chordsTranspose: chordsTranspose, chordsRender: chordsRender, chordsHas: chordsHas, chordsParts: chordsParts, chordsGuessKey: chordsGuessKey, chordsNashville: chordsNashville, chordsStructure: chordsStructure };
 }
