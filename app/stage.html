@@ -170,6 +170,9 @@
             bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
             right: calc(1.25rem + env(safe-area-inset-right, 0px));
             display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            max-width: calc(100vw - 2.5rem);
             gap: 0.3rem;
             z-index: 50;
             background: var(--s-bg);
@@ -185,6 +188,7 @@
             .lyrics-size-bar {
                 bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
                 right: calc(0.75rem + env(safe-area-inset-right, 0px));
+                max-width: calc(100vw - 1.5rem);
             }
         }
 
@@ -386,6 +390,7 @@
         .chord-row--chorus { font-weight: 600; }
         .chord-row--chorus .ch { font-weight: 700; }
         .stage-structure { margin: 0 0 1rem; font-size: 0.8em; }
+        .stage-structure:empty { margin: 0; }
         .chord-structure { color: var(--s-text); }
         .cs-key { color: var(--s-muted); margin-bottom: 0.2rem; }
         .cs-row { display: grid; grid-template-columns: 1.5em 6.5em 1fr; gap: 0.5rem; padding: 0.1rem 0; }
@@ -519,6 +524,6 @@
     <script src="/app/js/share-utils.js?v=5"></script>
     <script src="/app/js/arrangement.js?v=8"></script>
     <script src="/app/js/chords.js?v=10"></script>
-    <script src="/app/js/stage.js?v=14"></script>
+    <script src="/app/js/stage.js?v=15"></script>
 </body>
 </html>

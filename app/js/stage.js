@@ -115,8 +115,10 @@ function _stageFitColumns() {
   var b = document.getElementById('_stage_cols_btn');
   if (b) b.setAttribute('aria-pressed', String(_stageColsOn));
   if (!_stageColsOn) { el.style.height = ''; _applyLyricsSize(); return; }
-  // Room down to the floating size bar at the bottom.
-  el.style.height = Math.max(120, window.innerHeight - el.getBoundingClientRect().top - 72) + 'px';
+  // Room down to the floating size bar at the bottom (it wraps on phones).
+  var bar = document.querySelector('.lyrics-size-bar');
+  var reserve = bar ? Math.ceil(bar.getBoundingClientRect().height) + 28 : 72;
+  el.style.height = Math.max(120, window.innerHeight - el.getBoundingClientRect().top - reserve) + 'px';
   var px = _stageFitSearch(function (size) {
     el.style.fontSize = size + 'px';
     return el.scrollWidth <= el.clientWidth + 1;
