@@ -20,6 +20,15 @@ function run(r) {
     assertEq(C.chordsToPro('H7     Em\nOne more line'), '[H7]One mor[Em]e line');
   });
 
+  test('a chord with a bracketed alternative keeps only the first chord', () => {
+    assertEq(C.chordsIsLine('Em(Am)   C   G'), true);
+    assertEq(C.chordsIsLine('Am(Em)'), true);
+    assertEq(C.chordsToPro('Em(Am)   G\nla la la la la'), '[Em]la la la [G]la la');
+    assertEq(C.chordsToPro('Em(Bm)  C\n\nNext'), '[Em]        [C]\n\nNext');
+    assertEq(C.chordsToPro('||Em (Dm)   F\n\nx'), '[||Em]     [(Dm)]       [F]\n\nx');
+    assertEq(C.chordsIsLine('Hello(World) G'), false);
+  });
+
   test('H and B are both B natural when transposing', () => {
     assertEq(C.chordsTranspose('H', 1), 'C');
     assertEq(C.chordsTranspose('H7', 2), 'Db7');

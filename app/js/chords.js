@@ -13,8 +13,13 @@ var _CH_PC    = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, 'E#':
 
 // "||Em", "(Dm)", "Am||" -> the chord inside, "" for a pure bar mark.
 function _chCore(tok) { return tok.replace(/^[|:(]+/, '').replace(/[|:)]+$/, ''); }
-function _chIsChord(tok) { return _CH_CHORD.test(_chCore(tok)); }
-function _chIsToken(tok) { var c = _chCore(tok); return c === '' || _CH_MARK.test(c) || _CH_CHORD.test(c); }
+// "Em(Am)": a chord with its alternative; only the first chord is kept.
+function _chAltMain(tok) {
+  var m = /^([^(]+)\(([^)]+)\)$/.exec(tok);
+  return m && _CH_CHORD.test(_chCore(m[1])) && _CH_CHORD.test(m[2]) ? m[1] : null;
+}
+function _chIsChord(tok) { return _CH_CHORD.test(_chCore(_chAltMain(tok) || tok)); }
+function _chIsToken(tok) { var c = _chCore(_chAltMain(tok) || tok); return c === '' || _CH_MARK.test(c) || _CH_CHORD.test(c); }
 
 function _chNorm1(l) {
   l = l.replace(/\r$/, '');
@@ -43,7 +48,7 @@ function _chIsLyric(line) {
 // columns stay valid; a chord past the end pads the lyric with spaces.
 function _chMerge(chordLine, lyric) {
   var found = [], m, re = /\S+/g;
-  while ((m = re.exec(chordLine))) found.push({ at: m.index, tok: m[0] });
+  while ((m = re.exec(chordLine))) found.push({ at: m.index, tok: _chAltMain(m[0]) || m[0] });
   var out = lyric;
   for (var i = found.length - 1; i >= 0; i--) {
     var at = found[i].at;
