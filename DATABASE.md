@@ -110,7 +110,7 @@ One song's lyrics, kept out of `songs` so the song list stays small: lists retur
 |--------|------|-------|
 | `song_id` | integer PK FK → songs CASCADE | |
 | `artist_id` | integer FK → artists CASCADE | |
-| `lyrics` | text NOT NULL | Up to 20 000 characters; no row means no lyrics |
+| `lyrics` | text NOT NULL | Up to 20 000 characters; no row means no lyrics. May carry chords as ChordPro (`[Am]word`); plain lyrics are stored as typed |
 | `updated_at` | timestamptz DEFAULT now() | |
 
 **Indexes:** `song_lyrics_artist_id_idx`
