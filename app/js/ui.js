@@ -248,8 +248,12 @@ function openDeepLinkedRow(param) {
   });
 }
 
+// A drag that starts inside a modal and ends on the overlay also fires a click
+// on the overlay; only close when the press began there too.
+var _overlayPressed = null;
+document.addEventListener('mousedown', function(e) { _overlayPressed = e.target; });
 document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('modal-overlay') && e.target.classList.contains('open')) {
+  if (e.target === _overlayPressed && e.target.classList.contains('modal-overlay') && e.target.classList.contains('open')) {
     closeModal(e.target.id);
   }
 });

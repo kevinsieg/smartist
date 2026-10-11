@@ -338,7 +338,8 @@ function _refreshEditAddDropdown(sid) {
     .filter(function(s) { return s.active && !inSetIds.has(s.id); })
     .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
   sel.innerHTML = '<option value="">' + t('setlist.addSongPlaceholder') + '</option>' +
-    available.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.title || '') + '</option>'; }).join('');
+    available.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.title || '') + '</option>'; }).join('') +
+    (artistSlug && getToken() ? '<option value="__new">' + t('setlist.newSongOption') + '</option>' : '');
 }
 
 function _histEditMoveSong(index, dir, sid) {
@@ -362,6 +363,15 @@ function _histEditRemoveSong(index, sid) {
 }
 
 function _histEditAddSong(sel, sid) {
+  if (sel.value === '__new') {
+    sel.value = '';
+    _openQuickSong(function(song) {
+      if (!_editSongs) _editSongs = [];
+      _editSongs.push(song);
+      _renderEditSongsList(sid);
+    });
+    return;
+  }
   var songId = Number(sel.value);
   if (!songId) return;
   var song = allSongs.find(function(s) { return s.id === songId; });
