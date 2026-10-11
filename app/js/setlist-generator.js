@@ -568,7 +568,10 @@ function addSongToSet(select) {
 
 // --- Quick new song: created in the band's catalogue, then added to the set ---
 
-function _openQuickSong() {
+var _quickSongOnAdded = null;
+
+function _openQuickSong(onAdded) {
+  _quickSongOnAdded = onAdded || null;
   document.getElementById('quick-song-name').value   = '';
   document.getElementById('quick-song-key').innerHTML = _keyOptions('');
   document.getElementById('quick-song-length').value = '';
@@ -609,9 +612,10 @@ async function _saveQuickSong() {
     const song = await r.json();
     invalidateConfigCache();
     allSongs.push(song);
+    _closeQuickSong();
+    if (_quickSongOnAdded) { _quickSongOnAdded(song); return; }
     currentSet.push(song);
     _splitAt = null;
-    _closeQuickSong();
     renderResult(currentSet);
   } catch (err) {
     errEl.textContent = err && err.limit ? t('songs.limitReached', { limit: err.limit }) : t('songs.saveFailed');

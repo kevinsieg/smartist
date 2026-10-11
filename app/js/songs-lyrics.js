@@ -390,10 +390,6 @@ async function confirmDeleteLyrics() {
   }
 }
 
-document.getElementById('lyrics-modal').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeLyrics();
-});
-
 // ── URL preview modal ─────────────────────────────────────────────────────────
 
 
