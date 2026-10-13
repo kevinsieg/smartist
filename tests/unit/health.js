@@ -17,7 +17,7 @@ async function run(r) {
   const { SCHEMA_VERSION } = require(path.join(ROOT, 'api/_env'));
 
   // _config with getDb answering `db`, and only these variables set.
-  async function health(db, env) {
+  async function health(db, env, query = { action: 'health', db: '1' }) {
     const dbPath = require.resolve(path.join(ROOT, 'api/_db'));
     const configPath = require.resolve(path.join(ROOT, 'api/_config'));
     const saved = { ...process.env };
@@ -34,7 +34,7 @@ async function run(r) {
     res.json = b => { res._body = b; return res; };
     res.setHeader = (k, v) => { res._headers[k] = v; return res; };
     try {
-      await require(configPath)({ method: 'GET', query: { action: 'health' }, headers: {} }, res);
+      await require(configPath)({ method: 'GET', query, headers: {} }, res);
     } finally {
       for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
       Object.assign(process.env, saved);
@@ -100,6 +100,20 @@ async function run(r) {
     assertEq(res._body.database, 'not configured');
     assertEq(res._body.missing, ['DATABASE_URL']);
     assert(!queried, 'queried a database it has no URL for');
+  });
+
+  await testAsync('without db=1 no SQL runs and a missing variable still fails', async () => {
+    let queried = false;
+    const db = async () => { queried = true; return [{ current: true }]; };
+    const ok = await health(db, ENV, { action: 'health' });
+    assertEq(ok._status, 200);
+    assertEq(ok._body.ok, true);
+    assertEq(ok._body.database, 'skipped');
+    assertEq(ok._body.schema, null);
+    const bad = await health(db, { DATABASE_URL: ENV.DATABASE_URL }, { action: 'health' });
+    assertEq(bad._status, 503);
+    assertEq(bad._body.missing, ['APP_SECRET']);
+    assert(!queried, 'queried the database without db=1');
   });
 }
 

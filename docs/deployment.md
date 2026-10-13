@@ -125,8 +125,12 @@ Three checks per production deployment, all in Better Stack:
 
 - **Uptime.** A monitor on `https://<domain>/api/config?action=health`, every
   3 minutes, alerting when the URL is unavailable. The endpoint answers 503
-  when a required variable is missing, the database is unreachable or the
-  schema is behind, so a status check is enough; no keyword needed.
+  when a required variable is missing, so a status check is enough; no keyword
+  needed. It does not query the database: a monitor polling every few minutes
+  would keep a suspended Neon compute awake and use up its compute hours. A
+  second monitor on `…/api/config?action=health&db=1`, once a day (in the
+  morning, after the backup at 02:30 UTC), checks that the database answers and
+  its schema is current.
 - **Logs stopped arriving.** Each health request writes a `request` log line,
   so the uptime monitor keeps a steady stream flowing into the deployment's
   log source even at night. An alert on that source fires when fewer than one

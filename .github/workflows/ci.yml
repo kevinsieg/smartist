@@ -81,7 +81,7 @@ jobs:
         run: |
           node tests/harness/server.js > server.log 2>&1 &
           for i in $(seq 30); do
-            curl -sf http://localhost:3000/api/config?action=health > /dev/null && exit 0
+            curl -sf "http://localhost:3000/api/config?action=health&db=1" > /dev/null && exit 0
             sleep 1
           done
           cat server.log; exit 1
@@ -168,7 +168,7 @@ jobs:
           node tests/harness/seed.js
           node tests/harness/server.js > server.log 2>&1 &
           for i in $(seq 30); do
-            curl -sf http://localhost:3000/api/config?action=health > /dev/null && exit 0
+            curl -sf "http://localhost:3000/api/config?action=health&db=1" > /dev/null && exit 0
             sleep 1
           done
           cat server.log; exit 1

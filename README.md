@@ -102,7 +102,7 @@ work on dev  →  git push origin dev  →  verify on preview URL
 A schema change needs no manual step: every deployment runs `scripts/deploy_migrate.js` while it builds (the `postinstall` script in `package.json`, run by the npm install of every Vercel build), which applies pending migrations to that Vercel project's own `DATABASE_URL` (nothing pending → nothing runs; a failure fails the build and the previous deployment stays live). Check the deployments afterwards:
 
 ```bash
-curl https://<deployment>/api/config?action=health              # "schema":"current"
+curl "https://<deployment>/api/config?action=health&db=1"    # "schema":"current"
 ```
 
 The migration runs a minute or two before the new code is live, so drop a column only a release after the code stopped using it (CI runs `main`'s API suite on the new schema to catch this). To apply by hand, e.g. a database no deployment builds against: `DATABASE_URL=<url> node scripts/apply_schema.js` (asks before it connects), then `--check`.
@@ -148,7 +148,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables). `.env.ex
 | `R2_SECRET_ACCESS_KEY` | Prod R2 Secret Access Key                                    | Dev R2 Secret Access Key                       |
 | `R2_PUBLIC_URL`        | Prod bucket public URL (e.g. `https://media.yourdomain.com`) | Dev bucket public URL                          |
 
-`GET /api/config?action=health` on a deployment lists any required or recommended variable that is missing, and whether the database schema is current.
+`GET /api/config?action=health` on a deployment lists any required or recommended variable that is missing. It does not touch the database, so a monitor can poll it without keeping a suspended Neon compute awake; add `&db=1` to also check that the database answers and its schema is current.
 
 **Production only** — leave unset in Preview/Development:
 
@@ -319,7 +319,7 @@ A workspace is private. **Auth** column: ✓ = session required; *catalogue* / *
 | Method | Endpoint                          | Auth | Purpose                                                                                      |
 | ------ | --------------------------------- | ---- | -------------------------------------------------------------------------------------------- |
 | GET    | `/api/config`                     | —    | Band name and branding; songs and counts only with a session or a public catalogue           |
-| GET    | `/api/config?action=health`       | —    | Missing env vars and schema state of the deployment                                          |
+| GET    | `/api/config?action=health`       | —    | Missing env vars; with `&db=1` also the schema state                                         |
 | PATCH  | `/api/config`                     | ✓    | Admins rename the band or merge keys into its config; `?slug=` names the band                |
 | POST   | `/api/login`                      | —    | Log in with email + password across workspaces                                               |
 | GET    | `/api/auth/google-url`            | —    | Start Google sign-in (`facebook-url` for Facebook); returns to `/auth/callback`              |

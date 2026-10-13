@@ -417,7 +417,7 @@ database is missing without changing anything:
 DATABASE_URL='<url>' node scripts/apply_schema.js --check   # exit 1 when a migration is pending
 ```
 
-`GET /api/config?action=health` on a deployment answers the same question for
+`GET /api/config?action=health&db=1` on a deployment answers the same question for
 the database that deployment uses (`"schema": "behind"`).
 
 Features that send email (password reset, invites, account deletion, email
@@ -459,7 +459,7 @@ change) need the tenant's sending domain verified in Resend first.
 
 **Verification**
 - [ ] At least one successful production deploy — Vercel shows green
-- [ ] `curl https://<domain>/api/config?action=health` answers 200 with `"ok": true` — a 503 lists the missing variables (names only) or says the database is unreachable or behind
+- [ ] `curl "https://<domain>/api/config?action=health&db=1"` answers 200 with `"ok": true` — a 503 lists the missing variables (names only) or says the database is unreachable or behind
 - [ ] Better Stack uptime monitor on the health URL and a "no logs in 30 minutes" alert on the log source ([Monitoring](deployment.md#monitoring))
 - [ ] Login works at the custom domain with the admin account from `setup.js` (model 0: sign up at `/signup`)
 - [ ] `curl …/api/config` returns 200 (see Step 6)

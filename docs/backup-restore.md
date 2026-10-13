@@ -177,7 +177,7 @@ Rolls **the whole database** back, every band in it.
    `neon branches restore main ^self@<T> --preserve-under-name main_before_restore`
 4. If T is before the last schema migration, **redeploy production**
    (`vercel redeploy <the production URL>`): the build applies the schema
-   again. Then `GET https://<domain>/api/config?action=health` must say
+   again. Then `GET https://<domain>/api/config?action=health&db=1` must say
    `"schema":"current"`.
 5. Do F and G with this T.
 6. After a week, delete `inspect-…` and the backup branch (branches count
@@ -216,7 +216,7 @@ This is case by case; if it gets complicated, restoring the whole database
    string** in [`deployment.md`](deployment.md) (every Vercel environment,
    `DEMO_DATABASE_URL` where it applies, and the line in `BACKUP_DATABASES`),
    then redeploy. The build brings the schema up to date; check the health
-   endpoint.
+   endpoint with `&db=1`.
 5. Do F and G with T = the manifest's `createdAt`.
 6. Remove the plaintext and decrypted files from `./restore`.
 
