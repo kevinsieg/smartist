@@ -30,7 +30,7 @@ projects deploy `main`, each with its own database and env vars.
    has been read back footer-free. Merge commit
    (not squash), explicit title `Merge dev: <summary>` — never a `claude/…`
    branch name — and pass `expectedHeadSha`.
-6. **After deploy:** `GET https://<deployment>/api/config?action=health` on each
+6. **After deploy:** `GET https://<deployment>/api/config?action=health&db=1` on each
    production domain → 200, `"schema":"current"`, `missing: []`. Report any
    deployment that is not. Cloud sessions cannot reach the production domains:
    there, ask the user to run these checks and report back.

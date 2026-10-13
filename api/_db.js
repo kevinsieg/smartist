@@ -22,6 +22,10 @@ const { trimHistory } = require('./_domain/songs');
 // request at a time keeps one, unless it runs queries side by side
 // (Promise.all), which then overlap for real. Neon's pooled endpoint takes
 // thousands of client connections (health warns about a direct one).
+// idle_timeout: 20 — close a connection after 20 s unused. Without it
+// postgres.js keeps connections for the life of the instance, and instances
+// frozen between requests hold theirs open, so connections pile up on the
+// database and a suspended compute is never allowed to sleep.
 // connect_timeout: fail a request after 10 s instead of the 30 s default when
 // the database does not answer (a suspended compute that never wakes).
 // fetch_types stays on: without it postgres.js cannot send JS arrays as
@@ -30,7 +34,7 @@ const { trimHistory } = require('./_domain/songs');
 const DB = {
   connect: url => postgres(url, {
     ssl: /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url) ? false : 'require',
-    max: 4, prepare: false, connect_timeout: 10,
+    max: 4, prepare: false, idle_timeout: 20, connect_timeout: 10,
   }),
 };
 // ─────────────────────────────────────────────────────────────────────────────

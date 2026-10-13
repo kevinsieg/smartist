@@ -43,7 +43,7 @@ production database.
 - So the live code must survive the new schema: add freely, but drop or rename
   a column only a release after the code stopped using it. CI's *Live code on
   the new schema* job runs `main`'s API suite against the new schema.
-- After a deploy, `GET /api/config?action=health` on each domain must say
+- After a deploy, `GET /api/config?action=health&db=1` on each domain must say
   `"schema":"current"` with nothing missing.
 
 ## Run and test

@@ -104,11 +104,16 @@ module.exports = wrap(async function handler(req, res) {
 // any of that is wrong, so a deploy script or uptime monitor can alert on it.
 // An index an interrupted CREATE INDEX CONCURRENTLY left invalid is a warning:
 // queries still work, only slower.
+// The database is only asked with ?db=1: a monitor that pings every few
+// minutes would otherwise keep a suspended Neon compute awake around the
+// clock. Without it only the variables are checked (database "skipped").
 async function health(req, res) {
   const { missing, warnings } = envReport();
   let database = 'not configured';
   let schema = null;
-  if (process.env.DATABASE_URL) {
+  if (process.env.DATABASE_URL && req.query.db !== '1') {
+    database = 'skipped';
+  } else if (process.env.DATABASE_URL) {
     try {
       const [row] = await getDb()`
         SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE id = ${SCHEMA_VERSION}) AS current,
@@ -122,7 +127,7 @@ async function health(req, res) {
       else database = 'error';
     }
   }
-  const ok = missing.length === 0 && database === 'ok' && schema === 'current';
+  const ok = missing.length === 0 && (database === 'skipped' || (database === 'ok' && schema === 'current'));
   res.setHeader('Cache-Control', 'no-store');
   return res.status(ok ? 200 : 503).json({ ok, missing, warnings, database, schema, schemaVersion: SCHEMA_VERSION });
 }
