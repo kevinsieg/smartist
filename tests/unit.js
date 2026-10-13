@@ -66,6 +66,7 @@ const suites = [
   require('./unit/health'),
   require('./unit/sw'),
   require('./unit/offline'),
+  require('./unit/setlist_csv'),
 ];
 
 (async () => {

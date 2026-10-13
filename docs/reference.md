@@ -265,6 +265,8 @@ node scripts/apply_schema.js [--check] [--yes]             # apply schema.sql; -
 node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
 node scripts/import_songs.js --artist <slug> songs.json
 node scripts/import_gema.js  --artist <slug> [--ids <csv>] [--info <csv>] [--beteiligte <csv>] [--dry-run]
+node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" songs.csv [--dry-run] [--same "a=b"] [--new "t"]
+                                                           # CSV → complete existing songs (empty fields only), create the rest, save one setlist
 node scripts/plans.js                                      # list bands: plan, storage used/limit, songs, users
 node scripts/plans.js --artist <slug> --plan <free|pro>   # grant/change a band's plan
 node scripts/plans.js --recount                           # recompute storage_used_bytes from R2
