@@ -53,7 +53,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `api/_band/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}` |
 | `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `POST …/:id/duplicate`, `POST …/:id/share` `{email}` |
 | `api/_band/export.js` | `GET /api/:artist/export` — every table of the band as a ZIP of CSVs |
-| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`) |
+| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`; near-duplicate titles by `_domain/title_match.js`) |
 | `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `lyrics` (PUT/DELETE, `/lyrics/suggest` POST) |
 | `api/_band/gema.js` | `POST /api/:artist/gema/import` — one GEMA CSV (`_domain/gema.js`), Pro |
 | `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
