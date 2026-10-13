@@ -125,7 +125,7 @@ async function _siSend(body, isFile) {
   _siRows = data.rows;
   _siSummary = data.summary;
   if (data.limit !== undefined) _siLimit = data.limit;
-  _siRows.forEach(function(row) { if (row.status === 'error' || row.duplicate) _siFlagged[row.line] = true; });
+  _siRows.forEach(function(row) { if (row.status === 'error' || row.duplicate || row.similar) _siFlagged[row.line] = true; });
   if (isFile) _siOnlyIssues = Object.keys(_siFlagged).length > 0;
   _siStatus(r.status === 422 ? t('songImport.stillProblems') : '', r.status === 422);
   _siRender();
@@ -168,7 +168,7 @@ async function siImport(btn) {
   if (r.status === 422 && data.rows) {
     _siRows = data.rows;
     _siSummary = data.summary;
-    _siRows.forEach(function(row) { if (row.status === 'error' || row.duplicate) _siFlagged[row.line] = true; });
+    _siRows.forEach(function(row) { if (row.status === 'error' || row.duplicate || row.similar) _siFlagged[row.line] = true; });
     _siRender();
     _siStatus(t('songImport.stillProblems'), true);
     return;
@@ -268,6 +268,12 @@ function _siStatusCell(row) {
       (row.force ? ' checked' : '') + '> ' + escHtml(t('songImport.importAnyway')) + '</label>';
   }
   if (!html) html = b('gema-badge-ok', t('songImport.statusReady'));
+  // A near title never blocks: shown so the user can skip the row.
+  if (row.similar) {
+    html += b('gema-badge-warn', row.similar.line
+      ? t('songImport.similarLine', { title: row.similar.title, line: row.similar.line })
+      : t('songImport.similar', { title: row.similar.title }));
+  }
   return html;
 }
 
@@ -279,6 +285,7 @@ function _siRender() {
     badge('gema-badge-ok', t('songImport.sumReady', { n: s.ready })) +
     (s.error ? badge('gema-badge-err', t('songImport.sumErrors', { n: s.error })) : '') +
     (s.duplicate ? badge('gema-badge-warn', t('songImport.sumDuplicates', { n: s.duplicate })) : '') +
+    (s.similar ? badge('gema-badge-warn', t('songImport.sumSimilar', { n: s.similar })) : '') +
     (s.skipped ? badge('gema-badge-other', t('songImport.sumSkipped', { n: s.skipped })) : '');
 
   var notes = [];

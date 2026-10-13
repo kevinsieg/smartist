@@ -53,7 +53,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `api/_band/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}` |
 | `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `POST …/:id/duplicate`, `POST …/:id/share` `{email}` |
 | `api/_band/export.js` | `GET /api/:artist/export` — every table of the band as a ZIP of CSVs |
-| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`) |
+| `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`; near-duplicate titles by `_domain/title_match.js`) |
 | `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics + arrangements); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `lyrics` (PUT/DELETE, `/lyrics/suggest` POST) |
 | `api/_band/gema.js` | `POST /api/:artist/gema/import` — one GEMA CSV (`_domain/gema.js`), Pro |
 | `api/_band/venues.js` | `GET/POST /api/:artist/venues`; `PATCH` — bulk edit of the CRM fields (array of `{id, …}`, max 200, only the fields sent are written). `GET` takes `q/status/category/country`, paging (`limit`/`offset`), `sort` (whitelist: name, city, status, category, last_communication, deadline, season, preferred_period) + `dir`, and `letter` (single A–Z, or `#` for non-alphabetic) |
@@ -215,6 +215,14 @@ Per-band tier system. **`api/_plans.js` is the single source of truth** — edit
 
 ---
 
+## Offline
+
+- `app/sw.js` (served at `/sw.js` by a rewrite) saves static files (`/app/js|css|vendor|i18n` with `?v=`, cache first) and visited pages (network first, 3 s, one copy per path). It never touches `/api/`, writes or other origins.
+- `app/js/offline.js` saves the stage view's three GET answers (light config, one setlist, one song) in IndexedDB (`smartist-offline`), keyed to the user who saved them, and serves them on a network failure, timeout or 502/503/504. 401/403/404 are never replaced. Logout, a dead session and a 401 delete the database (`clearOfflineData`, `core.js`).
+- "Keep offline" on a saved setlist (`offlineKeep`) fetches the setlist, the config and every song, and asks the worker to save the stage page and its files.
+- `core.js` shows the offline banner and, when a save fails, a "not saved" notice; `apiFetch` marks network errors with `.offline`.
+- Offline is read-only: nothing is queued or synced. Safari may evict site data after about a week without a visit unless the site is installed; press "Keep offline" before a gig.
+
 ## Dates and numbers
 
 `formatDate(value, style)` and `formatTime(value)` in `core.js` are the only date formatters — no page calls `toLocaleDateString` itself (`tests/unit/page_scripts.js` enforces it). Styles: default `22.01.2026` (de) / `22/01/26` (en, fr), `'short'` without the year, `'long'` with the month spelled out. Values are read with UTC accessors because date columns arrive as UTC midnight. `stage.html` loads `core.js` and uses the same functions (without `i18n.js` the page's `lang` attribute picks the style). ISO strings stay raw in `<input type="date">` values and in the .ics export.
@@ -257,6 +265,8 @@ node scripts/apply_schema.js [--check] [--yes]             # apply schema.sql; -
 node scripts/seed.js [--force]                             # dev DB test data; --force wipes first
 node scripts/import_songs.js --artist <slug> songs.json
 node scripts/import_gema.js  --artist <slug> [--ids <csv>] [--info <csv>] [--beteiligte <csv>] [--dry-run]
+node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" songs.csv [--dry-run] [--same "a=b"] [--new "t"]
+                                                           # CSV → complete existing songs (empty fields only), create the rest, save one setlist
 node scripts/plans.js                                      # list bands: plan, storage used/limit, songs, users
 node scripts/plans.js --artist <slug> --plan <free|pro>   # grant/change a band's plan
 node scripts/plans.js --recount                           # recompute storage_used_bytes from R2

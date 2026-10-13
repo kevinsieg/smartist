@@ -183,12 +183,58 @@ async function run(r) {
     assert(row.record, 'has a record');
   });
 
+  // A title that is not the same by case and spacing alone but looks like a
+  // song the band has (or an earlier row): shown, never blocking.
+  const SIM = titleList => ({ titles: new Set(titleList.map(t => t.toLowerCase())), titleList, genres: [], tags: [] });
+  const sim = (title, titleList) => checkRows([{ line: 2, values: { title } }], SIM(titleList))[0];
+
+  test('a near title is a possible duplicate of the band\'s song, and does not block', () => {
+    const row = sim('Wonder wall', ['Wonderwall']);
+    assertEq(JSON.stringify(row.similar), '{"title":"Wonderwall"}');
+    assertEq(row.status, 'ready');
+    assert(row.record, 'still importable');
+  });
+
+  test('accents, punctuation and a leading article do not make a new song', () => {
+    assertEq(sim('Penn sardin', ["Les Penn' Sardin"]).similar.title, "Les Penn' Sardin");
+    assertEq(sim('Océano Nox', ['Oceano Nox']).similar.title, 'Oceano Nox');
+  });
+
+  test('a typo in a title is highlighted (Terre-neuvas / Terre-neuva)', () => {
+    assertEq(sim('Chant des Terre-neuvas', ['Chant des Terre-neuva']).similar.title, 'Chant des Terre-neuva');
+  });
+
+  test('an exact duplicate is a duplicate, not a possible one', () => {
+    const row = sim('Wonderwall', ['Wonderwall']);
+    assertEq(row.status, 'duplicate');
+    assertEq(row.similar, null);
+  });
+
+  test('a possible duplicate can be an earlier row of the same file', () => {
+    const rows = checkRows([
+      { line: 2, values: { title: 'Chant des Terre-neuvas' } },
+      { line: 3, values: { title: 'Chant des Terre-neuva' } },
+    ], SIM([]));
+    assertEq(rows[0].similar, null);
+    assertEq(JSON.stringify(rows[1].similar), '{"title":"Chant des Terre-neuvas","line":2}');
+  });
+
+  test('a skipped row shows no possible duplicate, and an unrelated title none', () => {
+    const [skipped] = checkRows([{ line: 2, values: { title: 'Wonder wall' }, skip: true }], SIM(['Wonderwall']));
+    assertEq(skipped.similar, null);
+    assertEq(sim('Surcouf', ['Wonderwall', 'Anita']).similar, null);
+  });
+
+  test('a context without a title list (older callers) still checks', () => {
+    assertEq(checkRows([{ line: 2, values: { title: 'Surcouf' } }], CTX())[0].similar, null);
+  });
+
   await testAsync('a file is checked, never written', async () => {
     const { sql, inserts } = fakeSql();
     const res = await songImport(sql, 1, { csv: 'title,key\nNew,C\nWonderwall,G\n', commit: true });
     assertEq(res.status, 200);
     assertEq(inserts().length, 0);
-    assertEq(JSON.stringify(res.body.summary), '{"total":2,"ready":1,"error":0,"duplicate":1,"skipped":0}');
+    assertEq(JSON.stringify(res.body.summary), '{"total":2,"ready":1,"error":0,"duplicate":1,"skipped":0,"similar":0}');
     assertEq(JSON.stringify(res.body.columns), '["title","key"]');
   });
 

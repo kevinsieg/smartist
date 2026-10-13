@@ -11,6 +11,7 @@
 
 const { energyToScale, matchGenre, cleanTags } = require('../_song_values');
 const { LYRICS_MAX } = require('./songs');
+const { titleEntry, similarEntries } = require('./title_match');
 
 const MAX_ROWS = 1000;
 // Vercel refuses request and response bodies over 4.5 MB. The file travels as
@@ -279,6 +280,8 @@ function checkCell(col, raw, ctx) {
 // duplicate.
 function checkRows(rows, ctx) {
   const seen = new Map(); // titleKey → first line
+  const live = (ctx.titleList ?? []).map(titleEntry);
+  const earlier = []; // entries of the file's rows so far, with their line
   return rows.map(input => {
     const line = Number(input?.line) || 0;
     const src = input && typeof input.values === 'object' && input.values ? input.values : {};
@@ -309,9 +312,21 @@ function checkRows(rows, ctx) {
       else if (seen.has(key)) duplicate = { of: 'line', line: seen.get(key) };
       else seen.set(key, line);
     }
+    // Not the same by case and spacing, but it looks like a song the band has
+    // or an earlier row: shown to the user, never blocking.
+    let similar = null;
+    if (record.title && !skip) {
+      const me = titleEntry(record.title);
+      if (!duplicate) {
+        const song = live.find(e => similarEntries(me, e));
+        const row = song ? null : earlier.find(e => similarEntries(me, e));
+        similar = song ? { title: song.title } : row ? { title: row.title, line: row.line } : null;
+      }
+      earlier.push({ ...me, line });
+    }
     const errorCount = Object.keys(errors).length;
     const blocked = !skip && (errorCount > 0 || (duplicate && !force));
-    const out = { line, values, errors, duplicate, skip, force };
+    const out = { line, values, errors, duplicate, skip, force, similar };
     if (!skip && !blocked) {
       record.genre = matchGenre(record.genre ?? null, ctx.genres) ?? null;
       out.record = record;
@@ -322,8 +337,8 @@ function checkRows(rows, ctx) {
 }
 
 function summarize(checked) {
-  const s = { total: checked.length, ready: 0, error: 0, duplicate: 0, skipped: 0 };
-  for (const r of checked) s[r.status]++;
+  const s = { total: checked.length, ready: 0, error: 0, duplicate: 0, skipped: 0, similar: 0 };
+  for (const r of checked) { s[r.status]++; if (r.similar) s.similar++; }
   return s;
 }
 
@@ -339,6 +354,7 @@ async function importContext(sql, artistId) {
       (SELECT count(*)::int FROM songs WHERE artist_id = ${artistId} AND NOT deleted) AS count`;
   return {
     titles: new Set((row?.titles ?? []).map(titleKey)),
+    titleList: row?.titles ?? [],
     genres: row?.genres ?? [],
     tags: row?.tags ?? [],
     count: row?.count ?? 0,
