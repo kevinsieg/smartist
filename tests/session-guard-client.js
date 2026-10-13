@@ -37,6 +37,8 @@ function load(pathname) {
   const ctx = {
     URL, URLSearchParams, console, setTimeout, clearTimeout, Promise, JSON,
     location, sessionStorage: storage(), localStorage: storage(),
+    // core.js helpers apiFetch calls (the offline banner and the wipe).
+    offlineMarkUp() {}, offlineMarkDown() {}, offlineNotice() {}, offlineText: (k, f) => f, clearOfflineData() {},
     document: { addEventListener() {}, querySelector: () => null, getElementById: () => null },
     fetch: async (url, opts) => { fetched.push({ url, opts }); return { ok: true, status: 200, json: async () => ({}) }; },
   };

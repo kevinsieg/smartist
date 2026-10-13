@@ -57,6 +57,13 @@ function _stageAuthHeaders() {
   return t ? { Authorization: 'Bearer ' + t } : {};
 }
 
+// A saved copy is shown with its age, so a musician knows how old the setlist is.
+function _stageOfflineNote(res) {
+  if (!res || !res.fromCache) return '';
+  return '<p class="stage-sub" role="status">Offline. Showing the version saved ' +
+    escHtml(formatDate(res.savedAt) + ' ' + formatTime(res.savedAt)) + '.</p>';
+}
+
 // ── Lyrics font size ───────────────────────────────────────────────────────────
 var _stageLyricsPx = parseInt(localStorage.getItem('stage_lyrics_px')) || 22;
 
@@ -291,9 +298,9 @@ async function init() {
     // key as loadConfig(…, { light: true }), signed-out answers apart (_anon).
     var _stageCacheKey = 'artist_config_cache_' + (_stageSlug || 'default') + '_light' +
       (_stageToken() ? '' : '_anon');
-    const cfgFetch = fetch('/api/config?light=1' + (_stageSlug ? '&slug=' + encodeURIComponent(_stageSlug) : ''),
-      { headers: _stageAuthHeaders() }
-    ).then(r => { if (!r.ok) throw new Error(); return r.json(); });
+    const cfgFetch = offlineFetch('/api/config?light=1' + (_stageSlug ? '&slug=' + encodeURIComponent(_stageSlug) : ''),
+      _stageAuthHeaders()
+    ).then(function(r) { return r.data; });
     var cfg;
     try { cfg = JSON.parse(sessionStorage.getItem(_stageCacheKey)) || await cfgFetch; }
     catch { cfg = await cfgFetch; }
@@ -308,8 +315,10 @@ async function init() {
     } else {
       await initSetlist(params, el, cfg);
     }
-  } catch {
-    el.innerHTML = '<p class="stage-message">Not found.</p>';
+  } catch (err) {
+    el.innerHTML = err && err.offline
+      ? '<p class="stage-message">Not available offline. Open this setlist once while online.</p>'
+      : '<p class="stage-message">Not found.</p>';
   }
 }
 
@@ -321,10 +330,8 @@ async function initSetlist(params, el, cfg) {
   }
 
   _shareSetlistId = setlistId;
-  const data = await fetch(`/api/${cfg.slug}/setlists/${setlistId}`, { headers: _stageAuthHeaders() }).then(r => {
-    if (!r.ok) throw new Error('not found');
-    return r.json();
-  });
+  const slRes = await offlineFetch(`/api/${cfg.slug}/setlists/${setlistId}`, _stageAuthHeaders());
+  const data = slRes.data;
   try { sessionStorage.setItem('stage_sl_' + setlistId, JSON.stringify(data)); } catch {}
 
   const songs = data.songs ?? [];
@@ -354,7 +361,7 @@ async function initSetlist(params, el, cfg) {
     </li>`;
   }).join('');
 
-  el.innerHTML = `
+  el.innerHTML = `${_stageOfflineNote(slRes)}
     <div class="stage-header">
       <div class="stage-band">${escHtml(cfg.name)}</div>
       <h1 class="stage-title">${mainTitle}</h1>
@@ -380,15 +387,14 @@ async function initSong(params, el, cfg) {
   if (fromId) {
     try { cachedSl = JSON.parse(sessionStorage.getItem('stage_sl_' + fromId)); } catch {}
   }
-  const [song, setlistData] = await Promise.all([
-    fetch(`/api/${cfg.slug}/songs/${songId}`, { headers: _stageAuthHeaders() }).then(r => {
-      if (!r.ok) throw new Error('not found');
-      return r.json();
-    }),
-    cachedSl         ? Promise.resolve(cachedSl)
-      : fromId       ? fetch(`/api/${cfg.slug}/setlists/${fromId}`, { headers: _stageAuthHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null)
+  const [songRes, slRes] = await Promise.all([
+    offlineFetch(`/api/${cfg.slug}/songs/${songId}`, _stageAuthHeaders()),
+    cachedSl         ? Promise.resolve({ data: cachedSl })
+      : fromId       ? offlineFetch(`/api/${cfg.slug}/setlists/${fromId}`, _stageAuthHeaders()).catch(() => null)
       : Promise.resolve(null),
   ]);
+  const song = songRes.data;
+  const setlistData = slRes ? slRes.data : null;
 
   // The active arrangement comes with the song's details.
   var activeArr   = song.active_arrangement || null;
@@ -475,7 +481,7 @@ async function initSong(params, el, cfg) {
        </div>`
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
-  el.innerHTML = `
+  el.innerHTML = `${_stageOfflineNote(songRes)}
     <div class="stage-header${navHtml ? ' stage-header--nav' : ''}">
       <div class="stage-band">${escHtml(cfg.name)}</div>
       <h1 class="stage-title">${escHtml(song.title)}</h1>

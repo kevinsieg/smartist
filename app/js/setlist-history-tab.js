@@ -97,6 +97,7 @@ function _openHistPanelContent(item, panelEl) {
           '</svg>' +
         '</button>') +
       '<button class="btn" data-onclick="_histStage(' + onArg(sid) + ')">' + t('setlist.stageBtn') + '</button>' +
+      '<button class="btn" id="hist-offline-btn" data-onclick="_histKeepOffline(' + onArg(sid) + ')">' + t('setlist.offlineBtn') + '</button>' +
       (_viewMode ? '' :
         '<button class="btn share-btn" data-onclick="_histShareMenu(' + onArg(sid) + ', this)">' +
           SHARE_ICON + '<span style="margin-left:4px">' + t('setlist.shareBtn') + '</span>' +
@@ -718,6 +719,24 @@ function _openSongPanel(setlistSid, songId) {
 
 function _histStage(sid) {
   window.open('/' + _artistSlug + '/stage?id=' + sid, '_blank');
+}
+
+async function _histKeepOffline(sid) {
+  var btn = document.getElementById('hist-offline-btn');
+  if (!btn || btn.disabled) return;
+  var label = btn.textContent;
+  btn.disabled = true;
+  try {
+    var out = await offlineKeep(_artistSlug, sid, function (done, total) {
+      btn.textContent = done + ' / ' + total;
+    });
+    var shell = await offlineWarm(location.origin + '/' + _artistSlug + '/stage?id=' + sid);
+    btn.textContent = out.failed.length ? t('setlist.offlinePartial', { n: out.failed.length })
+      : shell ? t('setlist.offlineDone') : t('setlist.offlineNoShell');
+  } catch (e) {
+    btn.textContent = t('setlist.offlineFailed');
+  }
+  setTimeout(function () { btn.textContent = label; btn.disabled = false; }, 4000);
 }
 
 async function _histExportPdf(sid) {

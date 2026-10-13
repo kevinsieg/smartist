@@ -315,3 +315,87 @@ if (typeof document !== 'undefined' && !window._onDispatch) {
 function clickById(id) { var el = document.getElementById(id); if (el) el.click(); }
 function removeParent(el) { if (el && el.parentElement) el.parentElement.remove(); }
 function closeShareMenu() { var m = document.getElementById('share-menu-popup'); if (m) { if (m._close) m._close(m.contains(document.activeElement)); else m.remove(); } }
+
+// ── Offline ────────────────────────────────────────────────────────────────────
+// The banner, the "not saved" notice, the wipe of saved offline data and the
+// service worker registration. Here because every page loads core.js, also
+// stage.html (which has no session.js and no t()): the texts fall back to English.
+var _offlineIsDown = false;
+
+function offlineText(key, fallback) {
+  return typeof t === 'function' ? t(key) : fallback;
+}
+
+function _offlineShow(id, role, text, css) {
+  var el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    el.setAttribute('role', role);
+    el.style.cssText = 'position:fixed;left:0;right:0;z-index:10000;padding:6px 12px;text-align:center;' +
+      'font:14px/1.3 system-ui,sans-serif;background:#7a4b00;color:#fff;' + css;
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  return el;
+}
+
+function offlineMarkDown() {
+  _offlineIsDown = true;
+  if (typeof document === 'undefined' || !document.body) return;
+  _offlineShow('offline-banner', 'status', offlineText('offline.banner', "No connection. Changes can't be saved."), 'top:0;');
+}
+
+function offlineMarkUp() {
+  if (!_offlineIsDown) return;
+  _offlineIsDown = false;
+  var el = document.getElementById('offline-banner');
+  if (el) el.remove();
+}
+
+function offlineNotice(text) {
+  var el = _offlineShow('offline-notice', 'alert', text, 'bottom:0;background:#8b1a1a;');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(function () { el.remove(); }, 6000);
+}
+
+// Saved copies of band data belong to whoever was signed in: gone on logout,
+// a dead session and a 401. Deleting the database needs no offline.js, so any
+// page can do it.
+function clearOfflineData() {
+  return new Promise(function (resolve) {
+    if (typeof indexedDB === 'undefined') return resolve();
+    var rq = indexedDB.deleteDatabase('smartist-offline');
+    rq.onsuccess = rq.onerror = rq.onblocked = function () { resolve(); };
+  });
+}
+
+// Ask the service worker to save a page and the files it loads. Resolves true
+// when it did, false when there is no worker or it failed or took too long.
+function offlineWarm(url) {
+  if (typeof navigator === 'undefined' || !navigator.serviceWorker) return Promise.resolve(false);
+  var ready = navigator.serviceWorker.ready.then(function (reg) {
+    return new Promise(function (resolve) {
+      var ch = new MessageChannel();
+      ch.port1.onmessage = function (e) { resolve(!!(e.data && e.data.ok)); };
+      reg.active.postMessage({ type: 'warm', url: url }, [ch.port2]);
+    });
+  });
+  var late = new Promise(function (resolve) { setTimeout(function () { resolve(false); }, 15000); });
+  return Promise.race([ready, late]).catch(function () { return false; });
+}
+
+if (typeof window !== 'undefined' && window.addEventListener && typeof navigator !== 'undefined') {
+  window.addEventListener('offline', offlineMarkDown);
+  window.addEventListener('online', offlineMarkUp);
+  if (navigator.onLine === false) offlineMarkDown();
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').then(function () {
+        // First visit: this page was loaded before the worker took over, so its
+        // files were not saved. Save them now, or "open once, go offline" fails.
+        if (!navigator.serviceWorker.controller) offlineWarm(location.href);
+      }).catch(function () {});
+    });
+  }
+}

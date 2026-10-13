@@ -59,12 +59,14 @@ function makeStorage(initial) {
 function runLogout({ session = {}, local = {} } = {}) {
   const assigned = [];
   const removedEls = [];
+  const deleted = [];
   const header = { classList: { removed: [], remove(c) { this.removed.push(c); } } };
 
   const context = {
     console,
     AUTH_TOKEN_KEY: 'smartist_token',
     _artistSlug: 'myband',
+    indexedDB: { deleteDatabase: name => { deleted.push(name); return {}; } },
     sessionStorage: makeStorage(session),
     localStorage: makeStorage(local),
     window: { location: { assign: url => assigned.push(url) } },
@@ -76,12 +78,13 @@ function runLogout({ session = {}, local = {} } = {}) {
   vm.createContext(context);
   vm.runInContext(
     [extractFunction(COMMON, 'clearToken'),
+     extractFunction(COMMON, 'clearOfflineData'),
      extractFunction(COMMON, 'invalidateConfigCache'),
      extractFunction(COMMON, 'doLogout'),
      'doLogout();'].join('\n'),
     context, { filename: 'app/js/shell.js' }
   );
-  return { assigned, removedEls, header, ...context };
+  return { assigned, removedEls, deleted, header, ...context };
 }
 
 console.log(B('\nlogout'));
@@ -120,6 +123,12 @@ test('drops the cached band config', () => {
   } });
   assertEq(out.sessionStorage.getItem('artist_config_cache_myband'), null);
   assertEq(out.sessionStorage.getItem('artist_config_cache_myband_light'), null);
+});
+
+test('wipes the saved offline data', () => {
+  // Band data kept for offline use belongs to whoever was signed in.
+  const out = runLogout({ session: { smartist_token: 'a' } });
+  assertEq(out.deleted, ['smartist-offline']);
 });
 
 test('closes the nav menu on the way out', () => {

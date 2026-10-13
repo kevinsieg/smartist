@@ -1,0 +1,202 @@
+#!/usr/bin/env node
+/**
+ * smartist — setlist importer (CSV → songs + one saved setlist)
+ *
+ * Reads a CSV of songs, matches every row against the band's existing songs,
+ * completes the ones that exist (only fields they have not got yet — nothing is
+ * overwritten), creates the ones that do not, and saves all of them as one
+ * setlist in CSV order. One transaction; --dry-run prints the report and rolls
+ * it back.
+ *
+ * CSV columns (header names are matched ignoring case and accents):
+ *   title        required (also: titre, titel)
+ *   length       3:20 or 3.33 minutes (also: duration, durée, dauer)
+ *   author       → extra.author   (also: auteur, autor)
+ *   composer     → extra.composer (also: compositeur, komponist)
+ *   arranger     → extra.arranger (also: harmonisation, arrangement)
+ *   traditional  yes/no; yes → extra.traditional = true (no is never stored)
+ *
+ * Matching: titles are compared ignoring case, accents, punctuation and a
+ * leading article. A live song with the same normalized title is the same song.
+ * A close title ("Sa compagne" / "Sa compagne c'est la mer") is only reported as
+ * MAYBE and blocks a real run until each one is settled:
+ *   --same "CSV title=Song title in the database"   same song, complete it
+ *   --new  "CSV title"                              not that song, create it
+ *   --skip "CSV title"                              leave it out (no song, not in the setlist)
+ * In a terminal the script asks for each open MAYBE instead (a candidate's
+ * number, n, s or q) and prints the flags that repeat your answers, so the run
+ * on the real database needs no prompt. --no-prompt turns the questions off.
+ *
+ * Usage:
+ *   node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv>
+ *        [--dry-run] [--yes] [--no-prompt] [--same "a=b"]… [--new "title"]… [--skip "title"]…
+ *        [--interpret "Band name"]
+ *
+ * Reads DATABASE_URL from .env.local or .env in the project root; asks before
+ * connecting and shows the database host. Does not check the plan's song limit.
+ *
+ * --interpret "Band name" sets the performer of every new song and of a matched
+ * song that has none. Without it interpret stays as it is (empty on new songs).
+ */
+
+'use strict';
+
+const fs       = require('fs');
+const path     = require('path');
+const readline = require('readline');
+const lib  = require('./_lib');
+const L    = require('./_setlist_csv');
+
+function flags(args, name) {
+  const out = [];
+  args.forEach((a, i) => { if (a === name && args[i + 1] !== undefined) out.push(args[i + 1]); });
+  return out;
+}
+
+function usage() {
+  console.error('Usage: node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv> [--dry-run] [--yes] [--no-prompt] [--same "a=b"] [--new "title"] [--skip "title"] [--interpret "Band name"]');
+  process.exit(1);
+}
+
+// Asks, for every open MAYBE, what it is; the answers settle the plan in place.
+async function decide(plan, opts) {
+  // Lines are queued as they arrive, so answers pasted together are not lost;
+  // the end of the input counts as "q".
+  const rl = readline.createInterface({ input: process.stdin });
+  const lines = [];
+  let closed = false, wake = null;
+  const notify = () => { if (wake) { wake(); wake = null; } };
+  rl.on('line', l => { lines.push(l); notify(); });
+  rl.on('close', () => { closed = true; notify(); });
+  const ask = async q => {
+    process.stdout.write(q);
+    while (!lines.length) {
+      if (closed) { process.stdout.write('q\n'); return 'q'; }
+      await new Promise(resolve => { wake = resolve; });
+    }
+    return lines.shift();
+  };
+  const decisions = [];
+  const open = plan.filter(p => p.kind === 'maybe');
+  console.log(`\n  ${open.length} title(s) may already exist. For each: a number = that song, n = new song, s = skip it, q = quit.`);
+  try {
+    for (const [i, p] of open.entries()) {
+      console.log(`\n  (${i + 1}/${open.length}) "${p.row.title}" may be:`);
+      p.candidates.forEach((s, j) => console.log(`    ${j + 1}) #${s.id} ${s.title}${s.deleted ? '  (deleted: cannot be used)' : ''}`));
+      let choice = null;
+      while (!choice) choice = L.parseChoice(await ask('  choice: '), p.candidates);
+      if (choice.kind === 'abort') { console.log('  Aborted, nothing written.'); process.exit(0); }
+      decisions.push({ row: p.row, ...choice });
+      if (choice.kind === 'same') Object.assign(p, { kind: 'match', song: choice.song, patch: L.completion(choice.song, p.row, opts) });
+      else p.kind = choice.kind;
+    }
+  } finally {
+    rl.close();
+  }
+  console.log(`\n  To repeat these answers without questions (the run on the real database):\n  ${L.decisionFlags(decisions).join(' ')}\n`);
+}
+
+async function main() {
+  lib.loadEnv();
+  const args   = process.argv.slice(2);
+  const dryRun = args.includes('--dry-run');
+  const slug   = flags(args, '--artist')[0];
+  const title  = flags(args, '--setlist')[0];
+  const opts   = { interpret: flags(args, '--interpret')[0] || null };
+  const same   = L.parseSame(flags(args, '--same'));
+  const forceNew = new Set(flags(args, '--new').map(L.normTitle));
+  const skip   = new Set(flags(args, '--skip').map(L.normTitle));
+  const valued = new Set(['--artist', '--setlist', '--same', '--new', '--skip', '--interpret']);
+  const file   = args.find((a, i) => !a.startsWith('--') && !valued.has(args[i - 1]));
+  if (!slug || !title || !file) usage();
+  if (!process.env.DATABASE_URL) { console.error('DATABASE_URL is not set.'); process.exit(1); }
+
+  const { rows, errors } = L.parseRows(fs.readFileSync(path.resolve(file), 'utf8'));
+  if (errors.length) { errors.forEach(e => console.error(`  ${e}`)); process.exit(1); }
+  if (!rows.length) { console.error('  no songs in the file'); process.exit(1); }
+
+  await lib.confirmDb(process.env.DATABASE_URL, { yes: args.includes('--yes'), question: `${dryRun ? 'Dry run' : 'Import'} here? (y/n): ` });
+  const sql = lib.connect(process.env.DATABASE_URL);
+  try {
+    const [band] = await sql`SELECT id, config FROM artists WHERE slug = ${slug} LIMIT 1`;
+    if (!band) { console.error(`  band "${slug}" not found`); process.exit(1); }
+    const [taken] = await sql`SELECT id FROM setlists WHERE artist_id = ${band.id} AND title = ${title} LIMIT 1`;
+    if (taken) { console.error(`  a setlist called "${title}" already exists (id ${taken.id}); nothing changed`); process.exit(1); }
+    const songs = await sql`SELECT id, title, length_min, interpret, extra, deleted FROM songs WHERE artist_id = ${band.id}`;
+
+    const plan = rows.map(row => {
+      const c = L.classify(row, songs, same, forceNew, skip);
+      return { row, ...c, patch: c.kind === 'match' ? L.completion(c.song, row, opts) : null };
+    });
+
+    if (process.stdin.isTTY && !args.includes('--no-prompt') && plan.some(p => p.kind === 'maybe')) {
+      await decide(plan, opts);
+    }
+
+    for (const p of plan) {
+      if (p.kind === 'skip') {
+        console.log(`  SKIP      ${p.row.title}`);
+      } else if (p.kind === 'match') {
+        const what = p.patch ? 'UPDATE   ' + [p.patch.length_min != null && 'length', p.patch.interpret && 'interpret', ...Object.keys(p.patch.extra || {})].filter(Boolean).join(', ') : 'UNCHANGED';
+        console.log(`  ${what.padEnd(9)} ${p.row.title}  →  #${p.song.id} ${p.song.title}`);
+      } else if (p.kind === 'new') {
+        console.log(`  NEW       ${p.row.title}`);
+      } else {
+        console.log(`  MAYBE     ${p.row.title}  ?  ${p.candidates.map(s => `#${s.id} ${s.title}${s.deleted ? ' (deleted)' : ''}`).join(' | ')}`);
+      }
+    }
+    const count = k => plan.filter(p => p.kind === k).length;
+    const fields = (band.config && band.config.songFields || []).map(f => f.field).filter(Boolean);
+    const left = plan.filter(p => p.kind === 'skip').length;
+    console.log(`\n  ${count('match')} matched (${plan.filter(p => p.patch).length} to complete), ${count('new')} new, ${count('maybe')} to settle${left ? `, ${left} skipped` : ''}; setlist "${title}" with ${plan.filter(p => p.kind !== 'skip').length} songs`);
+    console.log(`  custom song columns configured for this band: ${fields.join(', ') || '(none)'} — extra.author/composer/arranger show only where listed`);
+
+    const open = plan.filter(p => p.kind === 'maybe');
+    if (open.length) {
+      console.log(`\n  ${open.length} title(s) need a decision: --same "CSV title=Song title" or --new "CSV title".`);
+      if (!dryRun) { console.error('  nothing written'); process.exit(1); }
+    }
+
+    await sql.begin(async tx => {
+      const updates = plan.filter(p => p.patch).map(p => ({
+        id: p.song.id, length_min: p.patch.length_min ?? null, interpret: p.patch.interpret ?? null, extra: p.patch.extra ?? {},
+      }));
+      if (updates.length) {
+        await tx`
+          UPDATE songs s SET
+            length_min = COALESCE(NULLIF(s.length_min, 0), v.length_min, s.length_min),
+            interpret  = COALESCE(NULLIF(s.interpret, ''), v.interpret),
+            extra      = s.extra || v.extra
+          FROM jsonb_to_recordset(${tx.json(updates)}) AS v(id int, length_min real, interpret text, extra jsonb)
+          WHERE s.id = v.id AND s.artist_id = ${band.id}`;
+      }
+
+      const news = plan.filter(p => p.kind === 'new').map((p, pos) => ({ pos, ...L.newSong(p.row, opts) }));
+      const created = news.length ? await tx`
+        INSERT INTO songs (artist_id, title, length_min, interpret, extra)
+        SELECT ${band.id}, v.title, v.length_min, v.interpret, v.extra
+        FROM jsonb_to_recordset(${tx.json(news)}) AS v(pos int, title text, length_min real, interpret text, extra jsonb)
+        ORDER BY v.pos
+        RETURNING id, title` : [];
+      const createdId = new Map(created.map(c => [c.title, c.id]));
+
+      const ids = plan.filter(p => p.kind === 'match' || p.kind === 'new').map(p => p.kind === 'match' ? p.song.id : createdId.get(p.row.title));
+      // Only a dry run gets here with titles still to settle (a real run exits above).
+      if (plan.some(p => p.kind === 'maybe')) throw new Error('dry run: rolled back, nothing written');
+      const [sl] = await tx`
+        WITH s AS (
+          INSERT INTO setlists (artist_id, title) VALUES (${band.id}, ${title}) RETURNING id
+        ), ins AS (
+          INSERT INTO setlist_songs (setlist_id, song_id, position)
+          SELECT s.id, u.song_id, u.ord - 1 FROM s, unnest(${ids}::int[]) WITH ORDINALITY AS u(song_id, ord)
+        )
+        SELECT id FROM s`;
+      console.log(`\n  ${created.length} songs created, ${updates.length} completed, setlist #${sl.id} saved`);
+      if (dryRun) throw new Error('dry run: rolled back, nothing written');
+    });
+  } finally {
+    await sql.end();
+  }
+}
+
+main().catch(e => { console.error(`  ${e.message}`); process.exit(/dry run/.test(e.message) ? 0 : 1); });
