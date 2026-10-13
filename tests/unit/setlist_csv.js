@@ -84,6 +84,37 @@ function run(r) {
     assertEq(c.kind, 'new');
   });
 
+  test('--skip leaves a title out, even a clear match', () => {
+    const skip = new Set([L.normTitle('Anita')]);
+    assertEq(L.classify({ title: 'Anita' }, [song(1, 'Anita')], {}, undefined, skip).kind, 'skip');
+  });
+
+  test('a typed choice becomes a decision: a number is that live candidate, n new, s skip, q abort', () => {
+    const cands = [song(1, 'Chant des Terre-neuva'), song(2, 'Chant de Terre Neuve', { deleted: true })];
+    assertEq(L.parseChoice('1', cands), { kind: 'same', song: cands[0] });
+    assertEq(L.parseChoice(' N ', cands), { kind: 'new' });
+    assertEq(L.parseChoice('s', cands), { kind: 'skip' });
+    assertEq(L.parseChoice('Q', cands), { kind: 'abort' });
+  });
+
+  test('an invalid choice, a number out of range or a deleted candidate asks again', () => {
+    const cands = [song(1, 'A'), song(2, 'B', { deleted: true })];
+    for (const bad of ['', 'x', '0', '3', '2', '1.5']) assertEq(L.parseChoice(bad, cands), null, bad);
+  });
+
+  test('decisions are written back as the flags that repeat them without a prompt', () => {
+    const flags = L.decisionFlags([
+      { row: { title: 'Sa compagne c\'est la mer' }, kind: 'same', song: song(1, 'Sa Compagne') },
+      { row: { title: 'Surcouf "II"' }, kind: 'new' },
+      { row: { title: 'Anita' }, kind: 'skip' },
+    ]);
+    assertEq(flags, [
+      '--same "Sa compagne c\'est la mer=Sa Compagne"',
+      '--new "Surcouf \\"II\\""',
+      '--skip "Anita"',
+    ]);
+  });
+
   test('a match is only completed where the song is empty; nothing is overwritten', () => {
     const row = { title: 'Anita', length_min: 3.8, author: 'A', composer: 'B', arranger: 'C', traditional: true };
     const empty = L.completion(song(1, 'Anita'), row, 'Traditionnel');

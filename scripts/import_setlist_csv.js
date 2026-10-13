@@ -22,10 +22,15 @@
  * MAYBE and blocks a real run until each one is settled:
  *   --same "CSV title=Song title in the database"   same song, complete it
  *   --new  "CSV title"                              not that song, create it
+ *   --skip "CSV title"                              leave it out (no song, not in the setlist)
+ * In a terminal the script asks for each open MAYBE instead (a candidate's
+ * number, n, s or q) and prints the flags that repeat your answers, so the run
+ * on the real database needs no prompt. --no-prompt turns the questions off.
  *
  * Usage:
  *   node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv>
- *        [--dry-run] [--yes] [--same "a=b"]… [--new "title"]… [--traditional-label "Traditionnel"]
+ *        [--dry-run] [--yes] [--no-prompt] [--same "a=b"]… [--new "title"]… [--skip "title"]…
+ *        [--traditional-label "Traditionnel"]
  *
  * Reads DATABASE_URL from .env.local or .env in the project root; asks before
  * connecting and shows the database host. Does not check the plan's song limit.
@@ -33,8 +38,9 @@
 
 'use strict';
 
-const fs   = require('fs');
-const path = require('path');
+const fs       = require('fs');
+const path     = require('path');
+const readline = require('readline');
 const lib  = require('./_lib');
 const L    = require('./_setlist_csv');
 
@@ -45,8 +51,46 @@ function flags(args, name) {
 }
 
 function usage() {
-  console.error('Usage: node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv> [--dry-run] [--yes] [--same "a=b"] [--new "title"] [--traditional-label "Traditional"]');
+  console.error('Usage: node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv> [--dry-run] [--yes] [--no-prompt] [--same "a=b"] [--new "title"] [--skip "title"] [--traditional-label "Traditional"]');
   process.exit(1);
+}
+
+// Asks, for every open MAYBE, what it is; the answers settle the plan in place.
+async function decide(plan, label) {
+  // Lines are queued as they arrive, so answers pasted together are not lost;
+  // the end of the input counts as "q".
+  const rl = readline.createInterface({ input: process.stdin });
+  const lines = [];
+  let closed = false, wake = null;
+  const notify = () => { if (wake) { wake(); wake = null; } };
+  rl.on('line', l => { lines.push(l); notify(); });
+  rl.on('close', () => { closed = true; notify(); });
+  const ask = async q => {
+    process.stdout.write(q);
+    while (!lines.length) {
+      if (closed) { process.stdout.write('q\n'); return 'q'; }
+      await new Promise(resolve => { wake = resolve; });
+    }
+    return lines.shift();
+  };
+  const decisions = [];
+  const open = plan.filter(p => p.kind === 'maybe');
+  console.log(`\n  ${open.length} title(s) may already exist. For each: a number = that song, n = new song, s = skip it, q = quit.`);
+  try {
+    for (const [i, p] of open.entries()) {
+      console.log(`\n  (${i + 1}/${open.length}) "${p.row.title}" may be:`);
+      p.candidates.forEach((s, j) => console.log(`    ${j + 1}) #${s.id} ${s.title}${s.deleted ? '  (deleted: cannot be used)' : ''}`));
+      let choice = null;
+      while (!choice) choice = L.parseChoice(await ask('  choice: '), p.candidates);
+      if (choice.kind === 'abort') { console.log('  Aborted, nothing written.'); process.exit(0); }
+      decisions.push({ row: p.row, ...choice });
+      if (choice.kind === 'same') Object.assign(p, { kind: 'match', song: choice.song, patch: L.completion(choice.song, p.row, label) });
+      else p.kind = choice.kind;
+    }
+  } finally {
+    rl.close();
+  }
+  console.log(`\n  To repeat these answers without questions (the run on the real database):\n  ${L.decisionFlags(decisions).join(' ')}\n`);
 }
 
 async function main() {
@@ -58,7 +102,8 @@ async function main() {
   const label  = flags(args, '--traditional-label')[0] || 'Traditional';
   const same   = L.parseSame(flags(args, '--same'));
   const forceNew = new Set(flags(args, '--new').map(L.normTitle));
-  const valued = new Set(['--artist', '--setlist', '--same', '--new', '--traditional-label']);
+  const skip   = new Set(flags(args, '--skip').map(L.normTitle));
+  const valued = new Set(['--artist', '--setlist', '--same', '--new', '--skip', '--traditional-label']);
   const file   = args.find((a, i) => !a.startsWith('--') && !valued.has(args[i - 1]));
   if (!slug || !title || !file) usage();
   if (!process.env.DATABASE_URL) { console.error('DATABASE_URL is not set.'); process.exit(1); }
@@ -77,12 +122,18 @@ async function main() {
     const songs = await sql`SELECT id, title, length_min, interpret, extra, deleted FROM songs WHERE artist_id = ${band.id}`;
 
     const plan = rows.map(row => {
-      const c = L.classify(row, songs, same, forceNew);
+      const c = L.classify(row, songs, same, forceNew, skip);
       return { row, ...c, patch: c.kind === 'match' ? L.completion(c.song, row, label) : null };
     });
 
+    if (process.stdin.isTTY && !args.includes('--no-prompt') && plan.some(p => p.kind === 'maybe')) {
+      await decide(plan, label);
+    }
+
     for (const p of plan) {
-      if (p.kind === 'match') {
+      if (p.kind === 'skip') {
+        console.log(`  SKIP      ${p.row.title}`);
+      } else if (p.kind === 'match') {
         const what = p.patch ? 'UPDATE   ' + [p.patch.length_min != null && 'length', p.patch.interpret && 'interpret', ...Object.keys(p.patch.extra || {})].filter(Boolean).join(', ') : 'UNCHANGED';
         console.log(`  ${what.padEnd(9)} ${p.row.title}  →  #${p.song.id} ${p.song.title}`);
       } else if (p.kind === 'new') {
@@ -93,7 +144,8 @@ async function main() {
     }
     const count = k => plan.filter(p => p.kind === k).length;
     const fields = (band.config && band.config.songFields || []).map(f => f.field).filter(Boolean);
-    console.log(`\n  ${count('match')} matched (${plan.filter(p => p.patch).length} to complete), ${count('new')} new, ${count('maybe')} to settle; setlist "${title}" with ${rows.length} songs`);
+    const left = plan.filter(p => p.kind === 'skip').length;
+    console.log(`\n  ${count('match')} matched (${plan.filter(p => p.patch).length} to complete), ${count('new')} new, ${count('maybe')} to settle${left ? `, ${left} skipped` : ''}; setlist "${title}" with ${plan.filter(p => p.kind !== 'skip').length} songs`);
     console.log(`  custom song columns configured for this band: ${fields.join(', ') || '(none)'} — extra.author/composer/arranger show only where listed`);
 
     const open = plan.filter(p => p.kind === 'maybe');
@@ -125,9 +177,9 @@ async function main() {
         RETURNING id, title` : [];
       const createdId = new Map(created.map(c => [c.title, c.id]));
 
-      const ids = plan.filter(p => p.kind !== 'maybe').map(p => p.kind === 'match' ? p.song.id : createdId.get(p.row.title));
+      const ids = plan.filter(p => p.kind === 'match' || p.kind === 'new').map(p => p.kind === 'match' ? p.song.id : createdId.get(p.row.title));
       // Only a dry run gets here with titles still to settle (a real run exits above).
-      if (ids.length !== rows.length) throw new Error('dry run: rolled back, nothing written');
+      if (plan.some(p => p.kind === 'maybe')) throw new Error('dry run: rolled back, nothing written');
       const [sl] = await tx`
         WITH s AS (
           INSERT INTO setlists (artist_id, title) VALUES (${band.id}, ${title}) RETURNING id

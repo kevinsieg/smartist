@@ -5,6 +5,7 @@
 // be completed with. Tested in tests/unit/setlist_csv.js.
 
 const { parseCsvText, normLength } = require('../api/_domain/song_import');
+const { normTitle, similar } = require('../api/_domain/title_match');
 
 // CSV header (case, accents and punctuation ignored) → field.
 const HEADERS = {
@@ -19,14 +20,6 @@ const EXTRA_KEYS = ['author', 'composer', 'arranger'];
 
 function foldHeader(s) {
   return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-// How titles are compared: case, accents, punctuation and a leading article
-// are ignored, so "Les Penn' Sardin" is "Penn sardin".
-function normTitle(s) {
-  return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ').trim()
-    .replace(/^(?:le|la|les|l|un|une|the) /, '');
 }
 
 // → { rows: [{ line, title, length_min, author, composer, arranger, traditional }], errors: [text] }
@@ -77,35 +70,13 @@ function parseSame(pairs) {
   return out;
 }
 
-function distance(a, b) {
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-    prev = cur;
-  }
-  return prev[b.length];
-}
-
-// Close enough to be the same song under another spelling: equal, one title's
-// words all inside the other's ("Sa compagne" in "Sa compagne c'est la mer"),
-// or a small edit distance ("Terre-neuvas" / "Terre Neuve").
-function similar(a, b) {
-  if (a === b) return true;
-  const ta = a.split(' '), tb = b.split(' ');
-  const [short, long] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
-  if (short.every(w => long.includes(w))) return true;
-  return Math.min(a.length, b.length) >= 5 && distance(a, b) / Math.max(a.length, b.length) <= 0.25;
-}
-
-// → { kind: 'match', song } | { kind: 'maybe', candidates } | { kind: 'new' }
+// → { kind: 'match', song } | { kind: 'maybe', candidates } | { kind: 'new' } | { kind: 'skip' }
 // Only a live song with the same normalized title matches by itself. `same`
 // (from parseSame) settles a "maybe" as a match, `forceNew` (a Set of
-// normalized titles) as a new song.
-function classify(row, songs, same, forceNew) {
+// normalized titles) as a new song; `skip` (a Set) leaves a title out.
+function classify(row, songs, same, forceNew, skip) {
   const key = normTitle(row.title);
+  if (skip && skip.has(key)) return { kind: 'skip' };
   const live = songs.filter(s => !s.deleted);
   const settled = same && same[key];
   if (settled) {
@@ -140,4 +111,28 @@ function newSong(row, traditionalLabel) {
   return { title: row.title, length_min: row.length_min, interpret: row.traditional ? traditionalLabel : null, extra };
 }
 
-module.exports = { normTitle, parseRows, parseSame, classify, completion, newSong, similar };
+// What the user typed for a "maybe": the number of a live candidate (the same
+// song), n (a new song), s (leave it out), q (stop). null: ask again.
+function parseChoice(input, candidates) {
+  const t = String(input).trim().toLowerCase();
+  if (t === 'n') return { kind: 'new' };
+  if (t === 's') return { kind: 'skip' };
+  if (t === 'q') return { kind: 'abort' };
+  if (/^\d+$/.test(t)) {
+    const song = candidates[Number(t) - 1];
+    if (song && !song.deleted) return { kind: 'same', song };
+  }
+  return null;
+}
+
+// The choices made at the prompt as the flags that repeat them without one
+// (for the run on the real database).
+function decisionFlags(decisions) {
+  const q = s => '"' + String(s).replace(/[\\"$`]/g, '\\$&') + '"';
+  return decisions.map(d =>
+    d.kind === 'same' ? `--same ${q(`${d.row.title}=${d.song.title}`)}`
+      : d.kind === 'new' ? `--new ${q(d.row.title)}`
+      : `--skip ${q(d.row.title)}`);
+}
+
+module.exports = { normTitle, parseRows, parseSame, classify, completion, newSong, similar, parseChoice, decisionFlags };
