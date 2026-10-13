@@ -117,22 +117,36 @@ function run(r) {
 
   test('a match is only completed where the song is empty; nothing is overwritten', () => {
     const row = { title: 'Anita', length_min: 3.8, author: 'A', composer: 'B', arranger: 'C', traditional: true };
-    const empty = L.completion(song(1, 'Anita'), row, 'Traditionnel');
-    assertEq(empty, { length_min: 3.8, interpret: 'Traditionnel', extra: { author: 'A', composer: 'B', arranger: 'C' } });
-    const full = L.completion(song(1, 'Anita', { length_min: 4, interpret: 'Someone', extra: { author: 'X', composer: 'Y', arranger: 'Z' } }), row, 'Traditionnel');
+    const opts = { interpret: 'The Band' };
+    const empty = L.completion(song(1, 'Anita'), row, opts);
+    assertEq(empty, { length_min: 3.8, interpret: 'The Band', extra: { author: 'A', composer: 'B', arranger: 'C', traditional: true } });
+    const full = L.completion(song(1, 'Anita', { length_min: 4, interpret: 'Someone', extra: { author: 'X', composer: 'Y', arranger: 'Z', traditional: false } }), row, opts);
     assertEq(full, null);
-    const part = L.completion(song(1, 'Anita', { length_min: 4, extra: { author: 'X' } }), row, 'Traditionnel');
-    assertEq(part, { interpret: 'Traditionnel', extra: { composer: 'B', arranger: 'C' } });
+    const part = L.completion(song(1, 'Anita', { length_min: 4, extra: { author: 'X' } }), row, opts);
+    assertEq(part, { interpret: 'The Band', extra: { composer: 'B', arranger: 'C', traditional: true } });
+  });
+
+  test('interpret is only set when --interpret is given, never from the CSV', () => {
+    const row = { title: 'Anita', length_min: null, author: null, composer: null, arranger: null, traditional: true };
+    assertEq(L.completion(song(1, 'Anita'), row, {}), { extra: { traditional: true } });
+    assertEq(L.completion(song(1, 'Anita'), row), { extra: { traditional: true } });
+  });
+
+  test('traditional is an extra flag: set when the CSV says yes, never written as false', () => {
+    const no = { title: 'Anita', length_min: null, author: null, composer: null, arranger: null, traditional: false };
+    assertEq(L.completion(song(1, 'Anita'), no, {}), null);
+    assertEq(L.newSong(no, {}).extra, {});
   });
 
   test('an empty or blank existing value counts as empty', () => {
     const row = { title: 'Anita', length_min: null, author: 'A', composer: null, arranger: null, traditional: false };
-    assertEq(L.completion(song(1, 'Anita', { interpret: '', extra: { author: ' ' } }), row, 'T'), { extra: { author: 'A' } });
+    assertEq(L.completion(song(1, 'Anita', { interpret: '', extra: { author: ' ' } }), row, { interpret: 'T' }), { interpret: 'T', extra: { author: 'A' } });
   });
 
-  test('a new song carries every field the CSV has', () => {
+  test('a new song carries every field the CSV has, and the interpret that was asked for', () => {
     const row = { title: 'La Margot', length_min: 2.667, author: null, composer: null, arranger: 'C', traditional: true };
-    assertEq(L.newSong(row, 'Traditionnel'), { title: 'La Margot', length_min: 2.667, interpret: 'Traditionnel', extra: { arranger: 'C' } });
+    assertEq(L.newSong(row, { interpret: 'The Band' }), { title: 'La Margot', length_min: 2.667, interpret: 'The Band', extra: { arranger: 'C', traditional: true } });
+    assertEq(L.newSong(row, {}).interpret, null);
   });
 }
 

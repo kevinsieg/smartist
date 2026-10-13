@@ -94,21 +94,27 @@ function classify(row, songs, same, forceNew, skip) {
 const blank = v => v == null || String(v).trim() === '';
 
 // What a matched song may be completed with: only what it has not got yet.
+// opts.interpret is the performer to set where the song has none (given with
+// --interpret; never read from the CSV). `traditional` is an extra flag, set
+// when the CSV says yes and the song has no value for it.
 // → { length_min?, interpret?, extra? } or null when there is nothing to add.
-function completion(song, row, traditionalLabel) {
+function completion(song, row, opts) {
   const patch = {};
   if (row.length_min != null && !song.length_min) patch.length_min = row.length_min;
-  if (row.traditional && blank(song.interpret)) patch.interpret = traditionalLabel;
+  if (opts && opts.interpret && blank(song.interpret)) patch.interpret = opts.interpret;
+  const have = song.extra || {};
   const extra = {};
-  for (const k of EXTRA_KEYS) if (row[k] != null && blank((song.extra || {})[k])) extra[k] = row[k];
+  for (const k of EXTRA_KEYS) if (row[k] != null && blank(have[k])) extra[k] = row[k];
+  if (row.traditional && have.traditional == null) extra.traditional = true;
   if (Object.keys(extra).length) patch.extra = extra;
   return Object.keys(patch).length ? patch : null;
 }
 
-function newSong(row, traditionalLabel) {
+function newSong(row, opts) {
   const extra = {};
   for (const k of EXTRA_KEYS) if (row[k] != null) extra[k] = row[k];
-  return { title: row.title, length_min: row.length_min, interpret: row.traditional ? traditionalLabel : null, extra };
+  if (row.traditional) extra.traditional = true;
+  return { title: row.title, length_min: row.length_min, interpret: (opts && opts.interpret) || null, extra };
 }
 
 // What the user typed for a "maybe": the number of a live candidate (the same

@@ -14,7 +14,7 @@
  *   author       → extra.author   (also: auteur, autor)
  *   composer     → extra.composer (also: compositeur, komponist)
  *   arranger     → extra.arranger (also: harmonisation, arrangement)
- *   traditional  yes/no; yes → interpret "Traditional" (see --traditional-label)
+ *   traditional  yes/no; yes → extra.traditional = true (no is never stored)
  *
  * Matching: titles are compared ignoring case, accents, punctuation and a
  * leading article. A live song with the same normalized title is the same song.
@@ -30,10 +30,13 @@
  * Usage:
  *   node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv>
  *        [--dry-run] [--yes] [--no-prompt] [--same "a=b"]… [--new "title"]… [--skip "title"]…
- *        [--traditional-label "Traditionnel"]
+ *        [--interpret "Band name"]
  *
  * Reads DATABASE_URL from .env.local or .env in the project root; asks before
  * connecting and shows the database host. Does not check the plan's song limit.
+ *
+ * --interpret "Band name" sets the performer of every new song and of a matched
+ * song that has none. Without it interpret stays as it is (empty on new songs).
  */
 
 'use strict';
@@ -51,12 +54,12 @@ function flags(args, name) {
 }
 
 function usage() {
-  console.error('Usage: node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv> [--dry-run] [--yes] [--no-prompt] [--same "a=b"] [--new "title"] [--skip "title"] [--traditional-label "Traditional"]');
+  console.error('Usage: node scripts/import_setlist_csv.js --artist <slug> --setlist "<title>" <file.csv> [--dry-run] [--yes] [--no-prompt] [--same "a=b"] [--new "title"] [--skip "title"] [--interpret "Band name"]');
   process.exit(1);
 }
 
 // Asks, for every open MAYBE, what it is; the answers settle the plan in place.
-async function decide(plan, label) {
+async function decide(plan, opts) {
   // Lines are queued as they arrive, so answers pasted together are not lost;
   // the end of the input counts as "q".
   const rl = readline.createInterface({ input: process.stdin });
@@ -84,7 +87,7 @@ async function decide(plan, label) {
       while (!choice) choice = L.parseChoice(await ask('  choice: '), p.candidates);
       if (choice.kind === 'abort') { console.log('  Aborted, nothing written.'); process.exit(0); }
       decisions.push({ row: p.row, ...choice });
-      if (choice.kind === 'same') Object.assign(p, { kind: 'match', song: choice.song, patch: L.completion(choice.song, p.row, label) });
+      if (choice.kind === 'same') Object.assign(p, { kind: 'match', song: choice.song, patch: L.completion(choice.song, p.row, opts) });
       else p.kind = choice.kind;
     }
   } finally {
@@ -99,11 +102,11 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const slug   = flags(args, '--artist')[0];
   const title  = flags(args, '--setlist')[0];
-  const label  = flags(args, '--traditional-label')[0] || 'Traditional';
+  const opts   = { interpret: flags(args, '--interpret')[0] || null };
   const same   = L.parseSame(flags(args, '--same'));
   const forceNew = new Set(flags(args, '--new').map(L.normTitle));
   const skip   = new Set(flags(args, '--skip').map(L.normTitle));
-  const valued = new Set(['--artist', '--setlist', '--same', '--new', '--skip', '--traditional-label']);
+  const valued = new Set(['--artist', '--setlist', '--same', '--new', '--skip', '--interpret']);
   const file   = args.find((a, i) => !a.startsWith('--') && !valued.has(args[i - 1]));
   if (!slug || !title || !file) usage();
   if (!process.env.DATABASE_URL) { console.error('DATABASE_URL is not set.'); process.exit(1); }
@@ -123,11 +126,11 @@ async function main() {
 
     const plan = rows.map(row => {
       const c = L.classify(row, songs, same, forceNew, skip);
-      return { row, ...c, patch: c.kind === 'match' ? L.completion(c.song, row, label) : null };
+      return { row, ...c, patch: c.kind === 'match' ? L.completion(c.song, row, opts) : null };
     });
 
     if (process.stdin.isTTY && !args.includes('--no-prompt') && plan.some(p => p.kind === 'maybe')) {
-      await decide(plan, label);
+      await decide(plan, opts);
     }
 
     for (const p of plan) {
@@ -168,7 +171,7 @@ async function main() {
           WHERE s.id = v.id AND s.artist_id = ${band.id}`;
       }
 
-      const news = plan.filter(p => p.kind === 'new').map((p, pos) => ({ pos, ...L.newSong(p.row, label) }));
+      const news = plan.filter(p => p.kind === 'new').map((p, pos) => ({ pos, ...L.newSong(p.row, opts) }));
       const created = news.length ? await tx`
         INSERT INTO songs (artist_id, title, length_min, interpret, extra)
         SELECT ${band.id}, v.title, v.length_min, v.interpret, v.extra
