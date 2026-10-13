@@ -12,6 +12,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/sw.js", "destination": "/app/sw.js" },
     { "source": "/auth/callback",   "destination": "/api?__path=/auth/callback" },
 
     { "source": "/",                "destination": "/app/index.html" },
@@ -81,6 +82,12 @@
       "source": "/api/docs",
       "headers": [
         { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.3/dist/browser/standalone.js; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; frame-src https:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     },
     {

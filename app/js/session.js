@@ -110,6 +110,7 @@ function getToken() {
 function clearToken() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
+  clearOfflineData();
 }
 
 // The users row id this session belongs to, or null: no session, or the demo
@@ -158,6 +159,7 @@ async function _sessionAlive(token) {
 function _endDeadSession() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
+  clearOfflineData();
   invalidateConfigCache();
   window.location.replace('/login');
 }
@@ -175,7 +177,16 @@ async function apiFetch(url, method = 'GET', body) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
-  const r = await fetch(url, opts);
+  let r;
+  try { r = await fetch(url, opts); }
+  catch (e) {
+    offlineMarkDown();
+    if (method !== 'GET') offlineNotice(offlineText('offline.notSaved', 'Not saved. No connection.'));
+    const err = new Error('offline');
+    err.offline = true;
+    throw err;
+  }
+  offlineMarkUp();
   // A 404 while logged in is either a real miss or a workspace that no longer
   // exists (account deleted in another tab or device). Only the second one is
   // worth leaving the page for, so ask once whether the session still stands.
@@ -187,6 +198,7 @@ async function apiFetch(url, method = 'GET', body) {
     if (!isViewMode()) {
       sessionStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_TOKEN_KEY);
+      clearOfflineData();
       requireLogin();
     }
     throw new Error('Session expired');
