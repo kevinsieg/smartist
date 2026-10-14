@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { melodyChoose, melodySources, melodyDefaultSource, melodySummary, melodyVoices, melodyStage, melodySongImages } = require(path.join(__dirname, '../../app/js/melody-pick'));
+const { melodyChoose, melodySources, melodySummary, melodyVoices, melodyStage, melodySongImages } = require(path.join(__dirname, '../../app/js/melody-pick'));
 
 function run(r) {
   const { test, assertEq, B } = r;
@@ -39,13 +39,6 @@ function run(r) {
   test('sources: nothing given gives none', () => {
     assertEq(melodySources(undefined, undefined), []);
     assertEq(melodySources({}, { audio_url: null }), []);
-  });
-  test('default source: own recording, then listen, then playback', () => {
-    const all = melodySources(extra, { audio_url: 'ten.mp3' });
-    assertEq(melodyDefaultSource(all), 'own');
-    assertEq(melodyDefaultSource(all.filter(x => x.id !== 'own')), 'listen');
-    assertEq(melodyDefaultSource(all.filter(x => x.id === 'playback')), 'playback');
-    assertEq(melodyDefaultSource([]), null);
   });
   const ex = { listenUrl: 'https://x.test/l.mp3', waveform: 'aa', playbackUrl: 'https://x.test/p.mp3' };
   const mels = [{ instrument: 'TEN', sheet_urls: ['t1.jpg', 't2.jpg'], audio_url: 'ten.mp3', waveform: 'cc' }, { instrument: 'BAS', sheet_urls: ['b1.jpg'], audio_url: null }];

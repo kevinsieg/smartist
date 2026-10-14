@@ -31,12 +31,6 @@ function melodySources(extra, melody) {
   return out;
 }
 
-// What plays first: the voice's own recording, else Listen, else Playback.
-function melodyDefaultSource(sources) {
-  var ids = (sources || []).map(function(s) { return s.id; });
-  return ['own', 'listen', 'playback'].find(function(id) { return ids.indexOf(id) >= 0; }) || null;
-}
-
 // The voices to offer on this song: configured instruments (in settings order)
 // whose melody holds an image or a recording.
 function melodyVoices(melodies, instruments) {
@@ -113,5 +107,5 @@ function melodyStage(extra, melodies, instruments, savedKey, view, sheetPref) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { melodyChoose: melodyChoose, melodySources: melodySources, melodyDefaultSource: melodyDefaultSource, melodySummary: melodySummary, melodyVoices: melodyVoices, melodyStage: melodyStage, melodySongImages: melodySongImages, MELODY_VOICE_KEY: MELODY_VOICE_KEY };
+  module.exports = { melodyChoose: melodyChoose, melodySources: melodySources, melodySummary: melodySummary, melodyVoices: melodyVoices, melodyStage: melodyStage, melodySongImages: melodySongImages, MELODY_VOICE_KEY: MELODY_VOICE_KEY };
 }

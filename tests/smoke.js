@@ -252,15 +252,33 @@ async function main() {
     await page.goto(`${BASE}/${SLUG}/dashboard`);
     await settle(page);
     log.take();
-    for (const [href, file] of [['songs', 'songs'], ['setlist', 'setlist'], ['gigs', 'gigs'], ['songs', 'songs']]) {
+    // The Setlists link opens the history of saved sets, not the generator.
+    for (const [href, file] of [['songs', 'songs'], ['setlist?view=history', 'setlist'], ['gigs', 'gigs'], ['songs', 'songs']]) {
       await page.click(`.nav-links a[href="/${SLUG}/${href}"]`);
       await page.waitForURL(`**/${SLUG}/${href}`, { timeout: 10000 });
       await settle(page);
       const loaded = await page.evaluate(f =>
         [...document.querySelectorAll('script[src]')].some(s => s.src.includes(`/app/js/${f}.js`)), file);
       if (!loaded) throw new Error(`${file}.js not loaded after navigating to ${href}`);
+      const current = await page.getAttribute(`.nav-links a[href="/${SLUG}/${href}"]`, 'aria-current');
+      if (current !== 'page') throw new Error(`nav link ${href} not marked as the current page`);
       assertClean(log.take(), `SPA → ${href}`);
     }
+  });
+
+  // Already on the setlist page, on the generator tab: the nav link still shows the history.
+  await check('the Setlists link shows the history again from the generator tab', async () => {
+    await page.goto(`${BASE}/${SLUG}/setlist`);
+    await settle(page);
+    await page.waitForSelector('.setlist-tab[data-tab="generator"]', { timeout: 10000 });
+    await page.click(`.nav-links a[href="/${SLUG}/setlist?view=history"]`);
+    await page.waitForURL(`**/${SLUG}/setlist?view=history`, { timeout: 10000 });
+    await page.waitForFunction(() => document.querySelector('.setlist-tab--active')?.dataset.tab === 'history', null, { timeout: 10000 });
+    await page.click('.setlist-tab[data-tab="generator"]');
+    await page.waitForFunction(() => document.querySelector('.setlist-tab--active')?.dataset.tab === 'generator', null, { timeout: 10000 });
+    await page.click(`.nav-links a[href="/${SLUG}/setlist?view=history"]`);
+    await page.waitForFunction(() => document.querySelector('.setlist-tab--active')?.dataset.tab === 'history', null, { timeout: 10000 });
+    assertClean(log.take(), 'setlist nav');
   });
 
   // Page scripts share one global scope: one that redefines a shared function
@@ -352,12 +370,12 @@ async function main() {
       songId = made.json.id;
       await api('PUT', `/api/${SLUG}/songs/${songId}/lyrics`, { lyrics: 'La la la' });
       const [{ id: artistId }] = await sql`SELECT id FROM artists WHERE slug = ${SLUG}`;
-      await sql`INSERT INTO song_melodies (song_id, artist_id, instrument, sheet_urls, audio_url)
-        VALUES (${songId}, ${artistId}, 'TEN', ARRAY[${BASE + '/app/img/broken-guitar.svg'}, ${BASE + '/app/img/broken-guitar.svg?2'}]::text[], ${BASE + '/own.mp3'})`;
-
-      await sql`INSERT INTO song_melodies (song_id, artist_id, instrument, sheet_urls)
-        VALUES (${songId}, ${artistId}, '_song', ARRAY[${BASE + '/app/img/broken-guitar.svg?song'}]::text[])`;
-      await sql`UPDATE songs SET extra = extra || ${sql.json({ listenUrl: BASE + '/ref.mp3', waveform: 'c0'.repeat(100) })} WHERE id = ${songId}`;
+      await sql`INSERT INTO song_media (song_id, artist_id, kind, instrument, url, position) VALUES
+        (${songId}, ${artistId}, 'sheet', 'TEN', ${BASE + '/app/img/broken-guitar.svg'}, 0),
+        (${songId}, ${artistId}, 'sheet', 'TEN', ${BASE + '/app/img/broken-guitar.svg?2'}, 1),
+        (${songId}, ${artistId}, 'sheet', NULL, ${BASE + '/app/img/broken-guitar.svg?song'}, 0)`;
+      await sql`INSERT INTO song_media (song_id, artist_id, kind, instrument, url) VALUES (${songId}, ${artistId}, 'instrument', 'TEN', ${BASE + '/own.mp3'})`;
+      await sql`INSERT INTO song_media (song_id, artist_id, kind, url, waveform) VALUES (${songId}, ${artistId}, 'listen', ${BASE + '/ref.mp3'}, ${'c0'.repeat(100)})`;
       await page.evaluate(() => localStorage.removeItem('stage_melody_voice'));
       await page.goto(`${BASE}/${SLUG}/stage?song=${songId}`);
       // Opens on Listen: its track, no sheets; the voice button reads "My voice".
@@ -377,7 +395,7 @@ async function main() {
       await page.waitForFunction(() => /1 \/ 2/.test((document.querySelector('.stage-gallery-count') || {}).textContent || ''), null, { timeout: 5000 });
       await page.waitForFunction(() => /own\.mp3$/.test((document.querySelector('#_stage_audio audio') || {}).src || ''), null, { timeout: 5000 });
       if ((await pressed()).join() !== 'Tenor') throw new Error('Tenor not highlighted: ' + await pressed());
-      if (await page.locator('.stage-menu-wrap[data-menu="sheet"] .stage-menu button').count() !== 3) throw new Error('sheet dropdown should offer the song, the voice and the export option');
+      if (await page.locator('.stage-menu-wrap[data-menu="sheet"] .stage-menu button').count() !== 2) throw new Error('sheet dropdown should offer the song and the voice');
       await page.click('.stage-gallery-nav.next');
       await page.waitForFunction(() => /2 \/ 2/.test(document.querySelector('.stage-gallery-count').textContent), null, { timeout: 5000 });
       // Back to Listen: its track again, the voice button keeps "Tenor" but is not highlighted.
@@ -438,8 +456,11 @@ async function main() {
       let p1 = await shown();
       if (p1.player !== 'none' || p1.controls !== 'none' || p1.gallery !== 'none' || p1.all === 'none' || p1.sheets !== 1) throw new Error('print without the option: ' + JSON.stringify(p1));
       await page.emulateMedia({ media: 'screen' });
-      await page.click('.stage-menu-wrap[data-menu="sheet"] .stage-menu-btn');
-      await page.click('.stage-menu-wrap[data-menu="sheet"] .stage-menu button:has-text("All sheets")');
+      if (await page.locator('.stage-menu-wrap[data-menu="sheet"] .stage-menu button:has-text("All sheets")').count()) throw new Error('the export switch is still in the sheet menu');
+      await page.click('#stage-share-btn');
+      await page.click('#stage-allsheets-btn');
+      if (await page.getAttribute('#stage-allsheets-btn', 'aria-checked') !== 'true') throw new Error('export switch not checked');
+      await page.click('#stage-share-btn');
       await page.waitForFunction(() => document.querySelectorAll('.stage-print-sheet').length === 2, null, { timeout: 5000 });
       if (await page.locator('.stage-print').isVisible()) throw new Error('every sheet shows on screen');
       await page.emulateMedia({ media: 'print' });
@@ -451,7 +472,7 @@ async function main() {
       await page.goto(`${BASE}/${SLUG}/songs`);
       await settle(page);
       // The overview lists what is filled in, the voices included, and has no speed buttons.
-      await sql`UPDATE songs SET extra = extra || ${sql.json({ playbackUrl: BASE + '/pb.mp3' })} WHERE id = ${songId}`;
+      await sql`INSERT INTO song_media (song_id, artist_id, kind, url) SELECT id, artist_id, 'playback', ${BASE + '/pb.mp3'} FROM songs WHERE id = ${songId}`;
       await page.reload();
       await settle(page);
       await page.evaluate(id => window._openSongPanelById(id), songId);
@@ -471,8 +492,8 @@ async function main() {
         await window._uploadSongMedia(id, 'playback', file);
         await window.melodyUpload(id, 'TEN', 'audio', file);
       }, songId);
-      const [pb] = await sql`SELECT extra->>'playbackWaveform' AS w FROM songs WHERE id = ${songId}`;
-      const [mw] = await sql`SELECT waveform AS w FROM song_melodies WHERE song_id = ${songId} AND instrument = 'TEN'`;
+      const [pb] = await sql`SELECT waveform AS w FROM song_media WHERE song_id = ${songId} AND kind = 'playback'`;
+      const [mw] = await sql`SELECT waveform AS w FROM song_media WHERE song_id = ${songId} AND kind = 'instrument' AND instrument = 'TEN'`;
       if (!pb.w || pb.w.length !== 200) throw new Error('playback upload stored no waveform: ' + pb.w);
       if (!mw.w || mw.w.length !== 200) throw new Error('voice recording upload stored no waveform: ' + mw.w);
       await page.evaluate(id => window._openSongEditInPanel(id), songId);
@@ -507,12 +528,12 @@ async function main() {
       const made = await api('POST', `/api/${SLUG}/songs`, { title: '[TEST] stage smoke' });
       songId = made.json.id;
       await api('PUT', `/api/${SLUG}/songs/${songId}/lyrics`, { lyrics: 'La la la' });
-      await sql`UPDATE songs SET extra = extra || ${sql.json({ listenUrl: BASE + '/ref.mp3', waveform: 'c0'.repeat(100) })} WHERE id = ${songId}`;
+      await sql`INSERT INTO song_media (song_id, artist_id, kind, url, waveform) SELECT id, artist_id, 'listen', ${BASE + '/ref.mp3'}, ${'c0'.repeat(100)} FROM songs WHERE id = ${songId}`;
       setId = (await api('POST', `/api/${SLUG}/setlists`, { title: '[TEST] stage smoke', song_ids: [songId] })).json.id;
 
       await page.setViewportSize({ width: 1400, height: 900 });
       await page.goto(`${BASE}/${SLUG}/stage?song=${songId}&from=${setId}`);
-      await sql`UPDATE songs SET extra = extra || ${sql.json({ playbackUrl: BASE + '/pb.mp3', playbackWaveform: 'd0'.repeat(100) })} WHERE id = ${songId}`;
+      await sql`INSERT INTO song_media (song_id, artist_id, kind, url, waveform) SELECT id, artist_id, 'playback', ${BASE + '/pb.mp3'}, ${'d0'.repeat(100)} FROM songs WHERE id = ${songId}`;
       await page.reload();
       await page.waitForSelector('canvas.stage-wave', { timeout: 10000 });
       if (await page.getAttribute('canvas.stage-wave', 'data-wave') !== 'c0'.repeat(100)) throw new Error('listen waveform not drawn first');

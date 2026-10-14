@@ -310,6 +310,7 @@ function _shareHtml(navHtml) {
     <button class="stage-share-btn" id="stage-share-btn" data-onclick="toggleStageShareMenu(event)" aria-label="Share" aria-expanded="false" aria-controls="stage-share-menu" title="Share"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
     <div class="stage-share-menu" id="stage-share-menu" style="display:none">
       <button class="stage-share-item" data-onclick="stageSharePrint()"><span class="stage-share-icon" aria-hidden="true">⎙</span>Print / Export PDF</button>
+      <button class="stage-share-item" id="stage-allsheets-btn" data-onclick="stageToggleAllSheets()" role="menuitemcheckbox" aria-checked="false" hidden><span class="stage-share-icon" aria-hidden="true">&#9744;</span>All sheets in the export</button>
       <button class="stage-share-item" data-onclick="stageShareCopyLink()"><span class="stage-share-icon" aria-hidden="true">⧉</span><span id="stage-copy-label">Copy link</span></button>
       <button class="stage-share-item" data-onclick="stageShareEmail()"><span class="stage-share-icon" aria-hidden="true">✉</span>Share via email</button>
     </div>
@@ -392,13 +393,25 @@ function stageSetView(view) {
   _stageRender();
 }
 
-// The export can carry every sheet instead of the one on screen.
-var STAGE_ALL_SHEETS = '_all';
+// The export can carry every sheet instead of the one on screen: a switch in
+// the share menu, offered when the song has more than one sheet.
 var _stagePrintAll = false;
+
+function stageToggleAllSheets() {
+  _stagePrintAll = !_stagePrintAll;
+  _stageRender();
+}
+
+function _stageAllSheetsSync(st) {
+  var b = document.getElementById('stage-allsheets-btn');
+  if (!b) return;
+  b.hidden = st.sheets.length < 2;
+  b.setAttribute('aria-checked', String(_stagePrintAll));
+  b.querySelector('.stage-share-icon').textContent = _stagePrintAll ? '\u2611' : '\u2610';
+}
 
 // The sheet is chosen apart from the track; once chosen it stays.
 function stageSetSheet(key) {
-  if (key === STAGE_ALL_SHEETS) { _stagePrintAll = !_stagePrintAll; _stageRender(); return; }
   _stageSheet = key === _stageState().sheet ? 'none' : key;
   _stageRender();
 }
@@ -577,8 +590,7 @@ function _stageControlsHtml(st) {
       '<button class="stage-share-btn" data-fk="sheet" data-onclick="stageToggleSheet()" aria-pressed="' + !!chosen + '">' + escHtml((chosen || last).label) + '</button>' +
       (st.sheets.length > 1
         ? '<button type="button" class="stage-share-btn stage-menu-btn" data-fk="sheetMenu" data-onclick="stageMenu(this)" aria-haspopup="menu" aria-expanded="false" aria-label="Which sheet to show">&#9662;</button>' +
-          _stageMenuHtml(st.sheets.map(function(x) { return { key: x.key, label: x.label, checked: x.key === st.sheet }; })
-            .concat([{ key: STAGE_ALL_SHEETS, label: 'All sheets in the export', checked: _stagePrintAll }]), 'data-onclick="stageSetSheet(this.dataset.key)"')
+          _stageMenuHtml(st.sheets.map(function(x) { return { key: x.key, label: x.label, checked: x.key === st.sheet }; }), 'data-onclick="stageSetSheet(this.dataset.key)"')
         : '') + '</span>');
   }
   if (st.source) {
@@ -596,6 +608,7 @@ function _stageRenderControls(st) {
   if (!box) return;
   var focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null;
   box.innerHTML = _stageControlsHtml(st);
+  _stageAllSheetsSync(st);
   if (focused) { var again = box.querySelector('[data-fk="' + focused + '"]'); if (again) again.focus(); }
 }
 
