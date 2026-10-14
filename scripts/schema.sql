@@ -494,11 +494,38 @@ ALTER TABLE song_logs ADD CONSTRAINT song_logs_action_known CHECK (action IN (
   'playback_replace', 'playback_delete', 'melody_replace', 'melody_delete'));
 INSERT INTO schema_migrations (id) VALUES ('2026-10-13') ON CONFLICT DO NOTHING;
 
--- 2026-10-14: song_media (above) takes over the media keys of songs.extra
+-- 2026-10-14: song_media takes over the media keys of songs.extra
 -- (listenUrl, waveform, playbackUrl, playbackWaveform, sheetUrl): copied here,
 -- not removed, because the live code still reads them. The new code reads
 -- through songs_with_media, which answers with extra rebuilt from song_media and
 -- ignores the old keys. A later release removes them.
+-- The table again, for a database that already ran the base part (a deploy only
+-- runs the blocks it has not recorded):
+CREATE TABLE IF NOT EXISTS song_media (
+  id         SERIAL PRIMARY KEY,
+  song_id    INTEGER NOT NULL,
+  artist_id  INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+  kind       TEXT    NOT NULL,
+  instrument TEXT,
+  url        TEXT    NOT NULL,
+  waveform   TEXT,
+  position   INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT song_media_song_same_band_fkey FOREIGN KEY (song_id, artist_id)
+    REFERENCES songs(id, artist_id) ON DELETE CASCADE,
+  CONSTRAINT song_media_kind_known CHECK (kind IN ('listen', 'playback', 'pdf', 'instrument', 'sheet')),
+  CONSTRAINT song_media_instrument_by_kind CHECK (
+    (kind = 'instrument' AND instrument IS NOT NULL) OR (kind IN ('listen', 'playback', 'pdf') AND instrument IS NULL) OR kind = 'sheet'),
+  CONSTRAINT song_media_instrument_len CHECK (instrument IS NULL OR char_length(instrument) BETWEEN 1 AND 60),
+  CONSTRAINT song_media_waveform_audio CHECK (waveform IS NULL OR kind IN ('listen', 'playback', 'instrument'))
+);
+CREATE INDEX IF NOT EXISTS song_media_artist_idx ON song_media(artist_id, song_id);
+CREATE UNIQUE INDEX IF NOT EXISTS song_media_listen_uq ON song_media(song_id) WHERE kind = 'listen';
+CREATE UNIQUE INDEX IF NOT EXISTS song_media_playback_uq ON song_media(song_id) WHERE kind = 'playback';
+CREATE UNIQUE INDEX IF NOT EXISTS song_media_pdf_uq ON song_media(song_id) WHERE kind = 'pdf';
+CREATE UNIQUE INDEX IF NOT EXISTS song_media_instrument_uq ON song_media(song_id, instrument) WHERE kind = 'instrument';
+CREATE UNIQUE INDEX IF NOT EXISTS song_media_sheet_uq ON song_media(song_id, COALESCE(instrument, ''), position) WHERE kind = 'sheet';
 INSERT INTO song_media (song_id, artist_id, kind, url, waveform)
 SELECT id, artist_id, 'listen', extra->>'listenUrl', NULLIF(extra->>'waveform', '')
 FROM songs WHERE COALESCE(extra->>'listenUrl', '') <> '' ON CONFLICT DO NOTHING;

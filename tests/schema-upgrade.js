@@ -26,6 +26,7 @@ const fs = require('fs');
 const path = require('path');
 const postgres = require('postgres');
 const { applyStatements, connect } = require('../scripts/apply_schema');
+const { migrate } = require('../scripts/deploy_migrate');
 
 const ROOT = path.join(__dirname, '..');
 const URL_ = process.env.DATABASE_URL;
@@ -165,7 +166,10 @@ async function main() {
 
     await apply(DBS.upgraded, base);
     await seed(DBS.upgraded);
-    await apply(DBS.upgraded, head);
+    // As a deploy does it: only the blocks not recorded yet run, so a new table
+    // has to be created inside a dated block, not only in the base part.
+    const up_ = connect(urlFor(DBS.upgraded));
+    try { await migrate(up_, head); } finally { await up_.end(); }
     await apply(DBS.fresh, head);
 
     const mediaFail = await checkMedia(DBS.upgraded, head);
