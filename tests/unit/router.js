@@ -42,6 +42,7 @@ async function run(r) {
     ['/api/band/songs/12/audio',            'song',   { artist: 'band', path: ['12', 'audio'] }],
     ['/api/band/songs/12/sheet',            'song',   { artist: 'band', path: ['12', 'sheet'] }],
     ['/api/band/songs/12/playback',         'song',   { artist: 'band', path: ['12', 'playback'] }],
+    ['/api/band/songs/12/melodies/TEN/sheet', 'song',  { artist: 'band', path: ['12', 'melodies', 'TEN', 'sheet'] }],
     ['/api/band/songs/12/setlists',         'song',   { artist: 'band', path: ['12', 'setlists'] }],
     ['/api/band/songs/12/restore',          'song',   { artist: 'band', path: ['12', 'restore'] }],
     ['/api/band/setlists',                  'setlists', { artist: 'band' }],

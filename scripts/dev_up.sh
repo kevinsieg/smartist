@@ -27,9 +27,11 @@ export ARTIST_SLUG="${ARTIST_SLUG:-local}"
 export ARTIST_EMAIL="${ARTIST_EMAIL:-dev@example.test}"
 export ARTIST_PASSWORD="${ARTIST_PASSWORD:-local-password}"
 export BASE_URL="http://localhost:$PORT"
-# Presigning is local signing, no request to R2 — any values do.
+# No R2 here: uploads are PUT to the harness server, which keeps them in
+# LOCAL_STORAGE_DIR and serves them back at R2_PUBLIC_URL (api/_r2.js).
 export R2_ACCOUNT_ID=local R2_ACCESS_KEY_ID=local R2_SECRET_ACCESS_KEY=local
-export R2_BUCKET_NAME=local R2_PUBLIC_URL=https://cdn.example.test
+export R2_BUCKET_NAME=local R2_PUBLIC_URL="$BASE_URL/__storage"
+export LOCAL_STORAGE_DIR="$STATE/storage"
 export PORT
 
 log() { echo "  $*" >&2; }
@@ -83,7 +85,7 @@ up() {
 }
 
 print_env() {
-  for v in DATABASE_URL APP_SECRET ARTIST_SLUG ARTIST_EMAIL ARTIST_PASSWORD BASE_URL R2_PUBLIC_URL; do
+  for v in DATABASE_URL APP_SECRET ARTIST_SLUG ARTIST_EMAIL ARTIST_PASSWORD BASE_URL R2_PUBLIC_URL LOCAL_STORAGE_DIR; do
     echo "export $v=\"${!v}\""
   done
 }

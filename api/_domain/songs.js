@@ -99,7 +99,13 @@ async function songDetail(sql, artistId, songId) {
                                 'created_at', a.created_at, 'updated_at', a.updated_at)
        FROM song_arrangements a
        WHERE a.song_id = s.id AND a.artist_id = s.artist_id AND a.is_active
-       LIMIT 1) AS active_arrangement
+       LIMIT 1) AS active_arrangement,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', m.id, 'instrument', m.instrument, 'sheet_urls', m.sheet_urls,
+                                          'audio_url', m.audio_url, 'waveform', m.waveform, 'updated_at', m.updated_at) ORDER BY m.created_at, m.id)
+        FROM song_melodies m
+        WHERE m.song_id = s.id AND m.artist_id = s.artist_id
+      ), '[]') AS melodies
     FROM songs s
     LEFT JOIN song_lyrics l ON l.song_id = s.id
     ${gemaJoin(sql)}

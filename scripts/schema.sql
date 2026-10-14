@@ -226,6 +226,26 @@ CREATE INDEX IF NOT EXISTS song_arrangements_artist_id_idx
 CREATE UNIQUE INDEX IF NOT EXISTS song_arrangements_one_active_idx
   ON song_arrangements(song_id) WHERE is_active;
 
+-- ── song_melodies ──────────────────────────────────────────────────────────
+-- One row per song and band instrument (key from arrangementConfig): sheet
+-- images and an audio recording, files in R2 under sheets/ and audio/.
+
+CREATE TABLE IF NOT EXISTS song_melodies (
+  id         SERIAL PRIMARY KEY,
+  song_id    INTEGER NOT NULL,
+  artist_id  INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+  instrument TEXT    NOT NULL,
+  sheet_urls TEXT[]  NOT NULL DEFAULT '{}',
+  audio_url  TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT song_melodies_song_same_band_fkey FOREIGN KEY (song_id, artist_id)
+    REFERENCES songs(id, artist_id) ON DELETE CASCADE,
+  CONSTRAINT song_melodies_instrument_len CHECK (char_length(instrument) BETWEEN 1 AND 60),
+  CONSTRAINT song_melodies_unique_instrument UNIQUE (song_id, instrument)
+);
+CREATE INDEX IF NOT EXISTS song_melodies_artist_idx ON song_melodies(artist_id, song_id);
+
 -- ── song_lyrics ────────────────────────────────────────────────────────────
 -- One song's lyrics (up to 20 000 characters), read with that song's details.
 
@@ -256,7 +276,7 @@ CREATE TABLE IF NOT EXISTS song_logs (
   CONSTRAINT song_logs_action_known CHECK (action IN (
     'create', 'update', 'delete', 'lyrics_update', 'lyrics_delete',
     'audio_replace', 'audio_delete', 'sheet_replace', 'sheet_delete',
-    'playback_replace', 'playback_delete')),
+    'playback_replace', 'playback_delete', 'melody_replace', 'melody_delete')),
   CONSTRAINT song_logs_song_same_band_fkey FOREIGN KEY (song_id, artist_id)
     REFERENCES songs(id, artist_id) ON DELETE SET NULL (song_id)
 );
@@ -450,3 +470,32 @@ INSERT INTO schema_migrations (id) VALUES ('2026-10-07') ON CONFLICT DO NOTHING;
 ALTER TABLE venues DROP COLUMN IF EXISTS turnus;
 ALTER TABLE venues DROP COLUMN IF EXISTS main_genre;
 INSERT INTO schema_migrations (id) VALUES ('2026-10-08') ON CONFLICT DO NOTHING;
+
+-- 2026-10-13: melodies per song and instrument (sheet images + audio), and
+-- their log actions. Additive: the live code never reads or writes either.
+CREATE TABLE IF NOT EXISTS song_melodies (
+  id         SERIAL PRIMARY KEY,
+  song_id    INTEGER NOT NULL,
+  artist_id  INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+  instrument TEXT    NOT NULL,
+  sheet_urls TEXT[]  NOT NULL DEFAULT '{}',
+  audio_url  TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT song_melodies_song_same_band_fkey FOREIGN KEY (song_id, artist_id)
+    REFERENCES songs(id, artist_id) ON DELETE CASCADE,
+  CONSTRAINT song_melodies_instrument_len CHECK (char_length(instrument) BETWEEN 1 AND 60),
+  CONSTRAINT song_melodies_unique_instrument UNIQUE (song_id, instrument)
+);
+CREATE INDEX IF NOT EXISTS song_melodies_artist_idx ON song_melodies(artist_id, song_id);
+ALTER TABLE song_logs DROP CONSTRAINT IF EXISTS song_logs_action_known;
+ALTER TABLE song_logs ADD CONSTRAINT song_logs_action_known CHECK (action IN (
+  'create', 'update', 'delete', 'lyrics_update', 'lyrics_delete',
+  'audio_replace', 'audio_delete', 'sheet_replace', 'sheet_delete',
+  'playback_replace', 'playback_delete', 'melody_replace', 'melody_delete'));
+INSERT INTO schema_migrations (id) VALUES ('2026-10-13') ON CONFLICT DO NOTHING;
+
+-- 2026-10-14: loudness profile of a melody's audio recording (100 peaks, 200
+-- hex digits), drawn by the stage view. Additive: the live code never reads it.
+ALTER TABLE song_melodies ADD COLUMN IF NOT EXISTS waveform TEXT;
+INSERT INTO schema_migrations (id) VALUES ('2026-10-14') ON CONFLICT DO NOTHING;

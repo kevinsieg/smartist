@@ -21,7 +21,8 @@ artists
   │
   ├─── songs ──────────────────────── song_logs
   │      │                        ├── song_lyrics
-  │      │                        └── song_arrangements
+  │      │                        ├── song_arrangements
+  │      │                        └── song_melodies
   │      └─(via setlist_songs)──── setlists ──── gig_id (optional) ──┐
   │                                                                    │
   ├─── venues ◄──── gigs.venue_id ─── gigs ◄──────────────────────────┘
@@ -290,6 +291,22 @@ Versioned arrangement charts for a song. Each song can have several named versio
 
 ---
 
+### `song_melodies`
+
+Sheet images and an audio recording per song and band instrument. `instrument` is a key from `artists.config.arrangementConfig.instruments` (a key removed from Settings later stays and shows raw). Unique on `(song_id, instrument)`. The reserved key `_song` is the song's own sheet (images only, no recording; not an instrument); at most 20 per song and 8 images per melody (enforced in `api/_band/songs/melodies.js`). Files live in R2 under `sheets/<artist id>/` and `audio/<artist id>/`. They stay when the song is soft-deleted and go with it on a hard delete (FK CASCADE).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | serial PK | |
+| `song_id`, `artist_id` | integer | Same-band FK to `songs (id, artist_id)` CASCADE |
+| `instrument` | text | 1-60 characters |
+| `sheet_urls` | text[] | Ordered image URLs |
+| `audio_url` | text, nullable | |
+| `waveform` | text, nullable | The recording's 100 peaks as 200 hex digits, computed in the browser on upload |
+| `created_at`, `updated_at` | timestamptz | |
+
+**Indexes:** `song_melodies_artist_idx (artist_id, song_id)`, unique `(song_id, instrument)`
+
 ### `song_logs`
 
 Audit log. Every create, update, or soft-delete on a song writes a full JSON snapshot. Each song keeps its newest 20 entries (`SONG_LOG_KEEP`): every edit trims the history of the songs it wrote, in the same statement (or `trimSongLogs` in `api/_db.js` for media writes). Entries with `song_id` `NULL` are never trimmed.
@@ -301,7 +318,7 @@ Audit log. Every create, update, or soft-delete on a song writes a full JSON sna
 | `id` | serial PK | |
 | `artist_id` | integer FK → artists CASCADE | Denormalised for fast per-artist queries |
 | `song_id` | integer FK → songs SET NULL, nullable | |
-| `action` | text CHECK (`song_logs_action_known`) | `create`, `update`, `delete`, `lyrics_update`, `lyrics_delete`, `audio_replace`/`_delete`, `sheet_replace`/`_delete`, `playback_replace`/`_delete` |
+| `action` | text CHECK (`song_logs_action_known`) | `create`, `update`, `delete`, `lyrics_update`, `lyrics_delete`, `audio_replace`/`_delete`, `sheet_replace`/`_delete`, `playback_replace`/`_delete`, `melody_replace`/`_delete` |
 | `song_data` | jsonb NOT NULL | Complete `songs` row at time of action |
 | `changed_at` | timestamptz DEFAULT NOW() | |
 

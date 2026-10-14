@@ -15,6 +15,7 @@ const { presignLimited } = require('./_ratelimit');
 // Config shape:
 //   keyPrefix     — R2 key prefix, e.g. 'audio/'
 //   extraKey      — songs.extra key, e.g. 'listenUrl'
+//   waveformKey   — songs.extra key for the file's loudness profile, which travels with it
 //   maxBytes      — max upload size in bytes
 //   actionPrefix  — audit log prefix, e.g. 'audio' → events 'audio_replace', 'audio_delete'
 //   allowedExts   — Set of lowercase extensions; if absent only .pdf is accepted
@@ -28,9 +29,9 @@ const AUDIO_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4
   'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/flac', 'audio/x-flac']);
 
 const MEDIA_CONFIGS = {
-  audio:    { keyPrefix: 'audio/',    extraKey: 'listenUrl',   maxBytes: 50 * 1024 * 1024, actionPrefix: 'audio',    allowedExts: AUDIO_EXTS, types: AUDIO_TYPES },
+  audio:    { keyPrefix: 'audio/',    extraKey: 'listenUrl',   maxBytes: 50 * 1024 * 1024, actionPrefix: 'audio',    allowedExts: AUDIO_EXTS, types: AUDIO_TYPES, waveformKey: 'waveform' },
   sheet:    { keyPrefix: 'sheets/',   extraKey: 'sheetUrl',    maxBytes: 20 * 1024 * 1024, actionPrefix: 'sheet',    types: new Set(['application/pdf']) },
-  playback: { keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50 * 1024 * 1024, actionPrefix: 'playback', allowedExts: AUDIO_EXTS, types: AUDIO_TYPES },
+  playback: { keyPrefix: 'playback/', extraKey: 'playbackUrl', maxBytes: 50 * 1024 * 1024, actionPrefix: 'playback', allowedExts: AUDIO_EXTS, types: AUDIO_TYPES, waveformKey: 'playbackWaveform' },
 };
 
 const out = (status, body) => ({ status, body });
@@ -72,11 +73,38 @@ async function presignMedia(sql, band, songId, config, { filename, contentType, 
   return out(200, await createPresignedUrl(key, allowedExts ? String(contentType).toLowerCase() : 'application/pdf', Number(size), { pending: true }));
 }
 
+// Move the band's storage counter by `delta` bytes, refused when that passes
+// the plan's cap. The cap check and the update are one statement: band was read
+// before this request's R2 round-trips, so two uploads confirmed at once would
+// both pass a check against that stale value.
+async function reserveStorage(sql, band, delta) {
+  const limit = storageLimitBytes(band);
+  const [row] = await sql`
+    UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${delta})
+    WHERE id = ${band.id}
+      AND (${limit}::bigint IS NULL OR storage_used_bytes + ${delta} <= ${limit}::bigint)
+    RETURNING storage_used_bytes`;
+  return !!row;
+}
+
+async function releaseStorage(sql, band, bytes) {
+  await sql`UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes - ${bytes}) WHERE id = ${band.id}`;
+}
+
+function storageFull(band) {
+  return { error: 'Storage limit reached', code: 'storage_limit', limit: storageLimitBytes(band), used: Number(band.storage_used_bytes || 0) };
+}
+
 // Confirm an upload: store its URL on the song, drop the file it replaces, and
 // move the band's storage counter by the net change.
-async function confirmMedia(sql, band, songId, config, publicUrl) {
+// 100 peaks, 2 hex digits each, computed in the browser (app/js/waveform.js).
+const WAVEFORM_RE = /^[0-9a-f]{200}$/;
+
+async function confirmMedia(sql, band, songId, config, publicUrl, waveform) {
   const { keyPrefix, extraKey, maxBytes, actionPrefix, types } = config;
   if (!publicUrl || typeof publicUrl !== 'string') return out(400, { error: 'publicUrl required' });
+  if (config.waveformKey && waveform != null && !(typeof waveform === 'string' && WAVEFORM_RE.test(waveform)))
+    return out(400, { error: 'Invalid waveform' });
 
   const base = process.env.R2_PUBLIC_URL;
   // Keys carry the band id (see presignMedia), so a band can only confirm —
@@ -110,30 +138,26 @@ async function confirmMedia(sql, band, songId, config, publicUrl) {
   const prevHead = isReplacement ? await verifyUpload(keyFromUrl(previousUrl)) : null;
   const prevSize = prevHead ? prevHead.size : 0;
 
-  // Reserve the net change in the same statement that checks the cap: band was
-  // read before this request's R2 round-trips, so two uploads confirmed at once
-  // would both pass a check against that stale value.
-  const limit    = storageLimitBytes(band);
   const reserved = previousUrl === publicUrl ? 0 : head.size - prevSize;
-  if (reserved !== 0) {
-    const [row] = await sql`
-      UPDATE artists SET storage_used_bytes = GREATEST(0, storage_used_bytes + ${reserved})
-      WHERE id = ${band.id}
-        AND (${limit}::bigint IS NULL OR storage_used_bytes + ${reserved} <= ${limit}::bigint)
-      RETURNING storage_used_bytes`;
-    if (!row) {
-      await deleteFromR2(publicUrl);
-      return out(402, { error: 'Storage limit reached', code: 'storage_limit', limit, used: Number(band.storage_used_bytes || 0) });
-    }
+  if (reserved !== 0 && !(await reserveStorage(sql, band, reserved))) {
+    await deleteFromR2(publicUrl);
+    return out(402, storageFull(band));
   }
 
   // Merged into extra, never a rewrite of the whole object: a lyrics or field
   // edit saved while the upload ran must not be lost.
-  const [updated] = await sql`
-    UPDATE songs SET extra = extra || jsonb_build_object(${extraKey}::text, ${publicUrl}::text)
-    WHERE id = ${songId} AND artist_id = ${band.id}
-    RETURNING *
-  `;
+  // A recording replaces the previous one's waveform, or clears it when the
+  // browser could not compute one.
+  const [updated] = config.waveformKey
+    ? await sql`
+        UPDATE songs SET extra = (extra - ${config.waveformKey}::text) || jsonb_build_object(${extraKey}::text, ${publicUrl}::text)
+          || CASE WHEN ${waveform ?? null}::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object(${config.waveformKey}::text, ${waveform ?? null}::text) END
+        WHERE id = ${songId} AND artist_id = ${band.id}
+        RETURNING *`
+    : await sql`
+        UPDATE songs SET extra = extra || jsonb_build_object(${extraKey}::text, ${publicUrl}::text)
+        WHERE id = ${songId} AND artist_id = ${band.id}
+        RETURNING *`;
 
   // The reservation assumed the old file goes away; if it stays, count it again.
   const removed = (isReplacement && isOwnMediaUrl(previousUrl, band.id, keyFromUrl)) ? await deleteFromR2(previousUrl) : false;
@@ -164,7 +188,8 @@ async function deleteMedia(sql, band, songId, config) {
   if (!song) return out(404, { error: 'Song not found' });
 
   const url = song.url;
-  const writes = [sql`UPDATE songs SET extra = extra - ${extraKey}::text WHERE id = ${songId} AND artist_id = ${band.id}`];
+  const keys = config.waveformKey ? [extraKey, config.waveformKey] : [extraKey];
+  const writes = [sql`UPDATE songs SET extra = extra - ${keys}::text[] WHERE id = ${songId} AND artist_id = ${band.id}`];
   if (url) {
     const delHead = await verifyUpload(keyFromUrl(url));
     const removed = isOwnMediaUrl(url, band.id, keyFromUrl) ? await deleteFromR2(url) : false;
@@ -194,11 +219,11 @@ function makeMediaFn(config) {
 
     let result;
     if (req.method === 'POST')        result = await presignMedia(sql, band, songId, config, req.body ?? {}, req.user?.email ?? null);
-    else if (req.method === 'PUT')    result = await confirmMedia(sql, band, songId, config, req.body?.publicUrl);
+    else if (req.method === 'PUT')    result = await confirmMedia(sql, band, songId, config, req.body?.publicUrl, req.body?.waveform);
     else if (req.method === 'DELETE') result = await deleteMedia(sql, band, songId, config);
     else                              result = out(405, { error: 'Method not allowed' });
     return res.status(result.status).json(result.body);
   };
 }
 
-module.exports = { MEDIA_CONFIGS, makeMediaFn };
+module.exports = { MEDIA_CONFIGS, makeMediaFn, out, reserveStorage, releaseStorage, storageFull, AUDIO_EXTS, AUDIO_TYPES, WAVEFORM_RE };

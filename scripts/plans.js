@@ -153,6 +153,14 @@ async function recount() {
         if (url) urlList.push(url);
       }
     }
+    const melodies = await sql`
+      SELECT m.sheet_urls, m.audio_url FROM song_melodies m
+      JOIN songs s ON s.id = m.song_id AND s.artist_id = m.artist_id
+      WHERE m.artist_id = ${a.id} AND NOT s.deleted`;
+    for (const m of melodies) {
+      urlList.push(...(m.sheet_urls || []));
+      if (m.audio_url) urlList.push(m.audio_url);
+    }
     // Concurrent HEADs — one request at a time meant minutes for a large catalogue.
     const lengths = await mapLimit(urlList, 8, headContentLength);
     let total = 0, missing = 0;

@@ -1,6 +1,9 @@
 // The S3 SDK (~300 ms to load) is required on first use, not at module load:
 // songs, gigs, setlists and config import this module for keyFromUrl or a rare
 // upload, and loading the SDK on every cold start slowed their plain reads.
+const fsp = require('fs/promises');
+const path = require('path');
+
 let _sdk;
 function sdk() {
   if (!_sdk) {
@@ -39,6 +42,51 @@ const STORAGE = {
 // Uploads not yet confirmed (see createPresignedUrl).
 const PENDING_PREFIX = 'pending/';
 
+// ── Local storage (development only) ─────────────────────────────────────────
+// With LOCAL_STORAGE_DIR set, objects live in that directory and the harness
+// server (tests/harness/server.js) takes the uploads at <R2_PUBLIC_URL>/<key>
+// instead of R2. Only scripts/dev_up.sh sets it; no deployment does. The content
+// type of each object is kept under .meta/, since confirm checks it.
+const localDir = () => process.env.LOCAL_STORAGE_DIR || null;
+
+function localPath(key, base = '') {
+  if (typeof key !== 'string') return null;
+  const root = path.resolve(localDir(), base);
+  const file = path.resolve(root, key);
+  return file.startsWith(root + path.sep) ? file : null;
+}
+
+async function localPut(key, body, contentType) {
+  const file = localPath(key), meta = localPath(key, '.meta');
+  if (!file || !meta) throw new Error('Invalid key');
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.mkdir(path.dirname(meta), { recursive: true });
+  await fsp.writeFile(file, body);
+  await fsp.writeFile(meta, contentType || 'application/octet-stream');
+}
+
+// { file, size, contentType } for an object, or null when it is not there.
+async function localGet(key) {
+  const file = localPath(key), meta = localPath(key, '.meta');
+  if (!file || !meta) return null;
+  try {
+    const st = await fsp.stat(file);
+    if (!st.isFile()) return null;
+    const contentType = await fsp.readFile(meta, 'utf8').catch(() => 'application/octet-stream');
+    return { file, size: st.size, contentType };
+  } catch {
+    return null;
+  }
+}
+
+async function localRemove(key) {
+  const file = localPath(key), meta = localPath(key, '.meta');
+  if (!file || !meta) return false;
+  await fsp.rm(meta, { force: true });
+  await fsp.rm(file, { force: true });
+  return true;
+}
+
 function getR2Client() {
   const { S3Client } = sdk();
   return new S3Client({
@@ -67,6 +115,7 @@ function filenameFromUrl(url) {
 async function deleteFromR2(url) {
   const key = keyFromUrl(url);
   if (!key) return false;
+  if (localDir()) return localRemove(key);
   try {
     await getR2Client().send(new (sdk().DeleteObjectCommand)({ Bucket: STORAGE.bucket(), Key: key }));
     return true;
@@ -85,6 +134,9 @@ async function deleteFromR2(url) {
 // no storage counter knows about, does not stay in the bucket. publicUrl is
 // always the final address.
 async function createPresignedUrl(key, contentType, contentLength, { pending = false } = {}) {
+  if (localDir()) {
+    return { uploadUrl: `${STORAGE.publicUrl()}/${pending ? PENDING_PREFIX + key : key}`, publicUrl: `${STORAGE.publicUrl()}/${key}` };
+  }
   const params = { Bucket: STORAGE.bucket(), Key: pending ? PENDING_PREFIX + key : key, ContentType: contentType };
   if (Number.isInteger(contentLength) && contentLength > 0) params.ContentLength = contentLength;
   const { PutObjectCommand, getSignedUrl } = sdk();
@@ -99,6 +151,10 @@ async function createPresignedUrl(key, contentType, contentLength, { pending = f
 }
 
 async function verifyUpload(key) {
+  if (localDir()) {
+    const o = await localGet(key);
+    return o && { size: o.size, contentType: o.contentType };
+  }
   try {
     const r = await getR2Client().send(new (sdk().HeadObjectCommand)({ Bucket: STORAGE.bucket(), Key: key }));
     return { size: r.ContentLength ?? 0, contentType: r.ContentType ?? '' };
@@ -116,6 +172,12 @@ async function promoteUpload(key) {
   if (done) return done;
   const head = await verifyUpload(PENDING_PREFIX + key);
   if (!head) return null;
+  if (localDir()) {
+    const from = await localGet(PENDING_PREFIX + key);
+    await localPut(key, await fsp.readFile(from.file), head.contentType);
+    await localRemove(PENDING_PREFIX + key);
+    return head;
+  }
   const { CopyObjectCommand, DeleteObjectCommand } = sdk();
   const client = getR2Client();
   await client.send(new CopyObjectCommand({
@@ -133,4 +195,4 @@ function publicBaseUrl() {
   return (STORAGE.publicUrl() || '').replace(/\/+$/, '') || null;
 }
 
-module.exports = { keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload, promoteUpload, publicBaseUrl, PENDING_PREFIX };
+module.exports = { keyFromUrl, filenameFromUrl, deleteFromR2, createPresignedUrl, verifyUpload, promoteUpload, publicBaseUrl, PENDING_PREFIX, localPut, localGet };

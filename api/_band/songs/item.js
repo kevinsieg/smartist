@@ -10,6 +10,7 @@ const { songDetail, cleanLyrics, writeLyrics, publicSong } = require('../../_dom
 const { lockSongLimit } = require('../../_domain/song_import');
 const { MSG } = require('../../_domain/http');
 const { gigColumns, gigJoins } = require('../../_domain/setlists');
+const melodies = require('./melodies');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
 
@@ -46,6 +47,9 @@ module.exports = wrap(async function handler(req, res) {
     req.query.id = rawId;
     return MEDIA[action](req, res);
   }
+
+  // ── POST/PUT/DELETE /api/:artist/songs/:id/melodies/:instrument[/sheet|audio]
+  if (action === 'melodies') return melodies(req, res, songId, sub, arrSub);
 
   // ── PUT/DELETE /api/:artist/songs/:id/lyrics, POST …/lyrics/suggest ──────
   if (action === 'lyrics') {

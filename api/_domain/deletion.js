@@ -57,6 +57,9 @@ async function collectR2Urls(artistIds, sql) {
   const songs = await sql`
     SELECT extra FROM songs WHERE artist_id = ANY(${artistIds})
   `;
+  const melodies = await sql`
+    SELECT sheet_urls, audio_url FROM song_melodies WHERE artist_id = ANY(${artistIds})
+  `;
   const gigs = await sql`
     SELECT poster_url, thumb_url FROM gigs WHERE artist_id = ANY(${artistIds})
   `;
@@ -89,6 +92,7 @@ async function collectR2Urls(artistIds, sql) {
     const e = s.extra || {};
     add(e.listenUrl); add(e.sheetUrl); add(e.playbackUrl);
   }
+  for (const m of melodies) { (m.sheet_urls || []).forEach(add); add(m.audio_url); }
   for (const g of gigs) { add(g.poster_url); add(g.thumb_url); }
   // api/_config.js uploads two band images (photo → logoUrl, favicon → faviconUrl);
   // faviconUrl's key is slug-derived, not a UUID, so it's the one guessable

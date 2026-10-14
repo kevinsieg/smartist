@@ -1,17 +1,5 @@
 // Stage view — full-screen setlist for on-stage use
 
-function _setAudioSpeed(btn, rate) {
-  var wrap = btn.closest('.song-stage-rec');
-  var audio = wrap && wrap.querySelector('audio');
-  if (audio) audio.playbackRate = rate;
-  btn.parentNode.querySelectorAll('button').forEach(function(b) {
-    b.classList.remove('active');
-    b.setAttribute('aria-pressed', 'false');
-  });
-  btn.classList.add('active');
-  btn.setAttribute('aria-pressed', 'true');
-}
-
 // Screen readers hear status changes (copied, sent) through one polite live region.
 function _stageAnnounce(msg) {
   var live = document.getElementById('stage-live');
@@ -33,13 +21,6 @@ document.addEventListener('visibilitychange', _stageKeepAwake);
 // Some browsers refuse the lock before the first user interaction.
 document.addEventListener('pointerdown', _stageKeepAwake);
 _stageKeepAwake();
-
-function _speedBtns(label) {
-  return '<div class="audio-speed-btns" role="group" aria-label="' + label + ' speed">' +
-    [0.7, 0.8, 0.9].map(function(r) {
-      return '<button aria-pressed="false" data-onclick="_setAudioSpeed(this,' + r + ')">' + r + '×</button>';
-    }).join('') + '</div>';
-}
 
 var _shareSlug      = null;
 var _shareSetlistId = null;
@@ -67,18 +48,38 @@ function _stageOfflineNote(res) {
 // ── Lyrics font size ───────────────────────────────────────────────────────────
 var _stageLyricsPx = parseInt(localStorage.getItem('stage_lyrics_px')) || 22;
 
+// "Fit to screen" is a toggle like Columns: while on, the size follows the
+// screen; off, it goes back to the size set with A− and A+.
+var _stageFitOn = (function() {
+  try { return localStorage.getItem('stage_fit') === '1'; } catch (e) { return false; }
+})();
+
+function _stageFitSync() {
+  var b = document.getElementById('_stage_fit_btn');
+  if (b) b.setAttribute('aria-pressed', String(_stageFitOn));
+}
+
+function _stageFitStop() {
+  if (!_stageFitOn) return;
+  _stageFitOn = false;
+  try { localStorage.setItem('stage_fit', '0'); } catch (e) { /* storage unavailable */ }
+  _stageFitSync();
+}
+
 function _applyLyricsSize() {
   var el = document.getElementById('_stage_lyrics');
   if (el) el.style.fontSize = _stageLyricsPx + 'px';
 }
 
 function stageFontUp() {
+  _stageFitStop();
   _stageLyricsPx = Math.min(80, Math.round(_stageLyricsPx * 1.15));
   localStorage.setItem('stage_lyrics_px', _stageLyricsPx);
   _applyLyricsSize();
 }
 
 function stageFontDown() {
+  _stageFitStop();
   _stageLyricsPx = Math.max(8, Math.round(_stageLyricsPx / 1.15));
   localStorage.setItem('stage_lyrics_px', _stageLyricsPx);
   _applyLyricsSize();
@@ -95,18 +96,31 @@ function _stageFitSearch(fits, lo, hi) {
   return best;
 }
 
-function stageFitLyrics() {
+// The largest size at which the lyrics fit the screen below the header.
+function _stageFitNow() {
   var el = document.getElementById('_stage_lyrics');
   if (!el) return;
-  if (_stageColsOn) { _stageFitColumns(); return; }
   var availH = window.innerHeight - el.getBoundingClientRect().top - 24;
   if (availH < 40) return;
-  _stageLyricsPx = _stageFitSearch(function (px) {
-    el.style.fontSize = px + 'px';
+  var px = _stageFitSearch(function (size) {
+    el.style.fontSize = size + 'px';
     return el.scrollHeight <= availH;
   }, 7, 96);
-  localStorage.setItem('stage_lyrics_px', _stageLyricsPx);
-  el.style.fontSize = _stageLyricsPx + 'px';
+  el.style.fontSize = px + 'px';
+}
+
+// Fits again after anything that changes the room: the window, the sheet, the chords.
+function _stageRefit() {
+  if (_stageColsOn) _stageFitColumns();
+  else if (_stageFitOn) _stageFitNow();
+}
+
+function stageFitLyrics() {
+  _stageFitOn = !_stageFitOn;
+  try { localStorage.setItem('stage_fit', _stageFitOn ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+  _stageFitSync();
+  if (_stageColsOn) { _stageFitColumns(); return; }
+  if (_stageFitOn) _stageFitNow(); else _applyLyricsSize();
 }
 
 // ── Columns: the lyrics fill the screen below the header, in as many columns
@@ -115,13 +129,20 @@ var _stageColsOn = (function() {
   try { return localStorage.getItem('stage_cols') === '1'; } catch (e) { return false; }
 })();
 
+// True while the page is laid out for print. Safari lays out again and fires
+// resize repeatedly in its print preview; the lyrics and waveform refits then
+// feed each other until the tab dies.
+function _stageIsPrint() {
+  return !!(window.matchMedia && window.matchMedia('print').matches);
+}
+
 function _stageFitColumns() {
   var el = document.getElementById('_stage_lyrics');
-  if (!el) return;
+  if (!el || _stageIsPrint()) return;
   document.body.classList.toggle('stage-cols', _stageColsOn);
   var b = document.getElementById('_stage_cols_btn');
   if (b) b.setAttribute('aria-pressed', String(_stageColsOn));
-  if (!_stageColsOn) { el.style.height = ''; _applyLyricsSize(); return; }
+  if (!_stageColsOn) { el.style.height = ''; if (_stageFitOn) _stageFitNow(); else _applyLyricsSize(); return; }
   // Room down to the floating size bar at the bottom (it wraps on phones).
   var bar = document.querySelector('.lyrics-size-bar');
   var reserve = bar ? Math.ceil(bar.getBoundingClientRect().height) + 28 : 72;
@@ -141,9 +162,9 @@ function stageToggleColumns() {
 
 var _stageColsTimer = null;
 window.addEventListener('resize', function () {
-  if (!_stageColsOn) return;
+  if (!(_stageColsOn || _stageFitOn) || _stageIsPrint()) return;
   clearTimeout(_stageColsTimer);
-  _stageColsTimer = setTimeout(_stageFitColumns, 150);
+  _stageColsTimer = setTimeout(_stageRefit, 150);
 });
 
 // ── Chords: on/off and transpose ─────────────────────────────────────────────
@@ -185,7 +206,7 @@ function _stageRenderLyrics() {
   if (sb) sb.setAttribute('aria-pressed', String(_stageStructOn));
   var nb = document.getElementById('_stage_num_btn');
   if (nb) { nb.setAttribute('aria-pressed', String(_stageNumbersOn)); nb.style.display = _stageStructOn ? '' : 'none'; }
-  if (_stageColsOn) _stageFitColumns();
+  _stageRefit();
 }
 
 function stageToggleChords() {
@@ -229,10 +250,62 @@ function _stageLength(min) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// The setlist this page belongs to (the setlist itself, or a song opened from
+// it): the offline icon keeps and removes that one.
+var _stageSetlistId = 0;
+var _OFFLINE_ICON = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>';
+var _OFFLINE_KEPT_ICON = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>';
+
+function _stageOfflineBtnHtml() {
+  if (!_stageSetlistId || typeof offlineKept !== 'function') return '';
+  return '<button class="stage-share-btn stage-offline-btn" id="stage-offline-btn" data-onclick="stageToggleOffline()" aria-pressed="false" aria-label="Keep this setlist offline" title="Not saved offline. Click to download.">' + _OFFLINE_ICON + '</button>';
+}
+
+function _stageOfflineShow(btn, rec) {
+  btn.classList.toggle('kept', !!rec);
+  btn.setAttribute('aria-pressed', String(!!rec));
+  btn.innerHTML = rec ? _OFFLINE_KEPT_ICON : _OFFLINE_ICON;
+  btn.setAttribute('aria-label', rec ? 'Saved offline. Remove the offline copy' : 'Keep this setlist offline');
+  btn.title = rec
+    ? 'Saved offline, synced ' + formatDate(rec.syncedAt) + ' ' + formatTime(rec.syncedAt) + '. Click to remove.'
+    : 'Not saved offline. Click to download.';
+}
+
+async function _stageOfflineRefresh() {
+  var btn = document.getElementById('stage-offline-btn');
+  if (!btn) return;
+  _stageOfflineShow(btn, await offlineKept(_shareSlug, _stageSetlistId));
+}
+
+// Grey: download. Green: remove (asks first, the copy may be the only one at a
+// gig without connection).
+async function stageToggleOffline() {
+  var btn = document.getElementById('stage-offline-btn');
+  if (!btn || btn.disabled) return;
+  if (await offlineKept(_shareSlug, _stageSetlistId)) {
+    if (!confirm('Remove the offline copy of this setlist from this device?')) return;
+    await offlineRelease(_shareSlug, _stageSetlistId);
+    _stageOfflineShow(btn, null);
+    _stageAnnounce('Offline copy removed');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    var out = await offlineKeep(_shareSlug, _stageSetlistId, function(done, total) { btn.textContent = done + '/' + total; });
+    await offlineWarm(location.origin + '/' + _shareSlug + '/stage?id=' + _stageSetlistId);
+    _stageAnnounce(out.failed.length ? 'Saved offline, ' + out.failed.length + ' files failed' : 'Saved offline');
+  } catch (e) {
+    _stageAnnounce('Could not save offline. A connection is needed.');
+  }
+  btn.disabled = false;
+  _stageOfflineRefresh();
+}
+
 function _shareHtml(navHtml) {
   var light = document.body.classList.contains('stage-light');
   return `<div class="stage-header-btns">
     ${navHtml || ''}
+    ${_stageOfflineBtnHtml()}
     <button class="stage-invert-btn" id="stage-invert-btn" data-onclick="toggleStageInvert()" aria-label="Light mode" aria-pressed="${light}" title="${light ? 'Switch to dark mode' : 'Switch to light mode'}">${light ? _MOON_ICON : _SUN_ICON}</button>
     <button class="stage-share-btn" id="stage-share-btn" data-onclick="toggleStageShareMenu(event)" aria-label="Share" aria-expanded="false" aria-controls="stage-share-menu" title="Share"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
     <div class="stage-share-menu" id="stage-share-menu" style="display:none">
@@ -279,6 +352,354 @@ function toggleStageInvert() {
     btn.title = light ? 'Switch to dark mode' : 'Switch to light mode';
     btn.setAttribute('aria-pressed', String(light));
     btn.innerHTML = light ? _MOON_ICON : _SUN_ICON;
+  }
+}
+
+// --- Melody: the views (Listen, Playback, my voice), their recording and sheets ---
+
+var _stageMelodies = [];
+var _stageInstruments = [];
+var _stageExtra = {};
+var _stageView = null;
+var _stageSheet = null;
+var _stageRun = 0;
+var _stageRate = 1;
+
+function _stageVoiceSaved() {
+  try { return localStorage.getItem(MELODY_VOICE_KEY); } catch (e) { return null; }
+}
+
+function _stageState() {
+  return melodyStage(_stageExtra, _stageMelodies, _stageInstruments, _stageVoiceSaved(), _stageView, _stageSheet);
+}
+
+// The user's last choice; the saved voice stays chosen while another view is open.
+// Listen and Playback share one button, which keeps the one used last.
+var _stageTrack = 'listen';
+
+function stageSetView(view) {
+  if (view === 'voice' && !_stageState().voice.key) {
+    var btn = document.querySelector('.stage-menu-wrap[data-menu="voice"] .stage-menu-btn');
+    if (btn) stageMenu(btn);
+    return;
+  }
+  // A selected button is deselected by clicking it again, and the sheet that
+  // followed it goes with it; choosing one again brings that sheet back too.
+  if (_stageState().view === view) view = 'none';
+  if (view === 'listen' || view === 'playback') _stageTrack = view;
+  _stageView = view;
+  if (_stageSheet === 'none') _stageSheet = null;
+  _stageRender();
+}
+
+// The export can carry every sheet instead of the one on screen.
+var STAGE_ALL_SHEETS = '_all';
+var _stagePrintAll = false;
+
+// The sheet is chosen apart from the track; once chosen it stays.
+function stageSetSheet(key) {
+  if (key === STAGE_ALL_SHEETS) { _stagePrintAll = !_stagePrintAll; _stageRender(); return; }
+  _stageSheet = key === _stageState().sheet ? 'none' : key;
+  _stageRender();
+}
+
+// The sheet button itself shows or hides the sheet, like Track and Voice; the
+// caret picks which one.
+var _stageSheetLast = null;
+function stageToggleSheet() {
+  var st = _stageState();
+  if (st.sheet) _stageSheet = 'none';
+  else {
+    var back = st.sheets.some(function(x) { return x.key === _stageSheetLast; }) ? _stageSheetLast : st.sheets[0].key;
+    _stageSheet = back;
+  }
+  _stageRender();
+}
+
+// A new voice brings its own sheets: the sheet follows it again.
+function stageSetVoice(key) {
+  try {
+    if (key) localStorage.setItem(MELODY_VOICE_KEY, key); else localStorage.removeItem(MELODY_VOICE_KEY);
+  } catch (e) { /* storage unavailable: the choice lasts until the page closes */ }
+  _stageView = 'voice';
+  _stageSheet = null;
+  _stageRender();
+}
+
+// One menu open at a time; an outside click or Escape closes it.
+function stageMenu(btn) {
+  var menu = btn.closest('.stage-menu-wrap').querySelector('.stage-menu');
+  var open = menu.hidden;
+  _stageMenusClose();
+  menu.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+}
+
+function _stageMenusClose() {
+  document.querySelectorAll('.stage-menu').forEach(function(menu) {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    var btn = menu.closest('.stage-menu-wrap').querySelector('.stage-menu-btn');
+    if (btn) { btn.setAttribute('aria-expanded', 'false'); if (menu.contains(document.activeElement)) btn.focus(); }
+  });
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest || !e.target.closest('.stage-menu-wrap')) _stageMenusClose();
+});
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') _stageMenusClose(); });
+
+function stageSetRate(value) {
+  _stageRate = Number(value) || 1;
+  var audio = document.querySelector('#_stage_audio audio');
+  if (audio) audio.playbackRate = _stageRate;
+  _stageRenderControls(_stageState());
+}
+
+// A recording's loudness profile, stored with it: drawn here, never decoded
+// here. The played part follows the audio element next to it.
+function _stageWaveHtml(wave) {
+  return waveformValid(wave)
+    ? '<canvas class="stage-wave" aria-hidden="true" data-wave="' + wave + '" data-onclick="stageWaveSeek(event, this)"></canvas>'
+    : '';
+}
+
+function _stageWaveDraw(canvas) {
+  if (_stageIsPrint()) return;
+  var audio = canvas._stageAudio;
+  var peaks = waveformDecode(canvas.dataset.wave);
+  if (!audio || !peaks) return;
+  var dpr = window.devicePixelRatio || 1;
+  var w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+  var cs = getComputedStyle(document.body);
+  waveformDraw(canvas, peaks, audio.duration ? audio.currentTime / audio.duration : 0,
+    { played: cs.getPropertyValue('--s-accent').trim(), rest: cs.getPropertyValue('--s-muted').trim() });
+}
+
+function _stageWaveWire(root) {
+  root.querySelectorAll('canvas.stage-wave').forEach(function(c) {
+    var audio = c.parentNode.querySelector('audio');
+    if (!audio) return;
+    c._stageAudio = audio;
+    ['timeupdate', 'loadedmetadata', 'durationchange', 'seeked'].forEach(function(ev) {
+      audio.addEventListener(ev, function() { _stageWaveDraw(c); });
+    });
+    _stageWaveDraw(c);
+  });
+}
+
+function stageWaveSeek(ev, canvas) {
+  var audio = canvas._stageAudio;
+  if (!audio || !audio.duration) return;
+  var box = canvas.getBoundingClientRect();
+  audio.currentTime = Math.max(0, Math.min(1, (ev.clientX - box.left) / box.width)) * audio.duration;
+}
+
+window.addEventListener('resize', function() {
+  if (_stageIsPrint()) return;
+  document.querySelectorAll('canvas.stage-wave').forEach(_stageWaveDraw);
+});
+
+function stageZoomMelody(btn) {
+  var gallery = btn.closest('.stage-gallery');
+  var track = gallery.querySelector('.stage-gallery-track');
+  var page = Math.round(track.scrollLeft / (track.clientWidth || 1));
+  gallery.classList.toggle('zoom');
+  track.scrollLeft = page * track.clientWidth;
+}
+
+// A copy saved by "Keep offline" when there is one, else the file's own address.
+async function _stageMediaUrl(url) {
+  if (typeof offlineMediaGet !== 'function') return url;
+  return (await offlineMediaGet(url)) || url;
+}
+
+function _stageMediaSrc(url) { return url.indexOf('blob:') === 0 ? url : safeUrl(url); }
+
+var _STAGE_VIEW_LABEL = { listen: 'Listen', playback: 'Playback' };
+
+// onclick is the item's whole attribute, written out at the call (the handler
+// check reads each one from the source).
+function _stageMenuHtml(items, onclick) {
+  return '<ul class="stage-menu" role="menu" hidden>' + items.map(function(it) {
+    return '<li role="none"><button type="button" role="menuitemradio" aria-checked="' + it.checked + '" data-key="' + escHtml(it.key) +
+      '" ' + onclick + '>' + escHtml(it.label) + '</button></li>';
+  }).join('') + '</ul>';
+}
+
+var _STAGE_CARET = ' <span aria-hidden="true">&#9662;</span>';
+
+// A button with a menu: the main part acts, the caret opens the menu.
+function _stageSplitHtml(menu, mainFk, label, view, pressed, items, onclick) {
+  return '<span class="stage-menu-wrap" data-menu="' + menu + '">' +
+    '<button class="stage-share-btn" data-fk="' + mainFk + '" data-onclick="stageSetView(\'' + view + '\')" aria-pressed="' + pressed + '">' + escHtml(label) + '</button>' +
+    (items.length > (menu === 'voice' ? 0 : 1)
+      ? '<button type="button" class="stage-share-btn stage-menu-btn" data-fk="' + mainFk + 'Menu" data-onclick="stageMenu(this)" aria-haspopup="menu" aria-expanded="false" aria-label="' + (menu === 'voice' ? 'Choose your voice' : 'Choose the recording') + '">&#9662;</button>' + _stageMenuHtml(items, onclick)
+      : '') + '</span>';
+}
+
+// A button that is only a menu.
+function _stageDropHtml(menu, fk, label, aria, items, onclick) {
+  return '<span class="stage-menu-wrap" data-menu="' + menu + '"><button type="button" class="stage-share-btn stage-menu-btn stage-drop" data-fk="' + fk +
+    '" data-onclick="stageMenu(this)" aria-haspopup="menu" aria-expanded="false" aria-label="' + aria + '">' + escHtml(label) + _STAGE_CARET + '</button>' +
+    _stageMenuHtml(items, onclick) + '</span>';
+}
+
+function _stageCtl(caption, tip, inner) {
+  return '<div class="stage-ctl" title="' + escHtml(tip) + '"><span class="stage-ctl-label">' + caption + '</span>' + inner + '</div>';
+}
+
+// One row, each control with a small caption (and a hover text): the track
+// (Listen or Playback), my voice, the sheet to show, the speed.
+function _stageControlsHtml(st) {
+  var out = '';
+  var tracks = st.views.filter(function(v) { return v !== 'voice'; });
+  var showViews = st.views.length > 1 || st.views[0] === 'voice';
+  if (showViews && tracks.length) {
+    var held = tracks.indexOf(st.view) >= 0 ? st.view : (tracks.indexOf(_stageTrack) >= 0 ? _stageTrack : tracks[0]);
+    out += _stageCtl('Track', 'The recording to play: Listen (the reference) or Playback (the backing track)',
+      _stageSplitHtml('track', 'track', _STAGE_VIEW_LABEL[held], held, st.view === held,
+        tracks.map(function(v) { return { key: v, label: _STAGE_VIEW_LABEL[v], checked: v === held }; }), 'data-onclick="stageSetView(this.dataset.key)"'));
+  }
+  if (showViews && st.views.indexOf('voice') >= 0) {
+    out += _stageCtl('Voice', 'Your voice: plays its recording, and its sheets show with it',
+      _stageSplitHtml('voice', 'voice', st.voice.label || 'My voice', 'voice', st.view === 'voice',
+        st.voices.map(function(i) { return { key: i.key, label: i.label || i.key, checked: i.key === st.voice.key }; }), 'data-onclick="stageSetVoice(this.dataset.key)"'));
+  }
+  var chosen = st.sheets.find(function(x) { return x.key === st.sheet; });
+  if (st.sheets.length) {
+    if (chosen) _stageSheetLast = chosen.key;
+    var last = st.sheets.find(function(x) { return x.key === _stageSheetLast; }) || st.sheets[0];
+    out += _stageCtl('Sheet', 'The sheet to show, whatever is playing: any voice, or the whole song. Click to hide or show it',
+      '<span class="stage-menu-wrap" data-menu="sheet">' +
+      '<button class="stage-share-btn" data-fk="sheet" data-onclick="stageToggleSheet()" aria-pressed="' + !!chosen + '">' + escHtml((chosen || last).label) + '</button>' +
+      (st.sheets.length > 1
+        ? '<button type="button" class="stage-share-btn stage-menu-btn" data-fk="sheetMenu" data-onclick="stageMenu(this)" aria-haspopup="menu" aria-expanded="false" aria-label="Which sheet to show">&#9662;</button>' +
+          _stageMenuHtml(st.sheets.map(function(x) { return { key: x.key, label: x.label, checked: x.key === st.sheet }; })
+            .concat([{ key: STAGE_ALL_SHEETS, label: 'All sheets in the export', checked: _stagePrintAll }]), 'data-onclick="stageSetSheet(this.dataset.key)"')
+        : '') + '</span>');
+  }
+  if (st.source) {
+    out += _stageCtl('Speed', 'Playback speed',
+      _stageDropHtml('rate', 'rate', _stageRate + '×', 'Playback speed',
+        [1, 0.9, 0.8, 0.7].map(function(r) { return { key: String(r), label: r + '×', checked: r === _stageRate }; }), 'data-onclick="stageSetRate(this.dataset.key)"'));
+  }
+  return out;
+}
+
+// Shows the state: controls, the recording with its waveform, the sheets. A
+// recording that is already loaded keeps playing.
+function _stageRenderControls(st) {
+  var box = document.getElementById('_stage_controls');
+  if (!box) return;
+  var focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null;
+  box.innerHTML = _stageControlsHtml(st);
+  if (focused) { var again = box.querySelector('[data-fk="' + focused + '"]'); if (again) again.focus(); }
+}
+
+async function _stageRender() {
+  var run = ++_stageRun;
+  var st = _stageState();
+  _stageRenderControls(st);
+  await Promise.all([_stageRenderAudio(st, run), _stageRenderGallery(st, run)]);
+}
+
+async function _stageRenderAudio(st, run) {
+  var box = document.getElementById('_stage_audio');
+  if (!box) return;
+  var src = st.source;
+  if (!src) {
+    box.dataset.shown = '';
+    box.innerHTML = '';
+    return;
+  }
+  var url = await _stageMediaUrl(src.url);
+  if (run !== _stageRun || box.dataset.shown === src.url) return;
+  box.dataset.shown = src.url;
+  var label = st.view === 'voice' ? (st.voice.label || 'My voice') : _STAGE_VIEW_LABEL[st.view];
+  box.innerHTML =
+    '<div class="song-stage-rec"><span class="song-stage-rec-label"><span aria-hidden="true">&#9654; </span>' + escHtml(label) + '</span>' +
+    _stageWaveHtml(src.waveform) +
+    '<audio class="song-stage-audio" controls aria-label="' + escHtml(label) + '" src="' + escHtml(_stageMediaSrc(url)) + '"></audio></div>';
+  box.querySelector('audio').playbackRate = _stageRate;
+  _stageWaveWire(box);
+}
+
+// Sheet images as a gallery: swipe, or the arrows, one page at a time.
+function stageGalleryStep(btn, dir) {
+  var track = btn.parentNode.querySelector('.stage-gallery-track');
+  track.scrollBy({ left: dir * track.clientWidth, behavior: 'smooth' });
+}
+
+function _stageGalleryWire(gallery) {
+  var track = gallery.querySelector('.stage-gallery-track');
+  var pages = track.children.length;
+  var count = gallery.querySelector('.stage-gallery-count');
+  var prev = gallery.querySelector('.stage-gallery-nav.prev');
+  var next = gallery.querySelector('.stage-gallery-nav.next');
+  if (!count) return;
+  function update() {
+    var i = Math.max(0, Math.min(pages - 1, Math.round(track.scrollLeft / (track.clientWidth || 1))));
+    count.textContent = (i + 1) + ' / ' + pages;
+    prev.disabled = i === 0;
+    next.disabled = i === pages - 1;
+  }
+  track.addEventListener('scroll', update);
+  update();
+}
+
+// Print only: the sheets for the export as plain blocks and images (the gallery
+// itself, with its scrolling track and buttons, stays out of the print).
+function _stagePrintHtml(sheets) {
+  return '<div class="stage-print">' + sheets.map(function(x) {
+    return '<div class="stage-print-sheet"><p class="stage-print-sheet-label">' + escHtml(x.label) + '</p>' + x.srcs.map(function(u) {
+      return '<img class="stage-print-img" src="' + escHtml(_stageMediaSrc(u)) + '" alt="' + escHtml(x.label) + ' melody">';
+    }).join('') + '</div>';
+  }).join('') + '</div>';
+}
+
+async function _stagePrintSheets(st, imgUrls, label) {
+  if (!_stagePrintAll) return imgUrls.length ? [{ label: label, srcs: imgUrls }] : [];
+  return Promise.all(st.sheets.map(async function(x) {
+    var urls = x.key === MELODY_SONG_KEY ? melodySongImages(_stageMelodies)
+      : ((_stageMelodies.find(function(m) { return m.instrument === x.key; }) || {}).sheet_urls || []);
+    return { label: x.label, srcs: await Promise.all(urls.map(_stageMediaUrl)) };
+  }));
+}
+
+// The chosen voice's sheet images, centred at half the screen.
+async function _stageRenderGallery(st, run) {
+  var box = document.getElementById('_stage_melody');
+  if (!box) return;
+  var imgUrls = await Promise.all(st.images.map(_stageMediaUrl));
+  if (run !== _stageRun) return;
+  var picked = st.sheets.find(function(x) { return x.key === st.sheet; });
+  var label = picked ? picked.label : st.voice.label;
+  var note = { choose: 'Choose your voice to see its melody.', gone: 'Your saved voice is not set up any more. Choose again.' }[st.note] || '';
+  var many = imgUrls.length > 1;
+  box.innerHTML =
+    (note ? '<p class="stage-message stage-melody-note">' + escHtml(note) + '</p>' : '') +
+    (imgUrls.length
+      ? '<div class="stage-gallery"><div class="stage-gallery-track">' + imgUrls.map(function(u, n) {
+          return '<button type="button" class="stage-melody-zoom" data-onclick="stageZoomMelody(this)" aria-label="Zoom the melody sheet">' +
+            '<img class="stage-melody-img" src="' + escHtml(_stageMediaSrc(u)) + '" alt="' + escHtml(label) + ' melody, page ' + (n + 1) + '"></button>';
+        }).join('') + '</div>' +
+        (many ? '<button type="button" class="stage-gallery-nav prev" data-onclick="stageGalleryStep(this, -1)" aria-label="Previous page">&#8249;</button>' +
+          '<button type="button" class="stage-gallery-nav next" data-onclick="stageGalleryStep(this, 1)" aria-label="Next page">&#8250;</button>' +
+          '<div class="stage-gallery-count" aria-live="polite"></div>' : '') + '</div>'
+      : '');
+  var forPrint = await _stagePrintSheets(st, imgUrls, label);
+  if (run !== _stageRun) return;
+  if (forPrint.length) box.insertAdjacentHTML('beforeend', _stagePrintHtml(forPrint));
+  var gallery = box.querySelector('.stage-gallery');
+  if (gallery) _stageGalleryWire(gallery);
+  // The sheet pushes the lyrics down: fit the columns again once it is in, and
+  // again as each image gets its height.
+  if (_stageColsOn || _stageFitOn) {
+    _stageRefit();
+    box.querySelectorAll('img').forEach(function(img) { img.addEventListener('load', _stageRefit); });
   }
 }
 
@@ -330,6 +751,7 @@ async function initSetlist(params, el, cfg) {
   }
 
   _shareSetlistId = setlistId;
+  _stageSetlistId = setlistId;
   const slRes = await offlineFetch(`/api/${cfg.slug}/setlists/${setlistId}`, _stageAuthHeaders());
   const data = slRes.data;
   try { sessionStorage.setItem('stage_sl_' + setlistId, JSON.stringify(data)); } catch {}
@@ -372,6 +794,7 @@ async function initSetlist(params, el, cfg) {
     <ul class="stage-list">${items}</ul>
     ${totalMin ? `<p class="stage-total">${songs.length} song${songs.length !== 1 ? 's' : ''} &middot; ${_stageLength(totalMin)}</p>` : ''}`;
 
+  _stageOfflineRefresh();
   if (params.get('print') === '1') setTimeout(function() { window.print(); }, 400);
 }
 
@@ -383,6 +806,7 @@ async function initSong(params, el, cfg) {
     return;
   }
 
+  _stageSetlistId = fromId;
   var cachedSl = null;
   if (fromId) {
     try { cachedSl = JSON.parse(sessionStorage.getItem('stage_sl_' + fromId)); } catch {}
@@ -433,22 +857,21 @@ async function initSong(params, el, cfg) {
     song.length_min  ? `<span class="stage-capo">${_stageLength(song.length_min)}</span>` : '',
   ].filter(Boolean).join('');
 
-  // Recordings
-  let recItems = [];
-  if (extra.listenUrl) {
-    recItems.push(audioRe.test(extra.listenUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label"><span aria-hidden="true">&#9654; </span>Listen</span><audio class="song-stage-audio" controls aria-label="Listen" src="${escHtml(safeUrl(extra.listenUrl))}"></audio>${_speedBtns('Listen')}</div>`
-      : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.listenUrl))}" target="_blank" rel="noopener">&#9654; Listen</a>`);
-  }
-  if (extra.playbackUrl) {
-    recItems.push(audioRe.test(extra.playbackUrl)
-      ? `<div class="song-stage-rec"><span class="song-stage-rec-label"><span aria-hidden="true">&#9655; </span>Playback</span><audio class="song-stage-audio" controls aria-label="Playback" src="${escHtml(safeUrl(extra.playbackUrl))}"></audio>${_speedBtns('Playback')}</div>`
-      : `<a class="song-stage-link" href="${escHtml(safeUrl(extra.playbackUrl))}" target="_blank" rel="noopener">&#9655; Playback</a>`);
-  }
-  const recHtml = recItems.length ? `<div class="song-stage-section">${recItems.join('')}</div>` : '';
+  _stageMelodies = Array.isArray(song.melodies) ? song.melodies : [];
+  _stageInstruments = (arrConfig && arrConfig.instruments) || [];
+  _stageExtra = extra;
+  _stageView = null;
+  _stageSheet = null;
+  const hasMelodies = melodyVoices(_stageMelodies, _stageInstruments).length > 0;
+  // One player for every recording the song has (Listen, Playback, a voice's
+  // own); a link that is not an audio file stays a link.
+  const anyAudio = melodySources(extra, null).length > 0 || _stageMelodies.some(m => m.audio_url);
+  const hasSheets = hasMelodies || melodySongImages(_stageMelodies).length > 0;
 
   // Links
   const linkItems = [
+    extra.listenUrl && !audioRe.test(extra.listenUrl)     ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.listenUrl))}" target="_blank" rel="noopener">&#9654; Listen</a>` : '',
+    extra.playbackUrl && !audioRe.test(extra.playbackUrl) ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.playbackUrl))}" target="_blank" rel="noopener">&#9655; Playback</a>` : '',
     extra.sheetUrl     ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.sheetUrl))}"      target="_blank" rel="noopener">&#8801; Sheet music</a>` : '',
     extra.referenceUrl ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.referenceUrl))}"  target="_blank" rel="noopener">&#9654; Reference</a>`   : '',
     extra.songinfoUrl  ? `<a class="song-stage-link" href="${escHtml(safeUrl(extra.songinfoUrl))}"   target="_blank" rel="noopener">&#8505; Song info</a>`    : '',
@@ -458,7 +881,7 @@ async function initSong(params, el, cfg) {
         `<span style="font-size:11px">ARRANGEMENT</span></button>`
       : '',
   ].filter(Boolean);
-  const linksHtml = linkItems.length ? `<div class="song-stage-section song-stage-links">${linkItems.join('')}</div>` : '';
+  const linksHtml = linkItems.length ? `<div class="song-stage-section song-stage-links stage-narrow">${linkItems.join('')}</div>` : '';
 
   var _FIT_ICON = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>';
   const lyricsHtml = lyrics
@@ -466,7 +889,7 @@ async function initSong(params, el, cfg) {
        <div class="song-stage-lyrics" id="_stage_lyrics"></div>
        <div class="lyrics-size-bar" role="group" aria-label="Lyrics size">
          <button class="stage-share-btn" data-onclick="stageFontDown()" aria-label="Smaller text" title="Smaller text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A−</span></button>
-         <button class="stage-share-btn" data-onclick="stageFitLyrics()" aria-label="Fit lyrics to screen" title="Fit to screen">${_FIT_ICON}</button>
+         <button class="stage-share-btn" id="_stage_fit_btn" data-onclick="stageFitLyrics()" aria-pressed="${_stageFitOn}" aria-label="Fit lyrics to screen" title="Fit to screen">${_FIT_ICON}</button>
          <button class="stage-share-btn" data-onclick="stageFontUp()" aria-label="Larger text" title="Larger text"><span aria-hidden="true" style="font-size:11px;letter-spacing:-0.03em">A+</span></button>
          <button class="stage-share-btn" id="_stage_cols_btn" data-onclick="stageToggleColumns()" aria-pressed="${_stageColsOn}" aria-label="Lyrics in columns, fitted to the screen" title="Columns"><span aria-hidden="true" style="font-size:11px">▥</span></button>
          ${chordsHas(lyrics) ? `
@@ -482,16 +905,19 @@ async function initSong(params, el, cfg) {
     : `<p class="stage-message" style="padding:3rem 0">No lyrics saved.</p>`;
 
   el.innerHTML = `${_stageOfflineNote(songRes)}
-    <div class="stage-header${navHtml ? ' stage-header--nav' : ''}">
+    <div class="stage-header stage-narrow${navHtml ? ' stage-header--nav' : ''}">
       <div class="stage-band">${escHtml(cfg.name)}</div>
       <h1 class="stage-title">${escHtml(song.title)}</h1>
       ${subtitle}
       ${_shareHtml(navHtml)}
     </div>
-    ${metaBadges ? `<div class="song-stage-meta">${metaBadges}</div>` : ''}
-    ${recHtml}
+    ${metaBadges ? `<div class="song-stage-meta stage-narrow">${metaBadges}</div>` : ''}
+    ${anyAudio || hasMelodies ? '<div id="_stage_player" class="song-stage-section stage-narrow"><div id="_stage_controls" class="stage-controls"></div><div id="_stage_audio"></div></div>' : ''}
     ${linksHtml}
+    ${hasSheets ? '<section id="_stage_melody" class="stage-melody" aria-label="Melody"></section>' : ''}
     ${lyricsHtml}`;
+  if (anyAudio || hasSheets) _stageRender();
+  _stageOfflineRefresh();
 
   if (lyrics) {
     _stageLyricsText = lyrics;

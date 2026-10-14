@@ -130,6 +130,54 @@ async function run(r) {
     } finally { restore(); }
   });
 
+  console.log(B('\nR2 local storage (LOCAL_STORAGE_DIR)'));
+
+  const fs = require('fs');
+  const os = require('os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smartist-storage-'));
+  process.env.LOCAL_STORAGE_DIR = dir;
+  process.env.R2_PUBLIC_URL = 'http://localhost:3000/__storage';
+  const local = () => { delete require.cache[require.resolve(path.join(__dirname, '../../api/_r2'))]; return require(path.join(__dirname, '../../api/_r2')); };
+
+  try {
+    await testAsync('local: presign points the upload at the app, the public URL at the final key', async () => {
+      const { uploadUrl, publicUrl } = await local().createPresignedUrl('audio/1/a.mp3', 'audio/mpeg', 3, { pending: true });
+      assertEq(uploadUrl, 'http://localhost:3000/__storage/pending/audio/1/a.mp3');
+      assertEq(publicUrl, 'http://localhost:3000/__storage/audio/1/a.mp3');
+    });
+
+    await testAsync('local: put, verify, promote, read and delete round-trip', async () => {
+      const m = local();
+      assertEq(await m.verifyUpload('audio/1/a.mp3'), null);
+      await m.localPut('pending/audio/1/a.mp3', Buffer.from('abc'), 'audio/mpeg');
+      assertEq(await m.promoteUpload('audio/1/a.mp3'), { size: 3, contentType: 'audio/mpeg' });
+      assertEq(await m.verifyUpload('pending/audio/1/a.mp3'), null);
+      assertEq((await m.localGet('audio/1/a.mp3')).contentType, 'audio/mpeg');
+      assertEq(await m.deleteFromR2('http://localhost:3000/__storage/audio/1/a.mp3'), true);
+      assertEq(await m.verifyUpload('audio/1/a.mp3'), null);
+    });
+
+    await testAsync('local: a missing or foreign key is simply not there (a replaced file stored elsewhere)', async () => {
+      const m = local();
+      assertEq(await m.verifyUpload(null), null);
+      assertEq(await m.promoteUpload(null), null);
+      assertEq(await m.deleteFromR2('https://other.example.test/x.mp3'), false);
+    });
+
+    await testAsync('local: a key outside the storage directory is refused', async () => {
+      const m = local();
+      let threw = false;
+      try { await m.localPut('../escape.txt', Buffer.from('x'), 'text/plain'); } catch { threw = true; }
+      assertEq(threw, true);
+      assertEq(fs.existsSync(path.join(dir, '..', 'escape.txt')), false);
+      assertEq(await m.localGet('../escape.txt'), null);
+    });
+  } finally {
+    delete process.env.LOCAL_STORAGE_DIR;
+    fs.rmSync(dir, { recursive: true, force: true });
+    delete require.cache[require.resolve(path.join(__dirname, '../../api/_r2'))];
+  }
+
   if (ORIGINAL === undefined) {
     delete process.env.R2_PUBLIC_URL;
   } else {
