@@ -9,12 +9,13 @@
  *
  * Usage:
  *   node scripts/waveforms.js [--artist <slug>] [--all] [--dry-run] [--yes]
+ *   DATABASE_URL=<url> node scripts/waveforms.js --dry-run     # any other database
  *
  *   --artist   only this band
  *   --all      redo recordings that already have a waveform
  *   --dry-run  list what would be done, change nothing
  *
- * Reads DATABASE_URL from .env / .env.local; asks before it connects.
+ * Reads DATABASE_URL from the environment or .env / .env.local; asks before it connects.
  */
 
 'use strict';

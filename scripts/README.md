@@ -76,6 +76,7 @@ in the browser. This computes it for the recordings uploaded before that (needs
 node scripts/waveforms.js --dry-run              # list the recordings without a waveform
 node scripts/waveforms.js                        # compute and store them
 node scripts/waveforms.js --artist <slug> --all  # one band, redo all
+DATABASE_URL=<url> node scripts/waveforms.js --dry-run   # another database, like every script
 ```
 
 ---
