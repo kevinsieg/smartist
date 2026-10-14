@@ -267,7 +267,7 @@ async function warmPage(href) {
 // Nav link of the current page: highlighted and announced as the current page.
 function _markCurrentNav(path) {
   document.querySelectorAll('.nav-links a').forEach(function(a) {
-    var current = a.getAttribute('href').replace(/\/+$/, '') === path;
+    var current = a.getAttribute('href').split('?')[0].replace(/\/+$/, '') === path;
     a.classList.toggle('current', current);
     if (current) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
@@ -355,6 +355,10 @@ async function navigate(href) {
       }
     });
 
+    // The address first: a page script reads its query (?view=history) when it
+    // starts, and after the scripts is too late.
+    history.pushState(null, document.title, href);
+
     // Execute scripts sequentially (geo.js must run before page.js)
     for (const oldEl of newNodes.filter(function(el) { return el.tagName === 'SCRIPT'; })) {
       if (_navVersion !== version) return;
@@ -376,7 +380,6 @@ async function navigate(href) {
     // i18n.ready resolved on the first load; swapped-in markup needs its own pass.
     if (window.i18n && window.i18n.applyTranslations) window.i18n.applyTranslations(document);
 
-    history.pushState(null, document.title, href);
     _markCurrentNav(path);
     if (typeof updateAuthIndicator === 'function') updateAuthIndicator();
     _markMainContent();
@@ -429,7 +432,7 @@ window.addEventListener('popstate', function() { navigate(window.location.href);
       '<div class="nav-links">' +
         (_artistSlug ? (
           '<a href="' + _base + '/songs" data-i18n="nav.songs">Songs</a>' +
-          '<a href="' + _base + '/setlist" data-i18n="nav.setlists">Setlists</a>' +
+          '<a href="' + _base + '/setlist?view=history" data-i18n="nav.setlists">Setlists</a>' +
           '<a href="' + _base + '/gigs" data-i18n="nav.gigs">Gigs</a>' +
           '<div class="nav-more">' +
             '<a href="#" class="nav-more-toggle" id="nav-more-toggle" role="button" aria-haspopup="true" aria-controls="nav-more-menu" aria-expanded="false"><span data-i18n="nav.more">More</span> &#9662;</a>' +

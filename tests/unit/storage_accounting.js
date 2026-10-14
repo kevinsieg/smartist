@@ -14,7 +14,7 @@ const SECRET  = 'storage-accounting-secret-32-bytes!';
 const BASE    = 'https://cdn.example.test';
 const NEW_URL = `${BASE}/audio/1/new.mp3`;
 const OLD_URL = `${BASE}/audio/1/old.mp3`;
-const SIZES   = { 'audio/1/new.mp3': 100, 'audio/1/old.mp3': 40 };
+const SIZES   = { 'audio/1/new.mp3': 100, 'audio/1/old.mp3': 40, 'playback/1/new.mp3': 100 };
 
 // Pro plan: unlimited storage, so the cap never interferes with these tests.
 const ARTIST = { id: 1, slug: 'testband', name: 'Test Band', config: { plan: 'pro' }, storage_used_bytes: 1000 };
@@ -52,15 +52,17 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
 
   const deltas  = [];
   const deleted = [];
-  const extra   = storedUrl ? { listenUrl: storedUrl } : {};
+  const updates = [];
+  const removals = [];
 
   const sql = async (strings, ...values) => {
     const text = strings.join(' ').replace(/\s+/g, ' ');
     // requireAuth: band and membership in one row.
     if (text.includes('JOIN users u2'))                             return [{ ...ARTIST, member_id: 7, member_role: 'member', member_password_hash: null }];
-    // The media steps read only the one URL they need: extra->>key AS url.
-    if (text.includes('AS url FROM songs'))                         return [{ url: extra[values[0]] ?? null }];
-    if (text.includes('UPDATE songs SET extra'))                    return [{ id: 5, extra }];
+    // The media steps read the song and the file the kind holds now.
+    if (text.includes('LEFT JOIN song_media'))                      return [{ song: { id: 5, extra: {} }, url: storedUrl }];
+    if (text.includes('INSERT INTO song_media'))                    { updates.push({ text, values }); return []; }
+    if (text.includes('DELETE FROM song_media'))                    { removals.push({ text, values }); return []; }
     // Counter writes in either shape: "storage_used_bytes + $n" or "... - $n",
     // with or without a GREATEST(0, ...) wrapper.
     if (text.includes('UPDATE artists') && text.includes('storage_used_bytes')) {
@@ -100,16 +102,18 @@ function loadSongs({ storedUrl = null, deleteOk = true, counterFull = false } = 
     token:   tokenApi.generateUserToken(7, 'member', tokenApi.TTL_8H),
     deltas,
     deleted,
+    updates,
+    removals,
   };
 }
 
 // PUT /songs/5/audio confirms an upload, DELETE removes the file.
-async function call(handler, token, { method, body }) {
+async function call(handler, token, { method, body }, kind = 'audio') {
   const res = mockRes();
   await handler({
     method,
-    url: `/api/${ARTIST.slug}/songs/5/audio`,
-    query: { artist: ARTIST.slug, path: ['5', 'audio'] },
+    url: `/api/${ARTIST.slug}/songs/5/${kind}`,
+    query: { artist: ARTIST.slug, path: ['5', kind] },
     headers: { authorization: `Bearer ${token}` },
     body,
   }, res);
@@ -174,6 +178,70 @@ async function run(r) {
     assertEq(res.statusCode, 200);
     assert(!deltas.includes(-40), 'must not subtract bytes for a file that is still stored');
     assertEq(deltas.reduce((a, b) => a + b, 0), 100);
+  });
+
+  const WAVE = 'ab'.repeat(100);
+
+  // The peaks computed in the browser travel with the confirm and land in the
+  // same statement as the url, so a recording never has another one's waveform.
+  await testAsync('confirming a recording stores its waveform with the url', async () => {
+    const { handler, token, updates } = loadSongs();
+    const res = await call(handler, token, { method: 'PUT', body: { publicUrl: NEW_URL, waveform: WAVE } });
+    assertEq(res.statusCode, 200);
+    assertEq(updates.length, 1);
+    assert(updates[0].values.includes(WAVE), 'waveform not written');
+    assert(updates[0].values.includes(NEW_URL), 'url not written');
+  });
+
+  await testAsync('confirming a recording without a waveform clears the old recording\'s one', async () => {
+    const { handler, token, updates } = loadSongs({ storedUrl: OLD_URL });
+    await call(handler, token, confirmAudio);
+    assert(updates[0].text.includes('waveform = EXCLUDED.waveform'), 'stale waveform kept: ' + updates[0].text);
+    assert(updates[0].values.includes(null) && !updates[0].values.includes(WAVE), 'waveform should be written as null');
+  });
+
+  await testAsync('a malformed waveform is refused before anything is stored', async () => {
+    for (const bad of ['xyz', 'AB'.repeat(100), 'ab'.repeat(99), 7, ['ab']]) {
+      const { handler, token, updates, deltas } = loadSongs();
+      const res = await call(handler, token, { method: 'PUT', body: { publicUrl: NEW_URL, waveform: bad } });
+      assertEq(res.statusCode, 400, String(bad));
+      assertEq(updates.length, 0);
+      assertEq(deltas, []);
+    }
+  });
+
+  await testAsync('a playback confirm is its own kind, with its own waveform', async () => {
+    const { handler, token, updates } = loadSongs();
+    const res = await call(handler, token, { method: 'PUT', body: { publicUrl: NEW_URL.replace('/audio/', '/playback/'), waveform: WAVE } }, 'playback');
+    assertEq(res.statusCode, 200);
+    assert(updates[0].values.includes(WAVE), 'waveform not written');
+    assert(updates[0].values.includes('playback'), 'wrong kind: ' + JSON.stringify(updates[0].values));
+    assert(!updates[0].values.includes('listen'), 'the listen row was touched');
+  });
+
+  await testAsync('a sheet confirm takes no waveform', async () => {
+    const { handler, token, updates } = loadSongs();
+    const res = await call(handler, token, { method: 'PUT', body: { publicUrl: NEW_URL.replace('/audio/', '/sheet/'), waveform: WAVE } }, 'sheet');
+    assert(!updates.length || !updates[0].values.includes(WAVE), 'waveform written for a sheet');
+    if (updates.length) assert(updates[0].values.includes('pdf'), 'the sheet is the pdf kind');
+    void res;
+  });
+
+  // The waveform is a column of the row, so it goes with it.
+  await testAsync('deleting the playback track removes its row, waveform and all', async () => {
+    const { handler, token, removals } = loadSongs({ storedUrl: OLD_URL.replace('/audio/', '/playback/') });
+    const res = await call(handler, token, { method: 'DELETE' }, 'playback');
+    assertEq(res.statusCode, 200);
+    assertEq(removals.length, 1);
+    assert(removals[0].values.includes('playback'), JSON.stringify(removals[0].values));
+  });
+
+  await testAsync('deleting the listen recording removes its row, waveform and all', async () => {
+    const { handler, token, removals } = loadSongs({ storedUrl: OLD_URL });
+    const res = await call(handler, token, deleteAudio);
+    assertEq(res.statusCode, 200);
+    assertEq(removals.length, 1);
+    assert(removals[0].values.includes('listen'), JSON.stringify(removals[0].values));
   });
 
   // Two confirms at once both read the old counter; only the database can tell

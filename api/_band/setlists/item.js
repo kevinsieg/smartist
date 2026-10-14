@@ -40,7 +40,7 @@ module.exports = wrap(async function handler(req, res) {
                      'has_lyrics', EXISTS (SELECT 1 FROM song_lyrics l WHERE l.song_id = songs.id))
                    ORDER BY ss.position)
             FROM setlist_songs ss
-            JOIN songs ON ss.song_id = songs.id
+            JOIN songs_with_media songs ON ss.song_id = songs.id
             WHERE ss.setlist_id = s.id AND songs.artist_id = s.artist_id
           ), '[]') AS songs
         FROM setlists s

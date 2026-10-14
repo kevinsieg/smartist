@@ -226,6 +226,9 @@ npm run test:all             # unit + API + browser smoke tests on the local sta
 `npm run dev:up` is the same stack CI runs (see `tests/README.md`) and never
 touches a remote database. It prints its sign-in: open
 `http://localhost:3000/login` with `dev@example.test` / `local-password`.
+Uploads (song audio, sheets, photos) need no R2 there: the server keeps them in
+`$TMPDIR/smartist-local/storage` and serves them back under `/__storage` (`LOCAL_STORAGE_DIR`,
+set only by `scripts/dev_up.sh`).
 
 To run against the Neon dev database instead:
 

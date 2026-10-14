@@ -21,12 +21,11 @@ function _openSongPanelContent(item, panelEl) {
   var sidEsc      = escHtml(sid);
   var audioRe     = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
 
-  var _spd = '<div class="audio-speed-btns"><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.7)">0.7×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.8)">0.8×</button><button type="button" aria-pressed="false" data-onclick="_setAudioSpeed(this,0.9)">0.9×</button></div>';
   var audioHtml = '';
   if (listenUrl  && audioRe.test(listenUrl))
-    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(listenUrl)) + '"></audio>' + _spd + '</div>';
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9654; ' + t('songs.listen') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(listenUrl)) + '"></audio></div>';
   if (playbackUrl && audioRe.test(playbackUrl))
-    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(playbackUrl)) + '"></audio>' + _spd + '</div>';
+    audioHtml += '<div class="vsp-audio-block"><div class="vsp-audio-label">&#9655; ' + t('songs.playback') + '</div><audio class="vsp-audio" controls src="' + escHtml(safeUrl(playbackUrl)) + '"></audio></div>';
 
   var actions = '';
   if (!_viewMode) actions += '<button class="btn icon-btn" data-tooltip="' + t('songs.editSong') + '" aria-label="' + t('songs.editSong') + '" data-onclick="_openSongEditInPanel(' + onArg(sid) + ')">' +
@@ -119,6 +118,17 @@ function _openSongPanelContent(item, panelEl) {
     (isrc   ? _vspCell('ISRC',                  escHtml(String(isrc)))   : '');
   var rightsHtml = rightsCells ? _vspSection(t('songs.sectionRights'), rightsCells) : '';
 
+  // What is filled in, as a plain listing; the voices join once the song's details are in.
+  var hasListen = !!listenUrl, hasPlayback = !!playbackUrl;
+  var contentCells =
+    (hasListen   ? _vspCell(t('songs.listen'),   '&#10003;') : '') +
+    (hasPlayback ? _vspCell(t('songs.playback'), '&#10003;') : '') +
+    (sheetUrl    ? _vspCell(t('songs.sheet'),    '&#10003;') : '') +
+    (hasLyrics   ? _vspCell(t('songs.lyricsTitle'), '&#10003;') : '') +
+    (song.has_arrangement ? _vspCell(t('songs.colTitleArrangement'), '&#10003;') : '');
+  var contentsHtml = '<div id="vsp-contents-' + escHtml(sid) + '"' + (contentCells ? '' : ' hidden') + '>' +
+    _vspSection(t('songs.sectionContents'), contentCells) + '</div>';
+
   var lyricsHtml = hasLyrics
     ? '<div class="vsp-section-label">' + t('songs.lyricsTitle') + '</div><div class="vsp-lyrics" id="vsp-lyrics-' + escHtml(sid) + '">' +
         (song.lyrics ? escHtml(song.lyrics) : '<span class="skeleton-line" style="width:9rem;height:0.65rem;display:inline-block;"></span>') + '</div>'
@@ -133,7 +143,7 @@ function _openSongPanelContent(item, panelEl) {
       '<button class="vsp-close" data-onclick="_songsDeselect()" aria-label="' + t('songs.close') + '">&#215;</button>' +
     '</div>' +
     (audioHtml || actions ? audioHtml + '<div class="vsp-actions">' + actions + '</div>' : '') +
-    perfHtml + aboutHtml + statsHtml + rightsHtml +
+    contentsHtml + perfHtml + aboutHtml + statsHtml + rightsHtml +
     '<div class="vsp-cell vsp-cell--full" id="vsp-setlist-link"><span class="skeleton-line" style="width:7rem;height:0.65rem;display:inline-block;"></span></div>' +
     lyricsHtml + '</div>';
 
@@ -144,7 +154,20 @@ function _openSongPanelContent(item, panelEl) {
   // (GET /songs/:id), so one request covers them. Lyrics stay cached on the song.
   var needLyrics = hasLyrics && song.lyrics === undefined;
   var needArr    = !_viewMode && song.has_arrangement;
-  var detail = (needLyrics || needArr) ? _fetchSongDetail(song) : null;
+  var detail = _fetchSongDetail(song);
+  detail.then(function(d) {
+    var grid = document.querySelector('#vsp-contents-' + sid + ' .vsp-grid');
+    var voices = melodySummary(d.melodies, melodyInstruments());
+    var wholeSong = melodySongImages(d.melodies).length;
+    if (!grid || (!voices.length && !wholeSong)) return;
+    grid.insertAdjacentHTML('beforeend', (wholeSong ? _vspCell(t('songs.melodyWholeSong'), escHtml(t('songs.voiceImages', { count: wholeSong }))) : '') + voices.map(function(v) {
+      var parts = [];
+      if (v.images) parts.push(t('songs.voiceImages', { count: v.images }));
+      if (v.audio) parts.push(t('songs.voiceRecording'));
+      return _vspCell(escHtml(v.label), escHtml(parts.join(' · ')));
+    }).join(''));
+    grid.closest('[id^="vsp-contents-"]').hidden = false;
+  }).catch(function() {});
   if (needLyrics) {
     detail.then(function() {
       var el = document.getElementById('vsp-lyrics-' + sid);
@@ -316,6 +339,9 @@ function _openSongEditForm(sid, panelEl) {
           (isNew ? '<input type="hidden" data-id="' + id + '" data-key="lyrics" value="">' : '') +
         '</div>' +
       '</details>' +
+      (!isNew ? '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionMelodies') + '</summary>' +
+        '<div class="edit-section-body" id="melodies-body" data-sid="' + id + '"></div>' +
+      '</details>' : '') +
       '<details class="edit-section"><summary class="edit-section-summary">' + t('songs.sectionSongInfo') + '</summary>' +
         '<div class="edit-section-body">' +
           (_isSongFieldHidden('tags') ? '' : _editField(t('songs.fieldTags'),
@@ -365,6 +391,8 @@ function _openSongEditForm(sid, panelEl) {
 
   var titleInput = panelEl.querySelector('input[data-key="title"]');
   if (titleInput) titleInput.focus();
+
+  if (!isNew) melodiesLoad(id);
 
   if (!isNew && song.has_arrangement) {
     var _editArrSid = String(sid);

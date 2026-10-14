@@ -66,6 +66,21 @@ node scripts/plans.js --recount                         # recompute storage_used
 
 ---
 
+## waveforms.js — waveforms of existing recordings
+
+New uploads (Listen, Playback and each voice's own recording) get their waveform
+in the browser. This computes it for the recordings uploaded before that (needs
+`ffmpeg`), so the stage view can draw them.
+
+```bash
+node scripts/waveforms.js --dry-run              # list the recordings without a waveform
+node scripts/waveforms.js                        # compute and store them
+node scripts/waveforms.js --artist <slug> --all  # one band, redo all
+DATABASE_URL=<url> node scripts/waveforms.js --dry-run   # another database, like every script
+```
+
+---
+
 ## demo_reset.js — the public demo band
 
 The demo band lives in the production database next to real bands; every statement is scoped to

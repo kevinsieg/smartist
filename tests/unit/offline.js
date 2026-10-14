@@ -15,7 +15,7 @@ const down = async () => { throw new TypeError('Failed to fetch'); };
 function makeDeps(over) {
   const m = new Map();
   const d = {
-    store: { get: async k => m.get(k), set: async (k, v) => { m.set(k, v); } },
+    store: { get: async k => m.get(k), set: async (k, v) => { m.set(k, v); }, del: async k => { m.delete(k); }, keys: async () => [...m.keys()] },
     now: () => 1000, token: () => null, timeoutMs: 20, cleared: 0, marked: 0,
     clear: async () => { d.cleared++; }, markDown: () => { d.marked++; },
     fetch: async () => ok({ a: 1 }),
@@ -153,6 +153,177 @@ async function run(r) {
     d.fetch = down;
     let err; try { await O.offlineKeep('b', 3, null, d); } catch (e) { err = e; }
     assertEq(err && err.offline, true);
+  });
+
+  const blobRes = { ok: true, status: 200, blob: async () => new Blob(['x']) };
+  const withMelodies = { melodies: [{ sheet_urls: ['https://m/a.jpg', 'https://m/b.jpg'], audio_url: 'https://m/c.mp3' }, { sheet_urls: ['https://m/a.jpg'], audio_url: null }] };
+
+  test('offlineMediaUrls lists every sheet image and recording once', () => {
+    assertEq(O.offlineMediaUrls(withMelodies), ['https://m/a.jpg', 'https://m/b.jpg', 'https://m/c.mp3']);
+    assertEq(O.offlineMediaUrls({}), []);
+    assertEq(O.offlineMediaUrls(null), []);
+  });
+
+  await testAsync('a saved media file comes back as an object URL, only for the user who saved it', async () => {
+    const d = makeDeps({ token: () => tok(7), fetch: async () => blobRes });
+    await O.offlineMediaSave('https://m/c.mp3', d);
+    assert((await O.offlineMediaGet('https://m/c.mp3', d)).startsWith('blob:'), 'expected a blob: url');
+    assertEq(await O.offlineMediaGet('https://m/other.mp3', d), null);
+    const other = makeDeps({ token: () => tok(8), store: d.store });
+    assertEq(await O.offlineMediaGet('https://m/c.mp3', other), null);
+  });
+
+  await testAsync('offlineKeep also saves the melody files of every song, as cors requests', async () => {
+    const modes = [], caches = [];
+    const d = makeDeps({ fetch: async (u, o) => {
+      if (u.startsWith('https://m/')) { modes.push(o && o.mode); caches.push(o && o.cache); return blobRes; }
+      return ok(u.includes('/setlists/') ? { songs: [{ id: 4 }] } : u.includes('/songs/4') ? withMelodies : {});
+    } });
+    const progress = [];
+    const out = await O.offlineKeep('b', 3, (a, b) => progress.push([a, b]), d);
+    assertEq(out, { saved: 5, failed: [] });
+    assertEq(modes, ['cors', 'cors', 'cors']);
+    assertEq(caches, ['reload', 'reload', 'reload'], 'a copy cached by an earlier plain <img>/<audio> load has no CORS headers');
+    assertEq(progress[progress.length - 1], [5, 5]);
+    assert(await d.store.get('media:https://m/b.jpg'), 'media not stored');
+  });
+
+  await testAsync('a melody file that cannot be fetched is reported and the rest is kept', async () => {
+    const d = makeDeps({ fetch: async u => {
+      if (u === 'https://m/b.jpg') throw new TypeError('Failed to fetch');
+      if (u.startsWith('https://m/')) return blobRes;
+      return ok(u.includes('/setlists/') ? { songs: [{ id: 4 }] } : u.includes('/songs/4') ? withMelodies : {});
+    } });
+    const out = await O.offlineKeep('b', 3, null, d);
+    assertEq(out.failed, ['https://m/b.jpg']);
+    assertEq(out.saved, 4);
+  });
+
+  await testAsync('keeping a setlist again does not download files already saved', async () => {
+    let fetched = 0;
+    const d = makeDeps({ fetch: async u => {
+      if (u.startsWith('https://m/')) { fetched++; return blobRes; }
+      return ok(u.includes('/setlists/') ? { songs: [{ id: 4 }] } : u.includes('/songs/4') ? withMelodies : {});
+    } });
+    await O.offlineKeep('b', 3, null, d);
+    assertEq(fetched, 3);
+    const out = await O.offlineKeep('b', 3, null, d);
+    assertEq(fetched, 3);
+    assertEq(out, { saved: 5, failed: [] });
+  });
+
+  // ---- kept setlists: the green/grey icon, prune and re-sync ------------------
+
+  // Setlist 3 holds songs 4 and 5, setlist 6 holds songs 5 and 7. Song 5 has the
+  // melody files; the others none. `world.lists` can change between calls.
+  function world(over) {
+    const w = { lists: { 3: [4, 5], 6: [5, 7] }, gone: {}, down: false, fetched: [] };
+    const d = makeDeps(Object.assign({ fetch: async u => {
+      w.fetched.push(u);
+      if (w.down) throw new TypeError('Failed to fetch');
+      if (u.startsWith('https://m/')) return blobRes;
+      const sl = u.match(/\/setlists\/(\d+)$/);
+      if (sl) return w.gone[sl[1]] ? bad(404) : ok({ songs: (w.lists[sl[1]] || []).map(id => ({ id })) });
+      return ok(u.includes('/songs/5') ? withMelodies : {});
+    } }, over));
+    return Object.assign(w, { d });
+  }
+  const has = async (d, k) => (await d.store.get(k)) !== undefined;
+
+  await testAsync('a kept setlist is recorded for this user only, with what it uses', async () => {
+    const w = world({ token: () => tok(7), now: () => 5000 });
+    assertEq(await O.offlineKept('b', 3, w.d), null);
+    await O.offlineKeep('b', 3, null, w.d);
+    const rec = await O.offlineKept('b', 3, w.d);
+    assertEq(rec.syncedAt, 5000);
+    assert(rec.urls.includes('/api/b/songs/4') && rec.urls.includes('/api/b/setlists/3'), 'urls ' + rec.urls);
+    assertEq(rec.media, ['https://m/a.jpg', 'https://m/b.jpg', 'https://m/c.mp3']);
+    assertEq(await O.offlineKept('b', 3, makeDeps({ token: () => tok(8), store: w.d.store })), null);
+  });
+
+  await testAsync('keeping again prunes what the setlist no longer uses', async () => {
+    const w = world();
+    await O.offlineKeep('b', 3, null, w.d);
+    w.lists[3] = [4];
+    await O.offlineKeep('b', 3, null, w.d);
+    assert(await has(w.d, '/api/b/songs/4'), 'song 4 must stay');
+    assert(!(await has(w.d, '/api/b/songs/5')), 'song 5 is no longer in the setlist');
+    assert(!(await has(w.d, 'media:https://m/a.jpg')), 'its melody files must go with it');
+  });
+
+  await testAsync('what another kept setlist still uses is never pruned', async () => {
+    const w = world();
+    await O.offlineKeep('b', 3, null, w.d);
+    await O.offlineKeep('b', 6, null, w.d);
+    w.lists[3] = [4];
+    await O.offlineKeep('b', 3, null, w.d);
+    assert(await has(w.d, '/api/b/songs/5'), 'song 5 is in setlist 6');
+    assert(await has(w.d, 'media:https://m/c.mp3'), 'its recording too');
+  });
+
+  await testAsync('removing a kept setlist deletes only what no other one uses', async () => {
+    const w = world();
+    await O.offlineKeep('b', 3, null, w.d);
+    await O.offlineKeep('b', 6, null, w.d);
+    await O.offlineRelease('b', 3, w.d);
+    assertEq(await O.offlineKept('b', 3, w.d), null);
+    assert(!(await has(w.d, '/api/b/setlists/3')) && !(await has(w.d, '/api/b/songs/4')), 'only setlist 3 used these');
+    assert(await has(w.d, '/api/b/songs/5') && await has(w.d, '/api/b/songs/7'), 'setlist 6 still needs these');
+    assert(await has(w.d, '/api/config?light=1&slug=b'), 'the config is shared');
+    await O.offlineRelease('b', 6, w.d);
+    assert(!(await has(w.d, 'media:https://m/a.jpg')) && !(await has(w.d, '/api/config?light=1&slug=b')), 'nothing left uses these');
+  });
+
+  await testAsync('removing what was never kept does nothing', async () => {
+    const w = world();
+    await O.offlineKeep('b', 3, null, w.d);
+    await O.offlineRelease('b', 99, w.d);
+    assert(await has(w.d, '/api/b/songs/4'));
+  });
+
+  await testAsync('re-sync refreshes stale kept setlists only, and prunes', async () => {
+    let t = 0;
+    const w = world({ now: () => t });
+    await O.offlineKeep('b', 3, null, w.d);
+    t = 10 * 60 * 1000;
+    w.fetched.length = 0;
+    assertEq(await O.offlineSyncKept(w.d), 0);
+    assertEq(w.fetched, [], 'a copy synced ten minutes ago is fresh');
+    t = 2 * 60 * 60 * 1000;
+    w.lists[3] = [4];
+    assertEq(await O.offlineSyncKept(w.d), 1);
+    assert(!(await has(w.d, '/api/b/songs/5')), 'pruned by the re-sync');
+    assertEq((await O.offlineKept('b', 3, w.d)).syncedAt, t);
+  });
+
+  await testAsync('re-sync with no connection changes nothing and does not throw', async () => {
+    let t = 0;
+    const w = world({ now: () => t });
+    await O.offlineKeep('b', 3, null, w.d);
+    t = 3 * 60 * 60 * 1000; w.down = true;
+    assertEq(await O.offlineSyncKept(w.d), 0);
+    assert(await has(w.d, '/api/b/songs/5'));
+    assertEq((await O.offlineKept('b', 3, w.d)).syncedAt, 0);
+  });
+
+  await testAsync('a kept setlist that was deleted on the server is removed on re-sync', async () => {
+    let t = 0;
+    const w = world({ now: () => t });
+    await O.offlineKeep('b', 3, null, w.d);
+    t = 3 * 60 * 60 * 1000; w.gone[3] = true;
+    await O.offlineSyncKept(w.d);
+    assertEq(await O.offlineKept('b', 3, w.d), null);
+    assert(!(await has(w.d, '/api/b/songs/4')), 'its copies go with it');
+  });
+
+  await testAsync('re-sync leaves another user\'s kept setlists alone', async () => {
+    let t = 0;
+    const w = world({ now: () => t, token: () => tok(1) });
+    await O.offlineKeep('b', 3, null, w.d);
+    t = 3 * 60 * 60 * 1000;
+    w.fetched.length = 0;
+    assertEq(await O.offlineSyncKept(makeDeps({ token: () => tok(2), store: w.d.store, now: () => t, fetch: w.d.fetch })), 0);
+    assertEq(w.fetched, []);
   });
 }
 

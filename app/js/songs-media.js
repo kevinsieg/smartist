@@ -39,6 +39,23 @@ async function _panelUploadHandler(input, sid, mediaType) {
   }
 }
 
+// The recording's loudness profile for the stage view, decoded once here so no
+// phone has to. null when the browser cannot decode the file: the song then
+// simply has no waveform.
+async function _songWaveform(file) {
+  var Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  var ctx = new Ctx();
+  try {
+    var buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    return waveformEncode(waveformPeaks(buf.getChannelData(0)));
+  } catch (e) {
+    return null;
+  } finally {
+    if (ctx.close) ctx.close().catch(function() {});
+  }
+}
+
 // Shared presign → PUT → confirm pipeline for all media types.
 // Returns publicUrl on success. Throws on failure; err.message is one of:
 //   'auth'    — session expired (requireLogin already called; caller should bail silently)
@@ -56,8 +73,16 @@ async function _uploadSongMedia(sid, type, file) {
   var put = await fetch(json.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
   if (!put.ok) throw new Error('storage');
 
-  var confirm = await apiFetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, 'PUT', { publicUrl: json.publicUrl });
+  var body = { publicUrl: json.publicUrl };
+  var waveKey = type === 'audio' ? 'waveform' : type === 'playback' ? 'playbackWaveform' : null;
+  if (waveKey) body.waveform = await _songWaveform(file);
+  var confirm = await apiFetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, 'PUT', body);
   if (!confirm.ok) throw new Error('confirm');
+  if (waveKey) {
+    // Keep the page's copy in step, so a later save cannot write the old waveform back.
+    var own = songs.find(function(x) { return String(x.id) === String(sid); });
+    if (own) { own.extra = Object.assign({}, own.extra); if (body.waveform) own.extra[waveKey] = body.waveform; else delete own.extra[waveKey]; }
+  }
 
   // Media URLs live in songs.extra, which the cached config payload carries.
   invalidateConfigCache();
@@ -201,7 +226,7 @@ async function confirmDeleteAudio() {
 
     // Update local cache and swap ▶ back to ↑ in the table cell
     const song = songs.find(s => String(s.id) === String(sid));
-    if (song?.extra) delete song.extra.listenUrl;
+    if (song?.extra) { delete song.extra.listenUrl; delete song.extra.waveform; }
     const td = document.querySelector(`#row-${sid} .listen-cell`);
     if (td) {
       td.querySelector('input[type="text"]').value = '';
@@ -566,7 +591,7 @@ async function confirmDeletePlayback() {
     invalidateConfigCache();
 
     const song = songs.find(s => String(s.id) === String(sid));
-    if (song?.extra) delete song.extra.playbackUrl;
+    if (song?.extra) { delete song.extra.playbackUrl; delete song.extra.playbackWaveform; }
     const td = document.querySelector(`#row-${sid} .playback-cell`);
     if (td) {
       td.querySelector('input[type="text"]').value = '';

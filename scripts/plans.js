@@ -145,14 +145,12 @@ async function recount() {
   // Compute first (no writes), so a guard can refuse to clobber on failure.
   const results = [];
   for (const a of artists) {
-    const songs = await sql`SELECT extra FROM songs WHERE artist_id = ${a.id} AND NOT deleted`;
-    const urlList = [];
-    for (const s of songs) {
-      for (const k of ['listenUrl', 'sheetUrl', 'playbackUrl']) {
-        const url = s.extra && s.extra[k];
-        if (url) urlList.push(url);
-      }
-    }
+    // Every song file and link is a song_media row.
+    const media = await sql`
+      SELECT m.url FROM song_media m
+      JOIN songs s ON s.id = m.song_id AND s.artist_id = m.artist_id
+      WHERE m.artist_id = ${a.id} AND NOT s.deleted`;
+    const urlList = media.map(m => m.url);
     // Concurrent HEADs — one request at a time meant minutes for a large catalogue.
     const lengths = await mapLimit(urlList, 8, headContentLength);
     let total = 0, missing = 0;

@@ -22,7 +22,13 @@ async function main() {
   }
   const sql = connect(DATABASE_URL);
   try {
-    const hash = await bcrypt.hash(ARTIST_PASSWORD, 10);
+    // A new hash signs everyone out (sessions are tied to it): keep the stored
+    // one while it still matches, so repeated runs leave a browser logged in.
+    const [kept] = await sql`
+      SELECT u.password_hash FROM users u JOIN artists a ON a.id = u.artist_id
+      WHERE a.slug = ${ARTIST_SLUG} AND u.email = ${ARTIST_EMAIL.toLowerCase()}`;
+    const hash = kept && kept.password_hash && await bcrypt.compare(ARTIST_PASSWORD, kept.password_hash)
+      ? kept.password_hash : await bcrypt.hash(ARTIST_PASSWORD, 10);
     const [band] = await sql`
       INSERT INTO artists (slug, name, config) VALUES (${ARTIST_SLUG}, 'CI Band', ${sql.json({ plan: 'pro' })})
       ON CONFLICT (slug) DO UPDATE SET config = artists.config || ${sql.json({ plan: 'pro' })}

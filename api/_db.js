@@ -102,6 +102,7 @@ async function purgeDeletedSongs(sql, artistId, { always = false } = {}) {
         FROM songs s
         WHERE s.artist_id = ${artistId} AND s.deleted
           AND NOT (s.extra ?| ARRAY['listenUrl', 'sheetUrl', 'playbackUrl'])
+          AND NOT EXISTS (SELECT 1 FROM song_media m WHERE m.song_id = s.id)
           AND (SELECT max(l.changed_at) FROM song_logs l WHERE l.song_id = s.id)
               < now() - make_interval(days => ${PURGE_AFTER_DAYS})
       ), logs AS (

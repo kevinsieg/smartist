@@ -13,6 +13,9 @@ var OFFLINE_TIMEOUT_MS = 8000;
 // for 30 s, instead of the full timeout each.
 var OFFLINE_FAST_TIMEOUT_MS = 1500;
 var OFFLINE_FAIL_WINDOW_MS = 30000;
+var OFFLINE_MEDIA_TIMEOUT_MS = 180000;
+// A kept setlist is refreshed when it was last synced longer ago than this.
+var OFFLINE_SYNC_MS = 60 * 60 * 1000;
 var _offlineFailAt = null;
 
 // Whose copy is this? The user id inside the session token (the payload is
@@ -58,6 +61,8 @@ function offlineIdbStore() {
   return {
     get: function (k) { return tx('readonly', function (s) { return s.get(k); }); },
     set: function (k, v) { return tx('readwrite', function (s) { return s.put(v, k); }); },
+    del: function (k) { return tx('readwrite', function (s) { return s.delete(k); }); },
+    keys: function () { return tx('readonly', function (s) { return s.getAllKeys(); }); },
   };
 }
 
@@ -131,7 +136,95 @@ async function offlineFetch(url, headers, over, fresh) {
   return { data: body, savedAt: null, fromCache: false };
 }
 
-// Fetch and save a setlist with the config and every song the stage view needs.
+// Every melody image and recording of one song's details, once each.
+function offlineMediaUrls(song) {
+  var out = [];
+  ((song && song.melodies) || []).forEach(function (m) {
+    (m.sheet_urls || []).concat(m.audio_url ? [m.audio_url] : []).forEach(function (u) {
+      if (u && out.indexOf(u) < 0) out.push(u);
+    });
+  });
+  return out;
+}
+
+// A melody file is kept as a Blob in the same store, under 'media:<url>'. A
+// cors request: an opaque no-cors answer cannot be read back or played. 'reload'
+// skips a copy an earlier plain <img>/<audio> load left in the HTTP cache,
+// which carries no CORS headers.
+async function offlineMediaSave(url, over) {
+  var d = offlineDeps(over);
+  var blob = await offlineWithTimeout(
+    d.fetch(url, { mode: 'cors', cache: 'reload' }).then(function (res) {
+      if (!res.ok) throw offlineHttpError(res.status);
+      return res.blob();
+    }), OFFLINE_MEDIA_TIMEOUT_MS);
+  await offlineWithTimeout(Promise.resolve(d.store.set('media:' + url, { owner: offlineOwner(d.token()), savedAt: d.now(), blob: blob })), d.timeoutMs);
+}
+
+async function offlineMediaHas(url, d) {
+  try {
+    var hit = await offlineWithTimeout(Promise.resolve(d.store.get('media:' + url)), d.timeoutMs);
+    return !!hit && hit.owner === offlineOwner(d.token());
+  } catch (e) { return false; }
+}
+
+// An object URL for the saved file, or null (the caller uses the file's own
+// address then). A copy belongs to the user who saved it.
+async function offlineMediaGet(url, over) {
+  var d = offlineDeps(over);
+  try {
+    var hit = await offlineWithTimeout(Promise.resolve(d.store.get('media:' + url)), d.timeoutMs);
+    if (hit && hit.owner === offlineOwner(d.token())) return URL.createObjectURL(hit.blob);
+  } catch (e) { /* no saved copy */ }
+  return null;
+}
+
+// A setlist the user chose to keep: its record lists every saved entry it uses
+// (api answers by url, melody files as 'media:<url>'), so a refresh can prune
+// what the setlist no longer needs and a removal can spare what another kept
+// setlist still uses. Records belong to the user who kept them.
+function offlineKeptKey(slug, setlistId) { return 'kept:' + slug + ':' + Number(setlistId); }
+
+async function offlineKept(slug, setlistId, over) {
+  var d = offlineDeps(over);
+  try {
+    var rec = await offlineWithTimeout(Promise.resolve(d.store.get(offlineKeptKey(slug, setlistId))), d.timeoutMs);
+    return rec && rec.owner === offlineOwner(d.token()) ? rec : null;
+  } catch (e) { return null; }
+}
+
+async function offlineKeptAll(d) {
+  var owner = offlineOwner(d.token());
+  var out = [];
+  try {
+    var keys = await offlineWithTimeout(Promise.resolve(d.store.keys()), d.timeoutMs);
+    for (var i = 0; i < keys.length; i++) {
+      if (String(keys[i]).indexOf('kept:') !== 0) continue;
+      var rec = await offlineWithTimeout(Promise.resolve(d.store.get(keys[i])), d.timeoutMs);
+      if (rec && rec.owner === owner) out.push(rec);
+    }
+  } catch (e) { /* storage unavailable: nothing is known to be kept */ }
+  return out;
+}
+
+function offlineEntries(rec) {
+  return rec.urls.concat(rec.media.map(function (u) { return 'media:' + u; }));
+}
+
+// Deletes the entries of `rec` that no record in `stillKept` uses.
+async function offlinePrune(d, rec, stillKept) {
+  var used = {};
+  stillKept.forEach(function (r) { offlineEntries(r).forEach(function (e) { used[e] = true; }); });
+  var gone = offlineEntries(rec).filter(function (e) { return !used[e]; });
+  for (var i = 0; i < gone.length; i++) {
+    try { await offlineWithTimeout(Promise.resolve(d.store.del(gone[i])), d.timeoutMs); } catch (e) { /* left behind */ }
+  }
+}
+
+// Fetch and save a setlist with the config and every song the stage view needs,
+// then the melody files of those songs (files are never replaced: their address
+// carries a unique id, so one already saved is skipped). Keeping a setlist again
+// refreshes it and drops the copies it no longer uses.
 async function offlineKeep(slug, setlistId, onProgress, over) {
   var d = offlineDeps(over);
   var h = offlineHeaders(d);
@@ -140,15 +233,71 @@ async function offlineKeep(slug, setlistId, onProgress, over) {
   var ids = (sl.data.songs || []).map(function (s) { return Number(s.id); }).filter(Boolean);
   var urls = ['/api/config?light=1&slug=' + encodeURIComponent(slug)]
     .concat(ids.map(function (id) { return base + '/songs/' + id; }));
-  var failed = [], done = 0;
+  var failed = [], done = 0, media = [];
   for (var i = 0; i < urls.length; i++) {
-    try { await offlineFetch(urls[i], h, d, true); } catch (e) { failed.push(urls[i]); }
+    try {
+      var res = await offlineFetch(urls[i], h, d, true);
+      offlineMediaUrls(res.data).forEach(function (u) { if (media.indexOf(u) < 0) media.push(u); });
+    } catch (e) { failed.push(urls[i]); }
     done++;
     if (onProgress) onProgress(done, urls.length);
   }
-  return { saved: urls.length - failed.length, failed: failed };
+  var total = urls.length + media.length;
+  for (var j = 0; j < media.length; j++) {
+    try { if (!(await offlineMediaHas(media[j], d))) await offlineMediaSave(media[j], d); } catch (e) { failed.push(media[j]); }
+    done++;
+    if (onProgress) onProgress(done, total);
+  }
+  try {
+    var prev = await offlineKept(slug, setlistId, d);
+    var rec = {
+      owner: offlineOwner(d.token()), slug: slug, id: Number(setlistId),
+      savedAt: prev ? prev.savedAt : d.now(), syncedAt: d.now(),
+      urls: [base + '/setlists/' + Number(setlistId)].concat(urls), media: media,
+    };
+    await offlineWithTimeout(Promise.resolve(d.store.set(offlineKeptKey(slug, setlistId), rec)), d.timeoutMs);
+    if (prev) {
+      var others = (await offlineKeptAll(d)).filter(function (r) { return !(r.slug === slug && r.id === rec.id); });
+      await offlinePrune(d, prev, others.concat([rec]));
+    }
+  } catch (e) { /* storage unavailable: the copies exist, the setlist is just not marked */ }
+  return { saved: total - failed.length, failed: failed };
+}
+
+// Stop keeping a setlist: its copies go, except what another kept setlist uses.
+async function offlineRelease(slug, setlistId, over) {
+  var d = offlineDeps(over);
+  var rec = await offlineKept(slug, setlistId, d);
+  if (!rec) return;
+  await offlineWithTimeout(Promise.resolve(d.store.del(offlineKeptKey(slug, setlistId))), d.timeoutMs);
+  await offlinePrune(d, rec, await offlineKeptAll(d));
+}
+
+// Refresh the kept setlists that were last synced more than OFFLINE_SYNC_MS ago.
+// No connection: nothing changes. A setlist deleted on the server is released.
+// Returns how many were refreshed.
+async function offlineSyncKept(over) {
+  var d = offlineDeps(over);
+  var recs = await offlineKeptAll(d);
+  var n = 0;
+  for (var i = 0; i < recs.length; i++) {
+    if (d.now() - recs[i].syncedAt < OFFLINE_SYNC_MS) continue;
+    try { await offlineKeep(recs[i].slug, recs[i].id, null, d); n++; }
+    catch (e) { if (e && e.status === 404) await offlineRelease(recs[i].slug, recs[i].id, d); }
+  }
+  return n;
+}
+
+// Refresh when the connection returns and when a page opens online.
+if (typeof window !== 'undefined' && window.addEventListener && !window._offlineSyncWired) {
+  window._offlineSyncWired = true;
+  var _offlineSyncRun = function () {
+    if (navigator.onLine !== false) offlineSyncKept().catch(function () { /* tried again next time */ });
+  };
+  window.addEventListener('online', _offlineSyncRun);
+  setTimeout(_offlineSyncRun, 4000);
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { offlineOwner: offlineOwner, offlineFetch: offlineFetch, offlineKeep: offlineKeep };
+  module.exports = { offlineOwner: offlineOwner, offlineFetch: offlineFetch, offlineKeep: offlineKeep, offlineMediaUrls: offlineMediaUrls, offlineMediaSave: offlineMediaSave, offlineMediaGet: offlineMediaGet, offlineKept: offlineKept, offlineRelease: offlineRelease, offlineSyncKept: offlineSyncKept };
 }

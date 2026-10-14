@@ -184,7 +184,7 @@ async function run(r) {
       text.startsWith('SELECT s.*, g.title AS gig_name') ? [{ id: 3 }] : []);
     const res = mockRes();
     await handler({ method: 'GET', url: '/api/test/setlists/3', query: { path: ['3'] }, headers: {} }, res);
-    const q = sql.calls.find(c => c.text.includes('FROM setlist_songs ss JOIN songs'));
+    const q = sql.calls.find(c => c.text.includes('FROM setlist_songs ss JOIN songs_with_media songs'));
     assert(q && q.text.includes('songs.artist_id ='), `song join is not scoped: ${q && q.text}`);
   });
 
@@ -210,7 +210,7 @@ async function run(r) {
 
   const stored = { id: 10, title: 'Song', extra: { listenUrl: 'https://media.example.test/audio/1/a.mp3' } };
   // The PATCH batch is one WITH … UPDATE … RETURNING statement.
-  const songRoute = text => (text.startsWith('SELECT s.*') && text.includes('FROM songs s') ? [stored] : text.startsWith('WITH u AS') ? [stored] : []);
+  const songRoute = text => (text.startsWith('SELECT s.*') && text.includes('FROM songs_with_media s') ? [stored] : text.startsWith('WITH u AS') ? [stored] : []);
 
   for (const [label, extra, ok] of [
     ['a javascript: sheet link is refused', { sheetUrl: 'javascript:alert(1)' }, false],

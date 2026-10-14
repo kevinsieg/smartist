@@ -78,6 +78,12 @@ async function run(r) {
     assert(/DELETE FROM song_logs/.test(calls[0].text), 'their history goes too');
   });
 
+  await testAsync('purge keeps a deleted song that still has media (their files)', async () => {
+    const { sql, calls } = fakeSql();
+    await purgeDeletedSongs(sql, 7, { always: true });
+    assert(/NOT EXISTS \(SELECT 1 FROM song_media m WHERE m\.song_id = s\.id\)/.test(calls[0].text), 'songs with media stay');
+  });
+
   await testAsync('a failed trim never fails the request', async () => {
     const { sql } = fakeSql(true);
     const error = console.error;
