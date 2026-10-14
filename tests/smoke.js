@@ -256,14 +256,14 @@ async function main() {
     for (const [href, file] of [['songs', 'songs'], ['setlist?view=history', 'setlist'], ['gigs', 'gigs'], ['songs', 'songs']]) {
       await page.click(`.nav-links a[href="/${SLUG}/${href}"]`);
       await page.waitForURL(`**/${SLUG}/${href}`, { timeout: 10000 });
+      // The address changes before the page's scripts run: the highlight comes once they are in.
+      try {
+        await page.waitForFunction(h => document.querySelector(`.nav-links a[href="${h}"]`)?.getAttribute('aria-current') === 'page', `/${SLUG}/${href}`, { timeout: 10000 });
+      } catch { throw new Error(`nav link ${href} not marked as the current page`); }
       await settle(page);
       const loaded = await page.evaluate(f =>
         [...document.querySelectorAll('script[src]')].some(s => s.src.includes(`/app/js/${f}.js`)), file);
       if (!loaded) throw new Error(`${file}.js not loaded after navigating to ${href}`);
-      // The address changes before the page's scripts run: the highlight follows once they are in.
-      try {
-        await page.waitForFunction(h => document.querySelector(`.nav-links a[href="${h}"]`)?.getAttribute('aria-current') === 'page', `/${SLUG}/${href}`, { timeout: 10000 });
-      } catch { throw new Error(`nav link ${href} not marked as the current page`); }
       assertClean(log.take(), `SPA → ${href}`);
     }
   });
