@@ -23,7 +23,7 @@
 'use strict';
 
 const lib        = require('./_lib');
-
+const { splitLinks, setSongLinks } = require('../api/_domain/media');
 lib.loadEnv();
 
 // ── Print helpers ──────────────────────────────────────────────────────────
@@ -1424,7 +1424,9 @@ async function run() {
   const songRows = [];
   for (const s of SONGS) {
     // Lyrics and language are columns now (song_lyrics, songs.language), not extra keys.
-    const { lyrics = null, language = null, ...extra } = s.extra ?? {};
+    const { lyrics = null, language = null, ...withLinks } = s.extra ?? {};
+    // The listen, playback and sheet links are song_media rows, not extra keys.
+    const { rest: extra, links } = splitLinks(withLinks);
     const [row] = await sql`
       INSERT INTO songs (artist_id, title, active, heart, key, genre, energy, time_signature,
                          length_min, interpret, reference_interpret, comment, language, extra)
@@ -1437,6 +1439,7 @@ async function run() {
     if (lyrics) {
       await sql`INSERT INTO song_lyrics (song_id, artist_id, lyrics) VALUES (${row.id}, ${artist.id}, ${lyrics})`;
     }
+    await setSongLinks(sql, artist.id, row.id, links);
     songRows.push(row);
     ok(`  ${row.active ? '' : D('[inactive] ')}${row.title}`);
   }

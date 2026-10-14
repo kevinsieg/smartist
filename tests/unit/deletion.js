@@ -93,11 +93,11 @@ async function run(r) {
 
   console.log(B('\ncollectR2Urls'));
 
-  function fakeMediaSql({ songs = [], gigs = [], artists = [], melodies = [] }) {
+  function fakeMediaSql({ songs = [], gigs = [], artists = [], media = [] }) {
     return (strings, ...values) => {
       const text = strings.join('?');
       const ids  = values[0] || [];
-      if (/FROM song_melodies/i.test(text)) return Promise.resolve(melodies.filter(m => ids.includes(m.artist_id)));
+      if (/FROM song_media/i.test(text)) return Promise.resolve(media.filter(m => ids.includes(m.artist_id)));
       if (/FROM songs/i.test(text))   return Promise.resolve(songs.filter(s => ids.includes(s.artist_id)));
       if (/FROM gigs/i.test(text))    return Promise.resolve(gigs.filter(g => ids.includes(g.artist_id)));
       if (/FROM artists/i.test(text)) return Promise.resolve(artists.filter(a => ids.includes(a.id)));
@@ -115,17 +115,18 @@ async function run(r) {
     assertEq(urls.join(','), 'https://r2/audio/a.mp3');
   });
 
-  // A melody's images and recording live in the band's bucket prefixes like
-  // the other song media, but only in song_melodies, not in songs.extra.
-  await testAsync('melody sheets and audio are collected, other bands\' keys are not', async () => {
+  // Every song file (recordings, sheets, a voice's images) is a song_media row.
+  await testAsync('song_media files are collected, other bands\' keys are not', async () => {
     const { collectR2Urls } = require(path.join(__dirname, '../../api/_domain/deletion'));
     const was = process.env.R2_PUBLIC_URL;
     process.env.R2_PUBLIC_URL = 'https://cdn.example.test';
     try {
       const B = 'https://cdn.example.test';
-      const sql = fakeMediaSql({ artists: [{ id: 1, slug: 'band', config: {} }], melodies: [
-        { artist_id: 1, sheet_urls: [`${B}/sheets/1/a.jpg`, `${B}/sheets/2/theirs.jpg`], audio_url: `${B}/audio/1/b.mp3` },
-        { artist_id: 2, sheet_urls: [`${B}/sheets/2/other.jpg`], audio_url: null },
+      const sql = fakeMediaSql({ artists: [{ id: 1, slug: 'band', config: {} }], media: [
+        { artist_id: 1, url: `${B}/sheets/1/a.jpg` },
+        { artist_id: 1, url: `${B}/sheets/2/theirs.jpg` },
+        { artist_id: 1, url: `${B}/audio/1/b.mp3` },
+        { artist_id: 2, url: `${B}/sheets/2/other.jpg` },
       ]});
       const urls = await collectR2Urls([1], sql);
       assertEq([...urls].sort(), [`${B}/audio/1/b.mp3`, `${B}/sheets/1/a.jpg`]);

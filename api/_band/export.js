@@ -10,10 +10,10 @@ module.exports = wrap(async function handler(req, res) {
   const band = await requireAuth(req, res, slug, 'member');
   if (!band) return;
   const sql = getDb();
-  const [songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs, account, members] = await Promise.all([
+  const [songs, song_arrangements, song_media, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs, account, members] = await Promise.all([
     // Lyrics live in their own table; in the CSV they stay a column of songs.
     sql`
-      SELECT s.*, l.lyrics FROM songs s
+      SELECT s.*, l.lyrics FROM songs_with_media s
       LEFT JOIN song_lyrics l ON l.song_id = s.id
       WHERE s.artist_id = ${band.id} ORDER BY s.id
     `,
@@ -21,6 +21,8 @@ module.exports = wrap(async function handler(req, res) {
     // /profile as the last chance before permanent deletion — anything the
     // deletion destroys has to be in here.
     sql`SELECT * FROM song_arrangements WHERE artist_id = ${band.id} ORDER BY song_id, id`,
+    // Every song file and link: recordings, voice recordings, sheets, their waveforms.
+    sql`SELECT * FROM song_media WHERE artist_id = ${band.id} ORDER BY song_id, id`,
     sql`SELECT * FROM gigs WHERE artist_id = ${band.id} ORDER BY id`,
     sql`SELECT * FROM setlists WHERE artist_id = ${band.id} ORDER BY id`,
     sql`
@@ -59,7 +61,7 @@ module.exports = wrap(async function handler(req, res) {
   const safeSlug = String(slug ?? 'artist').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'artist';
   // config carries the band's own settings (displayFields, platforms, logo) —
   // destroyed with the artists row, and not reconstructible from any other table.
-  const tables = { artist: [{ slug: band.slug, name: band.name, config: band.config }], account, members, songs, song_arrangements, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs };
+  const tables = { artist: [{ slug: band.slug, name: band.name, config: band.config }], account, members, songs, song_arrangements, song_media, gigs, setlists, setlist_songs, venues, organizers, gema_works, gema_rightholders, song_logs };
   const files = {};
   for (const [name, all] of Object.entries(tables)) {
     // The CSVs drop the `deleted` column, so soft-deleted rows would read as live.

@@ -38,6 +38,7 @@ const suites = [
   require('./unit/song_handlers'),
   require('./unit/song_import'),
   require('./unit/melodies'),
+  require('./unit/media'),
   require('./unit/melody_handlers'),
   require('./unit/melody_resize'),
   require('./unit/melody_pick'),

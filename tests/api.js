@@ -1451,6 +1451,29 @@ async function testLyricsLifecycle(slug, token, songId) {
     assert(!song.extra?.language, 'language must not be stored in extra');
   });
 
+  // The link fields live in song_media; the API keeps answering them in extra.
+  await test('PATCH /songs saves a link in song_media and every read answers it in extra', async () => {
+    const link = 'https://soundcloud.example.test/track-1';
+    const { res, json } = await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { listenUrl: link, capo: 3 } }], { token });
+    assertStatus(res, json, 200);
+    assert(json.rows?.[0]?.extra?.listenUrl === link, 'the PATCH answer: ' + JSON.stringify(json.rows?.[0]?.extra));
+    const { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
+    assert(song.extra?.listenUrl === link && song.extra?.capo === 3, 'detail: ' + JSON.stringify(song.extra));
+    const { json: list } = await GET(`/api/${slug}/songs`, AUTH);
+    assert((list.rows ?? list).find(r => r.id === songId)?.extra?.listenUrl === link, 'list');
+  });
+
+  await test('saving the same link again keeps it, and an empty one removes it', async () => {
+    const link = 'https://soundcloud.example.test/track-1';
+    await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { listenUrl: link } }], { token });
+    let { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
+    assert(song.extra?.listenUrl === link, 'same link saved twice');
+    await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { listenUrl: '' } }], { token });
+    ({ json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH));
+    assert(!song.extra?.listenUrl, 'link not removed: ' + JSON.stringify(song.extra));
+    assert(song.extra?.capo === 3, 'other extra keys must stay');
+  });
+
   await test('PATCH /songs with language inside extra → row rejected, nothing stored', async () => {
     const { res, json } = await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { language: 'DE' } }], { token });
     assertStatus(res, json, 200);

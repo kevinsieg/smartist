@@ -11,6 +11,7 @@ const { lockSongLimit } = require('../../_domain/song_import');
 const { MSG } = require('../../_domain/http');
 const { gigColumns, gigJoins } = require('../../_domain/setlists');
 const melodies = require('./melodies');
+const { withMedia } = require('../../_domain/media');
 
 // Song sub-resources: media, lyrics, arrangements, GEMA, history.
 
@@ -292,7 +293,7 @@ module.exports = wrap(async function handler(req, res) {
         SELECT room.is_full AS _limit_full, s.* FROM room LEFT JOIN s ON true
       `;
     });
-    if (restored.id != null) return res.status(201).json(restored);
+    if (restored.id != null) return res.status(201).json((await withMedia(sql, [restored]))[0]);
     if (full) return res.status(402).json({ error: 'Song limit reached', code: 'song_limit', limit: max });
 
     // Nothing came back: the song is live, or there is no deleted row. A

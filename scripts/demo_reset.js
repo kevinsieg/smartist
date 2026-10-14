@@ -60,6 +60,8 @@ if (!process.env.DATABASE_URL) { err('DATABASE_URL is not set.'); process.exit(1
  */
 const TABLES = [
   { name: 'songs',             scope: 'artist', order: 'id' },
+  // Every song file and link; a snapshot from before song_media has none (see runRestore).
+  { name: 'song_media',        scope: 'artist', order: 'id' },
   // Keyed by song_id, no serial id of its own.
   { name: 'song_lyrics',       scope: 'artist', order: 'song_id', serialId: false },
   { name: 'venues',            scope: 'artist', order: 'id' },
@@ -152,6 +154,16 @@ async function runRestore(sql, artist) {
       if (table.serialId !== false) {
         await tx.unsafe(`SELECT setval(pg_get_serial_sequence('${table.name}', 'id'),
                          GREATEST((SELECT COALESCE(MAX(id), 1) FROM ${table.name}), 1))`);
+      }
+    }
+    // An older snapshot keeps the media links in songs.extra: copy them over.
+    if (!seed.tables.song_media && await tableExists(tx, 'song_media')) {
+      for (const [kind, key, wave] of [['listen', 'listenUrl', 'waveform'], ['playback', 'playbackUrl', 'playbackWaveform'], ['pdf', 'sheetUrl', null]]) {
+        await tx`
+          INSERT INTO song_media (song_id, artist_id, kind, url, waveform)
+          SELECT id, artist_id, ${kind}::text, extra->>${key}::text, ${wave ? tx`NULLIF(extra->>${wave}::text, '')` : null}
+          FROM songs WHERE artist_id = ${artist.id} AND COALESCE(extra->>${key}::text, '') <> ''
+          ON CONFLICT DO NOTHING`;
       }
     }
     console.log(`  ${D('removed:')} ${removed}   ${D('restored:')} ${added}`);

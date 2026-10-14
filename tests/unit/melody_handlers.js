@@ -34,7 +34,7 @@ function mockRes() {
 
 // existing — the melody row the lookup finds; upsert — rows the INSERT returns;
 // diag — answer of the "why was nothing written" read.
-function load({ existing, upsert = [{ id: 9 }], diag = { song: true, n: 1, imgs: 1 }, removed = [{ id: 9 }], dropped = null, deleteOk = true } = {}) {
+function load({ existing, clash = 0, upsert = [{ id: 9 }], diag = { song: true, n: 1, imgs: 1 }, removed = [{ id: 9 }], dropped = null, deleteOk = true } = {}) {
   process.env.APP_SECRET    = SECRET;
   process.env.R2_PUBLIC_URL = BASE;
 
@@ -45,13 +45,31 @@ function load({ existing, upsert = [{ id: 9 }], diag = { song: true, n: 1, imgs:
   const sql = async (strings, ...values) => {
     const text = strings.join(' ').replace(/\s+/g, ' ');
     if (text.includes('JOIN users u2')) return [{ ...ARTIST, member_id: 7, member_role: 'member', member_password_hash: null }];
-    if (text.includes('INSERT INTO song_melodies')) { writes.push({ text, values }); return upsert; }
-    if (text.includes('SET audio_url = NULL')) writes.push({ text, values });
+    if (text.includes('INSERT INTO song_media')) {
+      writes.push({ text, values });
+      if (clash-- > 0) throw Object.assign(new Error('duplicate key'), { code: '23505' });
+      return upsert;
+    }
     if (text.includes('AS imgs')) return [diag];
-    if (text.includes('array_remove')) return removed;
-    if (text.includes('SET audio_url = NULL')) return dropped ? [dropped] : [];
-    if (text.includes('DELETE FROM song_melodies')) return dropped ? [dropped] : [];
-    if (text.includes('FROM song_melodies WHERE song_id')) return existing ? [existing] : [];
+    // removeSheet: one image by url.
+    if (text.includes('DELETE FROM song_media') && text.includes('AND url =')) return removed;
+    // removeAudio: the recording row.
+    if (text.includes('DELETE FROM song_media') && text.includes("kind = 'instrument'") && !text.includes('kind IN')) {
+      writes.push({ text, values });
+      return dropped && dropped.audio_url ? [{ url: dropped.audio_url }] : [];
+    }
+    // removeMelody: every row of the voice.
+    if (text.includes('DELETE FROM song_media')) {
+      return dropped ? [...(dropped.sheet_urls || []), ...(dropped.audio_url ? [dropped.audio_url] : [])].map(url => ({ url })) : [];
+    }
+    // getMelody: the rows of one voice.
+    if (text.includes('FROM song_media') && text.includes('ORDER BY id')) {
+      if (!existing) return [];
+      return [
+        ...(existing.sheet_urls || []).map((url, i) => ({ id: 10 + i, kind: 'sheet', instrument: existing.instrument, url, waveform: null, position: i, updated_at: 't' })),
+        ...(existing.audio_url ? [{ id: 20, kind: 'instrument', instrument: existing.instrument, url: existing.audio_url, waveform: existing.waveform ?? null, position: 0, updated_at: 't' }] : []),
+      ];
+    }
     if (text.includes('FROM songs WHERE id')) return [{ id: 5 }];
     if (text.includes('UPDATE artists') && text.includes('storage_used_bytes')) {
       if (text.includes('<=') && deltas.__full) return [];
@@ -255,10 +273,35 @@ async function run(r) {
     assert(!h.writes[0].values.includes(WAVE), 'waveform written for a sheet');
   });
 
-  await testAsync('removing the audio clears its waveform', async () => {
+  await testAsync('removing the audio removes its row, waveform and all', async () => {
     const h = load({ dropped: { audio_url: AUD_OLD } });
     await call(h, { method: 'DELETE', kind: 'audio' });
-    assert(/waveform = NULL/.test(h.writes[0].text), h.writes[0].text);
+    assertEq(h.writes.length, 1);
+    assert(/DELETE FROM song_media/.test(h.writes[0].text), h.writes[0].text);
+  });
+
+  await testAsync('the whole song is stored with no instrument, a voice with its key', async () => {
+    const song = load();
+    await call(song, { method: 'PUT', instrument: '_song', kind: 'sheet', body: { publicUrl: IMG } });
+    assert(song.writes[0].values.includes(null), 'the whole song takes a null instrument: ' + JSON.stringify(song.writes[0].values));
+    const voice = load();
+    await call(voice, { method: 'PUT', kind: 'sheet', body: { publicUrl: IMG } });
+    assert(voice.writes[0].values.includes('TEN'), JSON.stringify(voice.writes[0].values));
+  });
+
+  await testAsync('two images confirmed at once: the one that loses the page number tries again', async () => {
+    const h = load({ clash: 1 });
+    const res = await call(h, { method: 'PUT', kind: 'sheet', body: { publicUrl: IMG } });
+    assertEq(res.statusCode, 200);
+    assertEq(h.writes.length, 2);
+    assertEq(h.deltas, [100]);
+  });
+
+  await testAsync('a page number that keeps clashing ends in an error, not a loop', async () => {
+    const h = load({ clash: 99 });
+    const res = await call(h, { method: 'PUT', kind: 'sheet', body: { publicUrl: IMG } });
+    assertEq(res.statusCode, 500);
+    assertEq(h.writes.length, 4);
   });
 
   await testAsync('removing the audio deletes the file', async () => {
@@ -284,8 +327,14 @@ async function run(r) {
     assertEq(h.deltas, []);
   });
 
-  await testAsync('removing a melody whose instrument left the settings still works', async () => {
+  await testAsync('removing a melody that holds nothing is 404', async () => {
     const h = load({ dropped: { sheet_urls: [], audio_url: null } });
+    const res = await call(h, { method: 'DELETE' });
+    assertEq(res.statusCode, 404);
+  });
+
+  await testAsync('removing a melody whose instrument left the settings still works', async () => {
+    const h = load({ dropped: { sheet_urls: [IMG], audio_url: null } });
     const res = await call(h, { method: 'DELETE', instrument: 'GONE' });
     assertEq(res.statusCode, 200);
   });

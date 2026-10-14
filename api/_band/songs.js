@@ -12,7 +12,7 @@ const {
 } = require('../_domain/songs');
 const { songImport, SONG_LIMIT_LOCK } = require('../_domain/song_import');
 const { MSG } = require('../_domain/http');
-
+const { splitLinks, setSongLinks, withMedia } = require('../_domain/media');
 const ENERGY_ERROR = 'energy must be a number from 0 to 10';
 
 // What a new song is checked against: the band's genres (spelling) and tags
@@ -179,6 +179,8 @@ module.exports = wrap(async function handler(req, res) {
     if (lyrics.error) return res.status(400).json({ error: lyrics.error });
     const extraErr = extraError(extra);
     if (extraErr) return res.status(400).json({ error: extraErr });
+    // The link fields (listen, playback, sheet) live in song_media, not in extra.
+    const { rest: storedExtra, links } = splitLinks(extra);
 
     // BEGIN, the lock with the band's genres and tags, the insert, COMMIT:
     // with auth, five statements. Song, lyrics and audit entry are one
@@ -190,7 +192,7 @@ module.exports = wrap(async function handler(req, res) {
         SELECT ${band.id}, ${title}, ${toBool(active, true)}, ${toBool(heart, false)}, ${key},
                ${genre}, ${energy}, ${time_signature}, ${bpm}, ${length_min},
                ${interpret}, ${reference_interpret},
-               ${comment}, ${language}, ${extra ?? {}},
+               ${comment}, ${language}, ${storedExtra ?? {}},
                ARRAY(SELECT jsonb_array_elements_text(${sql.json(tags ?? [])}))
         WHERE ${_max}::int IS NULL
            OR (SELECT count(*) FROM songs WHERE artist_id = ${band.id} AND NOT deleted) < ${_max}::int
@@ -210,7 +212,8 @@ module.exports = wrap(async function handler(req, res) {
       return (await insertSong(tx, matchGenre(typedGenre, known.genres), tags))[0] ?? null;
     });
     if (!song) return res.status(402).json({ error: 'Song limit reached', code: 'song_limit', limit: _max });
-    return res.status(201).json(song);
+    if (Object.keys(links).length) await setSongLinks(sql, band.id, song.id, links);
+    return res.status(201).json((await withMedia(sql, [song]))[0]);
   }
 
   // Batch update: [{ id, title, active, key, genre, energy, length_min,
@@ -241,7 +244,7 @@ module.exports = wrap(async function handler(req, res) {
               WHERE artist_id = ${band.id} AND NOT deleted AND genre IS NOT NULL AND genre <> '') AS known_genres,
         ARRAY(SELECT DISTINCT unnest(tags) FROM songs
               WHERE artist_id = ${band.id} AND NOT deleted) AS known_tags
-      FROM songs s
+      FROM songs_with_media s
       WHERE s.artist_id = ${band.id} AND s.id = ANY(${ids}::int[]) AND s.deleted = false
     ` : [];
     const knownGenres = storedRows[0]?.known_genres ?? [];
@@ -249,6 +252,7 @@ module.exports = wrap(async function handler(req, res) {
     const stored = new Map(storedRows.map(({ known_genres: _g, known_tags: _t, ...row }) => [row.id, row]));
 
     const rejected = [];
+    const linkWrites = new Map(); // id → the link fields of that update
     const accepted = new Map(); // id → row; a repeated id keeps the last update
     for (const raw of updates) {
       const update = raw && typeof raw === 'object' ? raw : {};
@@ -300,8 +304,11 @@ module.exports = wrap(async function handler(req, res) {
 
       value.active = toBool(update.active, current.active);
       value.heart  = toBool(update.heart,  current.heart);
-      value.extra  = update.extra ?? {};
+      // The link fields (listen, playback, sheet) live in song_media, not in extra.
+      const { rest, links } = splitLinks(update.extra);
+      value.extra  = rest ?? {};
       accepted.set(songId, value);
+      if (Object.keys(links).length) linkWrites.set(songId, links);
     }
 
     // One statement for the whole batch — the rows, merged extra, one audit
@@ -348,6 +355,8 @@ module.exports = wrap(async function handler(req, res) {
       saved = [...updated];
       const done = new Set(saved.map(r => r.id));
       applied = done.size;
+      await Promise.all([...linkWrites].filter(([id]) => done.has(id)).map(([id, links]) => setSongLinks(sql, band.id, id, links)));
+      saved = await withMedia(sql, saved);
       for (const id of accepted.keys()) if (!done.has(id)) rejected.push({ id, error: 'song not found' });
     }
     // The rows as stored, so the page updates them in place instead of

@@ -22,7 +22,7 @@ artists
   ├─── songs ──────────────────────── song_logs
   │      │                        ├── song_lyrics
   │      │                        ├── song_arrangements
-  │      │                        └── song_melodies
+  │      │                        └── song_media
   │      └─(via setlist_songs)──── setlists ──── gig_id (optional) ──┐
   │                                                                    │
   ├─── venues ◄──── gigs.venue_id ─── gigs ◄──────────────────────────┘
@@ -96,7 +96,7 @@ Song catalogue. Soft-deleted songs (`deleted = true`) are kept so setlist histor
 | `reference_interpret` | text | Artist of a specific reference recording |
 | `comment` | text | Free-form notes |
 | `language` | text | Language code (`EN`, `DE`, …); a linked GEMA work's language shadows it |
-| `extra` | jsonb DEFAULT `{}` | Artist-specific fields (capo, isrc, listenUrl, …) |
+| `extra` | jsonb DEFAULT `{}` | Artist-specific fields (capo, isrc, …). The media keys (`listenUrl`, `playbackUrl`, `sheetUrl`, their waveforms) are rows of `song_media`, answered in `extra` by the view `songs_with_media` |
 | `deleted` | boolean NOT NULL DEFAULT false | Soft-delete flag |
 
 **Indexes:** `songs_list_idx (artist_id, deleted, title)` — serves every song query; `songs_tags_idx` (GIN on `tags`). UNIQUE `songs_id_artist_key (id, artist_id)` is what the band-scoped foreign keys point at (see [FK delete strategies](#fk-delete-strategies)).
@@ -291,21 +291,24 @@ Versioned arrangement charts for a song. Each song can have several named versio
 
 ---
 
-### `song_melodies`
+### `song_media`
 
-Sheet images and an audio recording per song and band instrument. `instrument` is a key from `artists.config.arrangementConfig.instruments` (a key removed from Settings later stays and shows raw). Unique on `(song_id, instrument)`. The reserved key `_song` is the song's own sheet (images only, no recording; not an instrument); at most 20 per song and 8 images per melody (enforced in `api/_band/songs/melodies.js`). Files live in R2 under `sheets/<artist id>/` and `audio/<artist id>/`. They stay when the song is soft-deleted and go with it on a hard delete (FK CASCADE).
+Every additional file or link of a song, one row each: recordings, a band instrument's recording, sheet pages and the whole song's sheet. Files live in R2 under `audio/`, `playback/` and `sheets/` (`<artist id>/<uuid>-<name>`); a `url` can also be a link to another host (SoundCloud, YouTube). They stay when the song is soft-deleted and go with it on a hard delete (FK CASCADE; the files are removed by account deletion and the media handlers).
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | serial PK | |
 | `song_id`, `artist_id` | integer | Same-band FK to `songs (id, artist_id)` CASCADE |
-| `instrument` | text | 1-60 characters |
-| `sheet_urls` | text[] | Ordered image URLs |
-| `audio_url` | text, nullable | |
-| `waveform` | text, nullable | The recording's 100 peaks as 200 hex digits, computed in the browser on upload |
+| `kind` | text CHECK | `listen`, `playback` (the song's recordings), `pdf` (the whole song's sheet, a PDF or any link), `instrument` (a band instrument's recording), `sheet` (one image page) |
+| `instrument` | text, nullable | A key from `artists.config.arrangementConfig.instruments` (a key removed from Settings later stays and shows raw). Required for `instrument`; NULL for `listen`, `playback`, `pdf`; for `sheet`, the voice the page belongs to, NULL for the whole song's images |
+| `url` | text | The file in R2, or a link |
+| `waveform` | text, nullable | A stored recording's 100 peaks as 200 hex digits (kinds `listen`, `playback`, `instrument`), computed in the browser on upload |
+| `position` | integer | Page order among the `sheet` rows of one voice, or of the whole song |
 | `created_at`, `updated_at` | timestamptz | |
 
-**Indexes:** `song_melodies_artist_idx (artist_id, song_id)`, unique `(song_id, instrument)`
+**Unique:** one `listen`, one `playback`, one `pdf` per song; one `instrument` per `(song_id, instrument)`; one `sheet` per `(song_id, COALESCE(instrument, ''), position)`. **Indexes:** `song_media_artist_idx (artist_id, song_id)`. Caps in `api/_band/songs/melodies.js`: 8 images per voice (and for the whole song), 20 voices per song.
+
+**View `songs_with_media`:** `songs` with `extra` rebuilt: the five old keys (`listenUrl`, `waveform`, `playbackUrl`, `playbackWaveform`, `sheetUrl`) are removed and answered from `song_media`. Reads of songs go through it; writes use `songs`. The column list is written out, so a new `songs` column needs the view re-created (`tests/schema-upgrade.js` fails until it is). The old keys stay in already stored `extra` values (live code of the previous release reads them) and are ignored; a later release removes them.
 
 ### `song_logs`
 
@@ -544,13 +547,13 @@ A visitor without a session sees only the keys in `PUBLIC_CONFIG_KEYS` (`api/_co
 
 ### Export all data for one artist
 
-`GET /api/:artist/export` (requires a session; `api/_band/export.js`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `account` (the caller's own memberships across workspaces, no hashes or tokens), `members` (admins only: email, role, joined), `songs` (with a `lyrics` and a `language` column), `song_arrangements`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
+`GET /api/:artist/export` (requires a session; `api/_band/export.js`) returns a ZIP with one CSV per non-empty table: `artist` (slug, name, config), `account` (the caller's own memberships across workspaces, no hashes or tokens), `members` (admins only: email, role, joined), `songs` (with a `lyrics` and a `language` column), `song_arrangements`, `song_media`, `gigs`, `setlists`, `setlist_songs`, `venues`, `organizers`, `gema_works`, `gema_rightholders`, `song_logs`.
 
 Built by `api/_export.js`. Soft-deleted rows are left out. Columns empty in every row are dropped, as are `artist_id` and `deleted`; `id`s stay so the files still join. `songs.extra` is flattened into its own columns (a key clashing with a real column becomes `extra_<key>`); other JSON columns are a JSON string in the cell. UTF-8 with BOM, CRLF, and cells starting with `= + - @` are prefixed with `'` so spreadsheets don't run them.
 
 `subscribers` and `rate_limits` are global (not artist-scoped) and are excluded.
 
-R2 file assets (audio, sheet PDFs, playback) are referenced by URL in `songs.extra` fields (`listenUrl`, `sheetUrl`, `playbackUrl`) but are not included in the download. To export files, download each URL separately or use the Cloudflare R2 dashboard to download the bucket.
+R2 file assets (audio, sheets, playback, voice recordings) are referenced by URL in `song_media` (and in the `songs` CSV as `listenUrl`, `sheetUrl`, `playbackUrl`) but are not included in the download. To export files, download each URL separately or use the Cloudflare R2 dashboard to download the bucket.
 
 ---
 

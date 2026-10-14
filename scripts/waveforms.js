@@ -2,10 +2,10 @@
 /**
  * Smartist — Waveforms
  *
- * Computes the waveform of every uploaded recording that has none: Listen
- * (songs.extra.waveform), Playback (songs.extra.playbackWaveform) and each
- * voice's own recording (song_melodies.waveform). New uploads get theirs in the browser; this is for
- * the recordings uploaded before that existed. Needs ffmpeg on the PATH.
+ * Computes the waveform of every uploaded recording that has none: Listen,
+ * Playback and each voice's own recording (song_media.waveform). New uploads
+ * get theirs in the browser; this is for the recordings uploaded before that
+ * existed. Needs ffmpeg on the PATH.
  *
  * Usage:
  *   node scripts/waveforms.js [--artist <slug>] [--all] [--dry-run] [--yes]
@@ -65,31 +65,17 @@ async function main() {
   try {
     // One entry per recording: where it is, and how to store its waveform.
     const inScope = sql`(${slug}::text IS NULL OR a.slug = ${slug})`;
-    const extraRows = async (urlKey, waveKey, label) => (await sql`
-      SELECT s.id, s.title, s.extra->>${urlKey} AS url, a.slug
-      FROM songs s JOIN artists a ON a.id = s.artist_id
-      WHERE NOT s.deleted AND s.extra ? ${urlKey}
-        AND (${all} OR NOT s.extra ? ${waveKey})
-        AND ${inScope}
-      ORDER BY a.slug, s.id`).map(r => ({
-        what: `${r.slug} #${r.id} ${label} ${r.title}`, url: r.url,
-        save: waveform => sql`UPDATE songs SET extra = extra || ${sql.json({ [waveKey]: waveform })} WHERE id = ${r.id}`,
-      }));
-    const melodyRows = async () => (await sql`
-      SELECT m.id, m.instrument, m.audio_url AS url, s.title, a.slug
-      FROM song_melodies m JOIN songs s ON s.id = m.song_id JOIN artists a ON a.id = m.artist_id
-      WHERE NOT s.deleted AND m.audio_url IS NOT NULL
+    const mediaRows = async () => (await sql`
+      SELECT m.id, m.kind, m.instrument, m.url, s.title, a.slug
+      FROM song_media m JOIN songs s ON s.id = m.song_id JOIN artists a ON a.id = m.artist_id
+      WHERE NOT s.deleted AND m.kind IN ('listen', 'playback', 'instrument')
         AND (${all} OR m.waveform IS NULL)
         AND ${inScope}
       ORDER BY a.slug, m.id`).map(r => ({
-        what: `${r.slug} melody ${r.instrument} ${r.title}`, url: r.url,
-        save: waveform => sql`UPDATE song_melodies SET waveform = ${waveform} WHERE id = ${r.id}`,
+        what: `${r.slug} ${r.kind}${r.instrument ? ' ' + r.instrument : ''} ${r.title}`, url: r.url,
+        save: waveform => sql`UPDATE song_media SET waveform = ${waveform} WHERE id = ${r.id}`,
       }));
-    const rows = [
-      ...await extraRows('listenUrl', 'waveform', 'listen'),
-      ...await extraRows('playbackUrl', 'playbackWaveform', 'playback'),
-      ...await melodyRows(),
-    ];
+    const rows = await mediaRows();
     const todo = rows.filter(r => AUDIO_RE.test(r.url));
     console.log(`  ${todo.length} recording(s) to do (${rows.length - todo.length} link(s) skipped)`);
     let done = 0, failed = 0;

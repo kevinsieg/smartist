@@ -8,10 +8,13 @@ const { unsafeKey } = require('../../_validate');
 const { isOwnMediaUrl } = require('../../_ownership');
 const { presignLimited } = require('../../_ratelimit');
 const { out, reserveStorage, releaseStorage, storageFull, AUDIO_EXTS, AUDIO_TYPES, WAVEFORM_RE } = require('../../_media');
-const { SONG_KEY, MELODY_LIMITS, IMAGE_EXTS, IMAGE_TYPES, instrumentKnown, getMelody } = require('../../_domain/melodies');
+const { SONG_KEY, MELODY_LIMITS, IMAGE_EXTS, IMAGE_TYPES, instrumentKnown, voiceKey } = require('../../_domain/melodies');
+const { getMelody } = require('../../_domain/media');
 
 // /songs/:id/melodies/:instrument[/sheet|audio]: a melody's sheet images and
-// audio recording. Files go to R2 under the band's own sheets/ and audio/
+// audio recording, stored as song_media rows (kind sheet: one row per image;
+// kind instrument: the recording). `_song` is the whole song: its images have
+// no instrument. Files go to R2 under the band's own sheets/ and audio/
 // prefixes (presign, upload, confirm), like the other song media.
 
 const KINDS = {
@@ -56,15 +59,16 @@ async function dropFile(sql, band, url) {
   if (removed && head) await releaseStorage(sql, band, head.size);
 }
 
-// Why the upsert wrote nothing: the song is gone or a limit was hit.
+// Why the insert wrote nothing: the song is gone or a limit was hit.
 async function refusal(sql, band, songId, instrument) {
+  const key = voiceKey(instrument);
   const [d] = await sql`
     SELECT (SELECT true FROM songs WHERE id = ${songId} AND artist_id = ${band.id} AND NOT deleted) AS song,
-           (SELECT count(*)::int FROM song_melodies WHERE song_id = ${songId} AND artist_id = ${band.id}) AS n,
-           (SELECT cardinality(sheet_urls) FROM song_melodies
-            WHERE song_id = ${songId} AND artist_id = ${band.id} AND instrument = ${instrument}) AS imgs`;
+           (SELECT count(*)::int FROM song_media
+            WHERE song_id = ${songId} AND artist_id = ${band.id} AND kind = 'sheet'
+              AND instrument IS NOT DISTINCT FROM ${key}::text) AS imgs`;
   if (!d?.song) return out(404, { error: 'Song not found' });
-  if (d.imgs != null && d.imgs >= MELODY_LIMITS.images)
+  if (d.imgs >= MELODY_LIMITS.images)
     return out(409, { error: `At most ${MELODY_LIMITS.images} images per melody`, code: 'image_limit' });
   return out(409, { error: `At most ${MELODY_LIMITS.perSong} melodies per song`, code: 'melody_limit' });
 }
@@ -105,26 +109,39 @@ async function confirm(sql, band, songId, instrument, kind, publicUrl, waveform)
     return out(402, storageFull(band));
   }
 
-  const roomForNew = sql`(cnt.n < ${MELODY_LIMITS.perSong}
-    OR EXISTS (SELECT 1 FROM song_melodies WHERE song_id = ${songId} AND artist_id = ${band.id} AND instrument = ${instrument}))`;
+  const key = voiceKey(instrument);
+  // A new voice needs room among the song's voices (the whole song is not one).
+  const roomForVoice = sql`(${key}::text IS NULL
+    OR EXISTS (SELECT 1 FROM song_media WHERE song_id = ${songId} AND artist_id = ${band.id} AND instrument = ${key}::text)
+    OR (SELECT count(DISTINCT instrument) FROM song_media WHERE song_id = ${songId} AND artist_id = ${band.id}
+        AND instrument IS NOT NULL) < ${MELODY_LIMITS.perSong})`;
+  const insertSheet = () => sql`
+    INSERT INTO song_media (song_id, artist_id, kind, instrument, url, position)
+    SELECT ${songId}, ${band.id}, 'sheet', ${key}::text, ${publicUrl},
+           COALESCE((SELECT max(position) + 1 FROM song_media
+                     WHERE song_id = ${songId} AND artist_id = ${band.id} AND kind = 'sheet' AND instrument IS NOT DISTINCT FROM ${key}::text), 0)
+    FROM songs s
+    WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND NOT s.deleted AND ${roomForVoice}
+      AND (SELECT count(*) FROM song_media
+           WHERE song_id = ${songId} AND artist_id = ${band.id} AND kind = 'sheet' AND instrument IS NOT DISTINCT FROM ${key}::text) < ${MELODY_LIMITS.images}
+    RETURNING id`;
+  // Two images confirmed at once can pick the same page number: the unique
+  // index refuses the second, which then takes the next free one.
+  const sheetWithRetry = async () => {
+    for (let attempt = 0; ; attempt++) {
+      try { return await insertSheet(); }
+      catch (e) { if (e?.code !== '23505' || attempt >= 3) throw e; }
+    }
+  };
   const rows = kind === 'sheet'
-    ? await sql`
-        WITH cnt AS (SELECT count(*)::int AS n FROM song_melodies WHERE song_id = ${songId} AND artist_id = ${band.id})
-        INSERT INTO song_melodies (song_id, artist_id, instrument, sheet_urls)
-        SELECT ${songId}, ${band.id}, ${instrument}, ARRAY[${publicUrl}]::text[]
-        FROM songs s, cnt
-        WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND NOT s.deleted AND ${roomForNew}
-        ON CONFLICT (song_id, instrument) DO UPDATE
-          SET sheet_urls = song_melodies.sheet_urls || EXCLUDED.sheet_urls, updated_at = NOW()
-          WHERE cardinality(song_melodies.sheet_urls) < ${MELODY_LIMITS.images}
-        RETURNING id`
+    ? await sheetWithRetry()
     : await sql`
-        WITH cnt AS (SELECT count(*)::int AS n FROM song_melodies WHERE song_id = ${songId} AND artist_id = ${band.id})
-        INSERT INTO song_melodies (song_id, artist_id, instrument, audio_url, waveform)
-        SELECT ${songId}, ${band.id}, ${instrument}, ${publicUrl}, ${waveform ?? null}::text
-        FROM songs s, cnt
-        WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND NOT s.deleted AND ${roomForNew}
-        ON CONFLICT (song_id, instrument) DO UPDATE SET audio_url = EXCLUDED.audio_url, waveform = EXCLUDED.waveform, updated_at = NOW()
+        INSERT INTO song_media (song_id, artist_id, kind, instrument, url, waveform)
+        SELECT ${songId}, ${band.id}, 'instrument', ${instrument}, ${publicUrl}, ${waveform ?? null}::text
+        FROM songs s
+        WHERE s.id = ${songId} AND s.artist_id = ${band.id} AND NOT s.deleted AND ${roomForVoice}
+        ON CONFLICT (song_id, instrument) WHERE kind = 'instrument'
+        DO UPDATE SET url = EXCLUDED.url, waveform = EXCLUDED.waveform, updated_at = NOW()
         RETURNING id`;
   if (!rows.length) {
     await deleteFromR2(publicUrl);
@@ -146,8 +163,9 @@ async function confirm(sql, band, songId, instrument, kind, publicUrl, waveform)
 async function removeSheet(sql, band, songId, instrument, url) {
   if (!url || typeof url !== 'string') return out(400, { error: 'url required' });
   const rows = await sql`
-    UPDATE song_melodies SET sheet_urls = array_remove(sheet_urls, ${url}), updated_at = NOW()
-    WHERE song_id = ${songId} AND artist_id = ${band.id} AND instrument = ${instrument} AND ${url} = ANY(sheet_urls)
+    DELETE FROM song_media
+    WHERE song_id = ${songId} AND artist_id = ${band.id} AND kind = 'sheet'
+      AND instrument IS NOT DISTINCT FROM ${voiceKey(instrument)}::text AND url = ${url}
     RETURNING id`;
   if (!rows.length) return out(404, { error: 'Image not found' });
   await dropFile(sql, band, url);
@@ -157,31 +175,25 @@ async function removeSheet(sql, band, songId, instrument, url) {
 
 async function removeAudio(sql, band, songId, instrument) {
   const rows = await sql`
-    WITH old AS (
-      SELECT id, audio_url FROM song_melodies
-      WHERE song_id = ${songId} AND artist_id = ${band.id} AND instrument = ${instrument} FOR UPDATE
-    ), cleared AS (
-      UPDATE song_melodies SET audio_url = NULL, waveform = NULL, updated_at = NOW() WHERE id IN (SELECT id FROM old)
-    )
-    SELECT audio_url FROM old`;
+    DELETE FROM song_media
+    WHERE song_id = ${songId} AND artist_id = ${band.id} AND kind = 'instrument' AND instrument = ${instrument}
+    RETURNING url`;
   if (!rows.length) return out(404, { error: 'Melody not found' });
-  const url = rows[0].audio_url;
-  if (url) {
-    await dropFile(sql, band, url);
-    await insertAuditLog(sql, band.id, songId, 'melody_delete', { instrument, kind: 'audio', filename: filenameFromUrl(url), deletedAt: new Date().toISOString() });
-  }
+  const url = rows[0].url;
+  await dropFile(sql, band, url);
+  await insertAuditLog(sql, band.id, songId, 'melody_delete', { instrument, kind: 'audio', filename: filenameFromUrl(url), deletedAt: new Date().toISOString() });
   return out(200, { ok: true });
 }
 
 async function removeMelody(sql, band, songId, instrument) {
   const rows = await sql`
-    DELETE FROM song_melodies
-    WHERE song_id = ${songId} AND artist_id = ${band.id} AND instrument = ${instrument}
-    RETURNING sheet_urls, audio_url`;
+    DELETE FROM song_media
+    WHERE song_id = ${songId} AND artist_id = ${band.id} AND kind IN ('instrument', 'sheet')
+      AND instrument IS NOT DISTINCT FROM ${voiceKey(instrument)}::text
+    RETURNING url`;
   if (!rows.length) return out(404, { error: 'Melody not found' });
-  const urls = [...(rows[0].sheet_urls || []), ...(rows[0].audio_url ? [rows[0].audio_url] : [])];
-  for (const url of urls) await dropFile(sql, band, url);
-  await insertAuditLog(sql, band.id, songId, 'melody_delete', { instrument, kind: 'melody', files: urls.length, deletedAt: new Date().toISOString() });
+  for (const { url } of rows) await dropFile(sql, band, url);
+  await insertAuditLog(sql, band.id, songId, 'melody_delete', { instrument, kind: 'melody', files: rows.length, deletedAt: new Date().toISOString() });
   return out(200, { ok: true });
 }
 
