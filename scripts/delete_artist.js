@@ -79,6 +79,7 @@ async function main() {
              (SELECT count(*) FROM organizers        WHERE artist_id = ${artist.id}) AS organizers,
              (SELECT count(*) FROM gema_works        WHERE artist_id = ${artist.id}) AS gema_works,
              (SELECT count(*) FROM song_arrangements WHERE artist_id = ${artist.id}) AS arrangements,
+             (SELECT count(*) FROM song_media         WHERE artist_id = ${artist.id}) AS song_media,
              (SELECT count(*) FROM song_logs         WHERE artist_id = ${artist.id}) AS song_logs,
              (SELECT count(*) FROM users             WHERE artist_id = ${artist.id}) AS users`;
     Object.entries(counts).forEach(([table, n]) => console.log(`    ${table.padEnd(14)} ${n}`));
@@ -86,7 +87,8 @@ async function main() {
     const [media] = await sql`
       SELECT count(*) AS n FROM songs
       WHERE artist_id = ${artist.id}
-        AND (extra ? 'listenUrl' OR extra ? 'sheetUrl' OR extra ? 'playbackUrl')`;
+        AND (extra ? 'listenUrl' OR extra ? 'sheetUrl' OR extra ? 'playbackUrl'
+             OR EXISTS (SELECT 1 FROM song_media m WHERE m.song_id = songs.id))`;
     if (Number(media.n) > 0) warn(`${media.n} songs reference R2 files — those are not deleted by this script.`);
 
     console.log(R('\n  This cannot be undone.'));

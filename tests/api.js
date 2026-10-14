@@ -1282,21 +1282,21 @@ async function testFileValidation(slug, token, songId) {
       const { res, json } = await POST(`/api/${slug}/songs/${songId}/audio`,
         { filename: 'test.mp3', contentType: 'audio/mpeg', size: 1000 }, { token });
       assertStatus(res, json, 200);
-      assert(typeof json.uploadUrl === 'string' && json.uploadUrl.startsWith('https://'), 'bad uploadUrl');
+      assert(typeof json.uploadUrl === 'string' && /^https?:\/\//.test(json.uploadUrl), 'bad uploadUrl');
       assert(json.publicUrl.startsWith(`${R2_BASE}/audio/`), 'publicUrl has wrong prefix');
     });
     await test('POST /sheet valid params → 200 with uploadUrl + publicUrl', async () => {
       const { res, json } = await POST(`/api/${slug}/songs/${songId}/sheet`,
         { filename: 'chords.pdf', size: 1000 }, { token });
       assertStatus(res, json, 200);
-      assert(typeof json.uploadUrl === 'string' && json.uploadUrl.startsWith('https://'), 'bad uploadUrl');
+      assert(typeof json.uploadUrl === 'string' && /^https?:\/\//.test(json.uploadUrl), 'bad uploadUrl');
       assert(json.publicUrl.startsWith(`${R2_BASE}/sheets/`), 'publicUrl has wrong prefix');
     });
     await test('POST /playback valid params → 200 with uploadUrl + publicUrl', async () => {
       const { res, json } = await POST(`/api/${slug}/songs/${songId}/playback`,
         { filename: 'backing.mp3', contentType: 'audio/mpeg', size: 1000 }, { token });
       assertStatus(res, json, 200);
-      assert(typeof json.uploadUrl === 'string' && json.uploadUrl.startsWith('https://'), 'bad uploadUrl');
+      assert(typeof json.uploadUrl === 'string' && /^https?:\/\//.test(json.uploadUrl), 'bad uploadUrl');
       assert(json.publicUrl.startsWith(`${R2_BASE}/playback/`), 'publicUrl has wrong prefix');
     });
 
@@ -1320,6 +1320,65 @@ async function testFileValidation(slug, token, songId) {
     skip('PUT /audio|sheet|playback URL validation', 'R2_PUBLIC_URL not set');
     skip('POST /audio|sheet|playback presigned URL', 'R2_PUBLIC_URL not set');
     skip('DELETE /audio|sheet|playback idempotent', 'R2_PUBLIC_URL not set');
+  }
+}
+
+async function testMelodies(slug, token, songId) {
+  console.log(B('\nMelodies'));
+  const base = `/api/${slug}/songs/${songId}/melodies/TEN`;
+  const before = (await GET(CONFIG_URL, { token })).json?.config?.arrangementConfig ?? null;
+  const withTen = { ...(before ?? {}), instruments: [...(before?.instruments ?? []).filter(i => i.key !== 'TEN'), { key: 'TEN', label: 'Tenor' }] };
+
+  await test('melody routes without token → 401', async () => {
+    for (const [method, kind] of [['POST', 'sheet'], ['PUT', 'sheet'], ['DELETE', 'sheet'], ['DELETE', '']]) {
+      const { res, json } = await req(method, `/api/${slug}/songs/1/melodies/TEN${kind ? '/' + kind : ''}`, { body: {} });
+      assertStatus(res, json, 401);
+    }
+  });
+  await test('GET /songs/:id carries an empty melodies list', async () => {
+    const { res, json } = await GET(`/api/${slug}/songs/${songId}`, { token });
+    assertStatus(res, json, 200);
+    assert(Array.isArray(json.melodies) && json.melodies.length === 0, 'expected melodies: []');
+  });
+  await test('presign for an instrument the band has not configured → 400', async () => {
+    await PATCH(CONFIG_URL, { config: { arrangementConfig: { ...(before ?? {}), instruments: [] } } }, { token });
+    const { res, json } = await POST(`${base}/sheet`, { filename: 'a.jpg', contentType: 'image/jpeg', size: 1000 }, { token });
+    assertStatus(res, json, 400);
+  });
+  try {
+    await PATCH(CONFIG_URL, { config: { arrangementConfig: withTen } }, { token });
+    await test('presign of a PDF sheet → 400', async () => {
+      const { res, json } = await POST(`${base}/sheet`, { filename: 'a.pdf', contentType: 'application/pdf', size: 1000 }, { token });
+      assertStatus(res, json, 400);
+    });
+    if (process.env.R2_PUBLIC_URL) {
+      await test('presign of an image → 200 with an upload url under sheets/', async () => {
+        const { res, json } = await POST(`${base}/sheet`, { filename: 'a.jpg', contentType: 'image/jpeg', size: 1000 }, { token });
+        assertStatus(res, json, 200);
+        assert(json.publicUrl.startsWith(`${R2_BASE}/sheets/`), 'publicUrl has wrong prefix');
+      });
+      if (process.env.LOCAL_STORAGE_DIR) {
+        await test('local storage: upload, confirm, fetch and delete a sheet', async () => {
+          const bytes = Buffer.from('not-really-a-jpeg');
+          const { json: p } = await POST(`${base}/sheet`, { filename: 'a.jpg', contentType: 'image/jpeg', size: bytes.length }, { token });
+          const put = await fetch(p.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: bytes });
+          assert(put.status === 200, `upload answered ${put.status}`);
+          const { res, json } = await PUT(`${base}/sheet`, { publicUrl: p.publicUrl }, { token });
+          assertStatus(res, json, 200);
+          const got = await fetch(p.publicUrl);
+          assert(got.status === 200 && got.headers.get('content-type') === 'image/jpeg' && Buffer.from(await got.arrayBuffer()).equals(bytes), 'stored file differs');
+          const del = await DELETE(base, { token });
+          assertStatus(del.res, del.json, 200);
+          assert((await fetch(p.publicUrl)).status === 404, 'file still served after delete');
+        });
+      } else skip('local storage round trip', 'LOCAL_STORAGE_DIR not set');
+    } else skip('melody presign', 'R2_PUBLIC_URL not set');
+    await test('DELETE of a melody that does not exist → 404', async () => {
+      const { res, json } = await DELETE(base, { token });
+      assertStatus(res, json, 404);
+    });
+  } finally {
+    await PATCH(CONFIG_URL, { config: { arrangementConfig: before } }, { token });
   }
 }
 
@@ -1390,6 +1449,29 @@ async function testLyricsLifecycle(slug, token, songId) {
     const { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
     assert(song.language === 'FR', `language — got: ${JSON.stringify(song.language)}`);
     assert(!song.extra?.language, 'language must not be stored in extra');
+  });
+
+  // The link fields live in song_media; the API keeps answering them in extra.
+  await test('PATCH /songs saves a link in song_media and every read answers it in extra', async () => {
+    const link = 'https://soundcloud.example.test/track-1';
+    const { res, json } = await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { listenUrl: link, capo: 3 } }], { token });
+    assertStatus(res, json, 200);
+    assert(json.rows?.[0]?.extra?.listenUrl === link, 'the PATCH answer: ' + JSON.stringify(json.rows?.[0]?.extra));
+    const { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
+    assert(song.extra?.listenUrl === link && song.extra?.capo === 3, 'detail: ' + JSON.stringify(song.extra));
+    const { json: list } = await GET(`/api/${slug}/songs`, AUTH);
+    assert((list.rows ?? list).find(r => r.id === songId)?.extra?.listenUrl === link, 'list');
+  });
+
+  await test('saving the same link again keeps it, and an empty one removes it', async () => {
+    const link = 'https://soundcloud.example.test/track-1';
+    await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { listenUrl: link } }], { token });
+    let { json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH);
+    assert(song.extra?.listenUrl === link, 'same link saved twice');
+    await PATCH(`/api/${slug}/songs`, [{ id: songId, extra: { listenUrl: '' } }], { token });
+    ({ json: song } = await GET(`/api/${slug}/songs/${songId}`, AUTH));
+    assert(!song.extra?.listenUrl, 'link not removed: ' + JSON.stringify(song.extra));
+    assert(song.extra?.capo === 3, 'other extra keys must stay');
   });
 
   await test('PATCH /songs with language inside extra → row rejected, nothing stored', async () => {
@@ -1549,6 +1631,7 @@ async function testWrite(slug, token, firstSong, config) {
     // File, lyrics, and arrangement tests run on the temp song
     await testLyricsLifecycle(slug, token, song.id);
     await testFileValidation(slug, token, song.id);
+    await testMelodies(slug, token, song.id);
     await testArrangementWrite(slug, token, song);
 
     await test('DELETE /songs/:id soft-deletes → 204', async () => {

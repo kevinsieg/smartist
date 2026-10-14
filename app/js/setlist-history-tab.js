@@ -97,7 +97,7 @@ function _openHistPanelContent(item, panelEl) {
           '</svg>' +
         '</button>') +
       '<button class="btn" data-onclick="_histStage(' + onArg(sid) + ')">' + t('setlist.stageBtn') + '</button>' +
-      '<button class="btn" id="hist-offline-btn" data-onclick="_histKeepOffline(' + onArg(sid) + ')">' + t('setlist.offlineBtn') + '</button>' +
+      '<button class="btn hist-offline" id="hist-offline-btn" data-onclick="_histKeepOffline(' + onArg(sid) + ')" title="' + escHtml(t('setlist.offlineBtnTitle')) + '">' + t('setlist.offlineBtn') + '</button>' +
       (_viewMode ? '' :
         '<button class="btn share-btn" data-onclick="_histShareMenu(' + onArg(sid) + ', this)">' +
           SHARE_ICON + '<span style="margin-left:4px">' + t('setlist.shareBtn') + '</span>' +
@@ -105,6 +105,7 @@ function _openHistPanelContent(item, panelEl) {
     '</div>' +
     gigBlock + venueBlock + orgBlock + commentBlock +
     '<div id="hist-song-detail"></div>';
+  _histOfflineMark(sid);
 
   // Expand accordion body to show songs (lazy-loads if not yet fetched)
   var body = document.getElementById('hist-body-' + sid);
@@ -721,10 +722,30 @@ function _histStage(sid) {
   window.open('/' + _artistSlug + '/stage?id=' + sid, '_blank');
 }
 
+// Green with a tick: this setlist is saved on this device. Grey with an arrow:
+// it is not. Clicking the button downloads it or, when saved, removes it.
+var _HIST_DL_ICON = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>';
+var _HIST_KEPT_ICON = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>';
+
+async function _histOfflineMark(sid) {
+  var btn = document.getElementById('hist-offline-btn');
+  if (!btn || btn.disabled) return;
+  var rec = await offlineKept(_artistSlug, sid);
+  btn.classList.toggle('kept', !!rec);
+  btn.setAttribute('aria-pressed', String(!!rec));
+  btn.innerHTML = (rec ? _HIST_KEPT_ICON : _HIST_DL_ICON) + escHtml(t(rec ? 'setlist.offlineKept' : 'setlist.offlineBtn'));
+  btn.title = rec ? t('setlist.offlineKeptTitle', { date: formatDate(rec.syncedAt) + ' ' + formatTime(rec.syncedAt) }) : t('setlist.offlineBtnTitle');
+}
+
 async function _histKeepOffline(sid) {
   var btn = document.getElementById('hist-offline-btn');
   if (!btn || btn.disabled) return;
-  var label = btn.textContent;
+  if (await offlineKept(_artistSlug, sid)) {
+    if (!confirm(t('setlist.offlineRemoveConfirm'))) return;
+    await offlineRelease(_artistSlug, sid);
+    _histOfflineMark(sid);
+    return;
+  }
   btn.disabled = true;
   try {
     var out = await offlineKeep(_artistSlug, sid, function (done, total) {
@@ -736,7 +757,7 @@ async function _histKeepOffline(sid) {
   } catch (e) {
     btn.textContent = t('setlist.offlineFailed');
   }
-  setTimeout(function () { btn.textContent = label; btn.disabled = false; }, 4000);
+  setTimeout(function () { btn.disabled = false; _histOfflineMark(sid); }, 4000);
 }
 
 async function _histExportPdf(sid) {

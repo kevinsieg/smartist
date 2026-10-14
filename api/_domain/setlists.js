@@ -50,7 +50,7 @@ async function setlistForShare(sql, artistId, setlistId) {
     sql`
       SELECT songs.*, ss.position
       FROM setlist_songs ss
-      JOIN songs ON ss.song_id = songs.id
+      JOIN songs_with_media songs ON ss.song_id = songs.id
       WHERE ss.setlist_id = ${setlistId} AND songs.artist_id = ${artistId}
       ORDER BY ss.position
     `,

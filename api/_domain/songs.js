@@ -1,6 +1,7 @@
 'use strict';
 
 const { SONG_LOG_KEEP } = require('../_constants');
+const { melodiesFromMedia } = require('./media');
 
 // Song reads and writes shared by api/_band/songs.js and api/_band/songs/item.js.
 //
@@ -55,7 +56,7 @@ function listSongs(sql, artistId, { page = null, activeOnly = false, withArrange
         WHERE sa.song_id = s.id AND sa.artist_id = s.artist_id
       ) AS has_arrangement` : sql``}
       ${page ? sql`, COUNT(*) OVER()::int AS total` : sql``}
-    FROM songs s
+    FROM songs_with_media s
     LEFT JOIN plays p       ON p.song_id = s.id
     LEFT JOIN song_lyrics l ON l.song_id = s.id
     ${gemaJoin(sql)}
@@ -73,7 +74,7 @@ function configSongs(sql, artistId) {
   return sql`
     SELECT s.*, g.iswc, g.gema_work_number, g.language AS gema_language,
       EXISTS (SELECT 1 FROM song_lyrics l WHERE l.song_id = s.id) AS has_lyrics
-    FROM songs s
+    FROM songs_with_media s
     ${gemaJoin(sql)}
     WHERE s.artist_id = ${artistId} AND s.deleted = false
     ORDER BY s.title
@@ -99,13 +100,20 @@ async function songDetail(sql, artistId, songId) {
                                 'created_at', a.created_at, 'updated_at', a.updated_at)
        FROM song_arrangements a
        WHERE a.song_id = s.id AND a.artist_id = s.artist_id AND a.is_active
-       LIMIT 1) AS active_arrangement
-    FROM songs s
+       LIMIT 1) AS active_arrangement,
+      COALESCE((
+        SELECT json_agg(to_jsonb(m) ORDER BY m.id)
+        FROM song_media m
+        WHERE m.song_id = s.id AND m.artist_id = s.artist_id AND m.kind IN ('instrument', 'sheet')
+      ), '[]') AS media
+    FROM songs_with_media s
     LEFT JOIN song_lyrics l ON l.song_id = s.id
     ${gemaJoin(sql)}
     WHERE s.id = ${songId} AND s.artist_id = ${artistId} AND s.deleted = false
   `;
-  return song ?? null;
+  if (!song) return null;
+  const { media, ...rest } = song;
+  return { ...rest, melodies: melodiesFromMedia(media) };
 }
 
 // Lyrics as stored: trimmed, and empty means none.

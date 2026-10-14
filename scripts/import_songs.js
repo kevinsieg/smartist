@@ -40,7 +40,7 @@ const fs         = require('fs');
 const path       = require('path');
 const lib        = require('./_lib');
 const { energyToScale } = require('../api/_song_values');
-
+const { splitLinks, setSongLinks } = require('../api/_domain/media');
 lib.loadEnv();
 
 // ── Args ───────────────────────────────────────────────────────────────────
@@ -93,7 +93,9 @@ if (!process.env.DATABASE_URL) {
       continue;
     }
 
-    const { lyrics: extraLyrics, language: extraLanguage, ...extra } = s.extra ?? {};
+    const { lyrics: extraLyrics, language: extraLanguage, ...withLinks } = s.extra ?? {};
+    // The listen, playback and sheet links are song_media rows, not extra keys.
+    const { rest: extra, links } = splitLinks(withLinks);
     const lyrics   = String(s.lyrics ?? extraLyrics ?? '').trim() || null;
     const language = String(s.language ?? extraLanguage ?? '').trim().toUpperCase() || null;
     // Song and lyrics in one statement.
@@ -120,10 +122,12 @@ if (!process.env.DATABASE_URL) {
         ${extra}
       )
       RETURNING id, artist_id
-      )
+      ), l AS (
       INSERT INTO song_lyrics (song_id, artist_id, lyrics)
       SELECT id, artist_id, ${lyrics}::text FROM s WHERE ${lyrics}::text IS NOT NULL
-    `;
+      )
+      SELECT id FROM s
+    `.then(async ([song]) => { await setSongLinks(sql, artist.id, song.id, links); });
 
     imported++;
     if (imported % 20 === 0) process.stdout.write(`  ${imported} imported...\r`);

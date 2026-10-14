@@ -26,6 +26,7 @@ const fs = require('fs');
 const path = require('path');
 const postgres = require('postgres');
 const { applyStatements, connect } = require('../scripts/apply_schema');
+const { migrate } = require('../scripts/deploy_migrate');
 
 const ROOT = path.join(__dirname, '..');
 const URL_ = process.env.DATABASE_URL;
@@ -75,7 +76,9 @@ async function seed(db) {
     await sql([`
       WITH a AS (INSERT INTO artists (slug, name) VALUES ('upgrade-check', 'Upgrade Check') RETURNING id),
       u AS (INSERT INTO users (artist_id, email, role) SELECT id, 'upgrade@example.test', 'admin' FROM a),
-      s AS (INSERT INTO songs (artist_id, title) SELECT id, t FROM a, (VALUES ('One'), ('Two')) v(t) RETURNING id, artist_id),
+      s AS (INSERT INTO songs (artist_id, title, extra) SELECT id, t, e::jsonb FROM a, (VALUES
+        ('One', '{"listenUrl":"https://x.test/audio/1/a.mp3","waveform":"${'c0'.repeat(100)}","playbackUrl":"https://x.test/pb.mp3","sheetUrl":"https://x.test/s.pdf","capo":2}'),
+        ('Two', '{}')) v(t, e) RETURNING id, artist_id),
       v AS (INSERT INTO venues (artist_id, name) SELECT id, 'Hall' FROM a RETURNING id, artist_id),
       g AS (INSERT INTO gigs (artist_id, title, date, venue_id) SELECT artist_id, 'Gig', '2099-01-01', id FROM v RETURNING id, artist_id),
       l AS (INSERT INTO setlists (artist_id, title, gig_id) SELECT artist_id, 'Set', id FROM g RETURNING id)
@@ -84,6 +87,46 @@ async function seed(db) {
   } finally {
     await sql.end();
   }
+}
+
+// song_media: the old extra keys are copied once, the view answers with them
+// rebuilt from the table, the constraints hold, and the view lists every column of songs.
+async function checkMedia(db, head) {
+  const sql = connect(urlFor(db));
+  const fail = [];
+  const run = q => sql([q]);
+  try {
+    const rows = await run(`SELECT kind, instrument, url, waveform FROM song_media ORDER BY kind`);
+    const want = ['listen', 'pdf', 'playback'];
+    if (rows.map(r => r.kind).join() !== want.join()) fail.push('backfill made ' + JSON.stringify(rows.map(r => r.kind)));
+    if (rows[0] && rows[0].waveform !== 'c0'.repeat(100)) fail.push('listen waveform not copied');
+    await applyStatements(sql, head);
+    if ((await run(`SELECT count(*)::int AS n FROM song_media`))[0].n !== 3) fail.push('a second run added rows');
+    const [one] = await run(`SELECT extra FROM songs_with_media WHERE title = 'One'`);
+    const e = one && one.extra;
+    if (!e || e.listenUrl !== 'https://x.test/audio/1/a.mp3' || e.waveform !== 'c0'.repeat(100) || e.playbackUrl !== 'https://x.test/pb.mp3'
+        || e.sheetUrl !== 'https://x.test/s.pdf' || e.capo !== 2) fail.push('view extra: ' + JSON.stringify(e));
+    await run(`DELETE FROM song_media WHERE kind = 'listen'`);
+    const [gone] = await run(`SELECT extra FROM songs_with_media WHERE title = 'One'`);
+    if ('listenUrl' in gone.extra || 'waveform' in gone.extra) fail.push('a stale extra key came back through the view');
+    const [cols] = await run(`SELECT
+      (SELECT string_agg(column_name, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'songs') AS t,
+      (SELECT string_agg(column_name, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'songs_with_media') AS v`);
+    if (cols.t !== cols.v) fail.push('songs_with_media columns differ from songs: re-create the view\n    songs: ' + cols.t + '\n    view:  ' + cols.v);
+    const bad = [
+      `INSERT INTO song_media (song_id, artist_id, kind, url) SELECT id, artist_id, 'instrument', 'u' FROM songs LIMIT 1`,
+      `INSERT INTO song_media (song_id, artist_id, kind, url, instrument) SELECT id, artist_id, 'listen', 'u', 'TEN' FROM songs LIMIT 1`,
+      `INSERT INTO song_media (song_id, artist_id, kind, url, waveform) SELECT id, artist_id, 'sheet', 'u', 'aa' FROM songs LIMIT 1`,
+      `INSERT INTO song_media (song_id, artist_id, kind, url, instrument) SELECT id, artist_id, 'pdf', 'u', 'TEN' FROM songs LIMIT 1`,
+      `INSERT INTO song_media (song_id, artist_id, kind, url) SELECT id, artist_id, 'pdf', 'u' FROM songs WHERE title = 'One'`,
+      `INSERT INTO song_media (song_id, artist_id, kind, url) SELECT id, artist_id, 'video', 'u' FROM songs LIMIT 1`,
+      `INSERT INTO song_media (song_id, artist_id, kind, url) SELECT id, artist_id, 'playback', 'u' FROM songs WHERE title = 'One'`,
+    ];
+    for (const q of bad) {
+      try { await run(q); fail.push('accepted: ' + q.slice(0, 90)); } catch { /* refused, as intended */ }
+    }
+  } finally { await sql.end(); }
+  return fail;
 }
 
 async function apply(db, src) {
@@ -123,8 +166,20 @@ async function main() {
 
     await apply(DBS.upgraded, base);
     await seed(DBS.upgraded);
-    await apply(DBS.upgraded, head);
+    // As a deploy does it: only the blocks not recorded yet run, so a new table
+    // has to be created inside a dated block, not only in the base part.
+    const up_ = connect(urlFor(DBS.upgraded));
+    try { await migrate(up_, head); } finally { await up_.end(); }
     await apply(DBS.fresh, head);
+
+    const mediaFail = await checkMedia(DBS.upgraded, head);
+    if (mediaFail.length) {
+      failed = true;
+      console.log(R('  ✗ song_media'));
+      for (const l of mediaFail) console.log(`    ${l}`);
+    } else {
+      console.log(`  ${G('✓')} song_media: backfill, view and constraints`);
+    }
 
     const [up, fresh] = await Promise.all([snapshot(DBS.upgraded), snapshot(DBS.fresh)]);
     const onlyUp = up.filter(l => !fresh.includes(l));

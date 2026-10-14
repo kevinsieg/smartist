@@ -48,6 +48,35 @@ function resolve(p) {
   return { file: path.join(ROOT, 'api', 'index.js'), query: {} };
 }
 
+// Stands in for the R2 bucket (api/_r2.js, LOCAL_STORAGE_DIR): presigned uploads
+// are PUT here and the public URLs are read from here, Range requests included
+// so audio can seek.
+async function localStorage(req, res, key) {
+  const store = require('../../api/_r2');
+  try {
+    if (req.method === 'PUT') {
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      await store.localPut(key, Buffer.concat(chunks), req.headers['content-type']);
+      res.statusCode = 200; return res.end();
+    }
+    const obj = req.method === 'GET' || req.method === 'HEAD' ? await store.localGet(key) : null;
+    if (!obj) { res.statusCode = req.method === 'GET' || req.method === 'HEAD' ? 404 : 405; return res.end('not found'); }
+    res.setHeader('Content-Type', obj.contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    let start = 0, end = obj.size - 1;
+    if (m && (m[1] || m[2])) {
+      if (m[1]) { start = +m[1]; if (m[2]) end = Math.min(+m[2], end); } else { start = Math.max(0, obj.size - +m[2]); }
+      if (start > end) { res.statusCode = 416; res.setHeader('Content-Range', `bytes */${obj.size}`); return res.end(); }
+      res.statusCode = 206; res.setHeader('Content-Range', `bytes ${start}-${end}/${obj.size}`);
+    }
+    res.setHeader('Content-Length', end - start + 1);
+    if (req.method === 'HEAD' || obj.size === 0) return res.end();
+    fs.createReadStream(obj.file, { start, end }).pipe(res);
+  } catch (e) { console.error(e); if (!res.headersSent) { res.statusCode = 500; res.end('storage error'); } }
+}
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
   let p = u.pathname;
@@ -57,6 +86,7 @@ http.createServer(async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     return res.end(JSON.stringify({ outbox: outbox.filter(m => [].concat(m.to).includes(to)) }));
   }
+  if (p.startsWith('/__storage/') && process.env.LOCAL_STORAGE_DIR) return localStorage(req, res, decodeURIComponent(p.slice('/__storage/'.length)));
   const rw = matchRewrite(p);
   if (rw) { const d = new URL(rw, 'http://localhost'); p = d.pathname; extra = d.searchParams; }
   if (!p.startsWith('/api')) {

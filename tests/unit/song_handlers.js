@@ -144,7 +144,7 @@ async function run(r) {
     const q = calls.find(c => c.text.includes('unnest(tags)'));
     assert(q && q.values.every(v => v === 1 || Array.isArray(v)), 'known tags are scoped to the band');
     // The history trim's `SELECT id FROM u` is a fragment of the batch statement.
-    assertEq(calls.filter(c => c.text.startsWith('SELECT') && !/^SELECT id FROM u$/.test(c.text.trim())).length, 1, 'rows, genres and tags in one statement');
+    assertEq(calls.filter(c => c.text.startsWith('SELECT') && !/^SELECT id FROM u$/.test(c.text.trim()) && !c.text.includes('FROM song_media')).length, 1, 'rows, genres and tags in one statement');
   });
 
   await testAsync('invalid tags reject the row', async () => {
@@ -221,6 +221,42 @@ async function run(r) {
     assertEq(res.body?.count, 1);
     assertEq(res.body?.rejected?.length, 1);
     assertEq(res.body.rejected[0].id, 6);
+  });
+
+  await testAsync('the link fields go to song_media and stay out of the stored extra', async () => {
+    // The stored row comes through songs_with_media: its extra already holds the stored link.
+    const { handler, calls } = loadHandler(routeFor({ ...UPDATED, extra: { listenUrl: 'https://x.test/a.mp3' } }));
+    const res = await patch(handler, [{ id: 5, title: 'Song', extra: { listenUrl: 'https://x.test/a.mp3', capo: 2 } }]);
+    assertEq(res.body?.count, 1, JSON.stringify(res.body));
+    assertEq(batchRows(calls)[0].extra, { capo: 2 });
+    const write = calls.find(c => c.text.includes('INSERT INTO song_media'));
+    assert(write, 'no song_media write');
+    assert(write.values.includes('https://x.test/a.mp3'));
+  });
+
+  await testAsync('an emptied link removes its song_media row', async () => {
+    const { handler, calls } = loadHandler(routeFor(UPDATED));
+    await patch(handler, [{ id: 5, title: 'Song', extra: { sheetUrl: '' } }]);
+    const del = calls.find(c => c.text.startsWith('DELETE FROM song_media'));
+    assert(del, 'no song_media delete');
+    assert(del.values.includes('pdf'));
+  });
+
+  await testAsync('a save without link keys leaves song_media alone', async () => {
+    const { handler, calls } = loadHandler(routeFor(UPDATED));
+    await patch(handler, [{ id: 5, title: 'Song', extra: { capo: 3 } }]);
+    assert(!calls.some(c => /INSERT INTO song_media|DELETE FROM song_media/.test(c.text)), 'song_media was written');
+  });
+
+  await testAsync('the saved rows come back with their media keys', async () => {
+    const route = (text, values) => {
+      if (isBatch(text)) return values[0].json.map(r => ({ id: r.id, extra: { capo: 2 } }));
+      if (text.includes('FROM song_media')) return [{ song_id: 5, kind: 'listen', url: 'https://x.test/a.mp3', waveform: null }];
+      return text.startsWith('SELECT') ? [UPDATED] : [];
+    };
+    const { handler } = loadHandler(route);
+    const res = await patch(handler, [{ id: 5, title: 'Song', extra: { capo: 2 } }]);
+    assertEq(res.body.rows[0].extra, { capo: 2, listenUrl: 'https://x.test/a.mp3' });
   });
 }
 

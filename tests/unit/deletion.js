@@ -93,10 +93,11 @@ async function run(r) {
 
   console.log(B('\ncollectR2Urls'));
 
-  function fakeMediaSql({ songs = [], gigs = [], artists = [] }) {
+  function fakeMediaSql({ songs = [], gigs = [], artists = [], media = [] }) {
     return (strings, ...values) => {
       const text = strings.join('?');
       const ids  = values[0] || [];
+      if (/FROM song_media/i.test(text)) return Promise.resolve(media.filter(m => ids.includes(m.artist_id)));
       if (/FROM songs/i.test(text))   return Promise.resolve(songs.filter(s => ids.includes(s.artist_id)));
       if (/FROM gigs/i.test(text))    return Promise.resolve(gigs.filter(g => ids.includes(g.artist_id)));
       if (/FROM artists/i.test(text)) return Promise.resolve(artists.filter(a => ids.includes(a.id)));
@@ -112,6 +113,26 @@ async function run(r) {
     ]});
     const urls = await collectR2Urls([1], sql);
     assertEq(urls.join(','), 'https://r2/audio/a.mp3');
+  });
+
+  // Every song file (recordings, sheets, a voice's images) is a song_media row.
+  await testAsync('song_media files are collected, other bands\' keys are not', async () => {
+    const { collectR2Urls } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const was = process.env.R2_PUBLIC_URL;
+    process.env.R2_PUBLIC_URL = 'https://cdn.example.test';
+    try {
+      const B = 'https://cdn.example.test';
+      const sql = fakeMediaSql({ artists: [{ id: 1, slug: 'band', config: {} }], media: [
+        { artist_id: 1, url: `${B}/sheets/1/a.jpg` },
+        { artist_id: 1, url: `${B}/sheets/2/theirs.jpg` },
+        { artist_id: 1, url: `${B}/audio/1/b.mp3` },
+        { artist_id: 2, url: `${B}/sheets/2/other.jpg` },
+      ]});
+      const urls = await collectR2Urls([1], sql);
+      assertEq([...urls].sort(), [`${B}/audio/1/b.mp3`, `${B}/sheets/1/a.jpg`]);
+    } finally {
+      if (was === undefined) delete process.env.R2_PUBLIC_URL; else process.env.R2_PUBLIC_URL = was;
+    }
   });
 
   await testAsync('songs, gigs and the band logo are all collected', async () => {

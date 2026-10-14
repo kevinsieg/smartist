@@ -40,7 +40,7 @@ function run(r) {
     // Optional ones with safe defaults, not worth a warning.
     const OPTIONAL = new Set(['ARTIST_SLUG', 'GEMINI_API_KEY', 'GROQ_API_KEY',
       'MISTRAL_API_KEY', 'FACEBOOK_TRUST_EMAIL', 'SUPER_ADMIN_EMAILS', 'DEMO_ARTIST_SLUG',
-      'CONTACT_EMAIL', 'VERCEL_ENV', 'BETTERSTACK_TOKEN']);
+      'CONTACT_EMAIL', 'VERCEL_ENV', 'BETTERSTACK_TOKEN', 'LOCAL_STORAGE_DIR']);
     const listed = new Set([...REQUIRED, ...RECOMMENDED, ...PAIRS.flat(), ...OPTIONAL]);
     const used = new Set();
     const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
