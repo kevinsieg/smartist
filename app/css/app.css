@@ -700,12 +700,12 @@ input[type="date"], input[type="number"] {
     display: flex; align-items: flex-start; gap: 0.4rem;
     padding: 0.65rem 0; border-bottom: 1px solid rgba(221, 213, 200, 0.2);
 }
-/* drag handle: hidden on touch, revealed on pointer devices */
-.drag-handle { display: none; }
+/* drag handle: touch-action none so a finger drags it instead of scrolling */
+.drag-handle { display: block; cursor: grab; color: var(--third-color); font-size: 1.1rem; flex-shrink: 0; user-select: none; padding: 0 0.3rem; touch-action: none; }
+.drag-handle:active { cursor: grabbing; }
 @media (min-width: 640px) {
     .song-item   { gap: 0.5rem; padding: 0.55rem 0; }
-    .drag-handle { display: block; cursor: grab; color: var(--third-color); font-size: 1rem; flex-shrink: 0; user-select: none; padding-top: 1px; }
-    .drag-handle:active { cursor: grabbing; }
+    .drag-handle { font-size: 1rem; padding: 1px 0 0; }
 }
 .song-remove-btn {
     background: none; border: none; cursor: pointer; color: var(--muted-ink);
@@ -752,6 +752,7 @@ input[type="date"], input[type="number"] {
     border-top: 1px dashed var(--border-color);
     border-bottom: 1px dashed var(--border-color);
 }
+.set-add { list-style: none; }
 .set-break-label {
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em;
     color: var(--third-color); font-family: var(--font-ui);
@@ -1600,7 +1601,7 @@ body.brand-page .landing-main { flex: 1 0 auto; }
     .app-wrap  { max-width: 100%; padding: 0; }
 
     .app-header, footer, h1, .setlist-controls, .result-actions,
-    .add-song-row, .drag-handle, .song-actions,
+    .add-song-row, .set-add, .drag-handle, .song-actions,
     .total-time, .modal-overlay, .status-msg,
     #history-content { display: none !important; }
 

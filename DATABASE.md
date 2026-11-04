@@ -231,6 +231,8 @@ A saved setlist. Songs are stored in `setlist_songs`.
 | `gig_id` | integer FK → gigs SET NULL | Deleting the gig nullifies this, preserving the setlist |
 | `comment` | text | |
 | `created_at` | timestamptz DEFAULT NOW() | |
+| `document_url` | text | One PDF attached to the whole setlist (the evening's schedule); R2 key `documents/<artist id>/…`. NULL = none |
+| `document_name` | text | The file's name as shown on the stage link |
 
 `setlists_gig_same_band_fkey` (`(gig_id, artist_id)` → `gigs (id, artist_id)`, `ON DELETE SET NULL (gig_id)`) keeps the gig in the same band.
 

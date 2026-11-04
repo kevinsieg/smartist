@@ -557,3 +557,8 @@ LEFT JOIN LATERAL (
   WHERE m.song_id = s.id AND m.kind IN ('listen', 'playback', 'pdf')
 ) m ON true;
 INSERT INTO schema_migrations (id) VALUES ('2026-10-14') ON CONFLICT DO NOTHING;
+
+-- 2026-11-04: a PDF attached to a whole setlist (the evening's schedule)
+ALTER TABLE setlists ADD COLUMN IF NOT EXISTS document_url  TEXT;
+ALTER TABLE setlists ADD COLUMN IF NOT EXISTS document_name TEXT;
+INSERT INTO schema_migrations (id) VALUES ('2026-11-04') ON CONFLICT DO NOTHING;

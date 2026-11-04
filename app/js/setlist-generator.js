@@ -248,12 +248,46 @@ function _applyFinalOrder(set) {
   _splitAt = out.splitAt;
 }
 
+// Two sets are one list with a break index. These keep the break where the
+// user put it; dropping a song into the other set is the only way across.
+function _moveInSets(songs, splitAt, from, to) {
+  const out = songs.slice();
+  out.splice(to, 0, out.splice(from, 1)[0]);
+  if (splitAt === null) return { songs: out, splitAt: null };
+  return { songs: out, splitAt: splitAt - (from < splitAt ? 1 : 0) + (to < splitAt ? 1 : 0) };
+}
+
+function _removeFromSets(songs, splitAt, index) {
+  const out = songs.slice();
+  out.splice(index, 1);
+  return { songs: out, splitAt: splitAt === null ? null : splitAt - (index < splitAt ? 1 : 0) };
+}
+
+function _addToSets(songs, splitAt, song, setNo) {
+  const out = songs.slice();
+  if (splitAt === null || setNo !== 1) { out.push(song); return { songs: out, splitAt }; }
+  out.splice(splitAt, 0, song);
+  return { songs: out, splitAt: splitAt + 1 };
+}
+
+// The break the list is drawn with (same rule as renderResult).
+function _currentSplit() {
+  const split = document.getElementById('split-sets')?.checked;
+  return split && currentSet.length >= 2 ? (_splitAt ?? computeSplitIndex(currentSet)) : null;
+}
+
+function _applySets(out) {
+  currentSet = out.songs;
+  _splitAt = out.splitAt;
+  renderResult(currentSet);
+}
+
 function moveSong(index, dir) {
   const newIndex = index + dir;
   if (newIndex < 0 || newIndex >= currentSet.length) return;
-  [currentSet[index], currentSet[newIndex]] = [currentSet[newIndex], currentSet[index]];
-  _splitAt = null;
-  renderResult(currentSet);
+  const at = _currentSplit();
+  if (at !== null && (index < at) !== (newIndex < at)) return;
+  _applySets(_moveInSets(currentSet, at, index, newIndex));
   focusSongAfterMove(document.querySelector('.setlist-result .song-list'), newIndex, dir);
   announce(t('setlist.movedTo', { title: currentSet[newIndex].title, pos: newIndex + 1, total: currentSet.length }));
 }
@@ -472,7 +506,7 @@ function renderResult(songs) {
     const printLabels = song.genre ? `<span>${escHtml(song.genre)}</span>` : '';
 
     const displayNum = splitAt && i >= splitAt ? (i - splitAt + 1) : (i + 1);
-    const isFirst = i === 0, isLast = i === songs.length - 1;
+    const isFirst = i === 0 || i === splitAt, isLast = i === songs.length - 1 || i === splitAt - 1;
     const heading = tagStarts && tagStarts.has(i)
       ? `<li class="tag-heading">${escHtml(songTags(song)[0] || t('setlist.untagged'))}</li>`
       : '';
@@ -495,7 +529,7 @@ function renderResult(songs) {
     </li>`;
   });
 
-  if (splitAt) {
+  if (splitAt !== null) {
     const set2Min = totalMin - set1Min;
     itemHtmls.splice(splitAt, 0,
       `<li class="set-break">
@@ -505,8 +539,6 @@ function renderResult(songs) {
     );
   }
 
-  const items = itemHtmls.join('');
-
   const inSetIds = new Set(songs.map(s => s.id));
   const available = allSongs
     .filter(s => s.active && !inSetIds.has(s.id))
@@ -514,8 +546,17 @@ function renderResult(songs) {
   const options = available.map(s =>
     `<option value="${s.id}">${escHtml(s.title)}</option>`
   ).join('');
+  const addRow = (setNo, id) => `<div class="add-song-row">
+        <select${id ? ` id="${id}"` : ''} aria-label="${t(setNo === 1 ? 'setlist.addSongSet1' : setNo === 2 ? 'setlist.addSongSet2' : 'setlist.addSongLabel')}" data-onchange="addSongToSet(this, ${setNo})">
+          <option value="">${t('setlist.addSongPlaceholder')}</option>
+          ${options}
+          ${artistSlug && getToken() ? `<option value="__new">${t('setlist.newSongOption')}</option>` : ''}
+        </select>
+      </div>`;
+  if (splitAt !== null) itemHtmls.splice(splitAt, 0, `<li class="set-add">${addRow(1, '')}</li>`);
+  const items = itemHtmls.join('');
 
-  const headerText = splitAt
+  const headerText = splitAt !== null
     ? `${songs.length} ${t('setlist.songs')} &bull; ${formatLength(totalMin)} &ensp;${t('setlist.twoSets')}`
     : `${songs.length} ${t('setlist.songs')} &bull; ${formatLength(totalMin)}`;
 
@@ -528,13 +569,7 @@ function renderResult(songs) {
     <div class="setlist-result">
       <h2>${headerText}${feelBadge}</h2>
       <ul class="song-list">${items}</ul>
-      <div class="add-song-row">
-        <select id="add-song-select" aria-label="${t('setlist.addSongLabel')}" data-onchange="addSongToSet(this)">
-          <option value="">${t('setlist.addSongPlaceholder')}</option>
-          ${options}
-          ${artistSlug && getToken() ? `<option value="__new">${t('setlist.newSongOption')}</option>` : ''}
-        </select>
-      </div>
+      ${addRow(splitAt !== null ? 2 : 0, 'add-song-select')}
       <p class="total-time">${t('setlist.total', { duration: formatLength(totalMin) })}</p>
       <div class="result-actions">
         <button class="btn" data-onclick="onGenerate()" title="${t('setlist.regenTitle')}">${t('setlist.regenBtn')}</button>
@@ -548,22 +583,23 @@ function renderResult(songs) {
 }
 
 function removeFromSet(index) {
-  const [removed] = currentSet.splice(index, 1);
-  _splitAt = null;
-  renderResult(currentSet);
+  const removed = currentSet[index];
+  _applySets(_removeFromSets(currentSet, _currentSplit(), index));
   focusSongAfterRemove(document.querySelector('.setlist-result .song-list'), index, document.getElementById('add-song-select'));
   if (removed) announce(t('setlist.removedSong', { title: removed.title }));
 }
 
-function addSongToSet(select) {
-  if (select.value === '__new') { select.value = ''; _openQuickSong(); return; }
+function addSongToSet(select, setNo) {
+  if (select.value === '__new') {
+    select.value = '';
+    _openQuickSong(song => _applySets(_addToSets(currentSet, _currentSplit(), song, setNo)));
+    return;
+  }
   const songId = Number(select.value);
   if (!songId) return;
   const song = allSongs.find(s => s.id === songId);
   if (!song) return;
-  currentSet.push(song);
-  _splitAt = null;
-  renderResult(currentSet);
+  _applySets(_addToSets(currentSet, _currentSplit(), song, setNo));
 }
 
 // --- Quick new song: created in the band's catalogue, then added to the set ---
@@ -698,6 +734,49 @@ function applyKeyVariety(songs) {
 
 // --- Drag and drop reorder ---
 
+function _dropSong(from, to) {
+  if (from === to) return;
+  _applySets(_moveInSets(currentSet, _currentSplit(), from, to));
+}
+
+// Touch and pen: the browser's own drag does not start from a finger, so the
+// handle is dragged with pointer events. A mouse keeps the native drag.
+// onDrop(fromIndex, toIndex) is called for a drop on another song.
+function initHandleDrag(ul, onDrop) {
+  var src = null;
+  var overItem = function(e) {
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    return el && el.closest ? el.closest('li[data-index]') : null;
+  };
+  var clear = function() {
+    ul.querySelectorAll('.song-item').forEach(function(el) { el.classList.remove('dragging', 'drag-over'); });
+    src = null;
+  };
+  ul.addEventListener('pointerdown', function(e) {
+    if (e.pointerType === 'mouse') return;
+    var handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    src = handle.closest('li[data-index]');
+    src.draggable = false;
+    src.classList.add('dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  ul.addEventListener('pointermove', function(e) {
+    if (!src) return;
+    ul.querySelectorAll('.song-item').forEach(function(el) { el.classList.remove('drag-over'); });
+    var li = overItem(e);
+    if (li && li !== src) li.classList.add('drag-over');
+  });
+  ul.addEventListener('pointerup', function(e) {
+    if (!src) return;
+    var from = Number(src.dataset.index);
+    var li = overItem(e);
+    clear();
+    if (li) onDrop(from, Number(li.dataset.index));
+  });
+  ul.addEventListener('pointercancel', clear);
+}
+
 function initDragAndDrop() {
   const ul = document.querySelector('.song-list');
   if (!ul) return;
@@ -730,13 +809,10 @@ function initDragAndDrop() {
     e.preventDefault();
     const li = e.target.closest('li[data-index]');
     if (!li || dragSrcIndex === null) return;
-    const destIndex = Number(li.dataset.index);
-    if (dragSrcIndex === destIndex) return;
-    const [moved] = currentSet.splice(dragSrcIndex, 1);
-    currentSet.splice(destIndex, 0, moved);
-    _splitAt = null;
-    renderResult(currentSet);
+    _dropSong(dragSrcIndex, Number(li.dataset.index));
   });
+
+  initHandleDrag(ul, _dropSong);
 }
 
 // --- Accept / auth flow ---

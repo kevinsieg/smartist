@@ -531,6 +531,229 @@ async function _stageMediaUrl(url) {
 
 function _stageMediaSrc(url) { return url.indexOf('blob:') === 0 ? url : safeUrl(url); }
 
+// --- Setlist player: the songs' Listen recordings, one after the other ---
+
+var _STAGE_AUDIO_RE = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
+
+function _stageListenUrl(song) {
+  var url = song && song.extra && song.extra.listenUrl;
+  return url && _STAGE_AUDIO_RE.test(url) ? url : '';
+}
+
+// The songs the player plays: those with a Listen recording, in setlist order.
+// i is the song's place in the list, which the overview marks.
+function _stagePlaylist(songs) {
+  var out = [];
+  (songs || []).forEach(function (song, i) {
+    var url = _stageListenUrl(song);
+    if (url) out.push({ i: i, title: song.title || '', url: url });
+  });
+  return out;
+}
+
+// The order the queue plays in: the setlist's own, or every song once in random
+// order, starting at `first` when one is chosen.
+function _stageMakeOrder(n, shuffle, first, rnd) {
+  var order = [], i;
+  for (i = 0; i < n; i++) if (!shuffle || i !== first) order.push(i);
+  if (!shuffle) return order;
+  rnd = rnd || Math.random;
+  for (i = order.length - 1; i > 0; i--) {
+    var j = Math.floor(rnd() * (i + 1)), swap = order[i];
+    order[i] = order[j];
+    order[j] = swap;
+  }
+  if (first >= 0 && first < n) order.unshift(first);
+  return order;
+}
+
+// Place `dir` steps from `at` in an order of `len`; -1 past either end, unless the repeat is all.
+function _stageStepAt(len, at, dir, repeat) {
+  var n = at + dir;
+  if (n >= 0 && n < len) return n;
+  return repeat === 'all' && len ? (n + len) % len : -1;
+}
+
+function _stageClock(sec) {
+  sec = isFinite(sec) && sec > 0 ? Math.floor(sec) : 0;
+  var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), r = sec % 60;
+  return (h ? h + ':' + (m < 10 ? '0' : '') + m : m) + ':' + (r < 10 ? '0' : '') + r;
+}
+
+var _stagePlayList = [];
+var _stagePlayOrder = [];
+var _stagePlayAt = -1; // place in _stagePlayOrder; -1 = stopped
+var _stageShuffle = false;
+var _stageRepeat = 'off'; // off, all, one
+var _stageErrRun = 0;
+var _stagePlayMeta = { artist: '', album: '' };
+
+var _STAGE_ICON = {
+  prev: '<path d="M6 6h2v12H6zM20 6v12L9.5 12z"/>',
+  next: '<path d="M16 6h2v12h-2zM4 6l10.5 6L4 18z"/>',
+  play: '<path d="M8 5v14l11-7z"/>',
+  pause: '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>',
+  shuffle: '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
+  repeat: '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"/>'
+};
+
+function _stageIcon(name) {
+  return '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">' + _STAGE_ICON[name] + '</svg>';
+}
+
+function _stagePlayerHtml() {
+  if (!_stagePlayList.length) return '';
+  return '<div class="stage-player" id="stage-player" role="group" aria-label="Setlist player">' +
+    '<div class="stage-player-ctl">' +
+      '<button type="button" class="stage-player-btn" data-onclick="stagePlayStep(-1)" aria-label="Previous song">' + _stageIcon('prev') + '</button>' +
+      '<button type="button" class="stage-player-btn stage-player-main" id="stage-player-play" data-onclick="stagePlayToggle()" aria-label="Play">' + _stageIcon('play') + '</button>' +
+      '<button type="button" class="stage-player-btn" data-onclick="stagePlayStep(1)" aria-label="Next song">' + _stageIcon('next') + '</button>' +
+      '<button type="button" class="stage-player-btn stage-player-toggle" id="stage-player-shuffle" data-onclick="stagePlayShuffle()" aria-label="Shuffle" aria-pressed="false">' + _stageIcon('shuffle') + '</button>' +
+      '<button type="button" class="stage-player-btn stage-player-toggle" id="stage-player-repeat" data-onclick="stagePlayRepeat()" aria-label="Repeat: off" aria-pressed="false">' + _stageIcon('repeat') + '<span class="stage-player-one" aria-hidden="true">1</span></button>' +
+    '</div>' +
+    '<div class="stage-player-bar">' +
+      '<span class="stage-player-time" id="stage-player-elapsed">0:00</span>' +
+      '<input type="range" class="stage-player-seek" id="stage-player-seek" min="0" max="0" value="0" step="1" disabled aria-label="Position in the song">' +
+      '<span class="stage-player-time" id="stage-player-total">0:00</span>' +
+    '</div>' +
+    '<div class="stage-player-now" id="stage-player-now" aria-live="polite">' + _stagePlayList.length + ' song' + (_stagePlayList.length !== 1 ? 's' : '') + ' with a recording</div>' +
+    '<audio id="stage-audio" preload="none"></audio>' +
+  '</div>';
+}
+
+function _stagePlayerSync() {
+  var audio = document.getElementById('stage-audio');
+  var play = document.getElementById('stage-player-play');
+  if (!audio || !play) return;
+  var playing = _stagePlayAt >= 0 && !audio.paused;
+  play.innerHTML = _stageIcon(playing ? 'pause' : 'play');
+  play.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  var shuffle = document.getElementById('stage-player-shuffle');
+  shuffle.setAttribute('aria-pressed', String(_stageShuffle));
+  var repeat = document.getElementById('stage-player-repeat');
+  repeat.setAttribute('aria-pressed', String(_stageRepeat !== 'off'));
+  repeat.setAttribute('aria-label', 'Repeat: ' + _stageRepeat);
+  repeat.classList.toggle('stage-player-repeat-one', _stageRepeat === 'one');
+  var seek = document.getElementById('stage-player-seek');
+  var dur = isFinite(audio.duration) ? audio.duration : 0;
+  seek.disabled = !dur;
+  seek.max = Math.floor(dur);
+  seek.value = Math.floor(audio.currentTime || 0);
+  document.getElementById('stage-player-elapsed').textContent = _stageClock(audio.currentTime);
+  document.getElementById('stage-player-total').textContent = _stageClock(dur);
+}
+
+function _stagePlayerWire() {
+  var audio = document.getElementById('stage-audio');
+  if (!audio) return;
+  ['play', 'pause', 'timeupdate', 'durationchange', 'loadedmetadata'].forEach(function (ev) {
+    audio.addEventListener(ev, _stagePlayerSync);
+  });
+  audio.addEventListener('playing', function () { _stageErrRun = 0; });
+  audio.addEventListener('ended', function () {
+    if (_stageRepeat === 'one') { audio.currentTime = 0; audio.play().catch(function () {}); return; }
+    stagePlayStep(1);
+  });
+  // A file that will not load is skipped like a song without one; if none
+  // loads, the player stops rather than looping through them.
+  audio.addEventListener('error', function () {
+    if (_stagePlayAt < 0) return;
+    if (++_stageErrRun > _stagePlayList.length) { _stagePlayStop(); return; }
+    stagePlayStep(1);
+  });
+  document.getElementById('stage-player-seek').addEventListener('input', function (e) {
+    audio.currentTime = Number(e.target.value);
+  });
+  if ('mediaSession' in navigator) {
+    var ms = navigator.mediaSession;
+    ms.setActionHandler('play', function () { stagePlayToggle(); });
+    ms.setActionHandler('pause', function () { audio.pause(); });
+    ms.setActionHandler('previoustrack', function () { stagePlayStep(-1); });
+    ms.setActionHandler('nexttrack', function () { stagePlayStep(1); });
+  }
+}
+
+function _stagePlayMark(item) {
+  document.querySelectorAll('.stage-song-playing').forEach(function (el) { el.classList.remove('stage-song-playing'); });
+  var now = document.getElementById('stage-player-now');
+  if (now) now.textContent = item ? item.title : _stagePlayList.length + ' song' + (_stagePlayList.length !== 1 ? 's' : '') + ' with a recording';
+  if (!item) return;
+  var li = document.querySelector('.stage-song[data-i="' + item.i + '"]');
+  if (li) {
+    li.classList.add('stage-song-playing');
+    li.scrollIntoView({ block: 'nearest' });
+  }
+  if ('mediaSession' in navigator && typeof MediaMetadata === 'function')
+    navigator.mediaSession.metadata = new MediaMetadata({ title: item.title, artist: _stagePlayMeta.artist, album: _stagePlayMeta.album });
+}
+
+// at = place in the play order.
+async function _stagePlayIndex(at) {
+  var item = _stagePlayList[_stagePlayOrder[at]];
+  var audio = document.getElementById('stage-audio');
+  if (!item || !audio) return;
+  _stagePlayAt = at;
+  _stagePlayMark(item);
+  var src = await _stageMediaUrl(item.url);
+  if (_stagePlayAt !== at) return; // the user moved on while a saved copy was read
+  audio.src = _stageMediaSrc(src);
+  audio.play().catch(function () {});
+  _stagePlayerSync();
+}
+
+function _stagePlayStop() {
+  var audio = document.getElementById('stage-audio');
+  _stagePlayAt = -1;
+  if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
+  _stagePlayMark(null);
+  _stagePlayerSync();
+}
+
+function stagePlayToggle() {
+  var audio = document.getElementById('stage-audio');
+  if (!audio) return;
+  if (_stagePlayAt < 0) {
+    _stagePlayOrder = _stageMakeOrder(_stagePlayList.length, _stageShuffle, -1);
+    _stagePlayIndex(0);
+  } else if (audio.paused) audio.play().catch(function () {});
+  else audio.pause();
+}
+
+// dir 1 / -1. From a stopped player either starts at the first song. Back
+// within the first seconds of a song goes to the one before, later it restarts this one.
+function stagePlayStep(dir) {
+  var audio = document.getElementById('stage-audio');
+  if (!audio) return;
+  if (_stagePlayAt < 0) { stagePlayToggle(); return; }
+  if (dir < 0 && audio.currentTime > 3) { audio.currentTime = 0; return; }
+  var next = _stageStepAt(_stagePlayOrder.length, _stagePlayAt, dir, _stageRepeat);
+  if (next >= 0) _stagePlayIndex(next);
+  else if (dir < 0) audio.currentTime = 0;
+  else _stagePlayStop();
+}
+
+function stagePlaySong(i) {
+  var pos = _stagePlayList.findIndex(function (x) { return x.i === i; });
+  if (pos < 0) return;
+  _stagePlayOrder = _stageMakeOrder(_stagePlayList.length, _stageShuffle, pos);
+  _stagePlayIndex(_stageShuffle ? 0 : pos);
+}
+
+function stagePlayShuffle() {
+  _stageShuffle = !_stageShuffle;
+  if (_stagePlayAt >= 0) {
+    var current = _stagePlayOrder[_stagePlayAt];
+    _stagePlayOrder = _stageMakeOrder(_stagePlayList.length, _stageShuffle, current);
+    _stagePlayAt = _stageShuffle ? 0 : current;
+  }
+  _stagePlayerSync();
+}
+
+function stagePlayRepeat() {
+  _stageRepeat = _stageRepeat === 'off' ? 'all' : _stageRepeat === 'all' ? 'one' : 'off';
+  _stagePlayerSync();
+}
+
 var _STAGE_VIEW_LABEL = { listen: 'Listen', playback: 'Playback' };
 
 // onclick is the item's whole attribute, written out at the call (the handler
@@ -756,6 +979,13 @@ async function init() {
   }
 }
 
+// The attached PDF opens from the copy "Keep offline" saved, when there is one.
+async function _stageDocumentWire(url) {
+  var link = document.getElementById('stage-doc-link');
+  if (!link || !url) return;
+  link.href = _stageMediaSrc(await _stageMediaUrl(url));
+}
+
 async function initSetlist(params, el, cfg) {
   const setlistId = Number(params.get('id'));
   if (!setlistId) {
@@ -778,6 +1008,11 @@ async function initSetlist(params, el, cfg) {
 
   document.title = `smartist · ${data.title || data.gig_name || 'Stage'} · ${cfg.name}`;
 
+  _stagePlayList = _stagePlaylist(songs);
+  _stagePlayAt = -1;
+  _stagePlayMeta = { artist: cfg.name || '', album: data.title || data.gig_name || '' };
+  const playable = new Set(_stagePlayList.map(x => x.i));
+
   let totalMin = 0;
   const items = songs.map((song, i) => {
     totalMin += song.length_min || 0;
@@ -789,9 +1024,10 @@ async function initSetlist(params, el, cfg) {
       bjCapo  !== null ? `<span class="stage-capo">Bj: ${escHtml(String(bjCapo))}</span>`  : '',
       song.extra && song.extra.aCapella && !songFieldHidden(cfg.config, 'extra.aCapella') ? `<span class="stage-capo">A cappella</span>` : '',
     ].join('');
-    return `<li class="stage-song">
+    return `<li class="stage-song" data-i="${i}">
       <span class="stage-num">${i + 1}.</span>
       <a class="stage-song-title stage-song-link" href="/${cfg.slug}/stage?song=${song.id}&from=${setlistId}">${escHtml(song.title)}</a>
+      ${playable.has(i) ? `<button type="button" class="stage-song-play" data-onclick="stagePlaySong(${i})" aria-label="Play ${escHtml(song.title)}">&#9654;</button>` : ''}
       ${badges ? `<span class="stage-badges">${badges}</span>` : ''}
     </li>`;
   }).join('');
@@ -802,11 +1038,15 @@ async function initSetlist(params, el, cfg) {
       <h1 class="stage-title">${mainTitle}</h1>
       ${gigLine && setTitle ? `<p class="stage-sub">${setTitle}</p>` : ''}
       ${data.comment ? `<p class="stage-sub" style="font-style:italic;">${escHtml(data.comment)}</p>` : ''}
+      ${data.document_url ? `<p class="stage-doc"><a class="stage-doc-link" id="stage-doc-link" href="${escHtml(safeUrl(data.document_url))}" target="_blank" rel="noopener"><span aria-hidden="true">&#128196; </span>${escHtml(data.document_name || 'Document')}</a></p>` : ''}
       ${_shareHtml()}
     </div>
+    ${_stagePlayerHtml()}
     <ul class="stage-list">${items}</ul>
     ${totalMin ? `<p class="stage-total">${songs.length} song${songs.length !== 1 ? 's' : ''} &middot; ${_stageLength(totalMin)}</p>` : ''}`;
 
+  _stagePlayerWire();
+  _stageDocumentWire(data.document_url);
   _stageOfflineRefresh();
   if (params.get('print') === '1') setTimeout(function() { window.print(); }, 400);
 }

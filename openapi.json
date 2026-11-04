@@ -417,6 +417,15 @@
             "type": "string",
             "nullable": true
           },
+          "document_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "The PDF attached to the whole setlist (the evening's schedule)"
+          },
+          "document_name": {
+            "type": "string",
+            "nullable": true
+          },
           "gig_id": {
             "type": "integer",
             "nullable": true
@@ -3460,6 +3469,247 @@
                 }
               }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      }
+    },
+    "/api/{band}/setlists/{id}/document": {
+      "post": {
+        "summary": "Presign a setlist document upload",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Returns a 5-minute presigned PUT URL for a PDF attached to the whole setlist, e.g. the evening's schedule (20 MB). The key is `documents/<artist id>/<uuid>-<name>`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "filename",
+                  "size"
+                ],
+                "properties": {
+                  "filename": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadUrl": {
+                      "type": "string"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "put": {
+        "summary": "Confirm a setlist document upload",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Checks the object exists as a PDF under this band's key prefix, stores its URL and name on the setlist (`document_url`, `document_name`), counts it against the storage limit (402 `storage_limit` when full) and removes the file it replaces.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "publicUrl"
+                ],
+                "properties": {
+                  "publicUrl": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "publicUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "402": {
+            "description": "Plan limit (`upgrade_required`, `song_limit`, `storage_limit`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a setlist's document",
+        "tags": [
+          "Setlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/band"
+          },
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "description": "Member role. Clears the setlist's document and deletes the file, giving its bytes back to the storage count.",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "description": "Role too low for this action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
           },
           "500": {
             "$ref": "#/components/responses/500"

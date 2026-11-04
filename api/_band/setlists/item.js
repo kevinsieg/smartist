@@ -10,6 +10,7 @@ const logger = require('../../_logger');
 const { gigColumns, gigJoins, duplicateSetlist, setlistForShare } = require('../../_domain/setlists');
 const { MSG } = require('../../_domain/http');
 const { publicSong } = require('../../_domain/songs');
+const document = require('./document');
 
 module.exports = wrap(async function handler(req, res) {
   const [rawId, action] = req.query.path || [];
@@ -58,9 +59,10 @@ module.exports = wrap(async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       const [deleted] = await sql`
-        DELETE FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id} RETURNING id
+        DELETE FROM setlists WHERE id = ${setlistId} AND artist_id = ${band.id} RETURNING id, document_url
       `;
       if (!deleted) return res.status(404).json({ error: 'Setlist not found' });
+      await document.dropDocument(sql, band, deleted.document_url);
       return res.json({ deleted: true });
     }
 
@@ -112,6 +114,9 @@ module.exports = wrap(async function handler(req, res) {
     if (!updated) return res.status(404).json({ error: 'Setlist not found' });
     return res.json(updated);
   }
+
+  // ── POST/PUT/DELETE /setlists/:id/document — the attached PDF ─────────────
+  if (action === 'document') return document.handler(req, res, setlistId);
 
   // ── POST /setlists/:id/duplicate — copy the row and its songs ─────────────
   if (action === 'duplicate' || action === 'share') {

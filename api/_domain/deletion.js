@@ -60,6 +60,9 @@ async function collectR2Urls(artistIds, sql) {
   const media = await sql`
     SELECT url FROM song_media WHERE artist_id = ANY(${artistIds})
   `;
+  const setlists = await sql`
+    SELECT document_url FROM setlists WHERE artist_id = ANY(${artistIds})
+  `;
   const gigs = await sql`
     SELECT poster_url, thumb_url FROM gigs WHERE artist_id = ANY(${artistIds})
   `;
@@ -78,7 +81,7 @@ async function collectR2Urls(artistIds, sql) {
     if (!base || !u.startsWith(`${base}/`)) return true;   // not ours to judge; deleteFromR2 ignores it
     const key = u.slice(base.length + 1).split('?')[0];
     if (unsafeKey(key)) return false;
-    const m = /^(audio|sheets|playback)\/([^/]+)\/[^/]+$/.exec(key);
+    const m = /^(audio|sheets|playback|documents)\/([^/]+)\/[^/]+$/.exec(key);
     if (m) return ids.has(m[2]);
     const b = /^(bands|gigs)\/([^/]+)\//.exec(key);
     if (b) return slugs.has(b[2]);
@@ -93,6 +96,7 @@ async function collectR2Urls(artistIds, sql) {
     add(e.listenUrl); add(e.sheetUrl); add(e.playbackUrl);
   }
   for (const m of media) add(m.url);
+  for (const l of setlists) add(l.document_url);
   for (const g of gigs) { add(g.poster_url); add(g.thumb_url); }
   // api/_config.js uploads two band images (photo → logoUrl, favicon → faviconUrl);
   // faviconUrl's key is slug-derived, not a UUID, so it's the one guessable

@@ -164,6 +164,13 @@ async function run(r) {
     assertEq(O.offlineMediaUrls(null), []);
   });
 
+  test('offlineMediaUrls also lists the song\'s Listen recording, but not a link to a video page', () => {
+    assertEq(O.offlineMediaUrls({ extra: { listenUrl: 'https://m/l.mp3?x=1' }, melodies: [{ sheet_urls: [], audio_url: 'https://m/c.mp3' }] }),
+      ['https://m/c.mp3', 'https://m/l.mp3?x=1']);
+    assertEq(O.offlineMediaUrls({ extra: { listenUrl: 'https://www.youtube.com/watch?v=1' } }), []);
+    assertEq(O.offlineMediaUrls({ extra: { listenUrl: 'https://m/c.mp3' }, melodies: [{ sheet_urls: [], audio_url: 'https://m/c.mp3' }] }), ['https://m/c.mp3']);
+  });
+
   await testAsync('a saved media file comes back as an object URL, only for the user who saved it', async () => {
     const d = makeDeps({ token: () => tok(7), fetch: async () => blobRes });
     await O.offlineMediaSave('https://m/c.mp3', d);
@@ -186,6 +193,17 @@ async function run(r) {
     assertEq(caches, ['reload', 'reload', 'reload'], 'a copy cached by an earlier plain <img>/<audio> load has no CORS headers');
     assertEq(progress[progress.length - 1], [5, 5]);
     assert(await d.store.get('media:https://m/b.jpg'), 'media not stored');
+  });
+
+  await testAsync('offlineKeep also saves the PDF attached to the setlist, once', async () => {
+    const d = makeDeps({ fetch: async u => {
+      if (u.startsWith('https://m/')) return blobRes;
+      return ok(u.includes('/setlists/') ? { document_url: 'https://m/schedule.pdf', songs: [{ id: 4 }] } : {});
+    } });
+    const out = await O.offlineKeep('b', 3, null, d);
+    assertEq(out, { saved: 3, failed: [] });
+    assert(await d.store.get('media:https://m/schedule.pdf'), 'document not stored');
+    assertEq((await O.offlineKept('b', 3, d)).media, ['https://m/schedule.pdf']);
   });
 
   await testAsync('a melody file that cannot be fetched is reported and the rest is kept', async () => {
