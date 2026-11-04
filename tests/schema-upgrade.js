@@ -91,11 +91,17 @@ async function seed(db) {
 
 // song_media: the old extra keys are copied once, the view answers with them
 // rebuilt from the table, the constraints hold, and the view lists every column of songs.
-async function checkMedia(db, head) {
+// Once the base branch has the table, its own migration has long run on an empty
+// songs table: the rows the backfill would have made are inserted here instead.
+async function checkMedia(db, head, baseHasMedia) {
   const sql = connect(urlFor(db));
   const fail = [];
   const run = q => sql([q]);
   try {
+    if (baseHasMedia) {
+      for (const [kind, url, wave] of [['listen', 'https://x.test/audio/1/a.mp3', 'c0'.repeat(100)], ['playback', 'https://x.test/pb.mp3', null], ['pdf', 'https://x.test/s.pdf', null]])
+        await run(`INSERT INTO song_media (song_id, artist_id, kind, url, waveform) SELECT id, artist_id, '${kind}', '${url}', ${wave ? `'${wave}'` : 'NULL'} FROM songs WHERE title = 'One'`);
+    }
     const rows = await run(`SELECT kind, instrument, url, waveform FROM song_media ORDER BY kind`);
     const want = ['listen', 'pdf', 'playback'];
     if (rows.map(r => r.kind).join() !== want.join()) fail.push('backfill made ' + JSON.stringify(rows.map(r => r.kind)));
@@ -172,7 +178,7 @@ async function main() {
     try { await migrate(up_, head); } finally { await up_.end(); }
     await apply(DBS.fresh, head);
 
-    const mediaFail = await checkMedia(DBS.upgraded, head);
+    const mediaFail = await checkMedia(DBS.upgraded, head, base.includes('CREATE TABLE IF NOT EXISTS song_media'));
     if (mediaFail.length) {
       failed = true;
       console.log(R('  ✗ song_media'));
