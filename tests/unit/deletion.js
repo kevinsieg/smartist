@@ -93,10 +93,11 @@ async function run(r) {
 
   console.log(B('\ncollectR2Urls'));
 
-  function fakeMediaSql({ songs = [], gigs = [], artists = [], media = [] }) {
+  function fakeMediaSql({ songs = [], gigs = [], artists = [], media = [], setlists = [] }) {
     return (strings, ...values) => {
       const text = strings.join('?');
       const ids  = values[0] || [];
+      if (/FROM setlists/i.test(text)) return Promise.resolve(setlists.filter(l => ids.includes(l.artist_id)));
       if (/FROM song_media/i.test(text)) return Promise.resolve(media.filter(m => ids.includes(m.artist_id)));
       if (/FROM songs/i.test(text))   return Promise.resolve(songs.filter(s => ids.includes(s.artist_id)));
       if (/FROM gigs/i.test(text))    return Promise.resolve(gigs.filter(g => ids.includes(g.artist_id)));
@@ -130,6 +131,23 @@ async function run(r) {
       ]});
       const urls = await collectR2Urls([1], sql);
       assertEq([...urls].sort(), [`${B}/audio/1/b.mp3`, `${B}/sheets/1/a.jpg`]);
+    } finally {
+      if (was === undefined) delete process.env.R2_PUBLIC_URL; else process.env.R2_PUBLIC_URL = was;
+    }
+  });
+
+  await testAsync('a setlist\'s attached PDF is collected, another band\'s is not', async () => {
+    const { collectR2Urls } = require(path.join(__dirname, '../../api/_domain/deletion'));
+    const was = process.env.R2_PUBLIC_URL;
+    process.env.R2_PUBLIC_URL = 'https://cdn.example.test';
+    try {
+      const B = 'https://cdn.example.test';
+      const sql = fakeMediaSql({ artists: [{ id: 1, slug: 'band', config: {} }], setlists: [
+        { artist_id: 1, document_url: `${B}/documents/1/a.pdf` },
+        { artist_id: 1, document_url: `${B}/documents/2/theirs.pdf` },
+        { artist_id: 1, document_url: null },
+      ]});
+      assertEq([...(await collectR2Urls([1], sql))], [`${B}/documents/1/a.pdf`]);
     } finally {
       if (was === undefined) delete process.env.R2_PUBLIC_URL; else process.env.R2_PUBLIC_URL = was;
     }

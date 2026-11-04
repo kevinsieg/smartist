@@ -418,6 +418,95 @@ function _initEditSongsDnd(sid) {
     dragSrcIndex = null;
     _renderEditSongsList(sid);
   });
+  initHandleDrag(ul, function(from, to) {
+    if (!_editSongs || from === to) return;
+    _editSongs.splice(to, 0, _editSongs.splice(from, 1)[0]);
+    _renderEditSongsList(sid);
+  });
+}
+
+// The PDF attached to the whole setlist (the evening's schedule), shown in the
+// editor with buttons to attach, replace or remove it. It is saved on its own,
+// as soon as it is chosen; the editor's Save button does not touch it.
+var _HIST_DOC_MAX = 20 * 1024 * 1024;
+
+function _histDocHtml(s, sid) {
+  if (!s.document_url) {
+    return '<button type="button" class="btn" data-onclick="_histDocPick()">' + t('setlist.docAttach') + '</button>';
+  }
+  return '<a href="' + escHtml(safeUrl(s.document_url)) + '" target="_blank" rel="noopener">' + escHtml(s.document_name || s.document_url) + '</a> ' +
+    '<button type="button" class="btn" data-onclick="_histDocPick()">' + t('setlist.docReplace') + '</button> ' +
+    '<button type="button" class="btn" data-onclick="_histDocRemove(' + onArg(sid) + ')">' + t('setlist.docRemove') + '</button>';
+}
+
+function _histDocStatus(text, cls, upgrade) {
+  var el = document.getElementById('hist-edit-doc-status');
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'status-msg' + (cls ? ' ' + cls : '');
+  if (upgrade) {
+    var link = document.createElement('a');
+    link.href = '/' + artistSlug + '/settings#plan';
+    link.textContent = t('songs.storageUpgrade');
+    el.appendChild(document.createTextNode(' '));
+    el.appendChild(link);
+  }
+}
+
+function _histDocRefresh(s, sid) {
+  var box = document.getElementById('hist-edit-doc');
+  if (box) box.innerHTML = _histDocHtml(s, sid);
+}
+
+function _histDocPick() {
+  var input = document.getElementById('hist-edit-doc-file');
+  if (input) input.click();
+}
+
+async function _histDocPicked(input, sid) {
+  sid = String(sid);
+  var file = input.files[0];
+  input.value = '';
+  var s = _histSets.find(function(x) { return String(x.id) === sid; });
+  if (!file || !s) return;
+  if (file.size > _HIST_DOC_MAX) { _histDocStatus(t('setlist.docTooBig'), 'error'); return; }
+  _histDocStatus(t('setlist.docUploading'), '');
+  var base = '/api/' + artistSlug + '/setlists/' + sid + '/document';
+  try {
+    var r = await apiFetch(base, 'POST', { filename: file.name, contentType: 'application/pdf', size: file.size });
+    if (!r.ok) throw new Error('presign');
+    var target = await r.json();
+    var put = await fetch(target.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: file });
+    if (!put.ok) throw new Error('storage');
+    var confirm = await apiFetch(base, 'PUT', { publicUrl: target.publicUrl });
+    var body = await confirm.json().catch(function() { return {}; });
+    if (!confirm.ok) {
+      if (body.code === 'storage_limit') { _histDocStatus(t('songs.storageFull'), 'error', true); return; }
+      throw new Error('confirm');
+    }
+    s.document_url = body.document_url;
+    s.document_name = body.document_name;
+    _histDocRefresh(s, sid);
+    _histDocStatus('', '');
+  } catch (err) {
+    if (err.message !== 'auth') _histDocStatus(t('setlist.docFailed'), 'error');
+  }
+}
+
+async function _histDocRemove(sid) {
+  sid = String(sid);
+  var s = _histSets.find(function(x) { return String(x.id) === sid; });
+  if (!s) return;
+  try {
+    var r = await apiFetch('/api/' + artistSlug + '/setlists/' + sid + '/document', 'DELETE');
+    if (!r.ok) throw new Error('delete');
+    s.document_url = null;
+    s.document_name = null;
+    _histDocRefresh(s, sid);
+    _histDocStatus('', '');
+  } catch (err) {
+    if (err.message !== 'auth') _histDocStatus(t('setlist.docFailed'), 'error');
+  }
 }
 
 async function _histEdit(sid) {
@@ -465,6 +554,12 @@ async function _histEdit(sid) {
       '<div class="modal-field">' +
         '<label for="hist-edit-comment">' + t('setlist.editCommentLabel') + '</label>' +
         '<textarea id="hist-edit-comment" placeholder="' + t('setlist.editCommentPlaceholder') + '">' + escHtml(s.comment || '') + '</textarea>' +
+      '</div>' +
+      '<div class="modal-field">' +
+        '<label id="hist-edit-doc-label">' + t('setlist.docLabel') + '</label>' +
+        '<div id="hist-edit-doc" class="hist-doc" aria-labelledby="hist-edit-doc-label">' + _histDocHtml(s, sid) + '</div>' +
+        '<input type="file" id="hist-edit-doc-file" accept="application/pdf,.pdf" hidden data-onchange="_histDocPicked(this,' + onArg(sid) + ')">' +
+        '<div class="status-msg" id="hist-edit-doc-status"></div>' +
       '</div>' +
       '<div class="modal-field">' +
         '<label for="hist-edit-add-select" id="hist-edit-songs-label">' + t('setlist.editSongsLabel') + '</label>' +

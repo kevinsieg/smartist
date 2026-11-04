@@ -51,7 +51,7 @@ One serverless function, `api/index.js`, sends every `/api/*` path to a handler 
 | `api/_band/organizers.js` | `GET/POST /api/:artist/organizers` |
 | `api/_band/organizers/item.js` | `GET/PUT/DELETE /api/:artist/organizers/:id` |
 | `api/_band/setlists.js` | `GET /api/:artist/setlists`; `POST` — create `{song_ids}` |
-| `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `POST …/:id/duplicate`, `POST …/:id/share` `{email}` |
+| `api/_band/setlists/item.js` | `GET/PUT/DELETE /api/:artist/setlists/:id`; `POST …/:id/duplicate`, `POST …/:id/share` `{email}`; `POST/PUT/DELETE …/:id/document` — the one PDF attached to a setlist (`setlists.document_url`/`document_name`, `api/_band/setlists/document.js`): presign, confirm and delete like song PDFs, key `documents/<artist id>/…`, counted in the band's storage, removed with the setlist. The stage overview shows it as a link under the title, and "Keep offline" saves it |
 | `api/_band/export.js` | `GET /api/:artist/export` — every table of the band as a ZIP of CSVs |
 | `api/_band/songs.js` | `GET/POST/PATCH /api/:artist/songs`; `GET /api/:artist/song-logs`; `POST /songs/import` — CSV import (`_domain/song_import.js`; near-duplicate titles by `_domain/title_match.js`) |
 | `api/_band/songs/item.js` | `GET /songs/:id` (details incl. lyrics, arrangements and `melodies`); `melodies/:instrument[/sheet|audio]` (POST presign, PUT confirm, DELETE; `api/_band/songs/melodies.js`, rules in `api/_domain/melodies.js`); `DELETE` / `restore` / `setlists` / `gema` / `audio` / `sheet` / `playback`; `arrangements` (GET/POST, `/:arrId` PUT/DELETE, `/:arrId/activate`); `lyrics` (PUT/DELETE, `/lyrics/suggest` POST) |

@@ -136,7 +136,10 @@ async function offlineFetch(url, headers, over, fresh) {
   return { data: body, savedAt: null, fromCache: false };
 }
 
-// Every melody image and recording of one song's details, once each.
+var OFFLINE_AUDIO_RE = /\.(mp3|m4a|ogg|wav|flac)(\?|$)/i;
+
+// Every melody image and recording of one song's details, and the song's own
+// Listen recording (the setlist player's track, never a link to a video page), once each.
 function offlineMediaUrls(song) {
   var out = [];
   ((song && song.melodies) || []).forEach(function (m) {
@@ -144,6 +147,8 @@ function offlineMediaUrls(song) {
       if (u && out.indexOf(u) < 0) out.push(u);
     });
   });
+  var listen = song && song.extra && song.extra.listenUrl;
+  if (listen && OFFLINE_AUDIO_RE.test(listen) && out.indexOf(listen) < 0) out.push(listen);
   return out;
 }
 
@@ -233,7 +238,8 @@ async function offlineKeep(slug, setlistId, onProgress, over) {
   var ids = (sl.data.songs || []).map(function (s) { return Number(s.id); }).filter(Boolean);
   var urls = ['/api/config?light=1&slug=' + encodeURIComponent(slug)]
     .concat(ids.map(function (id) { return base + '/songs/' + id; }));
-  var failed = [], done = 0, media = [];
+  // The PDF attached to the whole setlist is kept with the songs' files.
+  var failed = [], done = 0, media = sl.data.document_url ? [sl.data.document_url] : [];
   for (var i = 0; i < urls.length; i++) {
     try {
       var res = await offlineFetch(urls[i], h, d, true);

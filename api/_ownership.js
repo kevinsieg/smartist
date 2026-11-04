@@ -41,7 +41,7 @@ async function ownsRefs(sql, artistId, { songIds = [], gigId = null, venueId = n
 function isOwnMediaUrl(url, artistId, keyFromUrl) {
   const key = keyFromUrl(url);
   if (!key || unsafeKey(key)) return false;
-  const m = /^(audio|sheets|playback)\/([^/]+)\/[^/]+$/.exec(key);
+  const m = /^(audio|sheets|playback|documents)\/([^/]+)\/[^/]+$/.exec(key);
   return !!m && m[2] === String(artistId);
 }
 

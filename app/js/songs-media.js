@@ -33,7 +33,7 @@ async function _panelUploadHandler(input, sid, mediaType) {
     setTimeout(function() { _setBulkStatus('', ''); }, 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
+    _mediaUploadFailed(err);
   } finally {
     if (btn) { btn.textContent = origText; btn.disabled = false; }
   }
@@ -62,6 +62,7 @@ async function _songWaveform(file) {
 //   'presign' — presign request failed
 //   'storage' — PUT to storage failed
 //   'confirm' — confirm request failed
+//   'storage_limit' — the confirm was refused: the plan's storage is full
 async function _uploadSongMedia(sid, type, file) {
   var contentType = type === 'sheet' ? 'application/pdf' : file.type;
   // apiFetch sends an ended session to the login page and throws.
@@ -77,7 +78,10 @@ async function _uploadSongMedia(sid, type, file) {
   var waveKey = type === 'audio' ? 'waveform' : type === 'playback' ? 'playbackWaveform' : null;
   if (waveKey) body.waveform = await _songWaveform(file);
   var confirm = await apiFetch('/api/' + artistSlug + '/songs/' + sid + '/' + type, 'PUT', body);
-  if (!confirm.ok) throw new Error('confirm');
+  if (!confirm.ok) {
+    var failure = await confirm.json().catch(function() { return {}; });
+    throw new Error(failure.code === 'storage_limit' ? 'storage_limit' : 'confirm');
+  }
   if (waveKey) {
     // Keep the page's copy in step, so a later save cannot write the old waveform back.
     var own = songs.find(function(x) { return String(x.id) === String(sid); });
@@ -87,6 +91,17 @@ async function _uploadSongMedia(sid, type, file) {
   // Media URLs live in songs.extra, which the cached config payload carries.
   invalidateConfigCache();
   return json.publicUrl;
+}
+
+// One message for every failed upload. A full quota links to the plan page.
+function _mediaUploadFailed(err) {
+  if (err.message === 'auth') return;
+  if (err.message !== 'storage_limit') { _setBulkStatus('error', t('songs.uploadFailed')); return; }
+  _setBulkStatus('error', t('songs.storageFull') + ' ');
+  var link = document.createElement('a');
+  link.href = '/' + artistSlug + '/settings#plan';
+  link.textContent = t('songs.storageUpgrade');
+  document.getElementById('status').appendChild(link);
 }
 
 // --- Audio upload ---
@@ -125,7 +140,7 @@ async function handleAudioFile(input, sid) {
     setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
+    _mediaUploadFailed(err);
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -282,7 +297,7 @@ async function handleReplaceFile(input) {
     _setBulkStatus('saved', t('songs.audioReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
+    _mediaUploadFailed(err);
   } finally {
     if (replaceBtn) { replaceBtn.textContent = t('songs.replace'); replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
@@ -343,7 +358,7 @@ async function handleSheetFile(input, sid) {
     setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
+    _mediaUploadFailed(err);
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -453,7 +468,7 @@ async function handleReplaceSheet(input) {
     _setBulkStatus('saved', t('songs.sheetReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
+    _mediaUploadFailed(err);
   } finally {
     if (replaceBtn) { replaceBtn.textContent = t('songs.replace'); replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }
@@ -520,7 +535,7 @@ async function handlePlaybackFile(input, sid) {
     setTimeout(() => _setBulkStatus('', ''), 3000);
     if (dirty.size > 0) saveAll();
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
+    _mediaUploadFailed(err);
   } finally {
     if (uploadBtn) { uploadBtn.textContent = uploadBtn.dataset.orig || '↑'; uploadBtn.classList.remove('listen-uploading'); uploadBtn.disabled = false; }
   }
@@ -639,7 +654,7 @@ async function handleReplacePlayback(input) {
     _setBulkStatus('saved', t('songs.playbackReplaced'));
     setTimeout(() => _setBulkStatus('', ''), 3000);
   } catch (err) {
-    if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed'));
+    _mediaUploadFailed(err);
   } finally {
     if (replaceBtn) { replaceBtn.textContent = t('songs.replace'); replaceBtn.classList.remove('listen-uploading'); replaceBtn.disabled = false; }
   }

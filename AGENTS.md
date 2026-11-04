@@ -36,7 +36,8 @@ production database.
   `process.env` read) **and** onto every Vercel project.
 - A schema change is a dated block appended to `scripts/schema.sql` ending in
   `INSERT INTO schema_migrations …`, with `SCHEMA_VERSION` in `api/_env.js` set
-  to it. Idempotent (`IF NOT EXISTS`), no `DO $$` blocks. **Each deployment
+  to it. Idempotent (`IF NOT EXISTS`), no `DO $$` blocks. A new table is created
+  inside the block too: a deploy runs only the blocks it has not recorded. **Each deployment
   applies it to its own database while it builds** (`scripts/deploy_migrate.js`,
   run as `postinstall` by the build's npm install), a minute or two before the new
   code goes live.

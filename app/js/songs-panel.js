@@ -448,7 +448,7 @@ async function _commitNewSong(formId) {
     var file = inputEl && inputEl.files[0];
     if (!file) continue;
     try { await _uploadSongMedia(newSong.id, staged[i][0], file); }
-    catch (err) { if (err.message !== 'auth') _setBulkStatus('error', t('songs.uploadFailed')); }
+    catch (err) { _mediaUploadFailed(err); }
   }
 
   // Persist a draft arrangement entered before the song existed, then activate it.

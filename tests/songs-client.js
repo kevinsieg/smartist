@@ -96,6 +96,21 @@ function loadDateHelpers(locale) {
 }
 function loadFormatDate(locale) { return loadDateHelpers(locale).formatDate; }
 
+// The upload failure message: a full storage quota offers the plan page, anything else stays generic.
+function loadUploadFailed() {
+  const MEDIA = fs.readFileSync(path.join(REPO_ROOT, 'app/js/songs-media.js'), 'utf8');
+  const status = { className: '', textContent: '', children: [], appendChild(c) { this.children.push(c); } };
+  const context = {
+    console, artistSlug: 'klimper', status,
+    t: key => key,
+    document: { getElementById: () => status, createElement: () => ({}) },
+    _setBulkStatus: (cls, msg) => { status.className = 'status ' + cls; status.textContent = msg; status.children = []; },
+  };
+  vm.createContext(context);
+  vm.runInContext(`${extractFunction(MEDIA, '_mediaUploadFailed', 'app/js/songs-media.js')}; this.fn = _mediaUploadFailed;`, context);
+  return context;
+}
+
 const SONGS = [
   { id: 1, title: 'Ab in die Welt',  interpret: 'My Band', genre: 'World',  active: true },
   { id: 2, title: 'Wonderwall',      interpret: 'Oasis',       genre: 'Pop',    active: true },
@@ -217,6 +232,25 @@ const SONGS = [
     assertEq(ctx.getSongs({ tags: ['Liebe', 'Arbeit'] }).map(s => s.id), [1, 2]);
     assertEq(ctx.getSongs({ tags: [] }).map(s => s.id), [1, 2, 3]);
     assertEq(ctx.tags({ tags: ['Liebe'] }), ['Arbeit', 'Liebe']);
+  });
+
+  test('a full storage quota says so and links to the plan page', () => {
+    const ctx = loadUploadFailed();
+    ctx.fn(new Error('storage_limit'));
+    assertEq(ctx.status.textContent.trim(), 'songs.storageFull');
+    assertEq(ctx.status.children.length, 1);
+    assertEq(ctx.status.children[0].href, '/klimper/settings#plan');
+    assertEq(ctx.status.children[0].textContent, 'songs.storageUpgrade');
+  });
+
+  test('any other upload failure stays generic, and an ended session stays silent', () => {
+    const ctx = loadUploadFailed();
+    ctx.fn(new Error('confirm'));
+    assertEq(ctx.status.textContent, 'songs.uploadFailed');
+    assertEq(ctx.status.children.length, 0);
+    ctx.status.textContent = '';
+    ctx.fn(new Error('auth'));
+    assertEq(ctx.status.textContent, '');
   });
 
   const total = passed + failed;

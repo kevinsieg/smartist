@@ -137,7 +137,9 @@ jobs:
       R2_ACCESS_KEY_ID: ci
       R2_SECRET_ACCESS_KEY: ci
       R2_BUCKET_NAME: ci
-      R2_PUBLIC_URL: https://cdn.example.test
+      # As in the local integration job: main's API suite uploads real files.
+      R2_PUBLIC_URL: http://localhost:3000/__storage
+      LOCAL_STORAGE_DIR: /tmp/smartist-storage
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -20,6 +20,17 @@ one gets all of it, and CI applies it twice.
    - `IF NOT EXISTS` / `IF EXISTS` everywhere. No `DO $$` blocks: `apply_schema.js`
      splits on `;`. Constraints that cannot say `IF NOT EXISTS` are fine —
      "already exists" errors are skipped.
+   - **A new table is created inside the dated block**, not only in the base part
+     of the file: a deploy runs only the blocks a database has not recorded
+     (`pendingStatements`), so a table created only in the base part never reaches
+     it (`relation … does not exist` in the build). `tests/schema-upgrade.js`
+     migrates the way a deploy does and fails if it is missing.
+   - A view that lists `s.*` fixes its columns when it is created: write the
+     columns out, and re-create the view when the table gains one
+     (`songs_with_media` over `songs`; the same test compares the columns).
+   - Data moves in the same block (`INSERT … SELECT … ON CONFLICT DO NOTHING`),
+     and the old columns or keys stay until a later release, as the live code
+     still reads them.
    - Two changes on one day: suffix the id (`2026-10-01b`).
    - A new index on an existing table: `CREATE INDEX CONCURRENTLY IF NOT EXISTS`
      (no write lock while live traffic runs). Every other statement runs with a

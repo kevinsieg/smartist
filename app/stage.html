@@ -53,6 +53,9 @@
             border-bottom: 1px solid rgba(249,191,143,0.18);
             position: relative;
         }
+        .stage-doc { margin-top: 0.5rem; }
+        .stage-doc-link { color: var(--s-accent); font-size: 1rem; text-decoration: none; }
+        .stage-doc-link:hover, .stage-doc-link:focus-visible { text-decoration: underline; text-underline-offset: 4px; }
         .stage-list { list-style: none; }
         .stage-song {
             display: flex;
@@ -75,6 +78,45 @@
             font-weight: 300;
             line-height: 1.2;
         }
+        .stage-song-play {
+            flex-shrink: 0; min-width: 2.75rem; min-height: 2.75rem;
+            background: none; border: 1px solid rgba(249,191,143,0.3); border-radius: 50%;
+            color: var(--s-accent); font-size: 1rem; cursor: pointer;
+        }
+        .stage-song-play:hover, .stage-song-play:focus-visible { background: rgba(249,191,143,0.12); }
+        .stage-song-playing .stage-song-title { color: var(--s-accent); }
+        .stage-song-playing .stage-num { opacity: 1; }
+        .stage-player {
+            display: grid; gap: 0.5rem 1rem; align-items: center; width: 100%;
+            grid-template-areas: "ctl" "now" "bar";
+            margin: 0 0 1rem; padding: 0 0 0.75rem;
+            border-bottom: 1px solid rgba(249,191,143,0.18);
+        }
+        .stage-player-ctl { grid-area: ctl; display: flex; align-items: center; justify-content: space-between; gap: 0.25rem; }
+        .stage-player-bar { grid-area: bar; display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+        .stage-player-now { grid-area: now; min-width: 0; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .stage-player-btn {
+            position: relative; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: none; border: 0; border-radius: 50%; color: var(--s-accent); cursor: pointer;
+        }
+        .stage-player-btn:hover, .stage-player-btn:focus-visible { background: rgba(249,191,143,0.12); }
+        .stage-player-main { min-width: 3.25rem; min-height: 3.25rem; background: var(--s-accent); color: #1a1a1a; }
+        .stage-player-main:hover, .stage-player-main:focus-visible { background: var(--s-accent); opacity: 0.85; }
+        .stage-player-toggle { opacity: 0.55; }
+        .stage-player-toggle[aria-pressed="true"] { opacity: 1; }
+        .stage-player-one { display: none; position: absolute; font-size: 0.6rem; font-weight: 700; }
+        .stage-player-repeat-one .stage-player-one { display: block; }
+        .stage-player-time { flex: 0 0 auto; font-size: 0.8rem; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 2.4rem; text-align: center; }
+        .stage-player-seek { flex: 1 1 auto; min-width: 0; height: 2.75rem; accent-color: var(--s-accent); cursor: pointer; }
+        .stage-player-seek:disabled { cursor: default; opacity: 0.5; }
+        @media (min-width: 760px) {
+            .stage-player { grid-template-columns: auto minmax(10rem, 1fr) minmax(8rem, 18rem); grid-template-areas: "ctl bar now"; }
+            .stage-player-ctl { justify-content: flex-start; }
+        }
+        body.stage-light .stage-song-play { border-color: rgba(138,88,32,0.35); }
+        body.stage-light .stage-player { border-color: rgba(138,88,32,0.25); }
+        body.stage-light .stage-player-main { color: #fff; }
         a.stage-song-link {
             color: inherit;
             text-decoration: none;
@@ -233,10 +275,11 @@
         }
 
         @media print {
-            .stage-header-btns, .stage-share-menu, .stage-modal-overlay, .lyrics-size-bar { display: none !important; }
+            .stage-header-btns, .stage-share-menu, .stage-modal-overlay, .lyrics-size-bar, .stage-player, .stage-song-play, .stage-doc { display: none !important; }
+            .stage-song-playing .stage-song-title { color: #111 !important; }
             html, body { background: #fff !important; color: #111 !important; }
             .stage-wrap { padding: 1rem 1.5rem !important; max-width: none !important; }
-            .stage-narrow, .song-stage-lyrics { max-width: none !important; }
+            .stage-narrow, .song-stage-lyrics, .stage-structure { max-width: none !important; }
             #_stage_player { display: none !important; }
             .stage-gallery { display: none !important; }
             .stage-print { display: block !important; }
@@ -407,7 +450,7 @@
             color: var(--s-text);
         }
         /* Lyrics sit in the same middle 3/4 as the rest; in columns they take the full width. */
-        @media (min-width: 900px) { body:not(.stage-cols) .song-stage-lyrics { max-width: 75%; margin-left: auto; margin-right: auto; } }
+        @media (min-width: 900px) { body:not(.stage-cols) .song-stage-lyrics, body:not(.stage-cols) .stage-structure { max-width: 75%; margin-left: auto; margin-right: auto; } }
         .chord-row { white-space: pre-wrap; word-break: break-word; min-height: 1.75em; }
         .chord-row--chords { line-height: 1.25; margin-top: 0.15rem; }
         .ch-seg { display: inline-block; vertical-align: bottom; white-space: pre-wrap; }
@@ -550,9 +593,9 @@
     <script src="/app/js/share-utils.js?v=5"></script>
     <script src="/app/js/arrangement.js?v=8"></script>
     <script src="/app/js/chords.js?v=11"></script>
-    <script src="/app/js/offline.js?v=4"></script>
+    <script src="/app/js/offline.js?v=6"></script>
     <script src="/app/js/melody-pick.js?v=8"></script>
     <script src="/app/js/waveform.js?v=1"></script>
-    <script src="/app/js/stage.js?v=35"></script>
+    <script src="/app/js/stage.js?v=38"></script>
 </body>
 </html>
