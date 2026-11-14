@@ -562,8 +562,11 @@ async function main() {
       if (await pressedOf('#_stage_fit_btn') !== 'true') throw new Error('fit button not pressed after a click');
       if (await lyricsPx() === base) throw new Error('fit did not change the size');
       await page.reload();
-      await page.waitForSelector('#_stage_fit_btn', { timeout: 10000 });
+      await page.waitForSelector('#_stage_fit_btn', { state: 'attached', timeout: 10000 });
       if (await pressedOf('#_stage_fit_btn') !== 'true') throw new Error('fit did not stay on after a reload');
+      if (await page.isVisible('#_stage_fit_btn')) throw new Error('focus mode did not hide the size bar');
+      await page.click('#_stage_lyrics');
+      if (!await page.isVisible('#_stage_fit_btn')) throw new Error('a tap did not bring the size bar back');
       await page.click('#_stage_fit_btn');
       if (await pressedOf('#_stage_fit_btn') !== 'false' || await lyricsPx() !== base) throw new Error('fit off did not restore the size');
       await page.click('#_stage_cols_btn');
