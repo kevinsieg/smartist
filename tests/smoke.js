@@ -429,7 +429,7 @@ async function main() {
       // A selected button deselects on a second click: the track goes, and the speed with it.
       await page.click('.stage-controls [data-fk="voice"]');
       await page.waitForFunction(() => !document.querySelector('#_stage_audio audio'), null, { timeout: 5000 });
-      if (await page.locator('.stage-menu-wrap[data-menu="rate"]').count()) throw new Error('speed still shown without a track');
+      if (await page.locator('#stage-rate-btn').count()) throw new Error('speed still shown without a track');
       if ((await pressed()).length) throw new Error('something still highlighted: ' + await pressed());
       // The sheet picked on purpose stays until it is deselected itself.
       if (!await page.locator('.stage-gallery').count()) throw new Error('a sheet picked on purpose went with the track');
@@ -440,7 +440,7 @@ async function main() {
       await page.click('.stage-controls [data-fk="track"]');
       await page.waitForFunction(() => /ref\.mp3$/.test((document.querySelector('#_stage_audio audio') || {}).src || ''), null, { timeout: 5000 });
       await page.waitForSelector('.stage-gallery', { timeout: 5000 });
-      if (!await page.locator('.stage-menu-wrap[data-menu="rate"]').count()) throw new Error('speed did not come back');
+      if (!await page.locator('#stage-rate-btn').count()) throw new Error('speed did not come back');
       // The sheet button itself hides the sheet while the track plays on, and shows it again.
       await page.click('.stage-controls [data-fk="sheet"]');
       await page.waitForFunction(() => !document.querySelector('.stage-gallery'), null, { timeout: 5000 });
@@ -541,9 +541,9 @@ async function main() {
       if (await page.getAttribute('canvas.stage-wave', 'data-wave') !== 'c0'.repeat(100)) throw new Error('listen waveform not drawn first');
       await page.click('.stage-menu-wrap[data-menu="track"] .stage-menu-btn');
       await page.click('.stage-menu-wrap[data-menu="track"] .stage-menu button:has-text("Playback")');
-      await page.click('.stage-menu-wrap[data-menu="rate"] .stage-menu-btn');
-      await page.click('.stage-menu-wrap[data-menu="rate"] .stage-menu button:has-text("0.8")');
-      if (await page.evaluate(() => document.querySelector('#_stage_audio audio').playbackRate) !== 0.8) throw new Error('speed dropdown did not apply');
+      await page.click('#stage-rate-btn');
+      await page.click('#stage-rate-btn');
+      if (await page.evaluate(() => document.querySelector('#_stage_audio audio').playbackRate) !== 0.8) throw new Error('speed button did not apply');
       await page.waitForFunction(w => (document.querySelector('canvas.stage-wave') || {}).dataset?.wave === w, 'd0'.repeat(100), { timeout: 5000 });
       if (!/pb\.mp3$/.test(await page.getAttribute('#_stage_player audio', 'src'))) throw new Error('playback not loaded into the one player');
       const width = await page.evaluate(() => document.querySelector('.stage-wrap').getBoundingClientRect().width);
@@ -562,8 +562,11 @@ async function main() {
       if (await pressedOf('#_stage_fit_btn') !== 'true') throw new Error('fit button not pressed after a click');
       if (await lyricsPx() === base) throw new Error('fit did not change the size');
       await page.reload();
-      await page.waitForSelector('#_stage_fit_btn', { timeout: 10000 });
+      await page.waitForSelector('#_stage_fit_btn', { state: 'attached', timeout: 10000 });
       if (await pressedOf('#_stage_fit_btn') !== 'true') throw new Error('fit did not stay on after a reload');
+      if (await page.isVisible('#_stage_fit_btn')) throw new Error('focus mode did not hide the size bar');
+      await page.click('#_stage_lyrics');
+      if (!await page.isVisible('#_stage_fit_btn')) throw new Error('a tap did not bring the size bar back');
       await page.click('#_stage_fit_btn');
       if (await pressedOf('#_stage_fit_btn') !== 'false' || await lyricsPx() !== base) throw new Error('fit off did not restore the size');
       await page.click('#_stage_cols_btn');
