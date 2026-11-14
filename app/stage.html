@@ -49,7 +49,7 @@
         .stage-header {
             margin-bottom: 2.5rem;
             padding-bottom: 1.25rem;
-            padding-right: 7rem;
+            padding-right: 10rem;
             border-bottom: 1px solid rgba(249,191,143,0.18);
             position: relative;
         }
@@ -159,7 +159,19 @@
         .song-stage-section[hidden] { display: none; }
         .stage-offline-btn.kept { color: #3fb36b; border-color: #3fb36b; }
         body.stage-light .stage-offline-btn.kept { color: #1f7a45; border-color: #1f7a45; }
-        .stage-wave { display: block; width: 100%; height: 48px; margin-bottom: 0.3rem; cursor: pointer; touch-action: manipulation; }
+        .stage-wave-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; }
+        .stage-wave, .stage-wave-fill { flex: 1 1 auto; min-width: 0; }
+        .stage-wave { display: block; width: 100%; height: 36px; cursor: pointer; touch-action: pan-y; }
+        .stage-rate-btn { flex: 0 0 auto; }
+        .stage-back { margin-top: 2.5rem; text-align: center; font-size: 0.72rem; }
+        .stage-back a { color: var(--s-muted); text-decoration: none; border-bottom: 1px solid currentColor; }
+        /* Focus mode (the Fit button): lyrics only; header and size bar come back on a tap. */
+        @media screen {
+            body.stage-focus .song-stage-meta, body.stage-focus #_stage_player, body.stage-focus .song-stage-links { display: none; }
+            body.stage-focus .stage-wrap { padding-top: 0.75rem; padding-bottom: 1rem; }
+            body.stage-focus .stage-header { position: fixed; top: 0; left: 0; right: 0; max-width: none; margin: 0; padding: 0.75rem 1rem; background: var(--s-bg); z-index: 60; }
+            body.stage-focus:not(.stage-focus-ui) .stage-header, body.stage-focus:not(.stage-focus-ui) .lyrics-size-bar { visibility: hidden; }
+        }
         .stage-controls { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: flex-end; }
         .stage-ctl { display: flex; flex-direction: column; gap: 3px; }
         .stage-ctl-label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--s-muted); cursor: help; }
@@ -200,7 +212,8 @@
             color: var(--s-muted);
             padding: 5rem 0;
         }
-        .stage-header--nav { padding-right: 17rem; }
+        .stage-header--nav { padding-right: 21rem; }
+        .stage-title--song { font-size: clamp(1.15rem, 3vw, 1.6rem); }
         @media (max-width: 600px) {
             .stage-wrap { padding: 1rem 1rem 6rem; }
             .stage-song { gap: 0.4rem 0.75rem; flex-wrap: wrap; }
@@ -275,7 +288,7 @@
         }
 
         @media print {
-            .stage-header-btns, .stage-share-menu, .stage-modal-overlay, .lyrics-size-bar, .stage-player, .stage-song-play, .stage-doc { display: none !important; }
+            .stage-back, .stage-header-btns, .stage-share-menu, .stage-modal-overlay, .lyrics-size-bar, .stage-player, .stage-song-play, .stage-doc { display: none !important; }
             .stage-song-playing .stage-song-title { color: #111 !important; }
             html, body { background: #fff !important; color: #111 !important; }
             .stage-wrap { padding: 1rem 1.5rem !important; max-width: none !important; }
@@ -596,6 +609,6 @@
     <script src="/app/js/offline.js?v=6"></script>
     <script src="/app/js/melody-pick.js?v=8"></script>
     <script src="/app/js/waveform.js?v=1"></script>
-    <script src="/app/js/stage.js?v=38"></script>
+    <script src="/app/js/stage.js?v=39"></script>
 </body>
 </html>

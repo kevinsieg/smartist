@@ -54,10 +54,20 @@ var _stageFitOn = (function() {
   try { return localStorage.getItem('stage_fit') === '1'; } catch (e) { return false; }
 })();
 
+// Fit is the focus mode: the lyrics at the largest size that needs no
+// scrolling, the rest of the page hidden until the screen is tapped.
 function _stageFitSync() {
   var b = document.getElementById('_stage_fit_btn');
   if (b) b.setAttribute('aria-pressed', String(_stageFitOn));
+  if (b) document.body.classList.toggle('stage-focus', _stageFitOn);
+  if (!_stageFitOn) document.body.classList.remove('stage-focus-ui');
 }
+
+document.addEventListener('click', function (e) {
+  if (!document.body.classList.contains('stage-focus')) return;
+  if (e.target.closest('a, button, input, select, audio, .stage-header, .lyrics-size-bar, .stage-modal-overlay, .arr-stage-modal-overlay, .stage-gallery')) return;
+  document.body.classList.toggle('stage-focus-ui');
+});
 
 function _stageFitStop() {
   if (!_stageFitOn) return;
@@ -145,7 +155,7 @@ function _stageFitColumns() {
   if (!_stageColsOn) { el.style.height = ''; if (_stageFitOn) _stageFitNow(); else _applyLyricsSize(); return; }
   // Room down to the floating size bar at the bottom (it wraps on phones).
   var bar = document.querySelector('.lyrics-size-bar');
-  var reserve = bar ? Math.ceil(bar.getBoundingClientRect().height) + 28 : 72;
+  var reserve = _stageFitOn ? 24 : bar ? Math.ceil(bar.getBoundingClientRect().height) + 28 : 72;
   el.style.height = Math.max(120, window.innerHeight - el.getBoundingClientRect().top - reserve) + 'px';
   var px = _stageFitSearch(function (size) {
     el.style.fontSize = size + 'px';
@@ -243,6 +253,10 @@ var _MOON_ICON = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24
 
 // Stage totals: blank for none and no zero-padded minutes ("7:30"), unlike
 // formatLength in core.js, which the song lists use.
+function _stageEditUrl(slug, id) {
+  return (slug ? '/' + slug : '') + '/setlist?view=history&set=' + id;
+}
+
 function _stageLength(min) {
   if (!min) return '';
   const m = Math.floor(min);
@@ -462,19 +476,30 @@ document.addEventListener('click', function(e) {
 });
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') _stageMenusClose(); });
 
-function stageSetRate(value) {
-  _stageRate = Number(value) || 1;
+function stageCycleRate() {
+  _stageRate = _stageNextRate(_stageRate);
   var audio = document.querySelector('#_stage_audio audio');
   if (audio) audio.playbackRate = _stageRate;
-  _stageRenderControls(_stageState());
+  var b = document.getElementById('stage-rate-btn');
+  if (b) b.textContent = _stageRate + '×';
 }
 
 // A recording's loudness profile, stored with it: drawn here, never decoded
 // here. The played part follows the audio element next to it.
+function _stageNextRate(rate) {
+  var rates = [1, 0.9, 0.8, 0.7];
+  return rates[(rates.indexOf(rate) + 1) % rates.length];
+}
+
+function _stageWaveFrac(x, left, width) {
+  return Math.max(0, Math.min(1, (x - left) / width));
+}
+
+// The waveform and, beside it, the speed button (one tap: the next speed).
 function _stageWaveHtml(wave) {
-  return waveformValid(wave)
-    ? '<canvas class="stage-wave" aria-hidden="true" data-wave="' + wave + '" data-onclick="stageWaveSeek(event, this)"></canvas>'
-    : '';
+  return '<div class="stage-wave-row">' +
+    (waveformValid(wave) ? '<canvas class="stage-wave" aria-hidden="true" data-wave="' + wave + '"></canvas>' : '<span class="stage-wave-fill"></span>') +
+    '<button type="button" class="stage-share-btn stage-rate-btn" id="stage-rate-btn" data-onclick="stageCycleRate()" aria-label="Playback speed" title="Playback speed">' + _stageRate + '×</button></div>';
 }
 
 function _stageWaveDraw(canvas) {
@@ -500,14 +525,16 @@ function _stageWaveWire(root) {
       audio.addEventListener(ev, function() { _stageWaveDraw(c); });
     });
     _stageWaveDraw(c);
+    // A tap jumps, a drag scrubs; vertical swipes still scroll the page.
+    function seek(ev) {
+      if (!audio.duration) return;
+      var box = c.getBoundingClientRect();
+      audio.currentTime = _stageWaveFrac(ev.clientX, box.left, box.width) * audio.duration;
+    }
+    c.addEventListener('pointerdown', function(ev) { c.setPointerCapture(ev.pointerId); c._stageDrag = true; seek(ev); });
+    c.addEventListener('pointermove', function(ev) { if (c._stageDrag) seek(ev); });
+    ['pointerup', 'pointercancel'].forEach(function(n) { c.addEventListener(n, function() { c._stageDrag = false; }); });
   });
-}
-
-function stageWaveSeek(ev, canvas) {
-  var audio = canvas._stageAudio;
-  if (!audio || !audio.duration) return;
-  var box = canvas.getBoundingClientRect();
-  audio.currentTime = Math.max(0, Math.min(1, (ev.clientX - box.left) / box.width)) * audio.duration;
 }
 
 window.addEventListener('resize', function() {
@@ -788,7 +815,7 @@ function _stageCtl(caption, tip, inner) {
 }
 
 // One row, each control with a small caption (and a hover text): the track
-// (Listen or Playback), my voice, the sheet to show, the speed.
+// (Listen or Playback), my voice, the sheet to show.
 function _stageControlsHtml(st) {
   var out = '';
   var tracks = st.views.filter(function(v) { return v !== 'voice'; });
@@ -815,11 +842,6 @@ function _stageControlsHtml(st) {
         ? '<button type="button" class="stage-share-btn stage-menu-btn" data-fk="sheetMenu" data-onclick="stageMenu(this)" aria-haspopup="menu" aria-expanded="false" aria-label="Which sheet to show">&#9662;</button>' +
           _stageMenuHtml(st.sheets.map(function(x) { return { key: x.key, label: x.label, checked: x.key === st.sheet }; }), 'data-onclick="stageSetSheet(this.dataset.key)"')
         : '') + '</span>');
-  }
-  if (st.source) {
-    out += _stageCtl('Speed', 'Playback speed',
-      _stageDropHtml('rate', 'rate', _stageRate + '×', 'Playback speed',
-        [1, 0.9, 0.8, 0.7].map(function(r) { return { key: String(r), label: r + '×', checked: r === _stageRate }; }), 'data-onclick="stageSetRate(this.dataset.key)"'));
   }
   return out;
 }
@@ -1043,7 +1065,8 @@ async function initSetlist(params, el, cfg) {
     </div>
     ${_stagePlayerHtml()}
     <ul class="stage-list">${items}</ul>
-    ${totalMin ? `<p class="stage-total">${songs.length} song${songs.length !== 1 ? 's' : ''} &middot; ${_stageLength(totalMin)}</p>` : ''}`;
+    ${totalMin ? `<p class="stage-total">${songs.length} song${songs.length !== 1 ? 's' : ''} &middot; ${_stageLength(totalMin)}</p>` : ''}
+    <p class="stage-back"><a href="${escHtml(_stageEditUrl(cfg.slug, setlistId))}" target="_blank" rel="noopener">Edit this setlist in smartist</a></p>`;
 
   _stagePlayerWire();
   _stageDocumentWire(data.document_url);
@@ -1160,7 +1183,7 @@ async function initSong(params, el, cfg) {
   el.innerHTML = `${_stageOfflineNote(songRes)}
     <div class="stage-header stage-narrow${navHtml ? ' stage-header--nav' : ''}">
       <div class="stage-band">${escHtml(cfg.name)}</div>
-      <h1 class="stage-title">${escHtml(song.title)}</h1>
+      <h1 class="stage-title stage-title--song">${escHtml(song.title)}</h1>
       ${subtitle}
       ${_shareHtml(navHtml)}
     </div>
@@ -1177,6 +1200,7 @@ async function initSong(params, el, cfg) {
     _stageKey = song.key || '';
     _stageSteps = 0;
     _stageCapos = { git: Number(gitCapo) || 0, bj: Number(bjCapo) || 0 };
+    _stageFitSync();
     _applyLyricsSize();
     _stageRenderLyrics();
   }
